@@ -1,0 +1,42 @@
+syntax="proto3";
+package xmhps;
+
+message GetParameterRequest {
+  optional bytes keys = 1;
+  optional bytes model_name = 2;
+  optional bool perf = 3;
+};
+
+message GetParameterResponse {
+  optional bytes parameter_value = 1;
+  optional bytes keys = 2;
+};
+
+enum PSCommand{
+  CLEAR_PS = 0;
+  RELOAD_PS = 1;
+};
+
+message CommandRequest{
+  PSCommand command = 1;
+  repeated bytes arg1 = 2;
+  repeated bytes arg2 = 3;
+  repeated bytes arg3 = 4;
+};
+message CommandResponse{
+  string reply = 1;
+};
+
+message PutParameterRequest{
+  optional bytes parameter_value = 2;
+};
+
+message PutParameterResponse{
+  optional bool sucess = 1;
+};
+
+service ParameterService {
+  rpc GetParameter(GetParameterRequest) returns (GetParameterResponse);
+  rpc Command(CommandRequest) returns (CommandResponse);
+  rpc PutParameter(PutParameterRequest) returns (PutParameterResponse);
+};
