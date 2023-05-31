@@ -1,6 +1,7 @@
 #pragma once
 #include "folly/Format.h"
 #include "folly/Random.h"
+#include "folly/init/Init.h"
 
 #include <cstdint>
 

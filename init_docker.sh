@@ -64,7 +64,7 @@ cmake -DgRPC_INSTALL=ON \
       -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
       ../..
 make -j20
-sudo make install
+sudo make install -j
 popd
 
 sudo apt install -y sshpass

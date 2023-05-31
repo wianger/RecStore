@@ -23,7 +23,7 @@ endif()
 
 # setting compiler flags
 
-set(SM "75" "80")
+set(SM "75")
 foreach(arch_name ${SM})
     if (arch_name STREQUAL 80 OR 
         arch_name STREQUAL 75 OR 
@@ -60,7 +60,6 @@ set(CMAKE_CUDA_FLAGS_DEBUG "${CMAKE_CUDA_FLAGS_DEBUG}  -g -G -Xptxas -O0 -linein
 
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda --expt-relaxed-constexpr")
 
-message(FATAL "CMAKE_CXX_FLAGS is ${CMAKE_CXX_FLAGS}")
 
 # setting output folder
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -72,17 +71,15 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # building
 
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_LIST_DIR}/third_party/grpc-install")
-include("${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake")
+
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/FindGRPC.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/cmake/FindProtobuf.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake")
 
 set(folly_DIR "${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/lib/cmake/folly")
 set(FOLLY_ROOT_DIR "${folly_DIR}")
 find_package(folly REQUIRED)
 find_package(gflags REQUIRED)
 find_package(glog CONFIG REQUIRED)
-
-# list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/HugeCTR/src/inference/cmake")
 
 
 if(OPENMP_FOUND)

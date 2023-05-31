@@ -6,11 +6,12 @@
 
 #include "folly/GLog.h"  // NOLINT
 #include "folly/ProducerConsumerQueue.h"
-#include "inference/inference_utils.hpp"
-#include "inference/timer.h"
-#include "nlohmann/json.hpp"
+// #include "inference/inference_utils.hpp"
+#include "base/timer.h"
+#include "base/array.h"
+// #include "nlohmann/json.hpp"
 #include "parameters.h"
-#include "parser.hpp"
+// #include "parser.hpp"
 
 #define XMH_ROBIN_HOOD_HASH
 
@@ -26,21 +27,19 @@
 #include "robin_hood.h"
 #endif
 
-namespace fs = std::experimental::filesystem;
-
 DECLARE_bool(use_master_worker);
 
 template <typename key_t>
 struct TaskElement {
-  TaskElement(const ConstArray<key_t> &keys,
-              const MutableArray<ParameterPack> &packs,
+  TaskElement(const base::ConstArray<key_t> &keys,
+              const base::MutableArray<ParameterPack> &packs,
               std::atomic_bool *promise)
       : keys(keys), packs(packs), promise(promise) {}
 
   TaskElement() {}
 
-  ConstArray<key_t> keys;
-  MutableArray<ParameterPack> packs;
+  base::ConstArray<key_t> keys;
+  base::MutableArray<ParameterPack> packs;
   std::atomic_bool *promise;
 };
 
@@ -296,7 +295,7 @@ class CachePS {
   }
 
   bool GetParameterMasterWorker(
-      const ConstArray<key_t> &keys,
+      const base::ConstArray<key_t> &keys,
       std::vector<std::vector<ParameterPack>> *packs) {
     CHECK(FLAGS_use_master_worker);
     packs->resize(get_thread_num_);
@@ -309,9 +308,9 @@ class CachePS {
       int end = std::min(size, (i + 1) * worksPerThread);
 
       get_thread_promises_[i].promise = false;
-      ConstArray<key_t> sub_keys(&keys[start], end - start);
+      base::ConstArray<key_t> sub_keys(&keys[start], end - start);
       packs->at(i).resize(end - start);
-      MutableArray<ParameterPack> sub_packs(packs->at(i));
+      base::MutableArray<ParameterPack> sub_packs(packs->at(i));
       while (!getTaskQs_[i]->write(sub_keys, sub_packs,
                                    &get_thread_promises_[i].promise))
         ;

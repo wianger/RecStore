@@ -15,7 +15,7 @@ class RawGDWrapper : public GPUDirectSSDInterface<KEY_T> {
 
   void InitFakeDB();
 
-  void BulkLoad(ConstArray<KEY_T> keys_array, const void *value);
+  void BulkLoad(base::ConstArray<KEY_T> keys_array, const void *value);
 
   void Write(void *h_input, uint64_t startBlock, int block_num);
 
@@ -32,7 +32,7 @@ class RawGDWrapper : public GPUDirectSSDInterface<KEY_T> {
   virtual ~RawGDWrapper() {}
 
  private:
-  void SubBulkLoad(const int nr_batch_pages, ConstArray<KEY_T> keys_array,
+  void SubBulkLoad(const int nr_batch_pages, base::ConstArray<KEY_T> keys_array,
                    const std::vector<uint64_t> &indexs_array, const void *value,
                    char *pinned_value);
   std::vector<Controller *> ctrls_;

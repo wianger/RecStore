@@ -412,7 +412,7 @@ void RawGDWrapper<KEY_T>::WriteBlock(void *h_value, int lba_no, int nr_lba) {
 // indexs_array: [5,6,7]
 template <typename KEY_T>
 void RawGDWrapper<KEY_T>::SubBulkLoad(const int nr_batch_pages,
-                                      ConstArray<KEY_T> keys_array,
+  base::ConstArray<KEY_T> keys_array,
                                       const std::vector<uint64_t> &indexs_array,
                                       const void *value, char *pinned_value) {
   //   static int isFirstVisit = 0;
@@ -465,11 +465,11 @@ void RawGDWrapper<KEY_T>::InitFakeDB() {
       value_vec.push_back(i);
     }
   }
-  BulkLoad(ConstArray<KEY_T>(key_vec), value_vec.data());
+  BulkLoad(base::ConstArray<KEY_T>(key_vec), value_vec.data());
 }
 
 template <typename KEY_T>
-void RawGDWrapper<KEY_T>::BulkLoad(ConstArray<KEY_T> keys_array,
+void RawGDWrapper<KEY_T>::BulkLoad(base::ConstArray<KEY_T> keys_array,
                                    const void *value) {
   CHECK_EQ(keys_array.Size(), kDBCapacity);
   //   const int nr_batch_pages = h_pc->pdt.n_pages;

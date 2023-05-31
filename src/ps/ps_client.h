@@ -26,6 +26,8 @@ using xmhps::PSCommand;
 using xmhps::PutParameterRequest;
 using xmhps::PutParameterResponse;
 
+using base::ConstArray;
+
 class ParameterClient {
  public:
   explicit ParameterClient(const std::string &host, int port, int shard);

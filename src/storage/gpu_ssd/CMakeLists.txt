@@ -3,8 +3,8 @@ find_package (Threads REQUIRED)
 
 
 add_library(gd_bam BaMWrapper.cu)
+target_link_libraries(gd_bam PUBLIC base)
 target_link_libraries(gd_bam PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/build/lib/libnvm.so)
-target_link_libraries(gd_bam PUBLIC Folly::folly)
 target_include_directories(gd_bam PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/include)
 target_include_directories(gd_bam PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/include/freestanding/include)
 target_compile_options(gd_bam PRIVATE -Wno-unused-function -Wno-aligned-new -Wno-format)
@@ -27,8 +27,8 @@ set_target_properties(test_BaM PROPERTIES CUDA_ARCHITECTURES OFF)
 
 
 add_library(gpu_direct_ssd_raw RawGDWrapper.cu)
+target_link_libraries(gpu_direct_ssd_raw PUBLIC base)
 target_link_libraries(gpu_direct_ssd_raw PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/build/lib/libnvm.so)
-target_link_libraries(gpu_direct_ssd_raw PUBLIC Folly::folly)
 target_include_directories(gpu_direct_ssd_raw PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/include)
 target_include_directories(gpu_direct_ssd_raw PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/include/freestanding/include)
 target_compile_options(gpu_direct_ssd_raw PRIVATE -Wno-unused-function -Wno-aligned-new -Wno-format)

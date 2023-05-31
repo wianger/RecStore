@@ -6,7 +6,7 @@ template <typename KEY_T>
 class GPUDirectSSDInterface {
  public:
   virtual void InitFakeDB() = 0;
-  virtual void BulkLoad(ConstArray<KEY_T> keys_array, const void *value) = 0;
+  virtual void BulkLoad(base::ConstArray<KEY_T> keys_array, const void *value) = 0;
   virtual void Write(void *h_input, uint64_t startBlock, int block_num) = 0;
 
   // d_d_outputBuffer's size is <ctrl.info.page_size * totalPages>

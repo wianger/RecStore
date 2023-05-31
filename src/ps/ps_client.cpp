@@ -8,9 +8,9 @@
 
 #include "flatc.h"
 #include "folly/executors/CPUThreadPoolExecutor.h"
-#include "folly/init/Init.h"
+#include "base/log.h"
 #include "base/array.h"
-#include "inference/timer.h"
+#include "base/timer.h"
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"

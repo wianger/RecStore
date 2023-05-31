@@ -1,11 +1,13 @@
-#include <random>
-#include "../../../include/inference/timer.h"
-#include "folly/executors/CPUThreadPoolExecutor.h"
-#include "folly/init/Init.h"
-#include "ps_client.h"
-#include "base/array.h"
+#include <folly/executors/CPUThreadPoolExecutor.h>
 
-static bool check_eq_1d(const std::vector<float> &a, const std::vector<float> &b) {
+#include <random>
+
+#include "base/array.h"
+#include "base/timer.h"
+#include "ps_client.h"
+
+static bool check_eq_1d(const std::vector<float> &a,
+                        const std::vector<float> &b) {
   if (a.size() != b.size()) return false;
 
   for (int i = 0; i < a.size(); i++) {
@@ -27,7 +29,8 @@ int main(int argc, char **argv) {
   folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread(2000);
   ParameterClient client("127.0.0.1", 15000, 1);
-  std::random_device rd;   // Will be used to obtain a seed for the random number engine
+  std::random_device
+      rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd());  // Standard mersenne_twister_engine seeded with rd()
   std::uniform_int_distribution<> distrib(1, 200LL * 1e6);
   while (1) {

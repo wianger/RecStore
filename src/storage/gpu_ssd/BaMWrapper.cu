@@ -189,7 +189,7 @@ void BaMWrapper<KEY_T>::InitFakeDB() {
 }
 
 template <typename KEY_T>
-void BaMWrapper<KEY_T>::BulkLoad(ConstArray<KEY_T> keys_array,
+void BaMWrapper<KEY_T>::BulkLoad(base::ConstArray<KEY_T> keys_array,
                                  const void *value) {
   CHECK_EQ(keys_array.Size(), kDBCapacity);
 }

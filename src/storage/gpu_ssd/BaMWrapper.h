@@ -16,7 +16,7 @@ class BaMWrapper : public GPUDirectSSDInterface<KEY_T> {
 
   void InitFakeDB();
 
-  void BulkLoad(ConstArray<KEY_T> keys_array, const void *value);
+  void BulkLoad(base::ConstArray<KEY_T> keys_array, const void *value);
 
   void Write(void *h_input, uint64_t startBlock, int block_num);
 

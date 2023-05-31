@@ -383,7 +383,7 @@ class PersistMemoryPool : public MallocApi {
         goto final;
       }
       LOG(FATAL) << fmt::format("Persist Memory Pool OOM, total_malloc={}",
-                                total_malloc_);
+                                total_malloc_.load());
     }
   final:
     CHECK(return_ptr);

@@ -1,3 +1,4 @@
+#include <folly/executors/CPUThreadPoolExecutor.h>
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
@@ -7,12 +8,11 @@
 #include <string>
 #include <vector>
 
-#include "HugeCTR/include/inference/timer.h"
+#include "base/base.h"
+#include "base/array.h"
+#include "base/timer.h"
 #include "cache_ps_impl.h"
 #include "flatc.h"
-#include "folly/executors/CPUThreadPoolExecutor.h"
-#include "folly/init/Init.h"
-#include "base/array.h"
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
@@ -41,7 +41,7 @@ class ParameterServiceImpl final : public xmhps::ParameterService::Service {
   Status GetParameter(ServerContext *context,
                       const GetParameterRequest *request,
                       GetParameterResponse *reply) override {
-    ConstArray<uint64_t> keys_array(request->keys());
+    base::ConstArray<uint64_t> keys_array(request->keys());
     bool isPerf = request->has_perf() && request->perf();
     if (isPerf) {
       xmh::PerfCounter::Record("PS Get Keys", keys_array.Size());
