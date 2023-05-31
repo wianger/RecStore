@@ -12,7 +12,7 @@
 #include "flatc.h"
 #include "folly/executors/CPUThreadPoolExecutor.h"
 #include "folly/init/Init.h"
-#include "inference/base/array.h"
+#include "base/array.h"
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"

@@ -3,7 +3,7 @@
 #include "folly/executors/CPUThreadPoolExecutor.h"
 #include "folly/init/Init.h"
 #include "ps_client.h"
-#include "inference/base/array.h"
+#include "base/array.h"
 
 static bool check_eq_1d(const std::vector<float> &a, const std::vector<float> &b) {
   if (a.size() != b.size()) return false;

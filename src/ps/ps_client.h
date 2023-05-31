@@ -9,7 +9,7 @@
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
-#include "inference/base/array.h"
+#include "base/array.h"
 
 #include "folly/Portability.h"
 #include "folly/executors/CPUThreadPoolExecutor.h"

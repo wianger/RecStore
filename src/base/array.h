@@ -1,8 +1,10 @@
 #pragma once
-#include <google/protobuf/repeated_field.h>
+// #include <google/protobuf/repeated_field.h>
 
 #include <string>
 #include <vector>
+
+namespace base{
 
 template <typename T>
 struct ConstArray {
@@ -18,9 +20,9 @@ struct ConstArray {
       : list(reinterpret_cast<const T *>(binary_data.data())),
         size(binary_data.size() / sizeof(T)) {}
 
-  ConstArray(
-      const google::protobuf::RepeatedField<T> &repeated_field)  // NOLINT
-      : list(repeated_field.data()), size(repeated_field.size()) {}
+  // ConstArray(
+  //     const google::protobuf::RepeatedField<T> &repeated_field)  // NOLINT
+  //     : list(repeated_field.data()), size(repeated_field.size()) {}
 
   ConstArray() : list(nullptr), size(0) {}
 
@@ -117,7 +119,7 @@ struct MutableArray {
       list = reinterpret_cast<T *>(data);
       size = data_size / sizeof(T);
     } else {
-      assert(0);
+      *(int *)0 = 0;
       list = nullptr;
       size = 0;
     }
@@ -160,3 +162,4 @@ struct MutableArray {
     return (list != nullptr) ? std::string(binary_data(), binary_size()) : "";
   }
 };
+}

@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "inference/base/array.h"
+#include "base/array.h"
 #include "folly/Random.h"
 #include "naiveKVell.h"
 

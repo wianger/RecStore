@@ -17,13 +17,14 @@ source /home/xieminhui/.bashrc
 cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
 
 # git submodule add https://github.com/facebook/folly
-cd ${PROJECT_PATH}/third_party/folly && git checkout v2021.01.04.00 && rm -rf _build && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
+# cd ${PROJECT_PATH}/third_party/folly && git checkout v2021.01.04.00 && rm -rf _build && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
+cd ${PROJECT_PATH}/third_party/folly && git checkout v2023.05.22.00 && rm -rf _build && mkdir -p _build && rm -rf folly-install-fPIC && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
 
-cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install
+# cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install
 
 cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo make install
 
-cd ${PROJECT_PATH}/third_party/rocksdb/ && rm -rf _build && mkdir _build && cd _build && cmake .. && make -j20 && sudo make install
+# cd ${PROJECT_PATH}/third_party/rocksdb/ && rm -rf _build && mkdir _build && cd _build && cmake .. && make -j20 && sudo make install
 
 #############################SPDK#############################
 cd ${PROJECT_PATH}/
