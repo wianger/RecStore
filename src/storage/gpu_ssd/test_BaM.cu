@@ -1,13 +1,14 @@
-#include <folly/Random.h>
-#include <folly/init/Init.h>
 #include <folly/portability/GTest.h>
 
 #include <vector>
 
 #include "BaMWrapper.h"
 #include "folly/Random.h"
-#include "inference/base/cuda.h"
-#include "inference/timer.h"
+
+#include "base/base.h"
+#include "base/cuda.h"
+#include "base/timer.h"
+
 using gpu_direct_ssd::BaMWrapper;
 
 DEFINE_int32(embedding_dimension, 32, "");

@@ -1,9 +1,8 @@
-#include <folly/Random.h>
-#include <folly/init/Init.h>
-
 #include "RawGDWrapper.h"
-#include "inference/base/cuda.h"
-#include "inference/timer.h"
+
+#include "base/base.h"
+#include "base/cuda.h"
+#include "base/timer.h"
 
 using gpu_direct_ssd::RawGDWrapper;
 

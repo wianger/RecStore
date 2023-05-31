@@ -1,7 +1,5 @@
-#include <folly/Random.h>
-#include <folly/init/Init.h>
-
 #include "BaMWrapper.h"
+#include "base/base.h"
 #include "base/cuda.h"
 #include "base/timer.h"
 
@@ -52,7 +50,6 @@ int main(int argc, char **argv) {
     XMH_CUDA_CHECK(cudaDeviceSynchronize());
     double elapsed_us = after - before;
 
-    
     xmh::Timer::ManualRecordNs("GPUDirect query", elapsed_us * 1e3);
   }
 

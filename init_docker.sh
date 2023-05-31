@@ -13,12 +13,23 @@ PROJECT_PATH="/data/project/RecStore"
 ln -sf ${PROJECT_PATH}/docker_config/.bashrc /home/xieminhui/.bashrc
 source /home/xieminhui/.bashrc
 
-# git submodule add https://github.com/fmtlib/fmt
+
+# git submodule add https://github.com/google/glog third_party/glog
+sudo rm /usr/lib/x86_64-linux-gnu/libglog.so.0*
+cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
+
+
+# git submodule add https://github.com/fmtlib/fmt third_party/fmt
 cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
 
-# git submodule add https://github.com/facebook/folly
-# cd ${PROJECT_PATH}/third_party/folly && git checkout v2021.01.04.00 && rm -rf _build && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
-cd ${PROJECT_PATH}/third_party/folly && git checkout v2023.05.22.00 && rm -rf _build && mkdir -p _build && rm -rf folly-install-fPIC && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
+
+# git submodule add https://github.com/facebook/folly third_party/folly
+cd ${PROJECT_PATH}/third_party/folly && git checkout v2021.01.04.00 && rm -rf _build && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
+
+# git submodule add https://github.com/google/googletest third_party/googletest
+
+
+
 
 # cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install
 

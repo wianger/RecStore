@@ -1,19 +1,20 @@
 #pragma once
 #include <assert.h>
+// #include <cuda_runtime_api.h>
+
+#include <sys/time.h>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
-// #include <cuda_runtime_api.h>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
-#include <sys/time.h>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -27,20 +28,16 @@
 #endif
 
 #ifndef XMH_PERF_GPU
-#define XMH_PERF_GPU
+// #define XMH_PERF_GPU
 #endif
 
-// #include <folly/GLog.h>
+// #include "folly/GLog.h"
 class XDebug {
  public:
   static void AssertTensorEq(const float *emb, int dim, uint64_t value,
                              const std::string &debug_str) {
     for (int i = 0; i < dim; i++) {
-      if (std::abs(emb[i] - value) > 1e-6) {
-        std::cerr << debug_str << std::flush;
-        assert(0);
-        std::exit(-1);
-      }
+      CHECK(std::abs(emb[i] - value) < 1e-6) << debug_str;
     }
   }
 };
@@ -60,7 +57,8 @@ class MathUtil {
 };
 
 class DrawTable {
-  static void DrawLine(std::stringstream &ss, const std::vector<int> &max, int columns) {
+  static void DrawLine(std::stringstream &ss, const std::vector<int> &max,
+                       int columns) {
     for (int i = 0; i < columns; i++) {
       ss << "+-";
       for (int j = 0; j <= max[i]; j++) {
@@ -94,6 +92,7 @@ class DrawTable {
     DrawLine(ss, max, columns);
   }
 };
+
 class SpinLock {
   std::atomic_flag locked = ATOMIC_FLAG_INIT;
 
@@ -103,10 +102,9 @@ class SpinLock {
       ;
     }
   }
-  void Unlock() {
-    locked.clear(std::memory_order_release);
-  }
+  void Unlock() { locked.clear(std::memory_order_release); }
 };
+
 class Histogram {
  public:
   Histogram() {}
@@ -149,8 +147,9 @@ class Histogram {
   std::string ToString() const {
     std::string r;
     char buf[200];
-    std::snprintf(buf, sizeof(buf), "Count: %.0f  Average: %.4f  StdDev: %.2f\n", num_,
-                  Average(), StandardDeviation());
+    std::snprintf(buf, sizeof(buf),
+                  "Count: %.0f  Average: %.4f  StdDev: %.2f\n", num_, Average(),
+                  StandardDeviation());
     r.append(buf);
     std::snprintf(buf, sizeof(buf), "Min: %.4f  Median: %.4f  Max: %.4f\n",
                   (num_ == 0.0 ? 0.0 : min_), Median(), max_);
@@ -166,7 +165,7 @@ class Histogram {
                     kBucketLimit(b),                         // right
                     buckets_[b],                             // count
                     mult * buckets_[b],                      // percentage
-                    mult * sum);                             // cumulative percentage
+                    mult * sum);  // cumulative percentage
       r.append(buf);
 
       // Add hash marks based on percentage; 20 marks for 100%.
@@ -180,9 +179,7 @@ class Histogram {
  private:
   enum { kNumBuckets = 154 };
 
-  double Median() const {
-    return Percentile(50.0);
-  }
+  double Median() const { return Percentile(50.0); }
   double Percentile(double p) const;
   double Average() const {
     if (num_ == 0.0) return 0;
@@ -222,6 +219,7 @@ class Counters {
       durations_[index_] = ns;
       if (unlikely(index_ == kCounterLen_ - 1)) {
         isOverflow_ = true;
+        // XXX(xieminhui): not reordered store-store in x86-64 TSO.
         index_ = 0;
       } else {
         index_++;
@@ -239,7 +237,7 @@ class Counters {
 
  public:
   Counters() = default;
-  Counters(const Counters &) = delete;
+  Counters(const Counters &) = default;
 
   double mean() {
     double mean = 0;
@@ -262,7 +260,8 @@ class Counters {
       int index = perThreadCounter_[tid].index_;
       if (index != 0) return perThreadCounter_[tid].durations_[index - 1];
       if (perThreadCounter_[tid].isOverflow_)
-        return perThreadCounter_[tid].durations_[PerThreadCounter::kCounterLen_ - 1];
+        return perThreadCounter_[tid]
+            .durations_[PerThreadCounter::kCounterLen_ - 1];
     }
     assert(0);
     return -1;
@@ -283,9 +282,7 @@ class Counters {
                      all_durations.end());
     return all_durations[it];
   }
-  void Record(double ns) {
-    perThreadCounter_[threadIDHash()].Record(ns);
-  }
+  void Record(double ns) { perThreadCounter_[threadIDHash()].Record(ns); }
 
   int threadIDHash() {
     static std::hash<std::thread::id> hasher;
@@ -345,12 +342,15 @@ class PerfCounter {
       spin_lock.Unlock();
       return "";
     }
-    for (auto key = orderedKeyList.begin(); key != orderedKeyList.end(); ++key) {
+    for (auto key = orderedKeyList.begin(); key != orderedKeyList.end();
+         ++key) {
       vec.push_back({*key, std::to_string(map[*key]->mean()),
-                     std::to_string(map[*key]->p(99)), std::to_string(map[*key]->now())});
+                     std::to_string(map[*key]->p(99)),
+                     std::to_string(map[*key]->now())});
     }
     spin_lock.Unlock();
-    DrawTable::DrawTB(ss, {25, 25, 25, 25}, {"Name", "Mean", "P99", "now"}, vec);
+    DrawTable::DrawTB(ss, {25, 25, 25, 25}, {"Name", "Mean", "P99", "now"},
+                      vec);
     return ss.str();
   }
 };
@@ -373,7 +373,8 @@ class Timer {
     return list;
   }
 
-  static inline std::string double2StringWithPrecision(double num, int precision) {
+  static inline std::string double2StringWithPrecision(double num,
+                                                       int precision) {
     std::stringstream ss;
     ss << std::fixed;
     ss << std::setprecision(precision);
@@ -398,10 +399,7 @@ class Timer {
   }
 
  public:
-  Timer(std::string timerName, int sample_rate = 1)
-      : timerName_(timerName), sample_rate_(sample_rate) {
-    start();
-  }
+  Timer(std::string timerName) : timerName_(timerName) { start(); }
 
   static void Init() {
     staticMap().clear();
@@ -411,32 +409,25 @@ class Timer {
 
   ~Timer() {
     if (!isEnd_) {
-      // std::cerr << "timer name is " << timerName_ << std::endl;
+      std::cerr << "timer name is " << timerName_ << std::endl;
       // assert(isEnd_);
     }
   }
 
-  void start() {
-    if (sampled_count_ % sample_rate_ == 0) {
-      isEnd_ = false;
-      start_ = std::chrono::steady_clock::now();
-    }
-    sampled_count_++;
-  }
+  void start() { start_ = std::chrono::steady_clock::now(); }
   double nsSinceStart() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
                std::chrono::steady_clock::now() - start_)
         .count();
   }
 
-  void CumStart() {
-    start_ = std::chrono::steady_clock::now();
-  }
+  void CumStart() { start_ = std::chrono::steady_clock::now(); }
 
   void CumEnd() {
     end_ = std::chrono::steady_clock::now();
     cum_count_ +=
-        std::chrono::duration_cast<std::chrono::nanoseconds>(end_ - start_).count();
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end_ - start_)
+            .count();
   }
 
   void CumReport() {
@@ -457,29 +448,50 @@ class Timer {
   }
 
   void destroy() {
-    // assert(!isEnd_);
+    assert(!isEnd_);
     isEnd_ = true;
   }
 
   virtual void end() {
-    if (!isEnd_) {
-      isEnd_ = true;
-      auto &map = staticMap();
-      auto &orderedKeyList = staticOrderedKeyList();
-      auto &spin_lock = staticSpinLock();
-      end_ = std::chrono::steady_clock::now();
-      if (map.find(timerName_) == map.end()) {
-        spin_lock.Lock();
-        if (map.find(timerName_) == map.end()) {
-          map[timerName_] = std::make_unique<Counters>();
-          orderedKeyList.push_back(timerName_);
-        }
-        spin_lock.Unlock();
-      }
-      auto &value = map[timerName_];
-      value->Record(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(end_ - start_).count());
+    assert(!isEnd_);
+    isEnd_ = true;
+    auto &map = staticMap();
+    auto &orderedKeyList = staticOrderedKeyList();
+    auto &spin_lock = staticSpinLock();
+    end_ = std::chrono::steady_clock::now();
+    spin_lock.Lock();
+    if (map.find(timerName_) == map.end()) {
+      map[timerName_] = std::make_unique<Counters>();
+      orderedKeyList.push_back(timerName_);
     }
+    auto &value = map[timerName_];
+    spin_lock.Unlock();
+    value->Record(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end_ - start_)
+            .count());
+  }
+
+  static void ManualRecordNs(const std::string &name, double ns) {
+    auto &map = staticMap();
+    auto &orderedKeyList = staticOrderedKeyList();
+    auto &spin_lock = staticSpinLock();
+    spin_lock.Lock();
+    if (map.find(name) == map.end()) {
+      map[name] = std::make_unique<Counters>();
+      orderedKeyList.push_back(name);
+    }
+    auto &value = map[name];
+    spin_lock.Unlock();
+    value->Record(ns);
+  }
+
+  static double ManualQuery(const std::string &key) {
+    auto &spin_lock = staticSpinLock();
+    auto &map = staticMap();
+    spin_lock.Lock();
+    double ret = map[key]->mean();
+    spin_lock.Unlock();
+    return ret;
   }
 
   static std::string Report() {
@@ -493,8 +505,10 @@ class Timer {
       spin_lock.Unlock();
       return "";
     }
-    for (auto key = orderedKeyList.begin(); key != orderedKeyList.end(); ++key) {
-      vec.push_back({*key, beautifyNs(map[*key]->mean()), beautifyNs(map[*key]->p(99))});
+    for (auto key = orderedKeyList.begin(); key != orderedKeyList.end();
+         ++key) {
+      vec.push_back(
+          {*key, beautifyNs(map[*key]->mean()), beautifyNs(map[*key]->p(99))});
     }
     spin_lock.Unlock();
     DrawTable::DrawTB(ss, {25, 25, 25}, {"Name", "Mean", "P99"}, vec);
@@ -507,8 +521,35 @@ class Timer {
   std::chrono::time_point<std::chrono::steady_clock> start_;
   std::chrono::time_point<std::chrono::steady_clock> end_;
   double cum_count_ = 0;
-  int sampled_count_ = 0;
-  const int sample_rate_ = 1;
+};
+
+class GPUTimer : public Timer {
+ public:
+  GPUTimer(const std::string &name) : Timer(name) {}
+  void end() override {
+#ifndef XMH_PERF_GPU
+    isEnd_ = true;
+    return;
+#else
+    cudaDeviceSynchronize();
+    assert(!isEnd_);
+    isEnd_ = true;
+    auto &map = staticMap();
+    auto &orderedKeyList = staticOrderedKeyList();
+    auto &spin_lock = staticSpinLock();
+    end_ = std::chrono::steady_clock::now();
+    spin_lock.Lock();
+    if (map.find(timerName_) == map.end()) {
+      map[timerName_] = std::make_unique<Counters>();
+      orderedKeyList.push_back(timerName_);
+    }
+    auto &value = map[timerName_];
+    spin_lock.Unlock();
+    value->Record(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end_ - start_)
+            .count());
+#endif
+  }
 };
 
 class Reporter {
@@ -522,16 +563,16 @@ class Reporter {
     return reportThreadFlag_;
   }
 
-  static void Clear() {
-    Timer::Init();
-    PerfCounter::Init();
-  }
-
- public:
   static void Init4GoogleTest() {
     StopReportThread();
     Clear();
     reportThreadFlag().store(true);
+  }
+
+ public:
+  static void Clear() {
+    Timer::Init();
+    PerfCounter::Init();
   }
 
   static void StartReportThread(int intervalMilliSecond = 5000) {
@@ -555,22 +596,16 @@ class Reporter {
   }
 
   static void Report() {
-    time_t now = time(0);
-    char *dt = ctime(&now);
-    std::string reported_string = Timer::Report() + PerfCounter::Report();
-    std::string concat = std::string(dt) + '\n' + reported_string;
-    if (reported_string == "") {
-      return;
-    } else {
-      std::cout << concat << std::endl << std::flush;
-    }
+    std::cout << Timer::Report() << std::flush;
+    std::cout << PerfCounter::Report() << std::flush;
   }
 
  private:
   static void ReportThread(int intervalMilliSecond = 5000) {
     while (reportThreadFlag().load()) {
       Report();
-      std::this_thread::sleep_for(std::chrono::milliseconds(intervalMilliSecond));
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(intervalMilliSecond));
     }
   }
 };
@@ -583,9 +618,7 @@ class PerfCounter {
 
   static void Record(const std::string &name, double count) {}
 
-  static std::string Report() {
-    return "";
-  }
+  static std::string Report() { return ""; }
 };
 
 class Timer {
@@ -597,14 +630,10 @@ class Timer {
   ~Timer() {}
 
   void start() {}
-  double nsSinceStart() {
-    return 0;
-  }
+  double nsSinceStart() { return 0; }
   void end() {}
 
-  static std::string Report() {
-    return "";
-  }
+  static std::string Report() { return ""; }
 
  private:
 };

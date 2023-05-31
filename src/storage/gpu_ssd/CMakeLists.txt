@@ -9,9 +9,10 @@ target_include_directories(gd_bam PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpud
 target_include_directories(gd_bam PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/include/freestanding/include)
 target_compile_options(gd_bam PRIVATE -Wno-unused-function -Wno-aligned-new -Wno-format)
 set_target_properties(gd_bam PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+set_target_properties(gd_bam PROPERTIES CUDA_ARCHITECTURES OFF)
 
 add_executable(perf_BaM perf_BaM.cu) 
-target_link_libraries(perf_BaM PUBLIC gd_bam)
+target_link_libraries(perf_BaM PUBLIC gd_bam gflags)
 set_target_properties(perf_BaM PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(perf_BaM PROPERTIES CUDA_ARCHITECTURES OFF)
 
@@ -33,6 +34,7 @@ target_include_directories(gpu_direct_ssd_raw PRIVATE ${PROJECT_SOURCE_DIR}/thir
 target_include_directories(gpu_direct_ssd_raw PRIVATE ${PROJECT_SOURCE_DIR}/third_party/gpudirect-nvme/include/freestanding/include)
 target_compile_options(gpu_direct_ssd_raw PRIVATE -Wno-unused-function -Wno-aligned-new -Wno-format)
 set_target_properties(gpu_direct_ssd_raw PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+set_target_properties(gpu_direct_ssd_raw PROPERTIES CUDA_ARCHITECTURES OFF)
 
 add_executable(test_RawGD test_RawGD.cu)
 target_link_libraries(test_RawGD gpu_direct_ssd_raw gtest)

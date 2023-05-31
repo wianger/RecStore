@@ -2,6 +2,8 @@
 #include "folly/Format.h"
 #include "folly/Random.h"
 #include "folly/init/Init.h"
+#include "folly/portability/GFlags.h"
+#include "base/log.h"
 
 #include <cstdint>
 
@@ -175,7 +177,7 @@ class ScopedTempDir {
 
   bool CreateUniqueTempDir() {
     auto temp = folly::Random::rand64();
-    auto path = folly::sformat("/tmp/temp-{}", temp);
+    std::string path = folly::sformat("/tmp/temp-{}", temp);
     file_util::CreateDirectory(path);
     path_.setPath(path);
     return true;
