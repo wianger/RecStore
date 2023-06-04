@@ -31,7 +31,8 @@
 // #define XMH_PERF_GPU
 #endif
 
-// #include "folly/GLog.h"
+#include "base.h"
+
 class XDebug {
  public:
   static void AssertTensorEq(const float *emb, int dim, uint64_t value,
@@ -399,7 +400,10 @@ class Timer {
   }
 
  public:
-  Timer(std::string timerName) : timerName_(timerName) { start(); }
+  Timer(std::string timerName, int sampling_times = 1)
+      : timerName_(timerName), sampling_times_(sampling_times) {
+    start();
+  }
 
   static void Init() {
     staticMap().clear();
@@ -453,6 +457,11 @@ class Timer {
   }
 
   virtual void end() {
+    if (cum_sampling_times_ % sampling_times_ != 0) {
+      return;
+    }
+    cum_sampling_times_++;
+
     assert(!isEnd_);
     isEnd_ = true;
     auto &map = staticMap();
@@ -521,6 +530,8 @@ class Timer {
   std::chrono::time_point<std::chrono::steady_clock> start_;
   std::chrono::time_point<std::chrono::steady_clock> end_;
   double cum_count_ = 0;
+  const int sampling_times_ = 1;
+  int cum_sampling_times_ = 0;
 };
 
 class GPUTimer : public Timer {

@@ -90,9 +90,13 @@ else()
 endif()
 
 add_subdirectory(third_party/googletest)
+add_subdirectory(third_party/Mayfly-main)
 
 include_directories(
   ${PROJECT_SOURCE_DIR}/src
+)
+include_directories(
+  ${PROJECT_SOURCE_DIR}
 )
 
 

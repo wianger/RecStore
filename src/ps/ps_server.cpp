@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
   xmh::Reporter::StartReportThread(2000);
   std::string server_address("0.0.0.0:15000");
 
-  auto cache_ps = std::make_unique<CachePS>(33762591LL, 0);  // 1GB dict
+  auto cache_ps = std::make_unique<CachePS>(33762591LL, 0, 8);  // 1GB dict
 
   ParameterServiceImpl service(cache_ps.get());
   grpc::EnableDefaultHealthCheckService(true);

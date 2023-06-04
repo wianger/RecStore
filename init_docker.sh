@@ -7,7 +7,10 @@ git config --global user.email "645214784@qq.com"
 sudo service ssh start
 
 
-PROJECT_PATH="/data/project/RecStore"
+PROJECT_PATH="/home/xieminhui/RecStore"
+
+
+sudo apt install -y libmemcached-dev 
 
 
 ln -sf ${PROJECT_PATH}/docker_config/.bashrc /home/xieminhui/.bashrc
@@ -15,7 +18,7 @@ source /home/xieminhui/.bashrc
 
 
 # git submodule add https://github.com/google/glog third_party/glog
-sudo rm /usr/lib/x86_64-linux-gnu/libglog.so.0*
+sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
 cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
 
 
@@ -29,6 +32,7 @@ cd ${PROJECT_PATH}/third_party/folly && git checkout v2021.01.04.00 && rm -rf _b
 # git submodule add https://github.com/google/googletest third_party/googletest
 
 
+cd ${PROJECT_PATH}/third_party/gperftools && rm -rf _build && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && sudo  make install && make clean
 
 
 # cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install

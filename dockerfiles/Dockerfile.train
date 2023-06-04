@@ -1,0 +1,186 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+ARG IMAGE_VERSION=21.06-tf2-py3
+FROM nvcr.io/nvidia/tensorflow:${IMAGE_VERSION} AS devel
+
+ARG UBUNTU_VERSION
+ARG CMAKE_VERSION=3.19.6
+ARG PYTHON_VERSION=3.8
+ARG RAPIDS_VERSION=21.06
+ARG HWLOC_VERSION=2.4.1
+ARG MPI_VERSION=4.1.0
+ARG MPI4PY_VERSION=3.0.3
+
+ARG RELEASE=false
+ARG SM="60;61;70;75;80"
+ARG VAL_MODE=OFF
+ARG ENABLE_MULTINODES=ON
+
+RUN apt-get remove --auto-remove -y python3 cmake && \
+    rm -rfv /usr/local/mpi /usr/local/ucx
+
+# ENV http_proxy=http://10.0.2.182:7890
+# ENV https_proxy=http://10.0.2.182:7890
+# ENV http_proxy=http://192.168.1.30:7890
+# ENV https_proxy=http://192.168.1.30:7890
+
+ENV no_proxy=localhost,127.0.0.1,kwaidc.com
+ENV CC=/usr/bin/gcc
+ENV CXX=/usr/bin/g++
+
+RUN apt-get update -y && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      vim gdb git wget tar unzip curl clang-format libboost-all-dev && \
+      rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /var/tmp && wget -q -nc --no-check-certificate -P /var/tmp https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh && \
+bash /var/tmp/Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/conda && \
+/opt/conda/bin/conda init && \
+ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+/opt/conda/bin/conda clean -afy && \
+rm -rf /var/tmp/Miniconda3-py38_4.10.3-Linux-x86_64.sh
+
+ENV CPATH=/opt/conda/include:$CPATH \
+LD_LIBRARY_PATH=/opt/conda/lib:$LD_LIBRARY_PATH \
+LIBRARY_PATH=/opt/conda/lib:$LIBRARY_PATH \
+PATH=/opt/conda/bin:$PATH \
+CONDA_PREFIX=/opt/conda \
+NCCL_LAUNCH_MODE=PARALLEL
+
+# remove cudf since it introduces an elder version of PB
+RUN conda update -n base -c defaults conda
+RUN conda update -n base -c defaults conda && \
+conda install -c rapidsai -c nvidia -c numba -c conda-forge python=3.8 cudatoolkit=11.2 && \
+conda install -c conda-forge cmake=3.19.6 pip ucx libhwloc=2.4.0 openmpi=4.1.0 openmpi-mpicc=4.1.0 mpi4py=3.0.3 && \
+conda install -c rapidsai -c nvidia -c numba -c conda-forge cudf=0.19 && \
+conda clean -afy && \
+rm -rfv /opt/conda/include/nccl.h /opt/conda/lib/libnccl* /opt/conda/include/google /opt/conda/include/*cudnn* /opt/conda/lib/*cudnn* /opt/conda/lib/libcudart*
+# RUN conda update -n base -c defaults conda && \
+# conda install -c rapidsai -c nvidia -c numba -c conda-forge cudf=0.19 python=3.8 cudatoolkit=11.2 && \
+# conda install -c conda-forge cmake=3.19.6 pip ucx libhwloc=2.4.0 openmpi=4.1.0 openmpi-mpicc=4.1.0 mpi4py=3.0.3 && \
+# conda clean -afy && \
+# rm -rfv /opt/conda/include/nccl.h /opt/conda/lib/libnccl* /opt/conda/include/google /opt/conda/include/*cudnn* /opt/conda/lib/*cudnn* /opt/conda/lib/libcudart*
+ENV OMPI_MCA_plm_rsh_agent=sh \
+OMPI_MCA_opal_cuda_support=true \
+OMPI_MCA_pml="ucx" \
+OMPI_MCA_osc="ucx" \
+UCX_MEMTYPE_CACHE=n
+
+RUN pip3 install numpy pandas scikit-learn ortools jupyter torch tqdm tensorflow && \
+pip3 cache purge
+
+RUN ln -s /usr/lib/x86_64-linux-gnu/libibverbs.so.1.11.32.1 /usr/lib/x86_64-linux-gnu/libibverbs.so
+
+# HugeCTR
+# RUN if [ "$RELEASE" = "true" ]; \
+# then \
+# mkdir -p /var/tmp && cd /var/tmp && git clone --depth=1 --branch master https://github.com/NVIDIA/HugeCTR.git HugeCTR && cd - && \
+# cd /var/tmp/HugeCTR && \
+# git submodule update --init --recursive && \
+# mkdir build && cd build && \
+# cmake -DCMAKE_BUILD_TYPE=Release -DSM=$SM \
+# -DVAL_MODE=$VAL_MODE -DENABLE_MULTINODES=$ENABLE_MULTINODES .. && \
+# make -j$(nproc) && make install && \
+# chmod +x /usr/local/hugectr/bin/* && \
+# chmod +x /usr/local/hugectr/lib/* && \
+# rm -rf /var/tmp/HugeCTR; \
+# else \
+# echo "Build container for development successfully"; \
+# fi
+# ENV PATH=/usr/local/hugectr/bin:$PATH \
+# LIBRARY_PATH=/usr/local/hugectr/lib:$LIBRARY_PATH \
+# LD_LIBRARY_PATH=/usr/local/hugectr/lib:$LD_LIBRARY_PATH \
+# PYTHONPATH=/usr/local/hugectr/lib:$PYTHONPATH
+
+RUN apt-get update -y && \
+  apt-get install -y --no-install-recommends \
+  libboost-all-dev \
+  libevent-dev \
+  libdouble-conversion-dev \
+  libgoogle-glog-dev \
+  libgflags-dev \
+  libiberty-dev \
+  liblz4-dev \
+  liblzma-dev \
+  libsnappy-dev \
+  zlib1g-dev \
+  binutils-dev \
+  libjemalloc-dev \
+  libssl-dev \
+  pkg-config \
+  libunwind-dev \
+  libunwind8-dev \
+  libelf-dev \
+  libdwarf-dev \
+  cloc \
+  check \
+  sudo \
+  libtbb-dev
+
+RUN apt remove -y libgoogle-glog-dev
+
+
+RUN apt-get update -y && \
+  apt-get install -y zsh fzf google-perftools openssh-server software-properties-common
+
+
+# RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin \
+#     && mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600 \
+#     && apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/7fa2af80.pub \
+#     && add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+
+RUN rm -f /etc/apt/sources.list.d/cuda.list
+RUN rm -f /etc/apt/sources.list.d/nvidia-ml.list
+RUN apt-key del 7fa2af80
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
+
+
+# RUN apt-get update \
+#     && apt-get install -y datacenter-gpu-manager
+
+RUN echo "xieminhui ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
+
+RUN echo "root:1234" | chpasswd
+
+RUN useradd --uid=1005 xieminhui
+
+RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shanghai' >/etc/timezone
+
+#RUN apt-get install -y nsight-compute-2021.2.0
+#
+
+RUN sed -i 's/#Port 22/Port 22222/g' /etc/ssh/sshd_config
+RUN mkdir /home/xieminhui
+RUN chown -R 1005:1005 /home/xieminhui
+RUN service ssh restart
+RUN apt-get install -y kmod
+
+USER 1005:1005
+WORKDIR /home/xieminhui
+RUN mkdir .ssh
+RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC5mtDaegM/dEFR1oD57lgvXxJp0NWWx1fmMXs+aycrbFcT+fgxMeou0uJSCBx4nugOwy2iu1KqX6v0UrdRVbQ9cY5b6z4wD/+xCqePzXbecU1HrsodBW8FY3xBDCB9DkncyXzJDtM5u+PviKG7bBpD4pCegthvtsYxbbh2Cp3hb9Bo4CW6S8mDpZJeNO1oEbJAj5dF2gULTQonK4HTB+jeRCU5FH2TGPvsjVnS2ITZxoQn2atJBGyPtjjNRvAUOaC2+fo4lvuWLk7h00KrSMaFUVTu6iBdRJWZP9AVLSORqmOYIow4vh+nHxTzx6h9NKCRV6sV1YIWD8o2Rk5GaxIgTaKEKrGCpXGSXx5vWNIuzQ9+hj672LY2kXERhZ9obuht43u/sKpSOUZ0Rc6hM+FZIMKGR4NKpKFKP2TVKMHRT5236U9kh4grz6BAOl9FmSbTN9ZPmSSC8fon5xCxPaQPgCfr2oHvfWCy2fjKWjeGI2Z1nDIFo/GSEw9WJtAwd70= xieminhui@xieminhuis-iMac.local' >>.ssh/authorized_keys
+RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCUrm/S6w7VH1p7UVItSXDSTwOe1gy8/mV+utHvRh6gwgjJuW6FfhuIM9w/wgFdZM8eK3WNu3tiTHX7YKVaGcbWVY65SxwnIve2MKCkKN5SR+9pLTRnacg7OGPpjhVHgZ39vGAptY8rqZ7FTz9jseb1BLI8X/65iYRoGPszbvEW/4kefGSRtEMGiIrybh4yVIPcPVagdqQc3Fp4iOE6YXhTNkKHjHPFs7xJKc/ZEN3hA8Nq8rrSGjF/qT1sILc2EfxYmyQSOtZ/xRbfyqPJI5mXbXljdqgDeeMol8bQkbvOzHU18MiIfVkAZhI6s/0JWuK7DvBPa0f4ml4G+qjHhciihi++rldu7qImXXCrFEMJFBgfdmt4yuroSNfdm8Kbem0xx86KCvAv7brt690SDzfuPFDFdMsT1e9U/EHDsRJ/yDnNADIEgoK6PFmA7UaVdjwNYnwArsdbTb/q2TrXPqQQyaxSlirTw42FX0wkmDGoqGgZdbpzCJlKGmryZLi+xK8= xieminhui@node182' >>.ssh/authorized_keys
+RUN chmod 600 .ssh/authorized_keys
+
+RUN alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
+ENV PYTHONPATH=/data/project/HugeCTR/build/lib
+
+
+# RUN sudo rm /opt/conda/lib/libtinfo*
+RUN sudo rm -rf /opt/conda/include/grpc*
+
+RUN sudo -E /opt/conda/bin/conda install -y -c conda-forge ncurses
+
