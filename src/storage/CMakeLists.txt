@@ -1,3 +1,5 @@
+add_subdirectory(gpu_cache)
+
 add_subdirectory(ssd)
 
 add_subdirectory(gpu_ssd)
