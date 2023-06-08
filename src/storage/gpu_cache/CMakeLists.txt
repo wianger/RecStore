@@ -24,7 +24,7 @@ file(GLOB gpu_cache_src
 
 add_library(gpu_cache SHARED ${gpu_cache_src})
 target_compile_options(gpu_cache PUBLIC  $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>) 
-target_compile_options(gpu_cache PUBLIC  $<$<COMPILE_LANGUAGE:CUDA>:--std=c++11>) 
+# target_compile_options(gpu_cache PUBLIC  $<$<COMPILE_LANGUAGE:CUDA>:--std=c++11>) 
 
 set_target_properties(gpu_cache PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(gpu_cache PROPERTIES CUDA_ARCHITECTURES OFF)

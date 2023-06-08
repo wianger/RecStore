@@ -64,3 +64,20 @@ export CPATH=/opt/conda/include:
 export NCCL_LAUNCH_MODE=PARALLEL
 export LD_LIBRARY_PATH=/data/project/HugeCTR/third_party/spdk/dpdk/build/lib:$LD_LIBRARY_PATH
 alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" http_proxy="$http_proxy" https_proxy="$https_proxy"'
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/opt/conda/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
+        . "/opt/conda/etc/profile.d/conda.sh"
+    else
+        export PATH="/opt/conda/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+
+export PATH=/home/xieminhui/.local/bin:$PATH

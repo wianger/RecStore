@@ -6,3 +6,5 @@ add_subdirectory(rdma_ps)
 
 add_subdirectory(memory)
 add_subdirectory(storage)
+
+add_subdirectory(framework_adapters/torch)

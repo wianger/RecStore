@@ -1642,4 +1642,6 @@ template class gpu_cache<unsigned int, uint64_t, std::numeric_limits<unsigned in
                          SET_ASSOCIATIVITY, SLAB_SIZE>;
 template class gpu_cache<long long, uint64_t, std::numeric_limits<long long>::max(),
                          SET_ASSOCIATIVITY, SLAB_SIZE>;
+template class gpu_cache<uint64_t, uint64_t, std::numeric_limits<uint64_t>::max(),
+                         SET_ASSOCIATIVITY, SLAB_SIZE>;
 }  // namespace gpu_cache

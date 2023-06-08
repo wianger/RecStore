@@ -23,9 +23,10 @@ endif()
 
 # setting compiler flags
 
-set(SM "75")
+set(SM "86")
 foreach(arch_name ${SM})
-    if (arch_name STREQUAL 80 OR 
+    if (arch_name STREQUAL 86 OR 
+        arch_name STREQUAL 80 OR 
         arch_name STREQUAL 75 OR 
         arch_name STREQUAL 70 OR 
         arch_name STREQUAL 61 OR 
