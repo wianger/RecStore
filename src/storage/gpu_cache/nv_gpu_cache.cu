@@ -1264,6 +1264,8 @@ gpu_cache<key_type, ref_counter_type, empty_key, set_associativity, warp_size, s
   CUDA_CHECK(cudaMalloc((void**)&slot_counter_, sizeof(ref_counter_type) * num_slot_));
   CUDA_CHECK(cudaMalloc((void**)&global_counter_, sizeof(atomic_ref_counter_type)));
 
+  std::cout << "global_counter_ = " << global_counter_ << std::endl;
+
   // Allocate GPU memory for set mutex
   CUDA_CHECK(cudaMalloc((void**)&set_mutex_, sizeof(mutex) * capacity_in_set_));
 
@@ -1638,10 +1640,12 @@ void gpu_cache<key_type, ref_counter_type, empty_key, set_associativity, warp_si
 }
 #endif
 
-template class gpu_cache<unsigned int, uint64_t, std::numeric_limits<unsigned int>::max(),
-                         SET_ASSOCIATIVITY, SLAB_SIZE>;
-template class gpu_cache<long long, uint64_t, std::numeric_limits<long long>::max(),
-                         SET_ASSOCIATIVITY, SLAB_SIZE>;
-template class gpu_cache<uint64_t, uint64_t, std::numeric_limits<uint64_t>::max(),
+// template class gpu_cache<unsigned int, uint64_t, std::numeric_limits<unsigned int>::max(),
+//                          SET_ASSOCIATIVITY, SLAB_SIZE>;
+// template class gpu_cache<long long, uint64_t, std::numeric_limits<long long>::max(),
+//                          SET_ASSOCIATIVITY, SLAB_SIZE>;
+// template class gpu_cache<uint64_t, uint64_t, std::numeric_limits<uint64_t>::max(),
+//                          SET_ASSOCIATIVITY, SLAB_SIZE>;
+template class gpu_cache<int64_t, uint64_t, std::numeric_limits<int64_t>::max(),
                          SET_ASSOCIATIVITY, SLAB_SIZE>;
 }  // namespace gpu_cache

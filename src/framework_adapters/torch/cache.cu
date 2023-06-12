@@ -14,6 +14,14 @@ struct CacheQueryResult : public torch::CustomClassHolder {
         missing_index_(missing_index),
         missing_keys_(missing_keys) {}
 
+  std::string __repr__() const {
+    std::stringstream ss;
+    ss << "CacheQueryResult(values=" << values_
+       << ", missing_index=" << missing_index_
+       << ", missing_keys=" << missing_keys_ << ")";
+    return ss.str();
+  }
+
   torch::Tensor values_;
   torch::Tensor missing_index_;
   torch::Tensor missing_keys_;
@@ -21,7 +29,7 @@ struct CacheQueryResult : public torch::CustomClassHolder {
 
 // template <typename key_t = uint64_t>
 class GpuCache : public torch::CustomClassHolder {
-  using key_t = uint64_t;
+  using key_t = int64_t;
   constexpr static int set_associativity = 2;
   constexpr static int WARP_SIZE = 32;
   constexpr static int bucket_size = WARP_SIZE * set_associativity;
@@ -31,14 +39,17 @@ class GpuCache : public torch::CustomClassHolder {
       : num_feats(num_feats),
         cache((num_items + bucket_size - 1) / bucket_size, num_feats) {}
 
-  c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys) {
+  // c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys) {
+  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Query(
+      torch::Tensor keys) {
     const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
 
     torch::Device device = keys.device();
-    CHECK(device.is_cuda())
-        << "The tensor of requested indices must be on GPU.";
+    TORCH_CHECK(device.is_cuda(),
+                "The tensor of requested indices must be on GPU.");
 
-    // torch::Device device(torch::kCUDA, 0);
+    TORCH_CHECK_EQ(keys.scalar_type(), torch::kLong)
+        << "The tensor of requested indices must be of type int64.";
 
     torch::Tensor values = at::zeros(
         torch::IntArrayRef({(int64_t)keys.sizes()[0], (int64_t)num_feats}),
@@ -49,39 +60,41 @@ class GpuCache : public torch::CustomClassHolder {
                      at::TensorOptions().dtype(torch::kLong).device(device));
 
     torch::Tensor missing_keys = torch::zeros_like(keys);
-    torch::Tensor missing_len = torch::zeros(1, torch::kLong);
+    torch::Tensor missing_len =
+        at::zeros(1, at::TensorOptions().dtype(torch::kLong).device(device));
 
-    // cache.Query(static_cast<const key_t *>(keys.data_ptr<key_t>()),
-    //             keys.sizes()[0], static_cast<float
-    //             *>(values.data_ptr<float>()), static_cast<uint64_t
-    //             *>(missing_index.data_ptr<uint64_t>()), static_cast<key_t
-    //             *>(missing_keys.data_ptr<key_t>()),
-    //             missing_len.data_ptr<uint64_t>(), stream);
+    cache.Query(static_cast<const key_t *>(keys.data_ptr<key_t>()),
+                keys.sizes()[0], static_cast<float *>(values.data_ptr<float>()),
+                (uint64_t *)(missing_index.data_ptr<int64_t>()),
+                static_cast<key_t *>(missing_keys.data_ptr<key_t>()),
+                (uint64_t *)missing_len.data_ptr<int64_t>(), stream);
 
-    torch::Tensor missing_len_host = missing_len.cpu();
+    auto missing_len_host = missing_len.cpu().item<int64_t>();
 
-    TORCH_CHECK_GE(missing_len_host.item<int64_t>(), 0);
-    TORCH_CHECK_LE(missing_len_host.item<int64_t>(), keys.sizes()[0]);
+    TORCH_CHECK_GE(missing_len_host, 0);
+    TORCH_CHECK_LE(missing_len_host, keys.sizes()[0]);
 
-    // missing_index = missing_index.CreateView({(int64_t)missing_len_host},
-    //                                          missing_index->dtype);
-    // missing_keys =
-    //     missing_keys.CreateView({(int64_t)missing_len_host},
-    //     keys->dtype);
+    torch::Tensor ret_missing_index =
+        missing_index.slice(0, 0, missing_len_host);
+    torch::Tensor ret_missing_key = missing_keys.slice(0, 0, missing_len_host);
 
-    return c10::make_intrusive<CacheQueryResult>(values, missing_index,
-                                                 missing_keys);
+    // return c10::make_intrusive<CacheQueryResult>(values, ret_missing_index,
+    //                                              ret_missing_key);
+    return std::make_tuple(values, ret_missing_index, ret_missing_key);
   }
 
-  //   void Replace(IdArray keys, NDArray values) {
-  //     cudaStream_t stream = dgl::runtime::getCurrentCUDAStream();
-  //     CHECK_EQ(keys->shape[0], values->shape[0])
-  //         << "First dimensions of keys and values must match";
-  //     CHECK_EQ(values->shape[1], num_feats) << "Embedding dimension must
-  //     match"; cache.Replace(static_cast<const key_t *>(keys->data),
-  //     keys->shape[0],
-  //                   static_cast<const float *>(values->data), stream);
-  //   }
+  void Replace(torch::Tensor keys, torch::Tensor values) {
+    const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
+    TORCH_CHECK_EQ(keys.scalar_type(), torch::kLong)
+        << "The tensor of requested indices must be of type int64.";
+    TORCH_CHECK_EQ(keys.sizes()[0], values.sizes()[0])
+        << "First dimensions of keys and values must match";
+    TORCH_CHECK_EQ(values.sizes()[1], num_feats)
+        << "Embedding dimension must match ";
+
+    cache.Replace(keys.data_ptr<key_t>(), keys.sizes()[0],
+                  values.data_ptr<float>(), stream);
+  }
 
   virtual ~GpuCache() = default;
 
@@ -93,10 +106,12 @@ class GpuCache : public torch::CustomClassHolder {
 };
 
 TORCH_LIBRARY(librecstore_pytorch, m) {
-  // m.class_<GpuCache>("GpuCache")
-  //     .def(torch::init<int64_t, int64_t>())
-  //     .def("Query", &GpuCache::Query);
-  m.class_<GpuCache>("GpuCache").def(torch::init<int64_t, int64_t>());
+  m.class_<CacheQueryResult>("CacheQueryResult")
+      .def("__repr__", &CacheQueryResult::__repr__);
+  m.class_<GpuCache>("GpuCache")
+      .def(torch::init<int64_t, int64_t>())
+      .def("Query", &GpuCache::Query)
+      .def("Replace", &GpuCache::Replace);
 }
 
 }  // namespace recstore
