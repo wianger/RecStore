@@ -92,6 +92,9 @@ endif()
 
 add_subdirectory(third_party/googletest)
 add_subdirectory(third_party/Mayfly-main)
+add_subdirectory(third_party/json)
+
+
 
 include_directories(
   ${PROJECT_SOURCE_DIR}/src

@@ -14,7 +14,7 @@
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
-#include "ps_client.h"
+#include "grpc_ps_client.h"
 
 using grpc::Channel;
 using grpc::ClientContext;

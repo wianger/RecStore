@@ -16,9 +16,9 @@ struct CacheQueryResult : public torch::CustomClassHolder {
 
   std::string __repr__() const {
     std::stringstream ss;
-    ss << "CacheQueryResult(values=" << values_
-       << ", missing_index=" << missing_index_
-       << ", missing_keys=" << missing_keys_ << ")";
+    ss << "CacheQueryResult(values=" << values_.toString()
+       << ", missing_index=" << missing_index_.toString()
+       << ", missing_keys=" << missing_keys_.toString() << ")";
     return ss.str();
   }
 
@@ -39,9 +39,9 @@ class GpuCache : public torch::CustomClassHolder {
       : num_feats(num_feats),
         cache((num_items + bucket_size - 1) / bucket_size, num_feats) {}
 
-  // c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys) {
-  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Query(
-      torch::Tensor keys) {
+  c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys) {
+  // std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Query(
+      // torch::Tensor keys) {
     const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
 
     torch::Device device = keys.device();
@@ -78,9 +78,9 @@ class GpuCache : public torch::CustomClassHolder {
         missing_index.slice(0, 0, missing_len_host);
     torch::Tensor ret_missing_key = missing_keys.slice(0, 0, missing_len_host);
 
-    // return c10::make_intrusive<CacheQueryResult>(values, ret_missing_index,
-    //                                              ret_missing_key);
-    return std::make_tuple(values, ret_missing_index, ret_missing_key);
+    return c10::make_intrusive<CacheQueryResult>(values, ret_missing_index,
+                                                 ret_missing_key);
+    // return std::make_tuple(values, ret_missing_index, ret_missing_key);
   }
 
   void Replace(torch::Tensor keys, torch::Tensor values) {
@@ -107,7 +107,7 @@ class GpuCache : public torch::CustomClassHolder {
 
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")
-      .def("__repr__", &CacheQueryResult::__repr__);
+      .def("__str__", &CacheQueryResult::__repr__);
   m.class_<GpuCache>("GpuCache")
       .def(torch::init<int64_t, int64_t>())
       .def("Query", &GpuCache::Query)

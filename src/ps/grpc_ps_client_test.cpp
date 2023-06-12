@@ -4,7 +4,7 @@
 
 #include "base/array.h"
 #include "base/timer.h"
-#include "ps_client.h"
+#include "grpc_ps_client.h"
 
 static bool check_eq_1d(const std::vector<float> &a,
                         const std::vector<float> &b) {

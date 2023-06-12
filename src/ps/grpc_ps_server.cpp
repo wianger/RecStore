@@ -8,14 +8,16 @@
 #include <string>
 #include <vector>
 
-#include "base/base.h"
 #include "base/array.h"
+#include "base/base.h"
 #include "base/timer.h"
 #include "cache_ps_impl.h"
 #include "flatc.h"
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
+
+#include "base_ps_server.h"
 
 using grpc::Server;
 using grpc::ServerBuilder;
@@ -128,27 +130,47 @@ class ParameterServiceImpl final : public xmhps::ParameterService::Service {
   CachePS *cache_ps_;
 };
 
+namespace recstore {
+class GRPCParameterServer : public BaseParameterServer {
+ public:
+  GRPCParameterServer() = default;
+
+  // void Init(const nlohmann::json &config) {}
+
+  void Run() {
+    std::string server_address("0.0.0.0:15000");
+    auto cache_ps = std::make_unique<CachePS>(33762591LL, 0, 8);  // 1GB dict
+    ParameterServiceImpl service(cache_ps.get());
+    grpc::EnableDefaultHealthCheckService(true);
+    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+    ServerBuilder builder;
+    // Listen on the given address without any authentication mechanism.
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    // Register "service" as the instance through which we'll communicate with
+    // clients. In this case it corresponds to an *synchronous* service.
+    builder.RegisterService(&service);
+    // Finally assemble the server.
+    std::unique_ptr<Server> server(builder.BuildAndStart());
+    std::cout << "Server listening on " << server_address << std::endl;
+    // Wait for the server to shutdown. Note that some other thread must be
+    // responsible for shutting down the server for this call to ever return.
+    server->Wait();
+  }
+};
+}  // namespace recstore
+
 int main(int argc, char **argv) {
   folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread(2000);
-  std::string server_address("0.0.0.0:15000");
+  nlohmann::json ex = nlohmann::json::parse(R"(
+  {
+    "pi": 3.141,
+    "happy": true
+  }
+  )");
 
-  auto cache_ps = std::make_unique<CachePS>(33762591LL, 0, 8);  // 1GB dict
-
-  ParameterServiceImpl service(cache_ps.get());
-  grpc::EnableDefaultHealthCheckService(true);
-  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
-  ServerBuilder builder;
-  // Listen on the given address without any authentication mechanism.
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  // Register "service" as the instance through which we'll communicate with
-  // clients. In this case it corresponds to an *synchronous* service.
-  builder.RegisterService(&service);
-  // Finally assemble the server.
-  std::unique_ptr<Server> server(builder.BuildAndStart());
-  std::cout << "Server listening on " << server_address << std::endl;
-  // Wait for the server to shutdown. Note that some other thread must be
-  // responsible for shutting down the server for this call to ever return.
-  server->Wait();
+  recstore::GRPCParameterServer ps;
+  ps.Init(ex);
+  ps.Run();
   return 0;
 }

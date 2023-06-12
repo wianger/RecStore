@@ -12,9 +12,7 @@ torch.classes.load_library("/home/xieminhui/RecStore/build/lib/librecstore_pytor
 
 gpu_cache = torch.classes.librecstore_pytorch.GpuCache(100,3)
 
-print("before query", flush=True)
 print(gpu_cache.Query(key))
-
 print("after query", flush=True)
 
 gpu_cache.Replace(key, values)
