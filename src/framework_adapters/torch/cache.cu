@@ -16,11 +16,15 @@ struct CacheQueryResult : public torch::CustomClassHolder {
 
   std::string __repr__() const {
     std::stringstream ss;
-    ss << "CacheQueryResult(values=" << values_.toString()
-       << ", missing_index=" << missing_index_.toString()
-       << ", missing_keys=" << missing_keys_.toString() << ")";
+    ss << "CacheQueryResult(values=" << values_
+       << ", missing_index=" << missing_index_
+       << ", missing_keys=" << missing_keys_ << ")";
     return ss.str();
   }
+
+  torch::Tensor values() { return values_; }
+  torch::Tensor missing_index() { return missing_index_; }
+  torch::Tensor missing_keys() { return missing_keys_; }
 
   torch::Tensor values_;
   torch::Tensor missing_index_;
@@ -35,13 +39,13 @@ class GpuCache : public torch::CustomClassHolder {
   constexpr static int bucket_size = WARP_SIZE * set_associativity;
 
  public:
-  GpuCache(int64_t num_items, int64_t num_feats)
-      : num_feats(num_feats),
-        cache((num_items + bucket_size - 1) / bucket_size, num_feats) {}
+  GpuCache(int64_t num_items, int64_t emb_dim)
+      : emb_dim(emb_dim),
+        cache((num_items + bucket_size - 1) / bucket_size, emb_dim) {}
 
-  c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys) {
-  // std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Query(
-      // torch::Tensor keys) {
+  c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys, torch::Tensor values) {
+    // std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Query(
+    // torch::Tensor keys) {
     const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
 
     torch::Device device = keys.device();
@@ -51,9 +55,9 @@ class GpuCache : public torch::CustomClassHolder {
     TORCH_CHECK_EQ(keys.scalar_type(), torch::kLong)
         << "The tensor of requested indices must be of type int64.";
 
-    torch::Tensor values = at::zeros(
-        torch::IntArrayRef({(int64_t)keys.sizes()[0], (int64_t)num_feats}),
-        at::TensorOptions().dtype(torch::kFloat).device(device));
+    // torch::Tensor values = at::zeros(
+    //     torch::IntArrayRef({(int64_t)keys.sizes()[0], (int64_t)emb_dim}),
+    //     at::TensorOptions().dtype(torch::kFloat).device(device));
 
     torch::Tensor missing_index =
         torch::zeros(torch::IntArrayRef({(int64_t)keys.sizes()[0]}),
@@ -89,7 +93,7 @@ class GpuCache : public torch::CustomClassHolder {
         << "The tensor of requested indices must be of type int64.";
     TORCH_CHECK_EQ(keys.sizes()[0], values.sizes()[0])
         << "First dimensions of keys and values must match";
-    TORCH_CHECK_EQ(values.sizes()[1], num_feats)
+    TORCH_CHECK_EQ(values.sizes()[1], emb_dim)
         << "Embedding dimension must match ";
 
     cache.Replace(keys.data_ptr<key_t>(), keys.sizes()[0],
@@ -99,19 +103,28 @@ class GpuCache : public torch::CustomClassHolder {
   virtual ~GpuCache() = default;
 
  private:
-  size_t num_feats;
+  size_t emb_dim;
   gpu_cache::gpu_cache<key_t, uint64_t, std::numeric_limits<key_t>::max(),
                        set_associativity, WARP_SIZE>
       cache;
 };
 
+void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
+              const at::Tensor missing_index);
+
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")
-      .def("__str__", &CacheQueryResult::__repr__);
+      .def("__str__", &CacheQueryResult::__repr__)
+      .def_property("values", &CacheQueryResult::values)
+      .def_property("missing_index", &CacheQueryResult::missing_index)
+      .def_property("missing_keys", &CacheQueryResult::missing_keys);
+
   m.class_<GpuCache>("GpuCache")
       .def(torch::init<int64_t, int64_t>())
       .def("Query", &GpuCache::Query)
       .def("Replace", &GpuCache::Replace);
+  
+  m.def("merge_op", &merge_op);
 }
 
 }  // namespace recstore
