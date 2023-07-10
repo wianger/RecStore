@@ -1,5 +1,7 @@
 #include "storage/gpu_cache/nv_gpu_cache.hpp"
 
+#include "gpu_cache_nohash.h"
+
 #include <ATen/cuda/CUDAContext.h>
 #include <torch/custom_class.h>
 #include <torch/extension.h>
@@ -125,6 +127,10 @@ TORCH_LIBRARY(librecstore_pytorch, m) {
       .def("Replace", &GpuCache::Replace);
   
   m.def("merge_op", &merge_op);
+
+
+  m.class_<GPUCacheWithNoHashTorch>("GpuCacheWithNoHash")
+    .def(torch::init<int64_t, int64_t, int64_t,int64_t>());
 }
 
 }  // namespace recstore
