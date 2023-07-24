@@ -36,6 +36,11 @@ namespace recstore {
 void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
               const at::Tensor missing_index) {
   const size_t missing_len = missing_index.size(0);
+
+  if (missing_len == 0) {
+    return;
+  }
+
   const size_t emb_vec_size = retrieved.size(1);
 
   TORCH_CHECK(merge_dst.size(1) == emb_vec_size);

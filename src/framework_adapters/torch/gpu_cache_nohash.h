@@ -8,36 +8,6 @@
 #include <cinttypes>
 #include <memory>
 
-#include "shm_helper.h"
-
-typedef struct shmStruct_st {
-  static constexpr int MAX_DEVICE = 8;
-  cudaIpcMemHandle_t memHandle[MAX_DEVICE];
-} shmStruct;
-
-class CUDAIPCEnv {
- public:
-  CUDAIPCEnv(int32_t device_count) {
-    std::cout << "start initialize ipc env\n";
-    const char shmName[] = "simpleIPCshm";
-    if (sharedMemoryCreate(shmName, sizeof(*shm_), &info_) != 0) {
-      std::cout << "Failed to create shared memory slab" << std::endl;
-      exit(-1);
-    }
-    std::cout << "Shared Memory Opened\n";
-
-    shm_ = (volatile shmStruct *)info_.addr;
-    memset((void *)shm_, 0, sizeof(*shm_));
-
-    device_count_ = device_count;
-  }
-
- private:
-  volatile shmStruct *shm_;
-  int32_t device_count_;
-  sharedMemoryInfo info_;
-};
-
 void UVAQuery(const int64_t *d_indices, const float *d_db, const int emb_dim,
               float *d_output_buffer, const int query_count,
               cudaStream_t stream);
@@ -45,17 +15,12 @@ void UVAQuery(const int64_t *d_indices, const float *d_db, const int emb_dim,
 template <typename ID_Type = int64_t>
 class GPUCacheWithNoHash {
  public:
-  GPUCacheWithNoHash(int64_t capacity, int emb_dim, ID_Type start, ID_Type end,
-                     float *d_cache_db)
-      : capacity_(capacity),
-        emb_dim_(emb_dim),
-        start_(start),
-        end_(end),
-        d_cache_db_(d_cache_db) {
-    CHECK_EQ(end - start, capacity);
-    // if (nullptr == d_cache_db_) {
-    //   cudaMalloc(&d_cache_db_, capacity * emb_dim * sizeof(float));
-    // }
+  GPUCacheWithNoHash(int64_t capacity, int emb_dim, ID_Type start, ID_Type end)
+      : capacity_(capacity), emb_dim_(emb_dim), start_(start), end_(end) {
+    TORCH_CHECK_EQ(end - start, capacity);
+    if (nullptr == d_cache_db_) {
+      cudaMalloc(&d_cache_db_, capacity * emb_dim * sizeof(float));
+    }
     CUDA_CHECK(cudaGetLastError());
   }
 
@@ -70,49 +35,15 @@ class GPUCacheWithNoHash {
   const int emb_dim_;
   const ID_Type start_;
   const ID_Type end_;
-  float *d_cache_db_;
+  float *d_cache_db_ = nullptr;
 };
-
-template <typename ID_Type = int64_t>
-class MultiGPUCacheWithNoHash {
- public:
-  MultiGPUCacheWithNoHash(int64_t capacity, int emb_dim, ID_Type start, ID_Type end,
-                     float *d_cache_db)
-      : capacity_(capacity),
-        emb_dim_(emb_dim),
-        start_(start),
-        end_(end),
-        d_cache_db_(d_cache_db) {
-    CHECK_EQ(end - start, capacity);
-    // if (nullptr == d_cache_db_) {
-    //   cudaMalloc(&d_cache_db_, capacity * emb_dim * sizeof(float));
-    // }
-    CUDA_CHECK(cudaGetLastError());
-  }
-
-  void Query(const ID_Type *d_indices, int key_len, float *d_value,
-             cudaStream_t stream) {
-    UVAQuery(d_indices, d_cache_db_, emb_dim_, d_value, key_len, stream);
-    CUDA_CHECK(cudaGetLastError());
-  }
-
- private:
-  const int64_t capacity_;
-  const int emb_dim_;
-  const ID_Type start_;
-  const ID_Type end_;
-  float *d_cache_db_;
-};
-
-
-
 
 class GPUCacheWithNoHashTorch : public torch::CustomClassHolder {
  public:
   GPUCacheWithNoHashTorch(int64_t capacity, int64_t emb_dim, int64_t start,
                           int64_t end) {
-    cache_ = std::make_unique<GPUCacheWithNoHash<int64_t>>(capacity, (int)emb_dim, start,
-                                                  end, nullptr);
+    cache_ = std::make_unique<GPUCacheWithNoHash<int64_t>>(
+        capacity, (int)emb_dim, start, end);
   }
 
   void Query(torch::Tensor keys, torch::Tensor values) {
