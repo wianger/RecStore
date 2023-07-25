@@ -79,6 +79,6 @@ class LocalCachedEmbedding(torch.autograd.Function):
                     )
                     temp += coo_list[-1].cpu()
 
-                embedding_weight.grad = temp
+                embedding_weight.grad = temp / dist.get_world_size()
 
         return None, None, None, torch.randn(1, 1)

@@ -9,8 +9,9 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
-import argparse
+from torch.nn.parallel import DistributedDataParallel as DDP
 
+import argparse
 import debugpy
 
 torch.classes.load_library(
@@ -131,7 +132,7 @@ class TestShardedCache(unittest.TestCase):
 
         print(f"========== Running Test with routine {routine}==========")
 
-        shm_tensor_store = ShmTensorStore([("emb", (3, 3))])
+        shm_tensor_store = ShmTensorStore([("emb", (1024, 3))])
         workers = []
         for worker_id in range(TestShardedCache.num_workers):
             p = mp.Process(target=worker_main, args=(
@@ -161,34 +162,61 @@ class TestShardedCache(unittest.TestCase):
         gpu_cache = NVGPUCache(100, 3)
         emb = ShmTensorStore.GetTensor("emb")
         fake_tensor = torch.randn(1, 1, requires_grad=True)
-        if worker_id == 0:
-            input_keys = torch.tensor([0, 1,],).long().cuda()
-        else:
-            input_keys = torch.tensor([0, 2,],).long().cuda()
+
+        input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
+
+        # if worker_id == 0:
+        #     input_keys = torch.tensor([0, 1,],).long().cuda()
+        # else:
+        #     input_keys = torch.tensor([0, 2,],).long().cuda()
 
         if worker_id == 0:
             # sparse_opt = optim.SparseAdam([emb], lr=1)
             sparse_opt = optim.SGD([emb], lr=1)
 
+        std_emb = nn.Embedding.from_pretrained(
+            emb.clone(), freeze=False).cuda()
+        std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
 
-        std_emb = torch.embedding()
+        std_sparse_opt = optim.SGD(std_emb_ddp.parameters(), lr=1)
 
         # forward
         for _ in range(1):
             embed_value = LocalCachedEmbedding.apply(
                 input_keys, emb, gpu_cache, fake_tensor)
             assert embed_value.requires_grad
-            loss = embed_value.sum(-1).sum(-1) * 100
+            loss = embed_value.sum(-1).sum(-1)
             loss.backward()
 
+            std_embed_value = std_emb_ddp(input_keys)
+            std_loss = std_embed_value.sum(-1).sum(-1)
+            self.assertTrue(torch.allclose(
+                embed_value, std_embed_value))
+            self.assertTrue(torch.allclose(
+                loss, std_loss))
+            std_loss.backward()
+
             if worker_id == 0:
-                print("emb grad is ", emb.grad)
+                # print("emb.grad", emb.grad)
+                # print("std_emb.grad", std_emb.weight.grad)
+                self.assertTrue(torch.allclose(
+                    emb.grad.to_dense().cpu(), std_emb.weight.grad.cpu()))
+
+            if worker_id == 0:
                 sparse_opt.step()
                 sparse_opt.zero_grad()
-                print("emb is ", emb)
+
+            std_sparse_opt.step()
+            std_sparse_opt.zero_grad()
+
+            mp.Barrier(num_workers)
+            # print("emb", emb)
+            # print("std_emb.weight", std_emb.weight)
+            self.assertTrue(torch.allclose(
+                emb, std_emb.weight.cpu()))
 
     def test_local_cache(self):
-        self.main_routine(self.routine_local_cache)
+        self.main_routine(self.routine_local_cache_helper)
 
 
 if __name__ == '__main__':
