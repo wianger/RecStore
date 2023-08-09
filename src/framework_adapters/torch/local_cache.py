@@ -6,9 +6,10 @@ import torch.distributed as dist
 import torch.optim as optim
 import logging
 from utils import all2all_data_transfer, merge_op
+from abs_emb import AbsEmb, NVGPUCache
 
 
-class LocalCachedEmbedding(torch.autograd.Function):
+class LocalCachedEmbeddingFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, keys, embedding_weight, emb_cache, fake_tensor):
         emb_dim = embedding_weight.shape[1]
@@ -82,3 +83,18 @@ class LocalCachedEmbedding(torch.autograd.Function):
                 embedding_weight.grad = temp / dist.get_world_size()
 
         return None, None, None, torch.randn(1, 1)
+
+
+class LocalCachedEmbedding(AbsEmb):
+    def __init__(self, emb, cache_capacity, ) -> None:
+        self.fake_tensor = torch.randn(1, 1, requires_grad=True)
+        self.emb = emb
+        self.emb_dim = emb.shape[1]
+        self.gpu_cache = NVGPUCache(
+            int(emb.shape[0]*cache_capacity), self.emb_dim)
+
+    def forward(self, input_keys):
+        embed_value = LocalCachedEmbeddingFn.apply(
+            input_keys, self.emb, self.gpu_cache, self.fake_tensor)
+        assert embed_value.requires_grad
+        return embed_value

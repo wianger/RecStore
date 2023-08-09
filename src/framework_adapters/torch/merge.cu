@@ -57,7 +57,6 @@ void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
                       missing_index.data_ptr<int64_t>(), missing_len,
                       emb_vec_size, BLOCK_SIZE,
                       at::cuda::getCurrentCUDAStream());
-  // AT_CUDA_CHECK(cudaGetLastError());
-  // AT_CUDA_CHECK(cudaStreamSynchronize(at::cuda::getCurrentCUDAStream()));
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 }  // namespace recstore

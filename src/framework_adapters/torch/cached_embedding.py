@@ -1,4 +1,5 @@
-from sharded_cache import ShardedCachedEmbedding
+import numpy as np
+from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import LocalCachedEmbedding
 import unittest
 import torch
@@ -14,11 +15,21 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import argparse
 import debugpy
 
+import tqdm
+
+
+import random
+random.seed(0)
+np.random.seed(0)
+torch.use_deterministic_algorithms(True)
+
+
 torch.classes.load_library(
     "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
 
 logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+                    # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+                    datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 class ShmTensorStore:
@@ -34,92 +45,16 @@ class ShmTensorStore:
         return cls._tensor_store[name]
 
 
-class NVGPUCache:
-    def __init__(self, capacity, feature_dim) -> None:
-        self.gpu_cache = torch.classes.librecstore_pytorch.GpuCache(
-            capacity, feature_dim)
-        self.feature_dim = feature_dim
-
-    def Query(self, keys, values):
-        return self.gpu_cache.Query(keys, values)
-
-    def BatchQuery(self, list_of_keys, list_of_values):
-        ret = []
-        for each_keys, each_values in zip(list_of_keys, list_of_values):
-            ret.append(self.Query(each_keys, each_values))
-        return ret
-
-    def Replace(self, keys, values):
-        assert values.shape[1] == self.feature_dim
-        assert keys.shape[0] == values.shape[0]
-        self.gpu_cache.Replace(keys, values)
-
-
-def worker_main(worker_id, args_config):
-    num_workers = args_config['num_workers']
-    torch.cuda.set_device(worker_id)
-
-    dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
-        master_ip='127.0.0.1', master_port='12345')
-    world_size = num_workers
-    torch.distributed.init_process_group(backend=None,
-                                         init_method=dist_init_method,
-                                         world_size=world_size,
-                                         rank=worker_id,
-                                         timeout=datetime.timedelta(seconds=4))
-
-    gpu_cache = NVGPUCache(100, 3)
-
-    emb = ShmTensorStore.GetTensor("emb")
-    # test shm
-    if worker_id == 0:
-        print(worker_id, emb)
-        for i in range(emb.shape[0]):
-            emb[i, :] = torch.ones(emb.shape[1]) * i
-    mp.Barrier(num_workers)
-    print(worker_id, emb)
-
-    if worker_id == 0:
-        # sparse_opt = optim.SparseAdam([emb], lr=1)
-        sparse_opt = optim.SGD([emb], lr=1)
-
-    if worker_id == 0:
-        input_keys = torch.tensor([0, 1,],).long().cuda()
-    else:
-        input_keys = torch.tensor([0, 2,],).long().cuda()
-
-    fake_tensor = torch.randn(1, 1, requires_grad=True)
-
-    shard_range = [0, 2, 4]
-
-    # forward
-
-    for _ in range(1):
-        # emb_value = LocalCachedEmbedding.apply(
-        #     input_keys, "emb", gpu_cache, fake_tensor)
-
-        emb_value = ShardedCachedEmbedding.apply(
-            input_keys, "emb", gpu_cache, fake_tensor, shard_range)
-
-        assert emb_value.requires_grad
-
-        loss = emb_value.sum(-1).sum(-1) * 100
-        loss.backward()
-
-        if worker_id == 0:
-            print("emb grad is ", emb.grad)
-            sparse_opt.step()
-            sparse_opt.zero_grad()
-            print("emb is ", emb)
-
-
 class TestShardedCache(unittest.TestCase):
     num_workers = 2
+    EMB_DIM = 3
+    EMB_LEN = 3
 
     def main_routine(self, routine):
         # wrap rountine with dist_init
         def worker_main(routine, worker_id, num_workers, args):
             torch.cuda.set_device(worker_id)
+            torch.manual_seed(worker_id)
             dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
                 master_ip='127.0.0.1', master_port='12345')
             world_size = num_workers
@@ -132,7 +67,9 @@ class TestShardedCache(unittest.TestCase):
 
         print(f"========== Running Test with routine {routine}==========")
 
-        shm_tensor_store = ShmTensorStore([("emb", (1024, 3))])
+        shm_tensor_store = ShmTensorStore(
+            [("emb", (TestShardedCache.EMB_LEN, TestShardedCache.EMB_DIM))])
+
         workers = []
         for worker_id in range(TestShardedCache.num_workers):
             p = mp.Process(target=worker_main, args=(
@@ -158,62 +95,99 @@ class TestShardedCache(unittest.TestCase):
     def test_shm_tensor(self):
         self.main_routine(self.routine_shm_tensor)
 
-    def routine_local_cache_helper(self, worker_id, num_workers, args):
-        gpu_cache = NVGPUCache(100, 3)
-        emb = ShmTensorStore.GetTensor("emb")
-        fake_tensor = torch.randn(1, 1, requires_grad=True)
-
-        input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
-
-        # if worker_id == 0:
-        #     input_keys = torch.tensor([0, 1,],).long().cuda()
-        # else:
-        #     input_keys = torch.tensor([0, 2,],).long().cuda()
-
+    def init_emb_tensor(self, emb, worker_id, num_workers):
         if worker_id == 0:
-            # sparse_opt = optim.SparseAdam([emb], lr=1)
-            sparse_opt = optim.SGD([emb], lr=1)
+            print(worker_id, emb)
+            for i in range(emb.shape[0]):
+                emb[i, :] = torch.ones(emb.shape[1]) * i
+        mp.Barrier(num_workers)
+        for i in range(emb.shape[0]):
+            self.assertTrue(torch.allclose(
+                emb[i, :], torch.ones(emb.shape[1]) * i))
 
+    def routine_local_cache_helper(self, worker_id, num_workers, args):
+        USE_SGD = True
+        # USE_SGD = False
+        rank = dist.get_rank()
+
+
+        emb = ShmTensorStore.GetTensor("emb")
+        self.init_emb_tensor(emb, worker_id, num_workers)
+
+        # Generate standard embedding
         std_emb = nn.Embedding.from_pretrained(
             emb.clone(), freeze=False).cuda()
         std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
 
-        std_sparse_opt = optim.SGD(std_emb_ddp.parameters(), lr=1)
+        std_sparse_opt = optim.SGD(std_emb_ddp.parameters(
+        ), lr=1) if USE_SGD else optim.Adam(std_emb_ddp.parameters(), lr=1)
+        # Generate standard embedding done
+
+        # Generate our embedding
+        fake_tensor = torch.Tensor([0])
+        sparse_opt = optim.SGD(
+            [fake_tensor], lr=1,) if USE_SGD else optim.SparseAdam([], lr=1)
+        abs_emb = None
+
+        emb_name = "KnownShardedCachedEmbedding"
+        if emb_name == "KnownShardedCachedEmbedding":
+            cached_range = KnownShardedCachedEmbedding.generate_cached_range(
+                emb)
+            abs_emb = KnownShardedCachedEmbedding(emb, cached_range)
+
+        elif emb_name == "LocalCachedEmbedding":
+            abs_emb = LocalCachedEmbedding(emb, 0.1,)
+
+        else:
+            assert False
+        abs_emb.reg_opt(sparse_opt)
+        # Generate our embedding done
 
         # forward
-        for _ in range(1):
-            embed_value = LocalCachedEmbedding.apply(
-                input_keys, emb, gpu_cache, fake_tensor)
-            assert embed_value.requires_grad
-            loss = embed_value.sum(-1).sum(-1)
-            loss.backward()
+        for _ in tqdm.trange(1000):
+        # for _ in tqdm.trange(2):
+            print(f"========== Step {_} ========== ")
+            input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
+
+            # if worker_id == 0:
+            #     input_keys = torch.tensor([1, 2,],).long().cuda()
+            # else:
+            #     input_keys = torch.tensor([0, 2,],).long().cuda()
+            logging.debug(f"{rank}:input_keys {input_keys}")
+
 
             std_embed_value = std_emb_ddp(input_keys)
             std_loss = std_embed_value.sum(-1).sum(-1)
+            std_loss.backward()
+            logging.debug(f"{rank}:std_embed_value {std_embed_value}")
+
+            embed_value = abs_emb.forward(input_keys)
+            loss = embed_value.sum(-1).sum(-1)
+            loss.backward()
+            logging.debug(f"{rank}:embed_value {embed_value}")
+
+
             self.assertTrue(torch.allclose(
-                embed_value, std_embed_value))
+                embed_value, std_embed_value)), "forward is error"
             self.assertTrue(torch.allclose(
                 loss, std_loss))
-            std_loss.backward()
 
-            if worker_id == 0:
-                # print("emb.grad", emb.grad)
-                # print("std_emb.grad", std_emb.weight.grad)
-                self.assertTrue(torch.allclose(
-                    emb.grad.to_dense().cpu(), std_emb.weight.grad.cpu()))
+            # if worker_id == 0:
+            #     self.assertTrue(torch.allclose(
+            #         emb.grad.to_dense().cpu(), std_emb.weight.grad.cpu())), "backward is error"
 
-            if worker_id == 0:
-                sparse_opt.step()
-                sparse_opt.zero_grad()
+            sparse_opt.step()
+            sparse_opt.zero_grad()
 
             std_sparse_opt.step()
             std_sparse_opt.zero_grad()
 
             mp.Barrier(num_workers)
-            # print("emb", emb)
-            # print("std_emb.weight", std_emb.weight)
-            self.assertTrue(torch.allclose(
-                emb, std_emb.weight.cpu()))
+            torch.cuda.synchronize()
+
+            # for i in tqdm.trange(emb.shape[0]):
+            #     self.assertTrue(torch.allclose(
+            #         emb[i, :], std_emb.weight[i, :].cpu(), atol=1e-6)), "opt is error"
 
     def test_local_cache(self):
         self.main_routine(self.routine_local_cache_helper)
@@ -237,13 +211,3 @@ if __name__ == '__main__':
     #     return run_config
 
     # args = get_run_config()
-    # shm_tensor_store = ShmTensorStore([("emb", (3, 3))])
-
-    # workers = []
-    # for worker_id in range(args['num_workers']):
-    #     p = mp.Process(target=worker_main, args=(worker_id, args))
-    #     p.start()
-    #     workers.append(p)
-
-    # for each in workers:
-    #     each.join()

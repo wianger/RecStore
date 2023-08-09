@@ -15,6 +15,8 @@ merge_op = torch.ops.librecstore_pytorch.merge_op
 _send_cpu, _recv_cpu = {}, {}
 
 # data: [rank0_data, rank1_data, ...]
+
+
 def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=False):
     rank, world_size = dist.get_rank(), dist.get_world_size()
     if verbose:
@@ -64,7 +66,7 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
             if verbose:
                 logging.debug(f"{rank}->{right}, dist.isend, {msg[right]}")
 
-        logging.debug(f"{rank}, {res[left]}")
+        # logging.debug(f"{rank}, {res[left]}")
         if res[left].nelement() != 0:
             # logging.debug(f"{rank}<-{left}, before dist.recv, {res[left]}")
             dist.recv(res[left], src=left, tag=tag)
@@ -77,3 +79,77 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
     res[rank] = data[rank]
     return res
 
+
+def reduce_sparse_tensor(sparse_tensor, shape, dst_rank=0):
+    keys = sparse_tensor.indices()
+    values = sparse_tensor.values()
+
+    if dist.get_rank() == dst_rank:
+        keys_gather_list = [torch.zeros_like(
+            keys) for _ in range(dist.get_world_size())]
+    else:
+        keys_gather_list = None
+    handle_1 = dist.gather(
+        keys, dst=dst_rank, gather_list=keys_gather_list, async_op=True)
+    # gather grad_output to rank 0
+
+    if dist.get_rank() == dst_rank:
+        value_list = [torch.zeros_like(
+            values) for _ in range(dist.get_world_size())]
+    else:
+        value_list = None
+
+    handle_2 = dist.gather(values.contiguous(
+    ), dst=dst_rank, gather_list=value_list, async_op=True)
+
+    handle_1.wait()
+    handle_2.wait()
+
+    if dist.get_rank() == dst_rank:
+        res = sum_sparse_tensor(keys_gather_list, value_list, shape)
+        res = res / dist.get_world_size()
+    else:
+        res = None
+
+    return res
+
+
+def reduce_sparse_kv_tensor(keys, values, shape, dst_rank=0):
+    # print(f'shape = {shape}')
+    # print(f'keys = {keys}')
+    # print(f'values = {values}')
+    return reduce_sparse_tensor(torch.sparse_coo_tensor(keys.unsqueeze(0), values, size=shape), shape, dst_rank)
+
+
+def all2all_sparse_tensor(keys, values, tag, verbose=False):
+    a2a_keys = all2all_data_transfer(keys, None, tag=tag,
+                                     dtype=torch.int64, verbose=verbose)
+
+    a2a_values = all2all_data_transfer(values, None, tag=tag,
+                                       dtype=torch.float32, verbose=verbose)
+
+    return a2a_keys, a2a_values
+
+
+def sum_sparse_tensor(keys_list, values_list, shape):
+    # print("sum_sparse_tensor keys_list", keys_list, )
+    # print("sum_sparse_tensor value_list", values_list, )
+    assert len(keys_list) == len(values_list)
+    with torch.no_grad():
+        coo_list = []
+        temp = torch.sparse_coo_tensor(
+            [[], []], [], size=shape)
+
+        for each in range(len(keys_list)):
+            if keys_list[each].nelement() == 0:
+                continue
+            # print("xxxxxx", keys_list[each])
+            # print("yyyyy", values_list[each])
+            coo_list.append(
+                torch.sparse_coo_tensor(keys_list[each].unsqueeze(0), values_list[each],
+                                        size=shape)
+            )
+            temp += coo_list[-1].cpu()
+
+        res = temp
+    return res
