@@ -1,3 +1,4 @@
+from abs_emb import ShmTensorStore, TorchNativeStdEmb
 import numpy as np
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import LocalCachedEmbedding
@@ -30,19 +31,6 @@ torch.classes.load_library(
 logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
                     # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
                     datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
-
-
-class ShmTensorStore:
-    _tensor_store = {}
-
-    def __init__(self, name_shape_list):
-        for name, shape in name_shape_list:
-            self._tensor_store[name] = torch.zeros(shape).share_memory_()
-            # self._tensor_store[name] = torch.zeros(shape).share_memory_()
-
-    @classmethod
-    def GetTensor(cls, name):
-        return cls._tensor_store[name]
 
 
 class TestShardedCache(unittest.TestCase):
@@ -110,23 +98,20 @@ class TestShardedCache(unittest.TestCase):
         # USE_SGD = False
         rank = dist.get_rank()
 
-
         emb = ShmTensorStore.GetTensor("emb")
         self.init_emb_tensor(emb, worker_id, num_workers)
 
-        # Generate standard embedding
-        std_emb = nn.Embedding.from_pretrained(
-            emb.clone(), freeze=False).cuda()
-        std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
-
-        std_sparse_opt = optim.SGD(std_emb_ddp.parameters(
-        ), lr=1) if USE_SGD else optim.Adam(std_emb_ddp.parameters(), lr=1)
-        # Generate standard embedding done
-
-        # Generate our embedding
         fake_tensor = torch.Tensor([0])
         sparse_opt = optim.SGD(
             [fake_tensor], lr=1,) if USE_SGD else optim.SparseAdam([], lr=1)
+
+        # Generate standard embedding
+        # std_emb = StdEmb(emb.clone())
+        std_emb = TorchNativeStdEmb(emb)
+        std_emb.reg_opt(sparse_opt)
+        # Generate standard embedding done
+
+        # Generate our embedding
         abs_emb = None
 
         emb_name = "KnownShardedCachedEmbedding"
@@ -144,19 +129,18 @@ class TestShardedCache(unittest.TestCase):
         # Generate our embedding done
 
         # forward
+
         for _ in tqdm.trange(1000):
         # for _ in tqdm.trange(2):
             print(f"========== Step {_} ========== ")
             input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
-
             # if worker_id == 0:
             #     input_keys = torch.tensor([1, 2,],).long().cuda()
             # else:
             #     input_keys = torch.tensor([0, 2,],).long().cuda()
             logging.debug(f"{rank}:input_keys {input_keys}")
 
-
-            std_embed_value = std_emb_ddp(input_keys)
+            std_embed_value = std_emb.forward(input_keys)
             std_loss = std_embed_value.sum(-1).sum(-1)
             std_loss.backward()
             logging.debug(f"{rank}:std_embed_value {std_embed_value}")
@@ -165,7 +149,6 @@ class TestShardedCache(unittest.TestCase):
             loss = embed_value.sum(-1).sum(-1)
             loss.backward()
             logging.debug(f"{rank}:embed_value {embed_value}")
-
 
             self.assertTrue(torch.allclose(
                 embed_value, std_embed_value)), "forward is error"
@@ -178,9 +161,6 @@ class TestShardedCache(unittest.TestCase):
 
             sparse_opt.step()
             sparse_opt.zero_grad()
-
-            std_sparse_opt.step()
-            std_sparse_opt.zero_grad()
 
             mp.Barrier(num_workers)
             torch.cuda.synchronize()

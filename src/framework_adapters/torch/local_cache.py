@@ -86,12 +86,12 @@ class LocalCachedEmbeddingFn(torch.autograd.Function):
 
 
 class LocalCachedEmbedding(AbsEmb):
-    def __init__(self, emb, cache_capacity, ) -> None:
+    def __init__(self, emb, cache_ratio, ) -> None:
         self.fake_tensor = torch.randn(1, 1, requires_grad=True)
         self.emb = emb
         self.emb_dim = emb.shape[1]
         self.gpu_cache = NVGPUCache(
-            int(emb.shape[0]*cache_capacity), self.emb_dim)
+            int(emb.shape[0]*cache_ratio), self.emb_dim)
 
     def forward(self, input_keys):
         embed_value = LocalCachedEmbeddingFn.apply(
