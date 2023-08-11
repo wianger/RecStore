@@ -5,7 +5,7 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
 import logging
-from abs_emb import AbsEmb, NVGPUCache
+from cache_common import AbsEmb, NVGPUCache
 from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 
 
@@ -214,7 +214,6 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         # 1.2 all to all keys with shapes
         recv_keys = all2all_data_transfer(
             cached_keys, None, tag=120, dtype=keys.dtype)
-        # print(f"Rank{rank}: keys after a2a", recv_keys, flush=True)
 
         # 2. search local cache
 
@@ -230,13 +229,10 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
                 emb_cache[each_shard_recv_keys - cached_start_key])
 
         # 3. all to all searched values
-
-        # if rank == 0:
-        #     for each in cache_query_values:
-        #         print("each\n", each)
         logging.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
-            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype)
+            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype, verbose= True)
+        logging.debug(f"{rank}: a2a cache_query_values done",)
         
         # 5. merge into final result
         ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
@@ -281,17 +277,12 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
         # split keys into shards
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
-
-        # print("sharded_keys", sharded_keys)
         sharded_grads = [grad_output[each] for each in in_each_rank_cache_mask]
-
         keys_in_this_rank, values_in_this_rank = all2all_sparse_tensor(
             sharded_keys, sharded_grads, tag=124)
-        # print("keys_in_this_rank", keys_in_this_rank)
 
         # all tensors minus cached_start_key in list(keys_in_this_rank)
-        cached_start_key = ctx.cached_start_key
-        cached_end_key = ctx.cached_end_key
+        cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
         cached_keys_in_this_rank = [each - cached_start_key for each in keys_in_this_rank]
         grad = sum_sparse_tensor(
             cached_keys_in_this_rank, values_in_this_rank, emb_cache.shape)
@@ -323,18 +314,6 @@ class KnownShardedCachedEmbedding(AbsEmb):
         assert embed_value.requires_grad
         return embed_value
 
-    @staticmethod
-    def generate_cached_range(emb):
-        rank, world_size = dist.get_rank(), dist.get_world_size()
-        capacity = emb.shape[0]
-
-        per_shard_size = (capacity + world_size-1) // world_size
-        cached_range = []
-        for i in range(world_size):
-            start = i * per_shard_size
-            end = min((i+1) * per_shard_size, capacity)
-            cached_range.append((start, end))
-        return cached_range
 
     def reg_opt(self, opt):
         opt.add_param_group({"params": self.emb_cache})

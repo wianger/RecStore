@@ -1235,7 +1235,7 @@ gpu_cache<key_type, ref_counter_type, empty_key, set_associativity, warp_size, s
     : capacity_in_set_(capacity_in_set), embedding_vec_size_(embedding_vec_size) {
   // Check parameter
   if (capacity_in_set_ == 0) {
-    printf("Error: Invalid value for capacity_in_set.\n");
+    printf("Error: Invalid value 0 for capacity_in_set.\n");
     return;
   }
   if (embedding_vec_size_ == 0) {

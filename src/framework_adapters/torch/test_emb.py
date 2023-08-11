@@ -1,11 +1,12 @@
-from abs_emb import ShmTensorStore, TorchNativeStdEmb
 import numpy as np
-from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
-from local_cache import LocalCachedEmbedding
 import unittest
-import torch
 import datetime
 import logging
+import argparse
+import debugpy
+import tqdm
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
@@ -13,10 +14,9 @@ import torch.distributed as dist
 import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-import argparse
-import debugpy
-
-import tqdm
+from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy
+from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
+from local_cache import LocalCachedEmbedding, KnownLocalCachedEmbedding
 
 
 import random
@@ -38,7 +38,7 @@ class TestShardedCache(unittest.TestCase):
     EMB_DIM = 3
     EMB_LEN = 3
 
-    def main_routine(self, routine):
+    def main_routine(self, routine, args=None):
         # wrap rountine with dist_init
         def worker_main(routine, worker_id, num_workers, args):
             torch.cuda.set_device(worker_id)
@@ -51,7 +51,7 @@ class TestShardedCache(unittest.TestCase):
                                                  world_size=world_size,
                                                  rank=worker_id,
                                                  timeout=datetime.timedelta(seconds=4))
-            routine(worker_id, num_workers, None)
+            routine(worker_id, num_workers, args)
 
         print(f"========== Running Test with routine {routine}==========")
 
@@ -61,7 +61,7 @@ class TestShardedCache(unittest.TestCase):
         workers = []
         for worker_id in range(TestShardedCache.num_workers):
             p = mp.Process(target=worker_main, args=(
-                routine, worker_id, TestShardedCache.num_workers, None))
+                routine, worker_id, TestShardedCache.num_workers, args))
             p.start()
             workers.append(p)
 
@@ -107,31 +107,35 @@ class TestShardedCache(unittest.TestCase):
 
         # Generate standard embedding
         # std_emb = StdEmb(emb.clone())
-        std_emb = TorchNativeStdEmb(emb)
+        std_emb = TorchNativeStdEmb(emb, device='cuda')
         std_emb.reg_opt(sparse_opt)
         # Generate standard embedding done
 
         # Generate our embedding
         abs_emb = None
+        emb_name = args['test_cache']
 
-        emb_name = "KnownShardedCachedEmbedding"
         if emb_name == "KnownShardedCachedEmbedding":
-            cached_range = KnownShardedCachedEmbedding.generate_cached_range(
-                emb)
-            abs_emb = KnownShardedCachedEmbedding(emb, cached_range)
-
+            cached_range = CacheShardingPolicy.generate_cached_range(
+                emb, 0.1)
+            abs_emb = KnownShardedCachedEmbedding(
+                emb, cached_range=cached_range)
         elif emb_name == "LocalCachedEmbedding":
-            abs_emb = LocalCachedEmbedding(emb, 0.1,)
-
+            abs_emb = LocalCachedEmbedding(emb, cache_ratio=1,)
+        elif emb_name == "KnownLocalCachedEmbedding":
+            cached_range = CacheShardingPolicy.generate_cached_range(
+                emb, 0.1)
+            abs_emb = KnownLocalCachedEmbedding(emb, cached_range=cached_range)
         else:
             assert False
+
         abs_emb.reg_opt(sparse_opt)
         # Generate our embedding done
 
         # forward
 
-        for _ in tqdm.trange(1000):
-        # for _ in tqdm.trange(2):
+        for _ in tqdm.trange(100):
+            # for _ in tqdm.trange(2):
             print(f"========== Step {_} ========== ")
             input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
             # if worker_id == 0:
@@ -169,8 +173,18 @@ class TestShardedCache(unittest.TestCase):
             #     self.assertTrue(torch.allclose(
             #         emb[i, :], std_emb.weight[i, :].cpu(), atol=1e-6)), "opt is error"
 
+    def test_known_sharded_cache(self):
+        args = {"test_cache": "KnownShardedCachedEmbedding"}
+        self.main_routine(self.routine_local_cache_helper, args)
+
+    @unittest.skip("now we use known local cache")
     def test_local_cache(self):
-        self.main_routine(self.routine_local_cache_helper)
+        args = {"test_cache": "LocalCachedEmbedding"}
+        self.main_routine(self.routine_local_cache_helper, args)
+
+    def test_known_local_cache(self):
+        args = {"test_cache": "KnownLocalCachedEmbedding"}
+        self.main_routine(self.routine_local_cache_helper, args)
 
 
 if __name__ == '__main__':

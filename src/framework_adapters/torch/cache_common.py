@@ -1,8 +1,32 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.multiprocessing as mp
+import torch.distributed as dist
+import torch.optim as optim
+import logging
+
+
 from abc import ABC
 import torch
 import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
+
+
+class CacheShardingPolicy:
+    @staticmethod
+    def generate_cached_range(emb, cache_ratio):
+        rank, world_size = dist.get_rank(), dist.get_world_size()
+        whole_capacity = emb.shape[0]
+        cache_capacity = int(whole_capacity * cache_ratio)
+        per_shard_cachesize = (cache_capacity + world_size-1) // world_size
+        cached_range = []
+        for i in range(world_size):
+            start = i * per_shard_cachesize
+            end = min((i+1) * per_shard_cachesize, cache_capacity)
+            cached_range.append((start, end))
+        return cached_range
 
 
 class AbsEmb(ABC):
@@ -17,14 +41,26 @@ class AbsEmb(ABC):
 
 
 class TorchNativeStdEmb(AbsEmb):
-    def __init__(self, emb):
+    def __init__(self, emb, device):
         # this standard embedding will clone (deep copy) the embedding variable <emb>
-        std_emb = nn.Embedding.from_pretrained(emb, freeze=False).cuda()
         worker_id = dist.get_rank()
-        self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
+        self.device = device
+        if device == 'cuda':
+            std_emb = nn.Embedding.from_pretrained(emb, freeze=False).cuda()
+            self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
+        elif device == 'cpu':
+            std_emb = nn.Embedding.from_pretrained(emb, freeze=False)
+            self.std_emb_ddp = DDP(std_emb, device_ids=None,)
+        else:
+            assert False
 
     def forward(self, input_keys):
-        return self.std_emb_ddp(input_keys)
+        if self.device == 'cpu':
+            return self.std_emb_ddp(input_keys)
+        elif self.device == 'cuda':
+            return self.std_emb_ddp(input_keys.cuda())
+        else:
+            assert False
 
     def reg_opt(self, opt):
         opt.add_param_group({"params": self.std_emb_ddp.parameters()})
