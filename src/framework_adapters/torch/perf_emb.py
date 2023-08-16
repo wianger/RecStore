@@ -16,8 +16,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
-from local_cache import LocalCachedEmbedding
-
+from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 
 
 import random
@@ -30,8 +29,8 @@ torch.classes.load_library(
     "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
 
 logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                    # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                    datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+                    # datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 def get_run_config():
@@ -47,6 +46,8 @@ def get_run_config():
         argparser.add_argument('--batch_size', type=int,
                                #    default=1024*26)
                                default=1024)
+        argparser.add_argument('--cache_ratio', type=float,
+                               default=0.1)
         return vars(argparser.parse_args())
 
     run_config = {}
@@ -56,7 +57,6 @@ def get_run_config():
 
 def init_emb_tensor(emb, worker_id, num_workers):
     if worker_id == 0:
-        print(worker_id, emb)
         for i in range(emb.shape[0]):
             emb[i, :] = torch.ones(emb.shape[1]) * i
     mp.Barrier(num_workers)
@@ -79,8 +79,7 @@ def main_routine(ARGS, routine):
 
     print(f"========== Running Perf with routine {routine}==========")
 
-    shm_tensor_store = ShmTensorStore(
-        [("emb", (int(ARGS['num_embs']), int(ARGS['emb_dim'])))])
+    ShmTensorStore.RegTensor("emb", (ARGS['num_embs'], ARGS['emb_dim']))
 
     workers = []
     for worker_id in range(ARGS['num_workers']):
@@ -105,21 +104,24 @@ def routine_local_cache_helper(worker_id, ARGS):
     sparse_opt = optim.SGD(
         [fake_tensor], lr=1,) if USE_SGD else optim.SparseAdam([fake_tensor], lr=1)
 
-    # std_emb = TorchNativeStdEmb(emb.clone())
-    # std_emb.reg_opt(sparse_opt)
-
     abs_emb = None
-    emb_name = "KnownShardedCachedEmbedding"
-    emb_name = "TorchNativeStdEmb"
+
+    # emb_name = "TorchNativeStdEmb"
+    # emb_name = "KnownShardedCachedEmbedding"
+    emb_name = "KnownLocalCachedEmbedding"
 
     if emb_name == "KnownShardedCachedEmbedding":
         cached_range = CacheShardingPolicy.generate_cached_range(
-            emb)
+            emb, ARGS['cache_ratio'])
         abs_emb = KnownShardedCachedEmbedding(emb, cached_range)
     elif emb_name == "LocalCachedEmbedding":
-        abs_emb = LocalCachedEmbedding(emb, cache_ratio=0.1,)
+        abs_emb = LocalCachedEmbedding(emb, cache_ratio=ARGS['cache_ratio'],)
     elif emb_name == "TorchNativeStdEmb":
         abs_emb = TorchNativeStdEmb(emb, device='cuda')
+    elif emb_name == "KnownLocalCachedEmbedding":
+        cached_range = CacheShardingPolicy.generate_cached_range(
+            emb, ARGS['cache_ratio'])
+        abs_emb = KnownLocalCachedEmbedding(emb, cached_range=cached_range)
     else:
         assert False
     abs_emb.reg_opt(sparse_opt)
@@ -129,23 +131,18 @@ def routine_local_cache_helper(worker_id, ARGS):
     for _ in tqdm.trange(1000):
         print(f"========== Step {_} ========== ")
         input_keys = torch.randint(emb.shape[0], size=(
-            ARGS['batch_size'],)).long()
-
-        # std_embed_value = std_emb.forward(input_keys)
-        # std_loss = std_embed_value.sum(-1).sum(-1)
-        # std_loss.backward()
-        # logging.debug(f"{rank}:std_embed_value {std_embed_value}")
+            ARGS['batch_size'],)).long().cuda()
 
         embed_value = abs_emb.forward(input_keys)
         loss = embed_value.sum(-1).sum(-1)
         loss.backward()
-        logging.debug(f"{rank}:embed_value {embed_value}")
 
         # sparse_opt.step()
         # sparse_opt.zero_grad()
 
-        mp.Barrier(ARGS['num_workers'])
-
+        torch.cuda.synchronize()
+        logging.debug(f"rank{rank}: before barrier")
+        dist.barrier()
 
 if __name__ == "__main__":
     # import debugpy

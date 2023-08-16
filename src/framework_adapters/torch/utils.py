@@ -150,38 +150,66 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
 
 
 @torch.no_grad()
+def gather_variable_shape_tensor(tensor, dst_rank=0):
+    # assert tensor.ndim in all ranks are same
+
+    rank, world_size = dist.get_rank(), dist.get_world_size()
+
+    # gather the shape of each rank into rank0
+    if rank == dst_rank:
+        shape_list = torch.empty(
+            [world_size * tensor.ndim], dtype=torch.int64, device=torch.device("cuda")).chunk(world_size)
+        shape_list = list(shape_list)
+    else:
+        shape_list = None
+
+    shape = torch.tensor(tensor.shape, device="cuda", dtype=torch.int64)
+    dist.gather(shape, gather_list=shape_list,
+                dst=dst_rank)
+
+    # gather the tensor
+    tag = 100
+    if rank == dst_rank:
+        res = [torch.empty(each.tolist(), dtype=tensor.dtype,
+                           device=torch.device("cuda")) for each in shape_list]
+
+        req_list = []
+        for i in range(1, world_size):
+            src_rank = (rank + i) % world_size
+            req = dist.irecv(res[src_rank], src=src_rank, tag=tag)
+            req_list.append(req)
+        res[dst_rank].copy_(tensor)
+        [each.wait() for each in req_list]
+    else:
+        dist.send(tensor, dst=dst_rank, tag=tag)
+        res = None
+
+    return res
+
+
+@torch.no_grad()
 def reduce_sparse_tensor(sparse_tensor, dst_rank=0):
+    rank, world_size = dist.get_rank(), dist.get_world_size()
+
     if not sparse_tensor.is_coalesced():
         sparse_tensor = sparse_tensor.coalesce()
-        
+
     keys = sparse_tensor.indices()
     values = sparse_tensor.values()
     shape = sparse_tensor.shape
 
+    keys_gather_list = gather_variable_shape_tensor(keys, dst_rank=dst_rank)
+    assert len(values.shape) == 2
+
+    values_list = gather_variable_shape_tensor(
+        values.contiguous(), dst_rank=dst_rank)
+
+    # logging.info(f"rank{dist.get_rank()}: gather keys and values done")
     if dist.get_rank() == dst_rank:
-        keys_gather_list = [torch.zeros_like(
-            keys) for _ in range(dist.get_world_size())]
-    else:
-        keys_gather_list = None
-    handle_1 = dist.gather(
-        keys, dst=dst_rank, gather_list=keys_gather_list, async_op=True)
-    # gather grad_output to rank 0
-
-    if dist.get_rank() == dst_rank:
-        value_list = [torch.zeros_like(
-            values) for _ in range(dist.get_world_size())]
-    else:
-        value_list = None
-
-    handle_2 = dist.gather(values.contiguous(
-    ), dst=dst_rank, gather_list=value_list, async_op=True)
-
-    handle_1.wait()
-    handle_2.wait()
-
-    if dist.get_rank() == dst_rank:
-        res = sum_sparse_tensor(keys_gather_list, value_list, shape)
+        # logging.debug(f"rank{dist.get_rank()}: before sum sparse tensors")
+        res = sum_sparse_tensor(keys_gather_list, values_list, shape)
         res = res / dist.get_world_size()
+        # logging.info(f"rank{dist.get_rank()}: after sum sparse tensors")
     else:
         res = None
 

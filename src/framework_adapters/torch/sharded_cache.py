@@ -306,7 +306,6 @@ class KnownShardedCachedEmbedding(AbsEmb):
         self.emb = emb
 
         self.emb_cache.copy_(self.emb[start:end, :])
-        print("self = ", self.emb)
 
     def forward(self, input_keys):
         embed_value = KnownShardedCachedEmbeddingFn.apply(

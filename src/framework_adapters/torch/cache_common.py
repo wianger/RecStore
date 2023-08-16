@@ -90,11 +90,17 @@ class NVGPUCache:
 class ShmTensorStore:
     _tensor_store = {}
 
-    def __init__(self, name_shape_list):
-        for name, shape in name_shape_list:
-            self._tensor_store[name] = torch.zeros(shape).share_memory_()
-            # self._tensor_store[name] = torch.zeros(shape).share_memory_()
+    # def __init__(self, name_shape_list):
+    #     for name, shape in name_shape_list:
+    #         self._tensor_store[name] = torch.zeros(shape).share_memory_()
 
     @classmethod
     def GetTensor(cls, name):
-        return cls._tensor_store[name]
+        if name in cls._tensor_store.keys():
+            return cls._tensor_store[name]
+        else:
+            return None
+
+    @classmethod
+    def RegTensor(cls, name, shape):
+        cls._tensor_store[name] = torch.zeros(shape).share_memory_()

@@ -137,6 +137,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         missing_keys = keys[not_in_this_rank_cache_mask]
 
         # 2. search local cache
+        logging.debug("search local cache")
         cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
@@ -144,6 +145,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         # 3. merge into final result
 
         # 3.1 join missing keys
+        logging.debug("join missing keys")
         missing_value = F.embedding(missing_keys.cpu(
         ),  embedding_weight, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
         ret_value[not_in_this_rank_cache_mask] = missing_value.cuda()
@@ -162,6 +164,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     @staticmethod
     @torch.no_grad()
     def backward(ctx, grad_output):
+        rank = dist.get_rank()
         keys, = ctx.saved_tensors
 
         embedding_weight = ctx.embedding_weight
@@ -173,11 +176,13 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         assert emb_dim == grad_output.shape[1]
 
         # 1. update local cache's grad
+        logging.debug("backward: update local cache's grad")
         # 1.1 all to all keys's grad
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
         sharded_grads = [grad_output[each] for each in in_each_rank_cache_mask]
         keys_in_this_rank, values_in_this_rank = all2all_sparse_tensor(
             sharded_keys, sharded_grads, tag=124)
+        logging.debug("backward: all to all keys's grad done")
 
         # 1.2 update grad of local cache
         cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
@@ -191,8 +196,14 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         # 2 aggregate grad of in-dram keys
         reduced_dram_grads = reduce_sparse_kv_tensor(
             keys, grad_output, embedding_weight.shape, 0)
+        logging.debug(f"rank{rank}: aggregate grad of in-dram keys done")
+
+        mp.Barrier(dist.get_world_size())
+        
         if dist.get_rank() == 0:
+            logging.debug(f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
             embedding_weight.grad = reduced_dram_grads
+            logging.debug("rank0: set DRAM Emb's grad done")
         return None, None, None, torch.randn(1, 1), None
 
 

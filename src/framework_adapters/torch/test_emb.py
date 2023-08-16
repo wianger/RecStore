@@ -1,10 +1,11 @@
 import numpy as np
-import unittest
 import datetime
 import logging
 import argparse
 import debugpy
 import tqdm
+import pytest
+import time
 
 import torch
 import torch.nn as nn
@@ -17,6 +18,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import LocalCachedEmbedding, KnownLocalCachedEmbedding
+from utils import print_rank0
 
 
 import random
@@ -29,13 +31,14 @@ torch.classes.load_library(
     "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
 
 logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                    # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                    datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+# datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
-class TestShardedCache(unittest.TestCase):
+class TestShardedCache:
     num_workers = 2
     EMB_DIM = 3
+    # EMB_LEN = 1000
     EMB_LEN = 3
 
     def main_routine(self, routine, args=None):
@@ -44,7 +47,7 @@ class TestShardedCache(unittest.TestCase):
             torch.cuda.set_device(worker_id)
             torch.manual_seed(worker_id)
             dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
-                master_ip='127.0.0.1', master_port='12345')
+                master_ip='127.0.0.1', master_port='12545')
             world_size = num_workers
             torch.distributed.init_process_group(backend=None,
                                                  init_method=dist_init_method,
@@ -53,10 +56,16 @@ class TestShardedCache(unittest.TestCase):
                                                  timeout=datetime.timedelta(seconds=4))
             routine(worker_id, num_workers, args)
 
-        print(f"========== Running Test with routine {routine}==========")
+        print(
+            f"========== Running Test with routine {routine} {args}==========")
 
-        shm_tensor_store = ShmTensorStore(
-            [("emb", (TestShardedCache.EMB_LEN, TestShardedCache.EMB_DIM))])
+        if ShmTensorStore.GetTensor("emb") is None:
+            ShmTensorStore.RegTensor(
+                "emb", (TestShardedCache.EMB_LEN, TestShardedCache.EMB_DIM))
+        else:
+            shm_tensor = ShmTensorStore.GetTensor("emb")
+            assert shm_tensor.shape == (
+                TestShardedCache.EMB_LEN, TestShardedCache.EMB_DIM)
 
         workers = []
         for worker_id in range(TestShardedCache.num_workers):
@@ -68,32 +77,43 @@ class TestShardedCache(unittest.TestCase):
         for each in workers:
             each.join()
 
+        print("join all processes done")
+
     def routine_shm_tensor(self, worker_id, num_workers, args):
         emb = ShmTensorStore.GetTensor("emb")
         if worker_id == 0:
-            print(worker_id, emb)
+            # print(worker_id, emb)
             for i in range(emb.shape[0]):
                 emb[i, :] = torch.ones(emb.shape[1]) * i
+        else:
+            # time.sleep(2)
+            pass
         mp.Barrier(num_workers)
         for i in range(emb.shape[0]):
-            self.assertTrue(torch.allclose(
+            assert (torch.allclose(
                 emb[i, :], torch.ones(emb.shape[1]) * i))
 
-    @unittest.skip("simple")
+    @pytest.mark.skip(reason="simple")
     def test_shm_tensor(self):
+        assert False
         self.main_routine(self.routine_shm_tensor)
 
     def init_emb_tensor(self, emb, worker_id, num_workers):
         if worker_id == 0:
-            print(worker_id, emb)
+            # print("pre", worker_id, emb)
             for i in range(emb.shape[0]):
                 emb[i, :] = torch.ones(emb.shape[1]) * i
-        mp.Barrier(num_workers)
+        # print(f"rank{worker_id} of {num_workers} arrived at barrier")
+        # mp.Barrier(num_workers)
+        dist.barrier()
+        # print(f"rank{worker_id} of {num_workers} arrived after barrier")
+
+        # print("post", worker_id, emb, flush=True)
         for i in range(emb.shape[0]):
-            self.assertTrue(torch.allclose(
+            assert (torch.allclose(
                 emb[i, :], torch.ones(emb.shape[1]) * i))
 
-    def routine_local_cache_helper(self, worker_id, num_workers, args):
+    def routine_cache_helper(self, worker_id, num_workers, args):
         USE_SGD = True
         # USE_SGD = False
         rank = dist.get_rank()
@@ -117,14 +137,16 @@ class TestShardedCache(unittest.TestCase):
 
         if emb_name == "KnownShardedCachedEmbedding":
             cached_range = CacheShardingPolicy.generate_cached_range(
-                emb, 0.1)
+                emb, args['cache_ratio'])
+            print_rank0(f"cache_range is {cached_range}")
             abs_emb = KnownShardedCachedEmbedding(
                 emb, cached_range=cached_range)
         elif emb_name == "LocalCachedEmbedding":
             abs_emb = LocalCachedEmbedding(emb, cache_ratio=1,)
         elif emb_name == "KnownLocalCachedEmbedding":
             cached_range = CacheShardingPolicy.generate_cached_range(
-                emb, 0.1)
+                emb, args['cache_ratio'])
+            print_rank0(f"cache_range is {cached_range}")
             abs_emb = KnownLocalCachedEmbedding(emb, cached_range=cached_range)
         else:
             assert False
@@ -134,7 +156,7 @@ class TestShardedCache(unittest.TestCase):
 
         # forward
 
-        for _ in tqdm.trange(100):
+        for _ in tqdm.trange(20):
             # for _ in tqdm.trange(2):
             print(f"========== Step {_} ========== ")
             input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
@@ -154,13 +176,13 @@ class TestShardedCache(unittest.TestCase):
             loss.backward()
             logging.debug(f"{rank}:embed_value {embed_value}")
 
-            self.assertTrue(torch.allclose(
+            assert (torch.allclose(
                 embed_value, std_embed_value)), "forward is error"
-            self.assertTrue(torch.allclose(
+            assert (torch.allclose(
                 loss, std_loss))
 
             # if worker_id == 0:
-            #     self.assertTrue(torch.allclose(
+            #     assert (torch.allclose(
             #         emb.grad.to_dense().cpu(), std_emb.weight.grad.cpu())), "backward is error"
 
             sparse_opt.step()
@@ -170,38 +192,22 @@ class TestShardedCache(unittest.TestCase):
             torch.cuda.synchronize()
 
             # for i in tqdm.trange(emb.shape[0]):
-            #     self.assertTrue(torch.allclose(
+            #     assert (torch.allclose(
             #         emb[i, :], std_emb.weight[i, :].cpu(), atol=1e-6)), "opt is error"
 
-    def test_known_sharded_cache(self):
-        args = {"test_cache": "KnownShardedCachedEmbedding"}
-        self.main_routine(self.routine_local_cache_helper, args)
+    # @pytest.mark.parametrize("test_cache", ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"])
+    # @pytest.mark.parametrize("cache_ratio", [0.1, 0.3, 0.5])
+    # def test_known_sharded_cache(self, test_cache, cache_ratio):
 
-    @unittest.skip("now we use known local cache")
+    def test_known_sharded_cache(self,):
+
+        for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
+            for cache_ratio in [0.1, 0.3, 0.5]:
+                args = {"test_cache": test_cache, "cache_ratio": cache_ratio}
+                print("xmh: ", args)
+                self.main_routine(self.routine_cache_helper, args)
+
+    @pytest.mark.skip(reason="now we use known local cache")
     def test_local_cache(self):
         args = {"test_cache": "LocalCachedEmbedding"}
-        self.main_routine(self.routine_local_cache_helper, args)
-
-    def test_known_local_cache(self):
-        args = {"test_cache": "KnownLocalCachedEmbedding"}
-        self.main_routine(self.routine_local_cache_helper, args)
-
-
-if __name__ == '__main__':
-    unittest.main()
-    # debugpy.listen(5678)
-    # print("wait debugpy connect", flush=True)
-    # debugpy.wait_for_client()
-
-    # def get_run_config():
-    #     def parse_args(default_run_config):
-    #         argparser = argparse.ArgumentParser("Training")
-    #         argparser.add_argument('--num_workers', type=int,
-    #                                default=2)
-
-    #         return vars(argparser.parse_args())
-    #     run_config = {}
-    #     run_config.update(parse_args(run_config))
-    #     return run_config
-
-    # args = get_run_config()
+        self.main_routine(self.routine_cache_helper, args)
