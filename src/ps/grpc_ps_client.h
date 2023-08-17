@@ -47,6 +47,8 @@ class ParameterClient {
 
   bool ClearPS();
 
+  bool LoadFakeData(int64_t data);
+
   bool LoadCkpt(const std::vector<std::string> &model_config_path,
                 const std::vector<std::string> &emb_file_path);
 

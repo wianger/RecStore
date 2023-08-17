@@ -159,6 +159,10 @@ public:
     // ssd_->BulkLoad(keys.Size(), value);
   }
 
+  std::pair<uint64_t, uint64_t> RegisterPMAddr() const override {
+    return std::make_pair(0, 0);
+  }
+
   void BatchPut(base::ConstArray<uint64> keys,
                 std::vector<base::ConstArray<float>> &values,
                 unsigned t) override {

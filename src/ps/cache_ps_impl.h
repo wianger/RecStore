@@ -13,7 +13,7 @@
 #include "folly/ProducerConsumerQueue.h"
 #include "parameters.h"
 
-DECLARE_bool(use_master_worker);
+static const int KEY_CNT = 12543670;
 
 template <typename key_t>
 struct TaskElement {
@@ -35,39 +35,22 @@ class CachePS {
 
   using CPUCacheGetTaskQ = TaskElement<key_t>;
 
-  CachePS(int64_t dict_capability, int64_t value_size, int num_threads) {
+  CachePS(int64_t dict_capability, int64_t value_size, int64_t memory_pool_size, int num_threads, int64_t max_batch_keys_size)
+  : value_size(value_size) 
+  {
     BaseKVConfig config;
     config.path = "/dev/shm/double-placeholder";
     config.capacity = dict_capability;
     config.value_size = value_size;
+    config.memory_pool_size = memory_pool_size;
     config.num_threads = num_threads;
-
-    auto p = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance("KVEngineDash",
+    config.max_batch_keys_size = max_batch_keys_size;
+    auto p = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance("KVEngineDoubleDesk",
                                                                       config);
-
     base_kv_.reset(p);
-
-    if (FLAGS_use_master_worker) {
-      for (int worker_id = 0; worker_id < get_thread_num_; worker_id++) {
-        getTaskQs_.push_back(nullptr);
-        getTaskQs_[worker_id].reset(
-            new folly::ProducerConsumerQueue<CPUCacheGetTaskQ>(64));
-        get_threads_.emplace_back(&CachePS::GetPollingThread, this, worker_id);
-      }
-      LOG(INFO) << "use multi thread get, thread num is " << get_thread_num_;
-    } else {
-      LOG(INFO) << "use single thread get";
-    }
   }
 
-  ~CachePS() {
-    if (FLAGS_use_master_worker) {
-      stopFlag_ = true;
-      for (auto &each : get_threads_) {
-        each.join();
-      }
-    }
-  }
+  ~CachePS() {}
 
   bool Initialize(const std::vector<std::string> &model_config_path,
                   const std::vector<std::string> &emb_file_path) {
@@ -79,26 +62,47 @@ class CachePS {
 
   void Clear() { base_kv_->clear(); }
 
+  void LoadFakeData(int64_t key_size) {
+    std::vector<uint64_t> keys;
+    float *values = new float[value_size / sizeof(float) * key_size];
+    for(int64_t i = 0; i < key_size; i++){
+      keys.push_back(i);
+    }
+    base_kv_->BulkLoad(base::ConstArray<uint64_t>(keys), values);
+    delete[] values;
+  }
+
   bool LoadCkpt(const std::vector<std::string> &model_config_path,
                 const std::vector<std::string> &emb_file_path) {
+    // base_kv_->loadCkpt();
+    // LoadFakeData(KEY_CNT);
     return true;
   }
 
-  void PutSingleParameter(const ParameterCompressItem *item) {
+  void PutSingleParameter(const ParameterCompressItem *item, int tid) {
     bool success;
     auto key = item->key;
     auto dim = item->dim;
-
     base_kv_->Put(
-        key, std::string_view((char *)item->data(), dim * sizeof(float)), 0);
+        key, std::string_view((char *)item->data(), dim * sizeof(float)), tid);
   }
 
-  bool GetParameterRun2Completion(key_t key, ParameterPack &pack) {
+  void PutParameter(const ParameterCompressReader *reader, int rid){
+    std::vector<uint64_t> keys_vec;
+    for(int i = 0; i < reader->item_size(); i++){
+      keys_vec.emplace_back(reader->item(i)->key);
+
+    }
+    base::ConstArray<uint64_t> keys(keys_vec);
+    
+  }
+
+  bool GetParameterRun2Completion(key_t key, ParameterPack &pack, int tid) {
     std::vector<uint64_t> keys = {key};
     base::ConstArray<uint64_t> keys_array(keys);
     std::vector<base::ConstArray<float>> values;
 
-    base_kv_->BatchGet(keys_array, &values, 0);
+    base_kv_->BatchGet(keys_array, &values, tid);
     base::ConstArray<float> value = values[0];
 
 
@@ -110,64 +114,28 @@ class CachePS {
       return false;
     }
     pack.key = key;
-    pack.dim = value.Size() / sizeof(float);
+    pack.dim = value.Size();
     pack.emb_data = value.Data();
+    // LOG(ERROR) << "Get key " << key << " dim " << pack.dim;
     return true;
   }
 
-  void GetPollingThread(int worker_id) {
-    CPUCacheGetTaskQ getTaskElement;
-    auto q = getTaskQs_[worker_id].get();
-    while (!stopFlag_.load()) {
-      if (!q->read(getTaskElement)) continue;
-      auto &keys = getTaskElement.keys;
-      for (int i = 0; i < keys.Size(); i++) {
-        GetParameterRun2Completion(keys[i], getTaskElement.packs[i]);
-      }
-      getTaskElement.promise->store(true);
+  bool GetParameterRun2Completion(base::ConstArray<uint64_t> keys, std::vector<ParameterPack> &pack, int tid) {
+    std::vector<base::ConstArray<float>> values;
+
+    base_kv_->BatchGet(keys, &values, tid);
+  
+    for(int i = 0; i < keys.Size(); i++){
+      pack.emplace_back(keys[i], values[i].Size(), values[i].Data());
     }
-  }
 
-  bool GetParameterMasterWorker(
-      const base::ConstArray<key_t> &keys,
-      std::vector<std::vector<ParameterPack>> *packs) {
-    CHECK(FLAGS_use_master_worker);
-    packs->resize(get_thread_num_);
-
-    int size = keys.Size();
-    int worksPerThread = size / get_thread_num_ + 1;
-
-    for (int i = 0; i < get_thread_num_; i++) {
-      int start = i * worksPerThread;
-      int end = std::min(size, (i + 1) * worksPerThread);
-
-      get_thread_promises_[i].promise = false;
-      base::ConstArray<key_t> sub_keys(&keys[start], end - start);
-      packs->at(i).resize(end - start);
-      base::MutableArray<ParameterPack> sub_packs(packs->at(i));
-      while (!getTaskQs_[i]->write(sub_keys, sub_packs,
-                                   &get_thread_promises_[i].promise))
-        ;
-    }
-    for (int i = 0; i < get_thread_num_; i++) {
-      while (!get_thread_promises_[i].promise.load())
-        ;
-    }
     return true;
   }
 
  private:
-  union {
-    std::atomic_bool promise;
-    char _[64];
-  } get_thread_promises_[10];
 
+  int value_size;
   std::unique_ptr<BaseKV> base_kv_;
-
-  static constexpr int get_thread_num_ = 2;
-  static_assert(get_thread_num_ < 10);
   std::atomic<bool> stopFlag_{false};
   std::vector<std::thread> get_threads_;
-  std::vector<std::unique_ptr<folly::ProducerConsumerQueue<CPUCacheGetTaskQ>>>
-      getTaskQs_;
 };

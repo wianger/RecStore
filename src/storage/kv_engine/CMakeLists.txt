@@ -36,12 +36,4 @@ target_link_libraries(perf_kv_engine PUBLIC pthread base kv_engine ps_common may
 target_link_libraries(perf_kv_engine PUBLIC OpenMP::OpenMP_CXX)
 
 add_executable(bench benchmark_zipf.cc)
-target_link_libraries(bench PUBLIC pthread base kv_engine)add_executable(test_kv
-  test_kv.cpp 
-)
-
-target_link_libraries(test_kv PUBLIC
-  base
-  kv_engine
-  gtest
-)
+target_link_libraries(bench PUBLIC pthread base kv_engine)

@@ -1,13 +1,9 @@
 find_package(PkgConfig)
 
 
-set (RECSTORE_SPDK_ENABLED OFF)
-
-
-
-
+#set (RECSTORE_SPDK_ENABLED OFF)
+set (RECSTORE_SPDK_ENABLED ON)
 if(RECSTORE_SPDK_ENABLED )
-	
 
 
 pkg_search_module(SPDK REQUIRED IMPORTED_TARGET GLOBAL spdk_nvme spdk_env_dpdk)
@@ -38,16 +34,13 @@ target_link_options(hello_spdk PUBLIC ${SPDK_LIB} ${DPDK_LIB})
 target_link_options(hello_spdk PUBLIC -Wl,--no-whole-archive)
 target_link_options(hello_spdk PUBLIC -lnuma -ldl  -L${PROJECT_SOURCE_DIR}/third_party/spdk/isa-l/.libs -lisal -pthread -lrt -luuid -lcrypto -lm -laio)
 
-
-
-
 add_library(spdk_wrapper spdk_wrapper.cc)
 target_link_options(spdk_wrapper INTERFACE -Wl,--whole-archive -Wl,--no-as-needed)
 target_link_options(spdk_wrapper INTERFACE ${SPDK_LIB} ${DPDK_LIB})
 target_link_options(spdk_wrapper INTERFACE -Wl,--no-whole-archive)
 target_link_options(spdk_wrapper INTERFACE -lnuma -ldl  -L${PROJECT_SOURCE_DIR}/third_party/spdk/isa-l/.libs -lisal -pthread -lrt -luuid -lcrypto -lm -laio)
 target_link_libraries(spdk_wrapper Folly::folly)
-
+target_link_libraries(spdk_wrapper protobuf::libprotobuf)
 
 add_executable(perf_spdk perf_spdk.cc)
 target_link_libraries(perf_spdk spdk_wrapper)
@@ -59,11 +52,11 @@ add_executable(test_naivekvell test_naiveKvell.cc)
 target_link_libraries(test_naivekvell  spdk_wrapper gtest)
 
 
-add_executable(perf_spdkkvell_from_gpu perf_spdkkvell_from_gpu.cu)
-target_link_libraries(perf_spdkkvell_from_gpu spdk_wrapper Folly::folly)
-set_target_properties(perf_spdkkvell_from_gpu PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-set_target_properties(perf_spdkkvell_from_gpu PROPERTIES CUDA_ARCHITECTURES OFF)
-set_property(TARGET perf_spdkkvell_from_gpu PROPERTY CUDA_STANDARD 17)
+# add_executable(perf_spdkkvell_from_gpu perf_spdkkvell_from_gpu.cu)
+# target_link_libraries(perf_spdkkvell_from_gpu spdk_wrapper Folly::folly)
+# set_target_properties(perf_spdkkvell_from_gpu PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+# set_target_properties(perf_spdkkvell_from_gpu PROPERTIES CUDA_ARCHITECTURES OFF)
+# set_property(TARGET perf_spdkkvell_from_gpu PROPERTY CUDA_STANDARD 17)
 
 find_package(RocksDB)
 

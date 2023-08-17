@@ -19,8 +19,8 @@ TEST(SpdkWrapper, test) {
                                      SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
   snprintf(buf, 0x1000, "%s", "Hello world!\n");
 
-  ssd->SyncWrite((void *)buf, 0x1000, 0);
-  ssd->SyncRead((void *)buf_2, 0x1000, 0);
+  ssd->SyncWrite((void *)buf, 0x1000, 0, 0);
+  ssd->SyncRead((void *)buf_2, 0x1000, 0, 0);
 
   CHECK(strcmp(buf, buf_2) == 0);
 }

@@ -96,7 +96,7 @@ endif()
 add_subdirectory(third_party/googletest)
 add_subdirectory(third_party/Mayfly-main)
 add_subdirectory(third_party/json)
-add_subdirectory(third_party/pybind11)
+# add_subdirectory(third_party/pybind11)
 # add_subdirectory(third_party/mimalloc)
 
 include_directories(

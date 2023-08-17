@@ -29,7 +29,9 @@ public:
   virtual void Put(const uint64_t key, const std::string_view &value, unsigned tid) = 0;
 
   virtual void BatchPut(base::ConstArray<uint64_t> keys,
-                        std::vector<base::ConstArray<float>> &values, unsigned tid) = 0;
+                        std::vector<base::ConstArray<float>> &values, unsigned tid) {
+    LOG(FATAL) << "not implemented";
+  };
 
   virtual void BatchGet(base::ConstArray<uint64_t> keys,
                         std::vector<base::ConstArray<float>> *values, unsigned tid) = 0;

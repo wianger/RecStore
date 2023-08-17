@@ -5,7 +5,7 @@
 #include <iostream>
 #include <vector>
 
-#include "inference/timer.h"
+#include "base/timer.h"
 #include "spdk_wrapper.h"
 
 DEFINE_int32(query_count, 100, "# of query embs in one round");
@@ -38,9 +38,9 @@ int main(int argc, char **argv) {
     std::atomic<int> counter{0};
     for (int i = 0; i < batch_get_num; i++) {
       ssd->SubmitReadCommand(buf + lba_size * i, lba_size, batch_get_lba_id[i],
-                             cb, &counter);
+                             cb, &counter, 0);
     }
-    while (counter != batch_get_num) ssd->PollCompleteQueue();
+    while (counter != batch_get_num) ssd->PollCompleteQueue(0);
     timer.end();
   }
 
