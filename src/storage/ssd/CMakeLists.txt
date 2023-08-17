@@ -14,18 +14,20 @@ pkg_search_module(SPDK REQUIRED IMPORTED_TARGET GLOBAL spdk_nvme spdk_env_dpdk)
 message(STATUS SPDK_LIBRARIES ${SPDK_LIBRARIES})
 message(STATUS SPDK_INCLUDE_DIR ${SPDK_INCLUDE_DIR})
 
+set(SPDK_POS "/home/frw/workdir/RecStore/third_party/spdk")
 
-
-set(SPDK_LIB "-L/usr/local/lib -L/data/project/HugeCTR/third_party/spdk/dpdk/build/lib \ 
+set(SPDK_LIB "-L/usr/local/lib -L${SPDK_POS}/build/lib \ 
  -lspdk_nvme -lspdk_sock -lspdk_sock_posix -lspdk_trace \ 
  -lspdk_rpc -lspdk_jsonrpc -lspdk_json -lspdk_vfio_user -lspdk_vmd -lspdk_env_dpdk \ 
- -lspdk_util -lspdk_log -lrte_eal -lrte_mempool -lrte_ring -lrte_mbuf \ 
- -lrte_bus_pci -lrte_pci -lrte_mempool_ring -lrte_telemetry -lrte_kvargs \ 
- -lrte_power -lrte_ethdev -lrte_net -lrte_vhost -lrte_net -lrte_dmadev -lrte_cryptodev -lrte_hash -lrte_rcu \ 
+ -lspdk_util -lspdk_log \
  -lssl
 ")
 
-set(DPDK_LIB "")
+set(DPDK_LIB "-L${SPDK_POS}/dpdk/build/lib \
+    -lrte_eal -lrte_eal -lrte_mempool -lrte_ring -lrte_mbuf \ 
+    -lrte_bus_pci -lrte_pci -lrte_mempool_ring -lrte_telemetry -lrte_kvargs \ 
+    -lrte_power -lrte_ethdev -lrte_net -lrte_vhost -lrte_net -lrte_dmadev -lrte_cryptodev -lrte_hash -lrte_rcu \ "
+)
 
 separate_arguments(SPDK_LIB UNIX_COMMAND "${SPDK_LIB}")
 separate_arguments(DPDK_LIB UNIX_COMMAND "${DPDK_LIB}")

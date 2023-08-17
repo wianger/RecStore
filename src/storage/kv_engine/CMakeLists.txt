@@ -21,7 +21,10 @@ endif()
 
 target_link_libraries(
   kv_engine
-  INTERFACE pet_kv)
+  INTERFACE pet_kv
+  spdk_wrapper
+  ${FOLLY_LIBRARIES}
+)
   # INTERFACE pet_kv dash_hash PMHashPCLHT PMHashLevel PMHashClevel PMHashCCEHVM)
 
 target_sources(
@@ -33,4 +36,12 @@ target_link_libraries(perf_kv_engine PUBLIC pthread base kv_engine ps_common may
 target_link_libraries(perf_kv_engine PUBLIC OpenMP::OpenMP_CXX)
 
 add_executable(bench benchmark_zipf.cc)
-target_link_libraries(bench PUBLIC pthread base kv_engine)
+target_link_libraries(bench PUBLIC pthread base kv_engine)add_executable(test_kv
+  test_kv.cpp 
+)
+
+target_link_libraries(test_kv PUBLIC
+  base
+  kv_engine
+  gtest
+)

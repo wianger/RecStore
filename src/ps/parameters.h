@@ -24,6 +24,9 @@ struct Pack<ParameterCompressItem> {
   uint64_t key = 0;
   int dim = 0;
   const float* emb_data = nullptr;
+  Pack<ParameterCompressItem>() = default;
+  Pack<ParameterCompressItem>(uint64_t key, int dim, const float* emb_data)
+      : key(key), dim(dim), emb_data(emb_data) {}
   void CompressAppend(std::string* output) const;
 };
 

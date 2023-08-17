@@ -6,12 +6,14 @@
 #include "naiveKVell.h"
 using ssdps::NaiveArraySSD;
 
+using base::ConstArray;
+
 TEST(NaiveArraySSD, test) {
   constexpr int emb_dim = 32;
   // int64_t test_key_capability = 10 * 1e6;
   int64_t test_key_capability = 1693782;
 
-  NaiveArraySSD<uint64_t> ssd(emb_dim * 4, test_key_capability);
+  NaiveArraySSD<uint64_t> ssd(emb_dim * 4, test_key_capability, 1);
 
   std::vector<uint64_t> keys;
   std::vector<float> values;
@@ -24,11 +26,11 @@ TEST(NaiveArraySSD, test) {
   }
   ConstArray<uint64_t> keys_array(keys);
 
-  ssd.BulkLoad(keys_array, values.data());
+  ssd.BulkLoad(keys_array.Size(), values.data());
 
   LOG(INFO) << "bulk load finished";
 
-  constexpr int batch_get_num = 100;
+  constexpr int batch_get_num = 2000;
   std::vector<uint64_t> test_get_keys(batch_get_num);
   ConstArray<uint64_t> test_get_keys_array(test_get_keys);
   ConstArray<uint64_t> index_array;
@@ -41,7 +43,7 @@ TEST(NaiveArraySSD, test) {
     }
     xmh::Timer timer("get");
     ssd.BatchGet(test_get_keys_array, index_array,
-                 (void *)test_get_values.data());
+                 (void *)test_get_values.data(), 3);
     timer.end();
     for (int i = 0; i < batch_get_num; i++) {
       for (int j = 0; j < emb_dim; j++) {

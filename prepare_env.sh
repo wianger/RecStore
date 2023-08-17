@@ -1,0 +1,1 @@
+export LD_LIBRARY_PATH=/home/frw/workdir/RecStore/third_party/spdk/dpdk/build/lib/:/opt/conda/lib/:/opt/conda/lib:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64

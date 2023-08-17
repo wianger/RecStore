@@ -8,6 +8,9 @@
 namespace ssdps {
 
 class SpdkWrapperImplementation : public SpdkWrapper {
+
+static constexpr int QPAIR_NUM = 8;
+
  public:
   void Init() override {
     LOG(INFO) << "Initializing NVMe Controllers";
@@ -29,17 +32,22 @@ class SpdkWrapperImplementation : public SpdkWrapper {
     LOG(INFO) << "Initialization complete";
 
     for (auto &ns_entry : g_namespaces_) {
-      ns_entry.qpair = spdk_nvme_ctrlr_alloc_io_qpair(ns_entry.ctrlr, NULL, 0);
+      for(int i = 0; i < QPAIR_NUM; i++){
+        ns_entry.qpair[i] = spdk_nvme_ctrlr_alloc_io_qpair(ns_entry.ctrlr, NULL, 0);
 
-      CHECK_NE(ns_entry.qpair, nullptr)
-          << "ERROR: spdk_nvme_ctrlr_alloc_io_qpair() failed";
+        CHECK_NE(ns_entry.qpair[i], nullptr)
+            << "ERROR: spdk_nvme_ctrlr_alloc_io_qpair() failed";
+      }
     }
+    LOG(INFO) << "Allocated " << QPAIR_NUM << " qpairs";
     CHECK_EQ(g_namespaces_.size(), 1) << "KISS, now only support 1 namespace";
   }
 
   ~SpdkWrapperImplementation() {
     for (auto ns_entry : g_namespaces_) {
-      spdk_nvme_ctrlr_free_io_qpair(ns_entry.qpair);
+      for(int qp_id = 0; qp_id < QPAIR_NUM; qp_id++){
+        spdk_nvme_ctrlr_free_io_qpair(ns_entry.qpair[qp_id]);
+      }
       struct spdk_nvme_detach_ctx *detach_ctx = NULL;
       spdk_nvme_detach_async(ns_entry.ctrlr, &detach_ctx);
       if (detach_ctx) {
@@ -50,12 +58,12 @@ class SpdkWrapperImplementation : public SpdkWrapper {
 
   int SubmitWriteCommand(const void *pinned_src, const int64_t bytes,
                          const int64_t lba, spdk_nvme_cmd_cb func,
-                         void *ctx) override {
+                         void *ctx, int qp_id) override {
     auto ns_entry = g_namespaces_[0];
     uint32_t lba_count = (bytes + kLBASize_ - 1) / kLBASize_;
 
     int ret =
-        spdk_nvme_ns_cmd_write(ns_entry.ns, ns_entry.qpair, (void *)pinned_src,
+        spdk_nvme_ns_cmd_write(ns_entry.ns, ns_entry.qpair[qp_id], (void *)pinned_src,
                                lba, lba_count, func, ctx, 0);
 
     CHECK(ret == 0 || ret == -ENOMEM) << ret;
@@ -64,27 +72,27 @@ class SpdkWrapperImplementation : public SpdkWrapper {
 
   void SubmitReadCommand(void *pinned_dst, const int64_t bytes,
                          const int64_t lba, spdk_nvme_cmd_cb func,
-                         void *ctx) override {
+                         void *ctx, int qp_id) override {
     auto ns_entry = g_namespaces_[0];
     uint32_t lba_count = (bytes + kLBASize_ - 1) / kLBASize_;
     while (1) {
-      auto ret = spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair, pinned_dst,
+      auto ret = spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id], pinned_dst,
                                        lba, lba_count, func, ctx, 0);
       if (ret == 0) {
         return;
       } else if (ret == -ENOMEM) {
         FB_LOG_EVERY_MS(ERROR, 10000)
             << "SubmitReadCommand return with ENOMEM, let's poll CQ";
-        PollCompleteQueue();
+        PollCompleteQueue(qp_id);
       } else {
         LOG(FATAL) << "SubmitReadCommand Error " << ret;
       }
     }
   }
 
-  FOLLY_ALWAYS_INLINE void PollCompleteQueue() override {
+  FOLLY_ALWAYS_INLINE void PollCompleteQueue(int qp_id) override {
     auto ns_entry = g_namespaces_[0];
-    spdk_nvme_qpair_process_completions(ns_entry.qpair, 0);
+    spdk_nvme_qpair_process_completions(ns_entry.qpair[qp_id], 0);
   }
 
   FOLLY_ALWAYS_INLINE int GetLBASize() const override { return kLBASize_; }
@@ -96,26 +104,26 @@ class SpdkWrapperImplementation : public SpdkWrapper {
     return capacity / GetLBASize();
   }
 
-  void SyncRead(void *pinned_dst, const int64_t bytes, const int64_t lba) {
+  void SyncRead(void *pinned_dst, const int64_t bytes, const int64_t lba, int qp_id) override {
     std::atomic_bool flag{false};
     SubmitReadCommand(pinned_dst, bytes, lba, SyncCommandCompleteCB,
-                      (void *)&flag);
+                      (void *)&flag, qp_id);
     while (!flag.load()) {
-      PollCompleteQueue();
+      PollCompleteQueue(qp_id);
     }
   }
 
   void SyncWrite(const void *pinned_src, const int64_t bytes,
-                 const int64_t lba) {
+                 const int64_t lba, int qp_id) override {
     std::atomic_bool flag{false};
     SubmitWriteCommand(pinned_src, bytes, lba, SyncCommandCompleteCB,
-                       (void *)&flag);
+                       (void *)&flag, qp_id);
     while (!flag.load()) {
-      PollCompleteQueue();
+      PollCompleteQueue(qp_id);
     }
   }
 
-  void Sync2Read(void *pinned_dst, const int64_t lba) {
+  void Sync2Read(void *pinned_dst, const int64_t lba, int qp_id) override {
     LOG(FATAL)
         << "dont use this function, this function is only used for test nvme "
            "command fusion";
@@ -123,19 +131,19 @@ class SpdkWrapperImplementation : public SpdkWrapper {
     auto ns_entry = g_namespaces_[0];
 
     auto ret =
-        spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair, pinned_dst, lba, 1,
+        spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id], pinned_dst, lba, 1,
                               nullptr, nullptr, SPDK_NVME_CMD_FUSE_FIRST);
     if (ret == 0) {
       LOG(INFO) << "submit successful 1";
     } else if (ret == -ENOMEM) {
       FB_LOG_EVERY_MS(ERROR, 10000)
           << "SubmitReadCommand return with ENOMEM, let's poll CQ";
-      PollCompleteQueue();
+      PollCompleteQueue(qp_id);
     } else {
       LOG(FATAL) << "SubmitReadCommand Error " << ret;
     }
 
-    ret = spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair,
+    ret = spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id],
                                 (char *)pinned_dst + 512, lba + 1, 1, nullptr,
                                 nullptr, SPDK_NVME_CMD_FUSE_SECOND);
     if (ret == 0) {
@@ -143,7 +151,7 @@ class SpdkWrapperImplementation : public SpdkWrapper {
     } else if (ret == -ENOMEM) {
       FB_LOG_EVERY_MS(ERROR, 10000)
           << "SubmitReadCommand return with ENOMEM, let's poll CQ";
-      PollCompleteQueue();
+      PollCompleteQueue(qp_id);
     } else {
       LOG(FATAL) << "SubmitReadCommand Error " << ret;
     }
@@ -233,7 +241,7 @@ class SpdkWrapperImplementation : public SpdkWrapper {
   struct ns_entry {
     struct spdk_nvme_ctrlr *ctrlr;
     struct spdk_nvme_ns *ns;
-    struct spdk_nvme_qpair *qpair;
+    struct spdk_nvme_qpair *qpair[QPAIR_NUM];
   };
 
   std::vector<ns_entry> g_namespaces_;

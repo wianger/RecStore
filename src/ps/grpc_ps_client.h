@@ -53,7 +53,7 @@ class ParameterClient {
   bool PutParameter(const std::vector<uint64_t> &keys,
                     const std::vector<std::vector<float>> &values);
 
- private:
+ protected:
   bool Initialize() {
     return true;
   }
@@ -72,49 +72,3 @@ class ParameterClient {
   std::shared_ptr<Channel> channel_;
   std::vector<std::unique_ptr<xmhps::ParameterService::Stub>> stubs_;
 };
-
-// class MultiPSClient {
-//   int GetShard(uint64_t key, int nr_shards) const { return key % nr_shards;
-//   }
-
-//   bool GetParameter(const std::vector<uint64_t>& keys,
-//                     std::vector<std::vector<const float>>* values) {
-//     if (keys.empty()) {
-//       return true;
-//     }
-//     values->clear();
-//     for (int i = 0; i < clients_.size(); ++i) shard_keys_[i].clear();
-//     for (auto key : keys) {
-//       auto shard = GetShard(key, clients_.size());
-//       shard_keys_[shard].push_back(key);
-//     }
-
-//     for (int i = 0; i < clients_.size(); ++i) {
-//       if (shard_keys_[i].empty()) continue;
-//       get_batch_holder_[i] = batch_client_->GetParameter(i,
-//       shard_keys_[i]);
-//     }
-//     bool res = true;
-//     for (int i = 0; i < clients_.size(); ++i) {
-//       if (shard_keys_[i].empty() || !get_batch_holder_[i]) {
-//         continue;
-//       }
-//       while (!get_batch_holder_[i]->done) {
-//         base::SleepForMilliseconds(1);
-//       }
-//       if (!get_batch_holder_[i]->parameters) {
-//         LOG(INFO) << "shard " << i << " parameters error";
-//         res = false;
-//       }
-//     }
-//     if (!res) return false;
-//     for (auto key : keys) {
-//       int shard = GetShard(key, clients_.size());
-//       values->push_back(get_batch_holder_[shard]->GetSingleParameter(key));
-//     }
-//     return true;
-//   }
-
-//   std::vector<std::unique_ptr<ParameterClient>> clients_;
-//   std::vector<> get_batch_holder_;
-// };

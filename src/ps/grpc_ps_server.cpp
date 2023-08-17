@@ -32,9 +32,6 @@ using xmhps::PSCommand;
 using xmhps::PutParameterRequest;
 using xmhps::PutParameterResponse;
 
-DEFINE_bool(use_master_worker, false,
-            "PS use master worker/ run to completion");
-
 class ParameterServiceImpl final : public xmhps::ParameterService::Service {
  public:
   ParameterServiceImpl(CachePS *cache_ps) { cache_ps_ = cache_ps; }
@@ -54,21 +51,11 @@ class ParameterServiceImpl final : public xmhps::ParameterService::Service {
     FB_LOG_EVERY_MS(INFO, 1000)
         << "[PS] Getting " << keys_array.Size() << " keys";
 
-    if (FLAGS_use_master_worker) {
-      static std::vector<std::vector<ParameterPack>> packs;
-      cache_ps_->GetParameterMasterWorker(keys_array, &packs);
-      for (auto &i : packs) {
-        for (auto &j : i) {
-          compressor.AddItem(j, &blocks);
-        }
-      }
-
-    } else {
-      for (auto each : keys_array) {
-        ParameterPack parameter_pack;
-        cache_ps_->GetParameterRun2Completion(each, parameter_pack);
-        compressor.AddItem(parameter_pack, &blocks);
-      }
+  
+    for (auto each : keys_array) {
+      ParameterPack parameter_pack;
+      cache_ps_->GetParameterRun2Completion(each, parameter_pack, 0);
+      compressor.AddItem(parameter_pack, &blocks);
     }
 
     compressor.ToBlock(&blocks);
@@ -121,7 +108,7 @@ class ParameterServiceImpl final : public xmhps::ParameterService::Service {
             request->parameter_value().data());
     int size = reader->item_size();
     for (int i = 0; i < size; i++) {
-      cache_ps_->PutSingleParameter(reader->item(i));
+      cache_ps_->PutSingleParameter(reader->item(i), 0);
     }
     return Status::OK;
   }
@@ -139,7 +126,7 @@ class GRPCParameterServer : public BaseParameterServer {
 
   void Run() {
     std::string server_address("0.0.0.0:15000");
-    auto cache_ps = std::make_unique<CachePS>(33762591LL, 0, 8);  // 1GB dict
+    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, 8, 65536);  // 1GB dict
     ParameterServiceImpl service(cache_ps.get());
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();

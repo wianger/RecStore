@@ -39,9 +39,7 @@ ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
       shard_(shard),
       nr_clients_(FLAGS_get_parameter_threads) {
   Initialize();
-  if (nr_clients_ > 1) {
-    future_pool_ = std::make_unique<folly::CPUThreadPoolExecutor>(nr_clients_);
-  }
+
   channel_ = grpc::CreateChannel(fmt::format("{}:{}", host, port),
                                  grpc::InsecureChannelCredentials());
   for (int i = 0; i < nr_clients_; i++) {
@@ -49,13 +47,6 @@ ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
     stubs_[i] = xmhps::ParameterService::NewStub(channel_);
     LOG(INFO) << "Init PS Client Shard " << i;
   }
-}
-
-bool ParameterClient::GetParameter(ConstArray<unsigned int> &keys,
-                                   std::vector<std::vector<float>> *values,
-                                   bool perf) {
-  CHECK(0);
-  return false;
 }
 
 bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
@@ -67,7 +58,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
   get_param_key_sizes_.clear();
   get_param_requests_.clear();
   get_param_responses_.clear();
-  futures_.clear();
+
   int request_num =
       (keys.Size() + MAX_PARAMETER_BATCH - 1) / MAX_PARAMETER_BATCH;
   get_param_requests_.resize(request_num);
@@ -80,53 +71,22 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
     get_param_key_sizes_.emplace_back(key_size);
     auto ret = std::make_shared<std::promise<bool>>();
     promise_vec.push_back(ret);
-    futures_.emplace_back(ret->get_future());
-    if (future_pool_ && keys.Size() > MAX_PARAMETER_BATCH) {
-      future_pool_->add([&, start, index, key_size, ret] {
-        auto &request = get_param_requests_[index];
-        auto &response = get_param_responses_[index];
-        request.set_perf(perf);
-        request.set_keys(reinterpret_cast<const char *>(&keys[start]),
-                         sizeof(uint64_t) * key_size);
-        grpc::ClientContext context;
-        grpc::Status status =
-            stubs_[folly::getCurrentThreadID() % nr_clients_]->GetParameter(
-                &context, request, &response);
-        if (status.ok()) {
-          ret->set_value(true);
-          return true;
-        } else {
-          std::cout << status.error_code() << ": " << status.error_message()
-                    << std::endl;
-          ret->set_value(false);
-          return false;
-        }
-      });
-    } else {
-      auto &request = get_param_requests_[index];
-      auto &response = get_param_responses_[index];
-      request.set_perf(perf);
-      request.set_keys(reinterpret_cast<const char *>(&keys[start]),
-                       sizeof(uint64_t) * key_size);
-      // rpc
-      grpc::ClientContext context;
-      grpc::Status status =
-          stubs_[0]->GetParameter(&context, request, &response);
-      if (status.ok())
-        ret->set_value(true);
-      else {
-        std::cout << status.error_code() << ": " << status.error_message()
-                  << std::endl;
-        ret->set_value(false);
-      }
+    auto &request = get_param_requests_[index];
+    auto &response = get_param_responses_[index];
+    request.set_perf(perf);
+    request.set_keys(reinterpret_cast<const char *>(&keys[start]),
+                      sizeof(uint64_t) * key_size);
+    // rpc
+    grpc::ClientContext context;
+    grpc::Status status =
+        stubs_[0]->GetParameter(&context, request, &response);
+    if (status.ok())
+      ret->set_value(true);
+    else {
+      std::cout << status.error_code() << ": " << status.error_message()
+                << std::endl;
+      ret->set_value(false);
     }
-  }
-  if (futures_.size()) {
-    bool res = true;
-    for (auto &future : futures_) {
-      if (!future.get()) res = false;
-    }
-    if (!res) return false;
   }
 
   size_t get_embedding_acc = 0;
@@ -180,7 +140,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
   get_param_key_sizes_.clear();
   get_param_requests_.clear();
   get_param_responses_.clear();
-  futures_.clear();
+  
   values->reserve(keys.Size());
 
   int request_num =
@@ -195,53 +155,23 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
     get_param_key_sizes_.emplace_back(key_size);
     auto ret = std::make_shared<std::promise<bool>>();
     promise_vec.push_back(ret);
-    futures_.emplace_back(ret->get_future());
-    if (future_pool_ && keys.Size() > MAX_PARAMETER_BATCH) {
-      future_pool_->add([&, start, index, key_size, ret] {
-        auto &request = get_param_requests_[index];
-        auto &response = get_param_responses_[index];
-        request.set_perf(perf);
-        request.set_keys(reinterpret_cast<const char *>(&keys[start]),
-                         sizeof(uint64_t) * key_size);
-        grpc::ClientContext context;
-        grpc::Status status =
-            stubs_[folly::getCurrentThreadID() % nr_clients_]->GetParameter(
-                &context, request, &response);
-        if (status.ok()) {
-          ret->set_value(true);
-          return true;
-        } else {
-          std::cout << status.error_code() << ": " << status.error_message()
-                    << std::endl;
-          ret->set_value(false);
-          return false;
-        }
-      });
-    } else {
-      auto &request = get_param_requests_[index];
-      auto &response = get_param_responses_[index];
-      request.set_perf(perf);
-      request.set_keys(reinterpret_cast<const char *>(&keys[start]),
-                       sizeof(uint64_t) * key_size);
-      // rpc
-      grpc::ClientContext context;
-      grpc::Status status =
-          stubs_[0]->GetParameter(&context, request, &response);
-      if (status.ok())
-        ret->set_value(true);
-      else {
-        std::cout << status.error_code() << ": " << status.error_message()
-                  << std::endl;
-        ret->set_value(false);
-      }
+
+    auto &request = get_param_requests_[index];
+    auto &response = get_param_responses_[index];
+    request.set_perf(perf);
+    request.set_keys(reinterpret_cast<const char *>(&keys[start]),
+                      sizeof(uint64_t) * key_size);
+    // rpc
+    grpc::ClientContext context;
+    grpc::Status status =
+        stubs_[0]->GetParameter(&context, request, &response);
+    if (status.ok())
+      ret->set_value(true);
+    else {
+      std::cout << status.error_code() << ": " << status.error_message()
+                << std::endl;
+      ret->set_value(false);
     }
-  }
-  if (futures_.size()) {
-    bool res = true;
-    for (auto &future : futures_) {
-      if (!future.get()) res = false;
-    }
-    if (!res) return false;
   }
 
   for (int i = 0; i < get_param_responses_.size(); ++i) {
@@ -278,6 +208,16 @@ bool ParameterClient::ClearPS() {
   return status.ok();
 }
 
+bool ParameterClient::LoadFakeData(int64_t data){
+  CommandRequest request;
+  CommandResponse response;
+  request.set_command(PSCommand::LOAD_FAKE_DATA);
+  request.add_arg1(&data, sizeof(int64_t));
+  grpc::ClientContext context;
+  grpc::Status status = stubs_[0]->Command(&context, request, &response);
+  return status.ok();
+}
+
 bool ParameterClient::LoadCkpt(
     const std::vector<std::string> &model_config_path,
     const std::vector<std::string> &emb_file_path) {
@@ -299,125 +239,36 @@ bool ParameterClient::LoadCkpt(
 bool ParameterClient::PutParameter(
     const std::vector<uint64_t> &keys,
     const std::vector<std::vector<float>> &values) {
-  futures_.clear();
   for (int start = 0, index = 0; start < keys.size();
        start += MAX_PARAMETER_BATCH, ++index) {
     int key_size = std::min((int)(keys.size() - start), MAX_PARAMETER_BATCH);
     auto ret = std::make_shared<std::promise<bool>>();
-    futures_.emplace_back(ret->get_future());
-    if (future_pool_ && keys.size() > MAX_PARAMETER_BATCH) {
-      future_pool_->add([&, start, index, key_size] {
-        PutParameterRequest request;
-        PutParameterResponse response;
-        ParameterCompressor compressor;
-        std::vector<std::string> blocks;
-        for (int i = start; i < start + key_size; i++) {
-          auto each_key = keys[i];
-          auto &embedding = values[i];
-          ParameterPack parameter_pack;
-          parameter_pack.key = each_key;
-          parameter_pack.dim = embedding.size();
-          parameter_pack.emb_data = embedding.data();
-          compressor.AddItem(parameter_pack, &blocks);
-        }
-        compressor.ToBlock(&blocks);
-        CHECK_EQ(blocks.size(), 1);
-        request.mutable_parameter_value()->swap(blocks[0]);
-        grpc::ClientContext context;
-        grpc::Status status =
-            stubs_[folly::getCurrentThreadID() % nr_clients_]->PutParameter(
-                &context, request, &response);
-        if (status.ok()) {
-          ret->set_value(true);
-          return true;
-        } else {
-          std::cout << status.error_code() << ": " << status.error_message()
-                    << std::endl;
-          ret->set_value(false);
-          return false;
-        }
-      });
+    PutParameterRequest request;
+    PutParameterResponse response;
+    ParameterCompressor compressor;
+    std::vector<std::string> blocks;
+    for (int i = start; i < start + key_size; i++) {
+      auto each_key = keys[i];
+      auto &embedding = values[i];
+      ParameterPack parameter_pack;
+      parameter_pack.key = each_key;
+      parameter_pack.dim = embedding.size();
+      parameter_pack.emb_data = embedding.data();
+      compressor.AddItem(parameter_pack, &blocks);
+    }
+    compressor.ToBlock(&blocks);
+    CHECK_EQ(blocks.size(), 1);
+    request.mutable_parameter_value()->swap(blocks[0]);
+    grpc::ClientContext context;
+    grpc::Status status =
+        stubs_[0]->PutParameter(&context, request, &response);
+    if (status.ok()) {
+      ret->set_value(true);
     } else {
-      PutParameterRequest request;
-      PutParameterResponse response;
-      ParameterCompressor compressor;
-      std::vector<std::string> blocks;
-      for (int i = start; i < start + key_size; i++) {
-        auto each_key = keys[i];
-        auto &embedding = values[i];
-        ParameterPack parameter_pack;
-        parameter_pack.key = each_key;
-        parameter_pack.dim = embedding.size();
-        parameter_pack.emb_data = embedding.data();
-        compressor.AddItem(parameter_pack, &blocks);
-      }
-      compressor.ToBlock(&blocks);
-      CHECK_EQ(blocks.size(), 1);
-      request.mutable_parameter_value()->swap(blocks[0]);
-      grpc::ClientContext context;
-      grpc::Status status =
-          stubs_[0]->PutParameter(&context, request, &response);
-      if (status.ok()) {
-        ret->set_value(true);
-      } else {
-        std::cout << status.error_code() << ": " << status.error_message()
-                  << std::endl;
-        ret->set_value(false);
-      }
+      std::cout << status.error_code() << ": " << status.error_message()
+                << std::endl;
+      ret->set_value(false);
     }
-  }
-  if (futures_.size()) {
-    bool res = true;
-    for (auto &future : futures_) {
-      if (!future.get()) res = false;
-    }
-    if (!res) return false;
   }
   return true;
 }
-
-// class MultiPSClient {
-//   int GetShard(uint64_t key, int nr_shards) const { return key % nr_shards;
-//   }
-
-//   bool GetParameter(const std::vector<uint64_t>& keys,
-//                     std::vector<std::vector<const float>>* values) {
-//     if (keys.empty()) {
-//       return true;
-//     }
-//     values->clear();
-//     for (int i = 0; i < clients_.size(); ++i) shard_keys_[i].clear();
-//     for (auto key : keys) {
-//       auto shard = GetShard(key, clients_.size());
-//       shard_keys_[shard].push_back(key);
-//     }
-
-//     for (int i = 0; i < clients_.size(); ++i) {
-//       if (shard_keys_[i].empty()) continue;
-//       get_batch_holder_[i] = batch_client_->GetParameter(i,
-//       shard_keys_[i]);
-//     }
-//     bool res = true;
-//     for (int i = 0; i < clients_.size(); ++i) {
-//       if (shard_keys_[i].empty() || !get_batch_holder_[i]) {
-//         continue;
-//       }
-//       while (!get_batch_holder_[i]->done) {
-//         base::SleepForMilliseconds(1);
-//       }
-//       if (!get_batch_holder_[i]->parameters) {
-//         LOG(INFO) << "shard " << i << " parameters error";
-//         res = false;
-//       }
-//     }
-//     if (!res) return false;
-//     for (auto key : keys) {
-//       int shard = GetShard(key, clients_.size());
-//       values->push_back(get_batch_holder_[shard]->GetSingleParameter(key));
-//     }
-//     return true;
-//   }
-
-//   std::vector<std::unique_ptr<ParameterClient>> clients_;
-//   std::vector<> get_batch_holder_;
-// };

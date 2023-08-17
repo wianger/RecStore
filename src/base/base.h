@@ -62,6 +62,15 @@ inline int64 GetTimestamp() {
       .count();
 }
 
+inline void bind_core(int n){
+  cpu_set_t mask;
+  CPU_ZERO(&mask);
+  CPU_SET(n, &mask);
+  if (sched_setaffinity(0, sizeof(mask), &mask) == -1) {
+    std::cout << "Could not set CPU affinity" << std::endl;
+  }
+}
+
 class Lock {
  public:
   void lock() { m.lock(); }
