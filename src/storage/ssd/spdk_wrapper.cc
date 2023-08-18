@@ -8,8 +8,9 @@
 namespace ssdps {
 
 class SpdkWrapperImplementation : public SpdkWrapper {
-
-static constexpr int QPAIR_NUM = 8;
+private:
+  static constexpr int MAX_QPAIR_NUM = 8;
+  int queue_cnt;
 
  public:
   void Init() override {
@@ -32,20 +33,24 @@ static constexpr int QPAIR_NUM = 8;
     LOG(INFO) << "Initialization complete";
 
     for (auto &ns_entry : g_namespaces_) {
-      for(int i = 0; i < QPAIR_NUM; i++){
+      for(int i = 0; i < queue_cnt; i++){
         ns_entry.qpair[i] = spdk_nvme_ctrlr_alloc_io_qpair(ns_entry.ctrlr, NULL, 0);
 
         CHECK_NE(ns_entry.qpair[i], nullptr)
             << "ERROR: spdk_nvme_ctrlr_alloc_io_qpair() failed";
       }
     }
-    LOG(INFO) << "Allocated " << QPAIR_NUM << " qpairs";
+    LOG(INFO) << "Allocated " << queue_cnt << " qpairs";
     CHECK_EQ(g_namespaces_.size(), 1) << "KISS, now only support 1 namespace";
+  }
+
+  SpdkWrapperImplementation(int queue_cnt) : queue_cnt(queue_cnt) {
+    CHECK(queue_cnt <= MAX_QPAIR_NUM);
   }
 
   ~SpdkWrapperImplementation() {
     for (auto ns_entry : g_namespaces_) {
-      for(int qp_id = 0; qp_id < QPAIR_NUM; qp_id++){
+      for(int qp_id = 0; qp_id < queue_cnt; qp_id++){
         spdk_nvme_ctrlr_free_io_qpair(ns_entry.qpair[qp_id]);
       }
       struct spdk_nvme_detach_ctx *detach_ctx = NULL;
@@ -241,15 +246,15 @@ static constexpr int QPAIR_NUM = 8;
   struct ns_entry {
     struct spdk_nvme_ctrlr *ctrlr;
     struct spdk_nvme_ns *ns;
-    struct spdk_nvme_qpair *qpair[QPAIR_NUM];
+    struct spdk_nvme_qpair *qpair[MAX_QPAIR_NUM];
   };
 
   std::vector<ns_entry> g_namespaces_;
 };
 
-std::unique_ptr<SpdkWrapper> SpdkWrapper::create() {
+std::unique_ptr<SpdkWrapper> SpdkWrapper::create(int queue_cnt) {
   std::unique_ptr<SpdkWrapper> ret =
-      std::make_unique<SpdkWrapperImplementation>();
+      std::make_unique<SpdkWrapperImplementation>(queue_cnt);
   return ret;
 }
 

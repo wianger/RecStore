@@ -66,6 +66,9 @@ target_link_libraries(grpc_ps_server_async PUBLIC
     kv_engine
 )
 
+target_include_directories(grpc_ps_server_async PRIVATE ${PROJECT_SOURCE_DIR}/third_party/atomic_queue/include)
+
+target_compile_options(grpc_ps_server_async PRIVATE -fsanitize=address)
 # add_executable(grpc_ps_client_with_config
 #     grpc_ps_client_with_config.cpp 
 #     ${common}

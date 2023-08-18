@@ -17,6 +17,7 @@
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
 #include "provider.h"
+#include "atomic_queue/atomic_queue.h"
 
 #include "base_ps_server.h"
 
@@ -48,7 +49,8 @@ public:
   Status status;
   RequestType request_type;
   ::grpc::ServerContext ctx;
-  DispatchParam(RequestType request_type) : status(PROCESSED), request_type(request_type) {}
+  xmh::Timer timer;
+  DispatchParam(RequestType request_type, const char *name) : status(PROCESSED), request_type(request_type), timer(name) {}
 };
 
 class PutRequestParam : public DispatchParam{
@@ -56,7 +58,7 @@ public:
   xmhps::PutParameterRequest request;
   ServerAsyncResponseWriter<PutParameterResponse> responder;
   PutParameterResponse reply;
-  PutRequestParam() : DispatchParam(PUT), responder(&ctx) {}
+  PutRequestParam() : DispatchParam(PUT, "PUT timer"), responder(&ctx) {}
 };
 
 class GetRequestParam : public DispatchParam {
@@ -64,7 +66,7 @@ public:
   xmhps::GetParameterRequest request;
   ServerAsyncResponseWriter<GetParameterResponse> responder;
   GetParameterResponse reply;
-  GetRequestParam() : DispatchParam(GET), responder(&ctx) {}
+  GetRequestParam() : DispatchParam(GET, "GET timer"), responder(&ctx) {}
 };
 
 class CommandRequestParam : public DispatchParam {
@@ -72,8 +74,14 @@ public:
   xmhps::CommandRequest request;
   ServerAsyncResponseWriter<CommandResponse> responder;
   CommandResponse reply;
-  CommandRequestParam() : DispatchParam(COMMAND), responder(&ctx) {}
+  CommandRequestParam() : DispatchParam(COMMAND, "COMMAND timer"), responder(&ctx) {}
 };
+
+const int GET_PATA_REQ_NUM = 1024;
+const int PUT_PATA_REQ_NUM = 64;
+const int COMMAND_REQ_NUM = 1;
+const int RESERVE_NUM = 512;
+const int TOTAL_NUM = GET_PATA_REQ_NUM + PUT_PATA_REQ_NUM + COMMAND_REQ_NUM + RESERVE_NUM;
 
 class ParameterServiceImpl final : public xmhps::ParameterService::AsyncService {
   
@@ -82,8 +90,9 @@ private:
   int thread_num_;
   std::vector<std::thread> thread_pool;
   std::atomic<uint64_t> get_key_cnt;
-
 public:
+  atomic_queue::AtomicQueue<DispatchParam *, TOTAL_NUM> task_queue;
+
   void Monitor(){
     while(true){
       std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -104,7 +113,6 @@ public:
     get_key_cnt = 0;
   }
 
-  PriorityProvider<DispatchParam *> provider;
 
   void DoGetParameter(GetRequestParam *under_process, int tid){
     GetParameterRequest *request = &under_process->request;
@@ -128,13 +136,14 @@ public:
     compressor.ToBlock(&blocks);
     CHECK_EQ(blocks.size(), 1);
     reply->mutable_parameter_value()->swap(blocks[0]);
+    // if (isPerf) {
+        timer_ps_get_req.end();
+    // } else {
+    //   timer_ps_get_req.destroy();
+    // }
+    under_process->timer.end();
     under_process->responder.Finish(under_process->reply, Status::OK, under_process);
     get_key_cnt.fetch_add(keys_array.Size());
-    if (isPerf) {
-      timer_ps_get_req.end();
-    } else {
-      timer_ps_get_req.destroy();
-    }
   }
 
   void DoPutParameter(PutRequestParam *under_process, int tid){
@@ -143,11 +152,13 @@ public:
         reinterpret_cast<const ParameterCompressReader *>(
             request->parameter_value().data());
     cache_ps_->PutParameter(reader, tid);
+    under_process->timer.end();
     under_process->responder.Finish(under_process->reply, Status::OK, under_process);
   }
 
   void DoCommand(CommandRequestParam *under_process, int tid){
     CommandRequest *request = &under_process->request;
+    xmh::Timer timer_ps_get_req("PS Command Req");
     if (request->command() == PSCommand::CLEAR_PS) {
       LOG(WARNING) << "[PS Command] Clear All";
       cache_ps_->Clear();
@@ -175,41 +186,31 @@ public:
     } else {
       LOG(FATAL) << "invalid command";
     }
+    timer_ps_get_req.end();
+    under_process->timer.end();
     under_process->responder.Finish(under_process->reply, Status::OK, under_process);
   }
 
   void Process(int work_id){
     base::bind_core(work_id);
     while(true){
-      while(provider.ExistTask()){
-        DispatchParam *under_process = provider.GetTask();
-        // std::cout << "A get task" << std::endl;
-        if(under_process == nullptr){
-          // std::cout << "A fake task" << std::endl;
-          // std::cout << "Here is fake return" << std::endl;
-          continue;
-        }
-        if(under_process->request_type == DispatchParam::RequestType::GET){
-          DoGetParameter(static_cast<GetRequestParam *>(under_process), work_id);
-          continue;
-        }
-        if(under_process->request_type == DispatchParam::RequestType::PUT){
-          DoPutParameter(static_cast<PutRequestParam *>(under_process), work_id);
-          continue;
-        }
-        if(under_process->request_type == DispatchParam::RequestType::COMMAND){
-          DoCommand(static_cast<CommandRequestParam *>(under_process), work_id);
-          continue;
-        }
+      DispatchParam *under_process = task_queue.pop();
+      if(under_process->request_type == DispatchParam::RequestType::GET){
+        DoGetParameter(static_cast<GetRequestParam *>(under_process), work_id);
+        continue;
+      }
+      if(under_process->request_type == DispatchParam::RequestType::PUT){
+        DoPutParameter(static_cast<PutRequestParam *>(under_process), work_id);
+        continue;
+      }
+      if(under_process->request_type == DispatchParam::RequestType::COMMAND){
+        DoCommand(static_cast<CommandRequestParam *>(under_process), work_id);
+        continue;
       }
     }
   }
 
 };
-
-const int GET_PATA_REQ_NUM = 1024;
-const int PUT_PATA_REQ_NUM = 64;
-const int COMMAND_REQ_NUM = 1;
 
 namespace recstore {
 class GRPCParameterServer : public BaseParameterServer {
@@ -255,7 +256,8 @@ class GRPCParameterServer : public BaseParameterServer {
       DispatchParam *param = static_cast<DispatchParam *>(tag);
       if(param->status == DispatchParam::Status::PROCESSED){
         param->status = DispatchParam::Status::RECEIVED;
-        service.provider.PutTask(param);
+        param->timer.start();
+        service.task_queue.push(param);
       } else {
         param->status = DispatchParam::PROCESSED;
         if(param->request_type == DispatchParam::RequestType::GET){

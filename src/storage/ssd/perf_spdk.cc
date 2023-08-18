@@ -19,7 +19,7 @@ void cb(void *ctx, const struct spdk_nvme_cpl *cpl) {
 int main(int argc, char **argv) {
   folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread();
-  auto ssd = ssdps::SpdkWrapper::create();
+  auto ssd = ssdps::SpdkWrapper::create(1);
   ssd->Init();
 
   int batch_get_num = FLAGS_query_count;

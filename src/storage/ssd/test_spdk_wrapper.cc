@@ -10,7 +10,7 @@
 #include "spdk_wrapper.h"
 
 TEST(SpdkWrapper, test) {
-  auto ssd = ssdps::SpdkWrapper::create();
+  auto ssd = ssdps::SpdkWrapper::create(1);
   ssd->Init();
 
   char *buf = (char *)spdk_zmalloc(0x1000, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY,

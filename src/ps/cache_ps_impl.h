@@ -91,10 +91,8 @@ class CachePS {
     std::vector<uint64_t> keys_vec;
     for(int i = 0; i < reader->item_size(); i++){
       keys_vec.emplace_back(reader->item(i)->key);
-
     }
     base::ConstArray<uint64_t> keys(keys_vec);
-    
   }
 
   bool GetParameterRun2Completion(key_t key, ParameterPack &pack, int tid) {

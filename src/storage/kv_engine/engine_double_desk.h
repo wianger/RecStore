@@ -127,6 +127,7 @@ public:
     }
     index_timer.CumEnd();
     ssd_timer.CumStart();
+    xmh::PerfCounter::Record("unhit_size Keys", unhit_size);
     if (unhit_size != 0) {
       base::ConstArray<uint64> unhit_keys(unhit_array[t], unhit_size);
       ssd_->BatchGet(unhit_keys, base::ConstArray<uint64_t>(),

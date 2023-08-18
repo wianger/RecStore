@@ -16,7 +16,7 @@ namespace ssdps {
 
 class SpdkWrapper {
  public:
-  static std::unique_ptr<SpdkWrapper> create();
+  static std::unique_ptr<SpdkWrapper> create(int queue_cnt);
   virtual void Init() = 0;
 
   virtual void SubmitReadCommand(void *pinned_dst, const int64_t bytes, const int64_t lba,

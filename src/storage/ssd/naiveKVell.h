@@ -30,7 +30,8 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
  public:
   NaiveArraySSD(int VALUE_SIZE, uint64_t vector_capability, int thread_num)
       : VALUE_SIZE(VALUE_SIZE), vector_capability(vector_capability), thread_num(thread_num) {
-    ssd_ = ssdps::SpdkWrapper::create();
+    CHECK(thread_num <= MAX_QUEUE_NUM);
+    ssd_ = ssdps::SpdkWrapper::create(thread_num);
     ssd_->Init();
     rawbouncedBuffer_ = (char *)spdk_malloc(kBouncedBuffer_ * ssd_->GetLBASize() * thread_num, 0, NULL,
                                  SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
@@ -47,6 +48,7 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     for (int i = 0; i < thread_num; i++) {
       bouncedBuffer_[i] = (char *)rawbouncedBuffer_ + i * kBouncedBuffer_ * ssd_->GetLBASize();
       write_buffer_[i] = (char *)rawwrite_buffer_ + i * pinned_bytes;
+      all_cb_contexts[i] = std::vector<ReadCompleteCBContext>(kBouncedBuffer_);
     }
   }
 
@@ -115,7 +117,7 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
   // of dst matrix (i.e. we need * VALUE_SIZE)
   void BatchGet(ConstArray<KEY_T> keys_array, ConstArray<uint64_t> index,
                 void *dst, int tid) override {
-    static std::vector<ReadCompleteCBContext> cb_contexts(kBouncedBuffer_);
+    auto &cb_contexts = all_cb_contexts[tid];
     CHECK_LE(keys_array.Size(), kBouncedBuffer_);
     bool orderedByIndex = true;
     if (index.Data() != nullptr) {
@@ -271,15 +273,16 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     readCompleteCBContext->readCompleteCount->fetch_add(1);
     ssd_memory_bounce.end();
   }
-
+  static const int MAX_QUEUE_NUM = 8;
   int VALUE_SIZE;
   uint64_t vector_capability;
   static constexpr int kBouncedBuffer_ = 20000;
   char *rawbouncedBuffer_;
   char *rawwrite_buffer_;
-  char *bouncedBuffer_[8];
-  char *write_buffer_[8];
+  char *bouncedBuffer_[MAX_QUEUE_NUM];
+  char *write_buffer_[MAX_QUEUE_NUM];
   std::unique_ptr<ssdps::SpdkWrapper> ssd_;
+  std::vector<ReadCompleteCBContext> all_cb_contexts[MAX_QUEUE_NUM];
   int thread_num;
 };
 }  // namespace ssdps

@@ -116,8 +116,8 @@ def loadGenerator(args,
         cpu_sub_requests += 1
         cpu_requests += 1
 
-      arrival_time = np.random.poisson(lam = arrival_rate, size = 1)
-      loadGenSleep( arrival_time[0] / 1000. )
+      # arrival_time = np.random.poisson(lam = arrival_rate, size = 1)
+      # loadGenSleep( arrival_time[0] / 1000. )
     epoch += 1
     exp_epochs += 1
 
