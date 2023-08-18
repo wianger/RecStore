@@ -87,12 +87,16 @@ class CachePS {
         key, std::string_view((char *)item->data(), dim * sizeof(float)), tid);
   }
 
-  void PutParameter(const ParameterCompressReader *reader, int rid){
+  void PutParameter(const ParameterCompressReader *reader, int tid){
     std::vector<uint64_t> keys_vec;
+    std::vector<base::ConstArray<float>> values;
     for(int i = 0; i < reader->item_size(); i++){
       keys_vec.emplace_back(reader->item(i)->key);
+      values.emplace_back((float *)reader->item(i)->data(), reader->item(i)->dim);
     }
     base::ConstArray<uint64_t> keys(keys_vec);
+
+    base_kv_->BatchPut(keys, values, tid);
   }
 
   bool GetParameterRun2Completion(key_t key, ParameterPack &pack, int tid) {

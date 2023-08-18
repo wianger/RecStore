@@ -48,7 +48,6 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     for (int i = 0; i < thread_num; i++) {
       bouncedBuffer_[i] = (char *)rawbouncedBuffer_ + i * kBouncedBuffer_ * ssd_->GetLBASize();
       write_buffer_[i] = (char *)rawwrite_buffer_ + i * pinned_bytes;
-      all_cb_contexts[i] = std::vector<ReadCompleteCBContext>(kBouncedBuffer_);
     }
   }
 
@@ -117,7 +116,7 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
   // of dst matrix (i.e. we need * VALUE_SIZE)
   void BatchGet(ConstArray<KEY_T> keys_array, ConstArray<uint64_t> index,
                 void *dst, int tid) override {
-    auto &cb_contexts = all_cb_contexts[tid];
+    static thread_local std::vector<ReadCompleteCBContext> cb_contexts(kBouncedBuffer_);
     CHECK_LE(keys_array.Size(), kBouncedBuffer_);
     bool orderedByIndex = true;
     if (index.Data() != nullptr) {
@@ -282,7 +281,6 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
   char *bouncedBuffer_[MAX_QUEUE_NUM];
   char *write_buffer_[MAX_QUEUE_NUM];
   std::unique_ptr<ssdps::SpdkWrapper> ssd_;
-  std::vector<ReadCompleteCBContext> all_cb_contexts[MAX_QUEUE_NUM];
   int thread_num;
 };
 }  // namespace ssdps

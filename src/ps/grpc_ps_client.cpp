@@ -19,6 +19,7 @@
 using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
+using grpc::ClientAsyncResponseReader;
 using xmhps::CommandRequest;
 using xmhps::CommandResponse;
 using xmhps::GetParameterRequest;
@@ -27,11 +28,12 @@ using xmhps::PSCommand;
 using xmhps::PutParameterRequest;
 using xmhps::PutParameterResponse;
 
+
 DEFINE_int32(get_parameter_threads, 4, "get clients per shard");
 DEFINE_bool(parameter_client_random_init, false, "");
 
 // static const int MAX_PARAMETER_BATCH = 16384;
-static const int MAX_PARAMETER_BATCH = 7000;
+static const int MAX_PARAMETER_BATCH = 500;
 
 ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
     : host_(host),
@@ -55,12 +57,16 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
     CHECK(0) << "todo implement";
     return true;
   }
+
   get_param_key_sizes_.clear();
+  get_param_status_.clear();
   get_param_requests_.clear();
   get_param_responses_.clear();
+  get_param_resonse_readers_.clear();
 
   int request_num =
       (keys.Size() + MAX_PARAMETER_BATCH - 1) / MAX_PARAMETER_BATCH;
+  get_param_status_.resize(request_num);
   get_param_requests_.resize(request_num);
   get_param_responses_.resize(request_num);
 
@@ -71,6 +77,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
     get_param_key_sizes_.emplace_back(key_size);
     auto ret = std::make_shared<std::promise<bool>>();
     promise_vec.push_back(ret);
+    auto &status = get_param_status_[index];
     auto &request = get_param_requests_[index];
     auto &response = get_param_responses_[index];
     request.set_perf(perf);
@@ -78,15 +85,20 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
                       sizeof(uint64_t) * key_size);
     // rpc
     grpc::ClientContext context;
-    grpc::Status status =
-        stubs_[0]->GetParameter(&context, request, &response);
-    if (status.ok())
-      ret->set_value(true);
-    else {
-      std::cout << status.error_code() << ": " << status.error_message()
-                << std::endl;
-      ret->set_value(false);
+    std::unique_ptr<ClientAsyncResponseReader<GetParameterResponse>> rpc = stubs_[0]->AsyncGetParameter(&context, request, &cq);
+        // GetParameter(&context, request, &response);
+    rpc->Finish(&response, &status, reinterpret_cast<void*>(index));
+  }
+
+  int get = 0;
+  while(get != request_num){
+    void *got_tag;
+    bool ok = false;
+    cq.Next(&got_tag, &ok);
+    if(!ok){
+      LOG(ERROR) << "error";
     }
+    get++;
   }
 
   size_t get_embedding_acc = 0;
@@ -138,13 +150,17 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
 
   values->clear();
   get_param_key_sizes_.clear();
+  get_param_status_.clear();
   get_param_requests_.clear();
   get_param_responses_.clear();
+  get_param_resonse_readers_.clear();
   
   values->reserve(keys.Size());
 
   int request_num =
       (keys.Size() + MAX_PARAMETER_BATCH - 1) / MAX_PARAMETER_BATCH;
+
+  get_param_status_.resize(request_num);
   get_param_requests_.resize(request_num);
   get_param_responses_.resize(request_num);
 
@@ -155,7 +171,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
     get_param_key_sizes_.emplace_back(key_size);
     auto ret = std::make_shared<std::promise<bool>>();
     promise_vec.push_back(ret);
-
+    auto &status = get_param_status_[index];
     auto &request = get_param_requests_[index];
     auto &response = get_param_responses_[index];
     request.set_perf(perf);
@@ -163,15 +179,21 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
                       sizeof(uint64_t) * key_size);
     // rpc
     grpc::ClientContext context;
-    grpc::Status status =
-        stubs_[0]->GetParameter(&context, request, &response);
-    if (status.ok())
-      ret->set_value(true);
-    else {
-      std::cout << status.error_code() << ": " << status.error_message()
-                << std::endl;
-      ret->set_value(false);
+    get_param_resonse_readers_.emplace_back(stubs_[0]->AsyncGetParameter(&context, request, &cq));
+    auto &rpc = get_param_resonse_readers_.back();
+        // GetParameter(&context, request, &response);
+    rpc->Finish(&response, &status, reinterpret_cast<void*>(index));
+  }
+
+  int get = 0;
+  while(get != request_num){
+    void *got_tag;
+    bool ok = false;
+    cq.Next(&got_tag, &ok);
+    if(!ok){
+      LOG(ERROR) << "error";
     }
+    get++;
   }
 
   for (int i = 0; i < get_param_responses_.size(); ++i) {

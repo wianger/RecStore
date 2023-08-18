@@ -164,9 +164,10 @@ public:
     return std::make_pair(0, 0);
   }
 
-  void BatchPut(base::ConstArray<uint64> keys,
+  void BatchPut(base::ConstArray<uint64_t> keys,
                 std::vector<base::ConstArray<float>> &values,
                 unsigned t) override {
+    std::vector<uint64_t> keys_arr;
     for(int i = 0; i < keys.Size(); i++){
       auto &key = keys[i];
       auto iter = hash_table_.find(key);
@@ -180,12 +181,12 @@ public:
         index_pos = iter->second;
       }
       IndexInfo *info = &index_info[index_pos];
-      std::vector<uint64_t> keys_arr{index_pos};
+      keys_arr.emplace_back(index_pos);
       if(info->in_cache){
         memcpy(cache_ + info->cache_offset * value_size, values[i].Data(), value_size);
       }
     }
-    ssd_->BatchPut(keys, values, t);
+    ssd_->BatchPut(base::ConstArray<uint64_t>(keys_arr), values, t);
   }
 
   void Put(const uint64_t key, const std::string_view &value,
