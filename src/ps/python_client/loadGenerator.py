@@ -69,13 +69,13 @@ def loadGenSleep( sleeptime ):
 def send_request(args, client, dataset,
                  batch_id, epoch, batch_size, sub_id, tot_sub_batches, embedding_size):
   # print(f"[{time.time()}] batch_id = {batch_id}, epoch = {epoch}, batch_size = {batch_size}, sub_id = {sub_id}, tot_sub_batches = {tot_sub_batches}")
-  indices = dataset.get(batch_size).to(torch.int64)
-  GET_RATE = 0.95
+  indices = dataset.get(batch_size)
+  GET_RATE = 0.96
   
   if random.random() < GET_RATE:
     _result = client.GetParameter(indices)
   else:
-    client.PutParameter(indices, torch.rand(indices.shape[0], embedding_size))
+    client.PutParameter(indices, torch.empty(indices.shape[0], embedding_size))
 
 def loadGenerator(args,
                   client,

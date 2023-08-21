@@ -125,8 +125,8 @@ public:
     xmh::Timer timer_ps_get_req("PS GetParameter Req");
     ParameterCompressor compressor;
     std::vector<std::string> blocks;
-    FB_LOG_EVERY_MS(INFO, 1000)
-        << "[PS] Getting " << keys_array.Size() << " keys";
+    // FB_LOG_EVERY_MS(INFO, 1000)
+    //     << "[PS] Getting " << keys_array.Size() << " keys";
 
     std::vector<ParameterPack> packs;
     cache_ps_->GetParameterRun2Completion(keys_array, packs, tid);
@@ -136,11 +136,11 @@ public:
     compressor.ToBlock(&blocks);
     CHECK_EQ(blocks.size(), 1);
     reply->mutable_parameter_value()->swap(blocks[0]);
-    // if (isPerf) {
+    if (isPerf) {
         timer_ps_get_req.end();
-    // } else {
-    //   timer_ps_get_req.destroy();
-    // }
+    } else {
+      timer_ps_get_req.destroy();
+    }
     under_process->timer.end();
     under_process->responder.Finish(under_process->reply, Status::OK, under_process);
     get_key_cnt.fetch_add(keys_array.Size());

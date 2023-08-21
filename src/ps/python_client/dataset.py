@@ -14,7 +14,7 @@ class DatasetLoader:
                 indices, offsets, lengths = torch.load(f)
 
         print("Dataset loaded")
-        self.indices = indices
+        self.indices = indices.to(torch.int64)
         self.offsets = offsets
         self.lengths = lengths
         self.tot_datasets = offsets.size()[0] - 1
