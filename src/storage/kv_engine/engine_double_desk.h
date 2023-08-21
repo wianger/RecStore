@@ -20,7 +20,7 @@ class KVEngineDoubleDesk : public BaseKV {
       uint64_t, uint64_t, std::hash<uint64_t>, std::equal_to<uint64_t>,
       folly::f14::DefaultAlloc<std::pair<uint64_t const, uint64_t>>>;
 
-  constexpr static uint64_t MAX_THREAD_CNT = 8;
+  constexpr static uint64_t MAX_THREAD_CNT = 32;
   ssdps::NaiveArraySSD<uint64_t> *ssd_;
   char *cache_;
   uint64_t CACHE_SIZE = 1l << 30;
@@ -52,7 +52,7 @@ public:
     CHECK_GT(max_batch_keys_size, 0) << "max_batch_keys_size must be positive";
     CHECK_GT(per_thread_buffer_size, 0) << "per_thread_buffer_size must be positive";
     CHECK_GT(thread_num, 0) << "thread_num must be positive";
-
+    CHECK_LE(thread_num, MAX_THREAD_CNT) << "thread_num must be less than " << MAX_THREAD_CNT;
     LOG(INFO) << "value_size: " << value_size;
     LOG(INFO) << "max_batch_keys_size: " << max_batch_keys_size;
     LOG(INFO) << "per_thread_buffer_size: " << per_thread_buffer_size;

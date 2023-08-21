@@ -53,9 +53,21 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
 
   // return <lbaID, InlbaOffset>
   std::pair<int64_t, int> Mapping(int64_t index) const {
+#if 1
+    int64_t lba_no = index * VALUE_SIZE / ssd_->GetLBASize();
+    int in_lba_offset = (index * VALUE_SIZE) % ssd_->GetLBASize();
+    return std::make_pair(lba_no, in_lba_offset);
+#else 
+#if 0
+    int64_t lba_no = index * 1;
+    int in_lba_offset = 0;
+    return std::make_pair(lba_no, in_lba_offset);
+#else
     uint64_t lba_no = ssd_->GetLBANumber() * index / vector_capability;
     int in_lba_offset = 0;
     return std::make_pair(lba_no, in_lba_offset);
+#endif
+#endif
   }
 
   // the address the index th value stored
@@ -266,13 +278,11 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
       LOG(FATAL) << "I/O error status: "
                  << spdk_nvme_cpl_get_status_string(&cpl->status);
     }
-    xmh::Timer ssd_memory_bounce("Hier-SSD memory_bounce");
     memcpy(readCompleteCBContext->dst, readCompleteCBContext->src,
            readCompleteCBContext->value_size);
     readCompleteCBContext->readCompleteCount->fetch_add(1);
-    ssd_memory_bounce.end();
   }
-  static const int MAX_QUEUE_NUM = 8;
+  static const int MAX_QUEUE_NUM = 32;
   int VALUE_SIZE;
   uint64_t vector_capability;
   static constexpr int kBouncedBuffer_ = 20000;

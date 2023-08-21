@@ -219,7 +219,7 @@ class GRPCParameterServer : public BaseParameterServer {
 
   void Run() {
     std::string server_address("0.0.0.0:15000");
-    const int THREAD_NUM = 8;
+    const int THREAD_NUM = 16;
     auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, THREAD_NUM, 16ll << 20);  // 1GB dict
     ParameterServiceImpl service(cache_ps.get(), THREAD_NUM);
     grpc::EnableDefaultHealthCheckService(true);

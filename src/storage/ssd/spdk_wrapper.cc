@@ -9,7 +9,7 @@ namespace ssdps {
 
 class SpdkWrapperImplementation : public SpdkWrapper {
 private:
-  static constexpr int MAX_QPAIR_NUM = 8;
+  static constexpr int MAX_QPAIR_NUM = 32;
   int queue_cnt;
 
  public:
