@@ -4,8 +4,8 @@
 
 #include "base/factory.h"
 #include "base_kv.h"
-#include "base/lf_list.h"
-#include "storage/ssd/naiveKVell.h"
+#include "base/lf_list.h" 
+#include "storage/ssd/conaiveKVell.h"
 
 DECLARE_int32(prefetch_method);
 
@@ -21,7 +21,7 @@ class KVEngineDoubleDesk : public BaseKV {
       folly::f14::DefaultAlloc<std::pair<uint64_t const, uint64_t>>>;
 
   constexpr static uint64_t MAX_THREAD_CNT = 32;
-  ssdps::NaiveArraySSD<uint64_t> *ssd_;
+  ssdps::CoNaiveArraySSD<uint64_t> *ssd_;
   char *cache_;
   uint64_t CACHE_SIZE = 1l << 30;
 
@@ -61,7 +61,7 @@ public:
     index_info = new IndexInfo[config.capacity];
     CHECK(index_info) << "failed to allocate index_info";
     
-    ssd_ = new ssdps::NaiveArraySSD<uint64_t>(config.value_size, config.capacity, thread_num);
+    ssd_ = new ssdps::CoNaiveArraySSD<uint64_t>(config.value_size, config.capacity, thread_num);
     CHECK(ssd_) << "failed to allocate ssd";
 
     cache_ = new char[CACHE_SIZE];
@@ -99,7 +99,7 @@ public:
     LOG(FATAL) << "not implemented";
   }
 
-  void BatchGet(base::ConstArray<uint64> keys,
+  void BatchGet(coroutine<void>::push_type& sink, base::ConstArray<uint64> keys,
                 std::vector<base::ConstArray<float>> *values,
                 unsigned t) override {
     xmh::Timer index_timer("BatchGet index");
@@ -130,7 +130,7 @@ public:
     xmh::PerfCounter::Record("unhit_size Keys", unhit_size);
     if (unhit_size != 0) {
       base::ConstArray<uint64> unhit_keys(unhit_array[t], unhit_size);
-      ssd_->BatchGet(unhit_keys, base::ConstArray<uint64_t>(),
+      ssd_->BatchGet(sink, unhit_keys, base::ConstArray<uint64_t>(),
                      per_thread_buffer[t], t);
     }
     ssd_timer.CumEnd();
@@ -164,7 +164,12 @@ public:
     return std::make_pair(0, 0);
   }
 
-  void BatchPut(base::ConstArray<uint64_t> keys,
+  void BatchGet(base::ConstArray<uint64_t> keys,
+                        std::vector<base::ConstArray<float>> *values, unsigned tid) override{
+    LOG(FATAL) << "not implemented";
+  }
+
+  void BatchPut(coroutine<void>::push_type& sink, base::ConstArray<uint64_t> keys,
                 std::vector<base::ConstArray<float>> &values,
                 unsigned t) override {
     std::vector<uint64_t> keys_arr;

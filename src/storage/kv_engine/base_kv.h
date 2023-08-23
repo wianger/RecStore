@@ -3,9 +3,11 @@
 #include "base/log.h"
 #include <string>
 #include <tuple>
-
+#include <boost/coroutine2/all.hpp>
 
 #define XMH_SIMPLE_MALLOC
+
+using boost::coroutines2::coroutine;
 
 struct BaseKVConfig {
   int value_size = 0;
@@ -28,13 +30,18 @@ public:
   virtual void Get(const uint64_t key, std::string &value, unsigned tid) = 0;
   virtual void Put(const uint64_t key, const std::string_view &value, unsigned tid) = 0;
 
-  virtual void BatchPut(base::ConstArray<uint64_t> keys,
+  virtual void BatchPut(coroutine<void>::push_type& sink, base::ConstArray<uint64_t> keys,
                         std::vector<base::ConstArray<float>> &values, unsigned tid) {
     LOG(FATAL) << "not implemented";
   };
 
   virtual void BatchGet(base::ConstArray<uint64_t> keys,
                         std::vector<base::ConstArray<float>> *values, unsigned tid) = 0;
+
+  virtual void BatchGet(coroutine<void>::push_type& sink, base::ConstArray<uint64_t> keys,
+                        std::vector<base::ConstArray<float>> *values, unsigned tid) {
+    LOG(FATAL) << "not implemented";
+  }
 
   virtual std::pair<uint64_t, uint64_t> RegisterPMAddr() const = 0;
 

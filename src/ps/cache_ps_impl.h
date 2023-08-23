@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <experimental/filesystem>
+#include <boost/coroutine2/all.hpp>
 
 #include "base/array.h"
 #include "base/timer.h"
@@ -12,6 +13,8 @@
 #include "storage/kv_engine/base_kv.h"
 #include "folly/ProducerConsumerQueue.h"
 #include "parameters.h"
+
+using boost::coroutines2::coroutine;
 
 static const int KEY_CNT = 12543670;
 
@@ -87,7 +90,7 @@ class CachePS {
         key, std::string_view((char *)item->data(), dim * sizeof(float)), tid);
   }
 
-  void PutParameter(const ParameterCompressReader *reader, int tid){
+  void PutParameter(coroutine<void>::push_type& sink, const ParameterCompressReader *reader, int tid){
     std::vector<uint64_t> keys_vec;
     std::vector<base::ConstArray<float>> values;
     for(int i = 0; i < reader->item_size(); i++){
@@ -96,7 +99,7 @@ class CachePS {
     }
     base::ConstArray<uint64_t> keys(keys_vec);
 
-    base_kv_->BatchPut(keys, values, tid);
+    base_kv_->BatchPut(sink, keys, values, tid);
   }
 
   bool GetParameterRun2Completion(key_t key, ParameterPack &pack, int tid) {
@@ -122,10 +125,10 @@ class CachePS {
     return true;
   }
 
-  bool GetParameterRun2Completion(base::ConstArray<uint64_t> keys, std::vector<ParameterPack> &pack, int tid) {
+  bool GetParameterRun2Completion(coroutine<void>::push_type& sink, base::ConstArray<uint64_t> keys, std::vector<ParameterPack> &pack, int tid) {
     std::vector<base::ConstArray<float>> values;
 
-    base_kv_->BatchGet(keys, &values, tid);
+    base_kv_->BatchGet(sink, keys, &values, tid);
   
     for(int i = 0; i < keys.Size(); i++){
       pack.emplace_back(keys[i], values[i].Size(), values[i].Data());
@@ -139,5 +142,4 @@ class CachePS {
   int value_size;
   std::unique_ptr<BaseKV> base_kv_;
   std::atomic<bool> stopFlag_{false};
-  std::vector<std::thread> get_threads_;
 };
