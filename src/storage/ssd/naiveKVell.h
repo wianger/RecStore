@@ -53,7 +53,7 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
 
   // return <lbaID, InlbaOffset>
   std::pair<int64_t, int> Mapping(int64_t index) const {
-#if 1
+#if 0
     int64_t lba_no = index * VALUE_SIZE / ssd_->GetLBASize();
     int in_lba_offset = (index * VALUE_SIZE) % ssd_->GetLBASize();
     return std::make_pair(lba_no, in_lba_offset);

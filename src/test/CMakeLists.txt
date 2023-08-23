@@ -20,3 +20,16 @@ target_link_libraries(test_hash_map PUBLIC
 )
 
 target_compile_options(test_hash_map PUBLIC -msse -msse2 -msse3 -msse4)
+
+add_executable(corotine 
+    corotine.cpp
+)
+
+target_link_libraries(corotine PUBLIC
+    ${BOOST_LIBRARIES}
+    ${FOLLY_LIBRARIES}
+)
+
+# add_executable(corotine2
+#     corotine2.cpp
+# )

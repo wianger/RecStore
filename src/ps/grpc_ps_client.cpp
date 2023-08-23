@@ -33,7 +33,7 @@ DEFINE_int32(get_parameter_threads, 4, "get clients per shard");
 DEFINE_bool(parameter_client_random_init, false, "");
 
 // static const int MAX_PARAMETER_BATCH = 16384;
-static const int MAX_PARAMETER_BATCH = 500;
+static const int MAX_PARAMETER_BATCH = 5000;
 
 ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
     : host_(host),
@@ -41,7 +41,6 @@ ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
       shard_(shard),
       nr_clients_(FLAGS_get_parameter_threads) {
   Initialize();
-
   channel_ = grpc::CreateChannel(fmt::format("{}:{}", host, port),
                                  grpc::InsecureChannelCredentials());
   for (int i = 0; i < nr_clients_; i++) {
@@ -70,13 +69,10 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
   get_param_requests_.resize(request_num);
   get_param_responses_.resize(request_num);
 
-  std::vector<std::shared_ptr<std::promise<bool>>> promise_vec;
   for (int start = 0, index = 0; start < keys.Size();
        start += MAX_PARAMETER_BATCH, ++index) {
     int key_size = std::min((int)(keys.Size() - start), MAX_PARAMETER_BATCH);
     get_param_key_sizes_.emplace_back(key_size);
-    auto ret = std::make_shared<std::promise<bool>>();
-    promise_vec.push_back(ret);
     auto &status = get_param_status_[index];
     auto &request = get_param_requests_[index];
     auto &response = get_param_responses_[index];
@@ -89,7 +85,6 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
         // GetParameter(&context, request, &response);
     rpc->Finish(&response, &status, reinterpret_cast<void*>(index));
   }
-
   int get = 0;
   while(get != request_num){
     void *got_tag;
@@ -100,7 +95,6 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
     }
     get++;
   }
-
   size_t get_embedding_acc = 0;
   int old_dimension = -1;
 

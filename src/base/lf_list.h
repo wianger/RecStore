@@ -29,6 +29,7 @@ public:
   }
 
   std::pair<int, int> TryPop(int cnt) {
+    return {-1, -1};
     while (cnt > 0) {
       int head_now = free_head.load();
       int res = free_tail.load() - head_now;

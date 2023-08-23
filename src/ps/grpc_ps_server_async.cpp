@@ -77,9 +77,9 @@ public:
   CommandRequestParam() : DispatchParam(COMMAND, "COMMAND timer"), responder(&ctx) {}
 };
 
-const int GET_PATA_REQ_NUM = 1024;
-const int PUT_PATA_REQ_NUM = 64;
-const int COMMAND_REQ_NUM = 1;
+const int GET_PATA_REQ_NUM = 10240;
+const int PUT_PATA_REQ_NUM = 6400;
+const int COMMAND_REQ_NUM = 100;
 const int RESERVE_NUM = 512;
 const int TOTAL_NUM = GET_PATA_REQ_NUM + PUT_PATA_REQ_NUM + COMMAND_REQ_NUM + RESERVE_NUM;
 
@@ -96,8 +96,7 @@ public:
   void Monitor(){
     while(true){
       std::this_thread::sleep_for(std::chrono::seconds(1));
-      double total_bytes = get_key_cnt.load();
-      get_key_cnt.store(0);
+      double total_bytes = get_key_cnt.exchange(0);
       total_bytes *= 128;
       total_bytes /= 1024 * 1024;
       std::cout << "\rThroughput " << total_bytes << " MB/s" << std::flush;
@@ -136,11 +135,11 @@ public:
     compressor.ToBlock(&blocks);
     CHECK_EQ(blocks.size(), 1);
     reply->mutable_parameter_value()->swap(blocks[0]);
-    // if (isPerf) {
+    if (isPerf) {
         timer_ps_get_req.end();
-    // } else {
-    //   timer_ps_get_req.destroy();
-    // }
+    } else {
+      timer_ps_get_req.destroy();
+    }
     under_process->timer.end();
     under_process->responder.Finish(under_process->reply, Status::OK, under_process);
     get_key_cnt.fetch_add(keys_array.Size());

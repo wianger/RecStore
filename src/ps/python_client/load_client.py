@@ -22,8 +22,8 @@ def parse():
 
 def client(args):
     client = Client(args.machine, args.port, 0, args.embedding_size)
-    dataset = DatasetLoader(args.dataset, args.test)
-    args.num_batches = (dataset.offsets.size()[0] - 1) // args.avg_mini_batch_size
+    dataset = DatasetLoader(args.dataset, args.test, args.table_size, args.batch_size)
+    args.num_batches = (dataset.offsets.size()[0] - 1) // args.sub_task_batch_size
     loadGenerator(args, client, dataset)
 
 if __name__ == '__main__':
@@ -32,14 +32,12 @@ if __name__ == '__main__':
         config = json.load(f)
     args.nepochs = config['nepochs']
     args.avg_arrival_rate = config['avg_arrival_rate']
-    args.max_mini_batch_size = config['batch_size']
-    args.avg_mini_batch_size = config['batch_size']
-    args.var_mini_batch_size = config['batch_size']
+    args.batch_size = config['batch_size']
     args.sub_task_batch_size = config['sub_task_batch_size']
     args.embedding_size = config['embedding_size']
     args.machine = config['machine']
     args.port = config['port']
     args.dataset = config['dataset']
     args.test = config['test']
-    args.batch_size_distribution = "fixed"
+    args.table_size = config['table_size']
     client(args)

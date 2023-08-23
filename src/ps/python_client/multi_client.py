@@ -17,16 +17,14 @@ if __name__ == '__main__':
             config = json.load(f)
         arg.nepochs = config['nepochs']
         arg.avg_arrival_rate = config['avg_arrival_rate']
-        arg.max_mini_batch_size = config['batch_size']
-        arg.avg_mini_batch_size = config['batch_size']
-        arg.var_mini_batch_size = config['batch_size']
+        arg.batch_size = config['batch_size']
         arg.sub_task_batch_size = config['sub_task_batch_size']
         arg.embedding_size = config['embedding_size']
         arg.machine = config['machine']
         arg.port = config['port']
         arg.dataset = config['dataset']
         arg.test = config['test']
-        arg.batch_size_distribution = "fixed"
+        arg.table_size = config['table_size']
         args.append(arg)
 
     for i in range(num_processes):

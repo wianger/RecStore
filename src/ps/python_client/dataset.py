@@ -3,35 +3,35 @@ import torch
 import numpy as np
 
 class DatasetLoader:
-    def __init__(self, filename: str, test: bool) -> None:
+    def __init__(self, filename: str, test: bool, table_size: int, batch_size: int) -> None:
         # self.offsets = 1024
         # return
         print("Dataset: ", filename)
         if(test):
             indices, offsets, lengths = torch.load(filename)
         else:
-            with gzip.open(filename) as f:
-                indices, offsets, lengths = torch.load(f)
+            indices, offsets = torch.load(filename)
 
         print("Dataset loaded")
         self.indices = indices
         self.offsets = offsets
-        self.lengths = lengths
-        self.tot_datasets = offsets.size()[0] - 1
+        self.tot_batch_size = batch_size
+        self.table_size = table_size
         self.index = 0
 
     def get(self, batch_size = 1):
         # return torch.tensor([1] * 10)
         index_begin = self.index
-        index_end = min(self.index + batch_size, self.tot_datasets)
+        index_end = min(self.index + batch_size, self.tot_batch_size)
         self.index = index_end
-        self.index %= self.tot_datasets
-        return self.indices[self.offsets[index_begin]:self.offsets[index_end]]
+        self.index %= self.tot_batch_size
+        idxs = [self.indices[self.offsets[i * self.tot_batch_size + index_begin]:self.offsets[i * self.tot_batch_size + index_end]] for i in range(self.table_size)]
+        return torch.cat(idxs)
 
 if __name__ == '__main__':
-    loader = DatasetLoader('./fbgemm_t856_bs65536_0.pt.gz')
-    print(loader.get())
-    print(loader.get())
-    print(loader.get())
-    print(loader.get())
-    print(loader.get(3))
+    loader = DatasetLoader('/dev/shm/2021/fbgemm_t856_bs65536_0.pt', False, 856, 65536)
+    print(loader.get(128))
+    print(loader.get(128))
+    print(loader.get(128))
+    print(loader.get(128))
+    print(loader.get(128))
