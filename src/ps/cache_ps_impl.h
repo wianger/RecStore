@@ -36,17 +36,16 @@ class CachePS {
  public:
   using key_t = uint64_t;
 
-  using CPUCacheGetTaskQ = TaskElement<key_t>;
-
-  CachePS(int64_t dict_capability, int64_t value_size, int64_t memory_pool_size, int num_threads, int64_t max_batch_keys_size)
+  CachePS(int64_t dict_capability, int value_size, int64_t memory_pool_size, int num_threads, int corotine_per_thread, int64_t max_batch_keys_size)
   : value_size(value_size) 
   {
     BaseKVConfig config;
-    config.path = "/dev/shm/double-placeholder";
+    config.path = "";
     config.capacity = dict_capability;
     config.value_size = value_size;
     config.memory_pool_size = memory_pool_size;
     config.num_threads = num_threads;
+    config.corotine_per_thread = corotine_per_thread;
     config.max_batch_keys_size = max_batch_keys_size;
     auto p = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance("KVEngineDoubleDesk",
                                                                       config);

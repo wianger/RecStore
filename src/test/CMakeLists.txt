@@ -29,7 +29,3 @@ target_link_libraries(corotine PUBLIC
     ${BOOST_LIBRARIES}
     ${FOLLY_LIBRARIES}
 )
-
-# add_executable(corotine2
-#     corotine2.cpp
-# )

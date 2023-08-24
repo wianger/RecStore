@@ -127,8 +127,8 @@ public:
     xmh::Timer timer_ps_get_req("PS GetParameter Req");
     ParameterCompressor compressor;
     std::vector<std::string> blocks;
-    FB_LOG_EVERY_MS(INFO, 1000)
-        << "[PS] Getting " << keys_array.Size() << " keys";
+    // FB_LOG_EVERY_MS(INFO, 1000)
+    //     << "[PS] Getting " << keys_array.Size() << " keys";
 
     std::vector<ParameterPack> packs;
     cache_ps_->GetParameterRun2Completion(sink, keys_array, packs, tid);
@@ -241,7 +241,8 @@ class GRPCParameterServer : public BaseParameterServer {
   void Run() {
     std::string server_address("0.0.0.0:15000");
     const int THREAD_NUM = 16;
-    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, THREAD_NUM, 16ll << 20);  // 1GB dict
+    const int COROTINE_PER_THREAD = 4;
+    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, THREAD_NUM, COROTINE_PER_THREAD, 16ll << 20);  // 1GB dict
     ParameterServiceImpl service(cache_ps.get(), THREAD_NUM);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();

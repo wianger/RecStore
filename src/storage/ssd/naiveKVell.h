@@ -139,7 +139,6 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
 
     std::atomic<int> readCompleteCount{0};
 
-    xmh::Timer timer_kvell_index("Hier-SSD index");
     xmh::Timer timer_kvell_submitCommand("Hier-SSD command");
     for (int64_t i = 0; i < keys_array.Size(); i++) {
       int64_t count_offset = -1;
@@ -162,7 +161,6 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
                               VALUE_SIZE, lba_no, ReadCompleteCB, &ctx, tid);
       timer_kvell_submitCommand.CumEnd();
     }
-    timer_kvell_index.CumReport();
     timer_kvell_submitCommand.CumReport();
 
     // batch sync
@@ -283,9 +281,9 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     readCompleteCBContext->readCompleteCount->fetch_add(1);
   }
   static const int MAX_QUEUE_NUM = 32;
+  static constexpr int kBouncedBuffer_ = 20000;
   int VALUE_SIZE;
   uint64_t vector_capability;
-  static constexpr int kBouncedBuffer_ = 20000;
   char *rawbouncedBuffer_;
   char *rawwrite_buffer_;
   char *bouncedBuffer_[MAX_QUEUE_NUM];

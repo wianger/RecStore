@@ -3,7 +3,7 @@
 #include <torch/extension.h>
 #include <torch/torch.h>
 
-static const int MAX_PARAMETER_BATCH = 7000;
+static const int MAX_PARAMETER_BATCH = 5000;
 
 class PythonParameterClient : public torch::CustomClassHolder, public ParameterClient {
 private:

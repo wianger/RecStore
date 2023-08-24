@@ -126,7 +126,7 @@ class GRPCParameterServer : public BaseParameterServer {
 
   void Run() {
     std::string server_address("0.0.0.0:15000");
-    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, 8, 65536);  // 1GB dict
+    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, 8, 4, 65536);  // 1GB dict
     ParameterServiceImpl service(cache_ps.get());
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
