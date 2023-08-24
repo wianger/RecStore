@@ -13,7 +13,7 @@ TEST(NaiveArraySSD, test) {
   // int64_t test_key_capability = 10 * 1e6;
   int64_t test_key_capability = 1693782;
 
-  NaiveArraySSD<uint64_t> ssd(emb_dim * 4, test_key_capability, 1);
+  NaiveArraySSD<uint64_t> ssd(emb_dim * 4, test_key_capability, 10);
 
   std::vector<uint64_t> keys;
   std::vector<float> values;

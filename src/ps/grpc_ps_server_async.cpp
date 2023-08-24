@@ -91,6 +91,7 @@ class ParameterServiceImpl final : public xmhps::ParameterService::AsyncService 
 private:
   CachePS *cache_ps_;
   int thread_num_;
+  int corotine_per_thread_;
   std::vector<std::thread> thread_pool;
   std::atomic<uint64_t> get_key_cnt;
 public:
@@ -107,7 +108,7 @@ public:
   }
 
 
-  ParameterServiceImpl(CachePS *cache_ps, int thread_num) : cache_ps_(cache_ps), thread_num_(thread_num) {
+  ParameterServiceImpl(CachePS *cache_ps, int thread_num, int corotine_per_thread) : cache_ps_(cache_ps), thread_num_(thread_num), corotine_per_thread_(corotine_per_thread) {
     for(int i = 0; i < thread_num_; i++){
       thread_pool.push_back(std::thread(&ParameterServiceImpl::Process, this, i));
     }
@@ -193,7 +194,7 @@ public:
     under_process->responder.Finish(under_process->reply, Status::OK, under_process);
   }
 
-  static void worker_func(coroutine<void>::push_type& sink, int coro_id, int work_id, ParameterServiceImpl* service){
+  static void worker_func(coroutine<void>::push_type& sink, int work_id, ParameterServiceImpl* service){
     DispatchParam *under_process;
     while(true){
       if(service->task_queue.try_pop(under_process)){
@@ -216,16 +217,16 @@ public:
   }
 
   void Process(int work_id){
-    base::bind_core(work_id);
     const int kMaxWorker = 8;
+    CHECK_LE(corotine_per_thread_, kMaxWorker);
+    base::bind_core(work_id);
     using std::placeholders::_1;
     coroutine<void>::pull_type* worker[kMaxWorker];
-
-    for (int i = 0; i < kMaxWorker; i++) {
-        worker[i] = new coroutine<void>::pull_type{ std::bind(worker_func, _1, i, work_id, this) };
+    for (int i = 0; i < corotine_per_thread_; i++) {
+        worker[i] = new coroutine<void>::pull_type{ std::bind(worker_func, _1, work_id * corotine_per_thread_ + i, this) };
     }
     while (true){
-      for(int i = 0; i < kMaxWorker; i++){
+      for(int i = 0; i < corotine_per_thread_; i++){
         (*worker[i])();
       }
     }
@@ -243,7 +244,7 @@ class GRPCParameterServer : public BaseParameterServer {
     const int THREAD_NUM = 16;
     const int COROTINE_PER_THREAD = 4;
     auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, THREAD_NUM, COROTINE_PER_THREAD, 16ll << 20);  // 1GB dict
-    ParameterServiceImpl service(cache_ps.get(), THREAD_NUM);
+    ParameterServiceImpl service(cache_ps.get(), THREAD_NUM, COROTINE_PER_THREAD);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
