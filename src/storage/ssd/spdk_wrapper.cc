@@ -30,6 +30,7 @@ private:
         << "spdk_nvme_probe failed";
 
     CHECK_NE(g_controllers_.size(), 0) << "no NVMe controllers found";
+    CHECK_EQ(g_namespaces_.size(), 1) << "KISS, now only support 1 namespace";
     LOG(INFO) << "Initialization complete";
 
     for (auto &ns_entry : g_namespaces_) {
@@ -40,8 +41,8 @@ private:
             << "ERROR: spdk_nvme_ctrlr_alloc_io_qpair() failed";
       }
     }
+    
     LOG(INFO) << "Allocated " << queue_cnt << " qpairs";
-    CHECK_EQ(g_namespaces_.size(), 1) << "KISS, now only support 1 namespace";
   }
 
   SpdkWrapperImplementation(int queue_cnt) : queue_cnt(queue_cnt) {

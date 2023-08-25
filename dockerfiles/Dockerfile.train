@@ -27,6 +27,8 @@ ARG RELEASE=false
 ARG SM="60;61;70;75;80"
 ARG VAL_MODE=OFF
 ARG ENABLE_MULTINODES=ON
+ARG username
+ARG userid
 
 RUN apt-get remove --auto-remove -y python3 cmake && \
     rm -rfv /usr/local/mpi /usr/local/ucx
@@ -130,7 +132,8 @@ RUN apt-get update -y && \
   cloc \
   check \
   sudo \
-  libtbb-dev
+  libtbb-dev \
+  libmemcached-dev 
 
 RUN apt remove -y libgoogle-glog-dev
 
@@ -155,12 +158,12 @@ RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machi
 #     && apt-get install -y datacenter-gpu-manager
 
 # RUN echo "xieminhui ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
-RUN echo "frw ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
+# RUN echo "frw ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
+# RUN echo "jhd ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
 
 RUN echo "root:1234" | chpasswd
 
-# RUN useradd --uid=1005 xieminhui
-RUN useradd --uid=1004 frw
+RUN useradd --uid=${uid} ${username}
 
 RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shanghai' >/etc/timezone
 
@@ -168,20 +171,16 @@ RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo 'Asia/Shanghai' 
 #
 
 RUN sed -i 's/#Port 22/Port 22222/g' /etc/ssh/sshd_config
-# RUN mkdir /home/xieminhui
-# RUN chown -R 1005:1005 /home/xieminhui
 
-RUN mkdir /home/frw
-RUN chown -R 1004:1004 /home/frw
+RUN mkdir /home/${username}
+RUN chown -R ${uid}:${uid} /home/${username}
 
 RUN service ssh restart
 RUN apt-get install -y kmod
 
-# USER 1005:1005
-# WORKDIR /home/xieminhui
+USER ${uid}:${uid}
+WORKDIR /home/${username}
 
-USER 1004:1004
-WORKDIR /home/frw
 RUN mkdir .ssh
 RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC5mtDaegM/dEFR1oD57lgvXxJp0NWWx1fmMXs+aycrbFcT+fgxMeou0uJSCBx4nugOwy2iu1KqX6v0UrdRVbQ9cY5b6z4wD/+xCqePzXbecU1HrsodBW8FY3xBDCB9DkncyXzJDtM5u+PviKG7bBpD4pCegthvtsYxbbh2Cp3hb9Bo4CW6S8mDpZJeNO1oEbJAj5dF2gULTQonK4HTB+jeRCU5FH2TGPvsjVnS2ITZxoQn2atJBGyPtjjNRvAUOaC2+fo4lvuWLk7h00KrSMaFUVTu6iBdRJWZP9AVLSORqmOYIow4vh+nHxTzx6h9NKCRV6sV1YIWD8o2Rk5GaxIgTaKEKrGCpXGSXx5vWNIuzQ9+hj672LY2kXERhZ9obuht43u/sKpSOUZ0Rc6hM+FZIMKGR4NKpKFKP2TVKMHRT5236U9kh4grz6BAOl9FmSbTN9ZPmSSC8fon5xCxPaQPgCfr2oHvfWCy2fjKWjeGI2Z1nDIFo/GSEw9WJtAwd70= xieminhui@xieminhuis-iMac.local' >>.ssh/authorized_keys
 RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCUrm/S6w7VH1p7UVItSXDSTwOe1gy8/mV+utHvRh6gwgjJuW6FfhuIM9w/wgFdZM8eK3WNu3tiTHX7YKVaGcbWVY65SxwnIve2MKCkKN5SR+9pLTRnacg7OGPpjhVHgZ39vGAptY8rqZ7FTz9jseb1BLI8X/65iYRoGPszbvEW/4kefGSRtEMGiIrybh4yVIPcPVagdqQc3Fp4iOE6YXhTNkKHjHPFs7xJKc/ZEN3hA8Nq8rrSGjF/qT1sILc2EfxYmyQSOtZ/xRbfyqPJI5mXbXljdqgDeeMol8bQkbvOzHU18MiIfVkAZhI6s/0JWuK7DvBPa0f4ml4G+qjHhciihi++rldu7qImXXCrFEMJFBgfdmt4yuroSNfdm8Kbem0xx86KCvAv7brt690SDzfuPFDFdMsT1e9U/EHDsRJ/yDnNADIEgoK6PFmA7UaVdjwNYnwArsdbTb/q2TrXPqQQyaxSlirTw42FX0wkmDGoqGgZdbpzCJlKGmryZLi+xK8= xieminhui@node182' >>.ssh/authorized_keys
@@ -192,10 +191,8 @@ RUN chmod 600 .ssh/authorized_keys
 RUN alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
 ENV PYTHONPATH=/data/project/HugeCTR/build/lib
 
-
 # RUN sudo rm /opt/conda/lib/libtinfo*
 RUN sudo rm -rf /opt/conda/include/grpc*
 
-# RUN sudo chown -R 1005:1005 /opt/conda/
-RUN sudo chown -R 1004:1004 /opt/conda/
+RUN sudo chown -R ${uid}:${uid} /opt/conda/
 RUN sudo -E /opt/conda/bin/conda install -y -c conda-forge ncurses

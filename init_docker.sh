@@ -1,20 +1,20 @@
 export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 set -x
 set -e
-git config --global user.name "Minhui Xie"
-git config --global user.email "645214784@qq.com"
+# git config --global user.name "Minhui Xie"
+# git config --global user.email "645214784@qq.com"
 
 sudo service ssh start
 
 
-PROJECT_PATH="/home/xieminhui/RecStore"
+PROJECT_PATH="/home/${USER}/RecStore"
 
 
 sudo apt install -y libmemcached-dev 
 
 
-ln -sf ${PROJECT_PATH}/docker_config/.bashrc /home/xieminhui/.bashrc
-source /home/xieminhui/.bashrc
+ln -sf ${PROJECT_PATH}/docker_config/.bashrc /home/${USER}/.bashrc
+source /home/${USER}/.bashrc
 
 
 # git submodule add https://github.com/google/glog third_party/glog

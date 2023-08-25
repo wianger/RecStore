@@ -1,83 +1,128 @@
-export NPP_VERSION=11.3.3.95
-export NVIDIA_VISIBLE_DEVICES=all
-export DALI_BUILD=2356513
-export BAZELRC=/root/.bazelrc
-export CUSOLVER_VERSION=11.1.2.109
-export NVM_INC=/usr/local/nvm/versions/node/v15.12.0/include/node
-export OMPI_MCA_osc=ucx
-export CUBLAS_VERSION=11.5.1.109
-export HOSTNAME=reco-zl-c4-reco307.idczw.hb1.kwaidc.com
-export PYVER=3.8
-export CUFFT_VERSION=10.4.2.109
-export NVIDIA_REQUIRE_CUDA="cuda>=9.0"
-export TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT=1
-export CUDA_CACHE_DISABLE=1
-export TENSORBOARD_PORT=6006
-export NCCL_VERSION=2.9.9
-export CUSPARSE_VERSION=11.6.0.109
-export ENV=/etc/shinit_v2
-export NVIDIA_TENSORFLOW_VERSION=21.06-tf2
-export TENSORFLOW_VERSION=2.5.0
-export CONDA_PREFIX=/opt/conda
-export OPENUCX_VERSION=1.10.1
-export NSIGHT_SYSTEMS_VERSION=2021.2.1.58
-export NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
-export CXX=/usr/bin/g++
-export OMPI_MCA_pml=ucx
-export TRT_VERSION=7.2.3.4+cuda11.1.0.024
-export RDMACORE_VERSION=32.1
-export HOME=/home/xieminhui
-export CUDA_VERSION=11.3.1.005
-export CURAND_VERSION=10.2.4.109
-export HPCX_VERSION=2.8.2rc3
-export DLPROF_VERSION=21.06
-export NVM_DIR=/usr/local/nvm
-export TENSORBOARD_DEBUGGER_PORT=6064
-export TERM=xterm
-export GDRCOPY_VERSION=2.2
-export OPENMPI_VERSION=4.1.1rc1
-export NVJPEG_VERSION=11.5.0.109
-export LIBRARY_PATH=/usr/local/hugectr/lib:/opt/conda/lib:/usr/local/cuda/lib64/stubs:
-export PYTHONIOENCODING=utf-8
-export SHLVL=1
-export NVM_CD_FLAGS=
-export BASH_ENV=/etc/bash.bashrc
-export TF_AUTOTUNE_THRESHOLD=2
-export OMPI_MCA_opal_cuda_support=true
-export CUDNN_VERSION=8.2.1.32
-export NSIGHT_COMPUTE_VERSION=2021.1.1.5
-export DALI_VERSION=1.2.0
-export UCX_MEMTYPE_CACHE=n
-export JUPYTER_PORT=8888
-export LD_LIBRARY_PATH=/usr/local/hugectr/lib:/opt/conda/lib:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
-export NVIDIA_BUILD_ID=24129408
-export CUDA_DRIVER_VERSION=465.19.01
-export LC_ALL=C.UTF-8
-export _CUDA_COMPAT_PATH=/usr/local/cuda/compat
-export PATH=/usr/local/nvm/versions/node/v15.12.0/bin:/usr/local/hugectr/bin:/opt/conda/bin:/usr/local/mpi/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/ucx/bin:/opt/tensorrt/bin
-export CC=/usr/bin/gcc
-export MOFED_VERSION=5.2-rdmacore32.1
-export NVM_BIN=/usr/local/nvm/versions/node/v15.12.0/bin
-export TRTOSS_VERSION=21.06
-export OMPI_MCA_plm_rsh_agent=sh
-export CPATH=/opt/conda/include:
-export NCCL_LAUNCH_MODE=PARALLEL
-export LD_LIBRARY_PATH=/data/project/HugeCTR/third_party/spdk/dpdk/build/lib:$LD_LIBRARY_PATH
-alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH" http_proxy="$http_proxy" https_proxy="$https_proxy"'
+# ~/.bashrc: executed by bash(1) for non-login shells.
+# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
+# for examples
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/opt/conda/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
-        . "/opt/conda/etc/profile.d/conda.sh"
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+# don't put duplicate lines or lines starting with space in the history.
+# See bash(1) for more options
+HISTCONTROL=ignoreboth
+
+# append to the history file, don't overwrite it
+shopt -s histappend
+
+# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
+HISTSIZE=1000
+HISTFILESIZE=2000
+
+# check the window size after each command and, if necessary,
+# update the values of LINES and COLUMNS.
+shopt -s checkwinsize
+
+# If set, the pattern "**" used in a pathname expansion context will
+# match all files and zero or more directories and subdirectories.
+#shopt -s globstar
+
+# make less more friendly for non-text input files, see lesspipe(1)
+[ -x /usr/bin/lesspipe ] && eval "$(SHELL=/bin/sh lesspipe)"
+
+# set variable identifying the chroot you work in (used in the prompt below)
+if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
+    debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+# set a fancy prompt (non-color, unless we know we "want" color)
+case "$TERM" in
+    xterm-color|*-256color) color_prompt=yes;;
+esac
+
+# uncomment for a colored prompt, if the terminal has the capability; turned
+# off by default to not distract the user: the focus in a terminal window
+# should be on the output of commands, not on the prompt
+force_color_prompt=yes
+
+if [ -n "$force_color_prompt" ]; then
+    if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+	# We have color support; assume it's compliant with Ecma-48
+	# (ISO/IEC-6429). (Lack of such support is extremely rare, and such
+	# a case would tend to support setf rather than setaf.)
+	color_prompt=yes
     else
-        export PATH="/opt/conda/bin:$PATH"
+	color_prompt=
     fi
 fi
-unset __conda_setup
-# <<< conda initialize <<<
 
-export PATH=/home/xieminhui/.local/bin:$PATH
+if [ "$color_prompt" = yes ]; then
+    PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
+else
+    PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
+fi
+unset color_prompt force_color_prompt
+
+# If this is an xterm set the title to user@host:dir
+case "$TERM" in
+xterm*|rxvt*)
+    PS1="\[\e]0;${debian_chroot:+($debian_chroot)}\u@\h: \w\a\]$PS1"
+    ;;
+*)
+    ;;
+esac
+
+# enable color support of ls and also add handy aliases
+if [ -x /usr/bin/dircolors ]; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+    alias ls='ls --color=auto'
+    #alias dir='dir --color=auto'
+    #alias vdir='vdir --color=auto'
+
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# colored GCC warnings and errors
+#export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
+
+# some more ls aliases
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+
+# Add an "alert" alias for long running commands.  Use like so:
+#   sleep 10; alert
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+# Alias definitions.
+# You may want to put all your additions into a separate file like
+# ~/.bash_aliases, instead of adding them here directly.
+# See /usr/share/doc/bash-doc/examples in the bash-doc package.
+
+if [ -f ~/.bash_aliases ]; then
+    . ~/.bash_aliases
+fi
+
+# enable programmable completion features (you don't need to enable
+# this, if it's already enabled in /etc/bash.bashrc and /etc/profile
+# sources /etc/bash.bashrc).
+if ! shopt -oq posix; then
+  if [ -f /usr/share/bash-completion/bash_completion ]; then
+    . /usr/share/bash-completion/bash_completion
+  elif [ -f /etc/bash_completion ]; then
+    . /etc/bash_completion
+  fi
+fi
+
+export PATH=$PATH:/usr/local/cuda/bin
+
+export http_proxy=http://10.0.3.8:7890
+export https_proxy=http://10.0.3.8:7890
+
+export all_proxy=socks5://10.0.3.8:7890
+
+alias sudo="sudo env PATH=$PATH"
+
+ulimit -c 0

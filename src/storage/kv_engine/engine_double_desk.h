@@ -160,7 +160,7 @@ class KVEngineDoubleDesk : public BaseKV {
           pinned_value + submit_counter * ssd_->GetLBASize(),
           ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter, tid);
       ssd_->PollCompleteQueue(tid);
-    } while (ret != 0);
+    } while (ret != 0); 
     submit_counter++;
     while (submit_counter != finished_counter) ssd_->PollCompleteQueue(tid);
   }
@@ -187,6 +187,7 @@ public:
     CHECK_GT(thread_num, 0) << "thread_num must be positive";
     CHECK_LE(thread_num, MAX_THREAD_CNT) << "thread_num must be less than " << MAX_THREAD_CNT;
     CHECK_GE(corotine_num, 0) << "corotine_num must be positive";
+    CHECK_LE(corotine_num, MAX_COROTINE_SIZE) << "corotine_num must be less than " << MAX_COROTINE_SIZE;
 
     LOG(INFO) << "value_size: " << value_size;
     LOG(INFO) << "max_batch_keys_size: " << max_batch_keys_size;
@@ -263,6 +264,7 @@ public:
     int t = rt / corotine_per_thread;
     std::atomic<int> readCompleteCount{0};
     xmh::Timer timer_kvell_submitCommand("Hier-SSD command");
+    CHECK_LE(value_size, ssd_->GetLBASize()) << "KISS";
     for (int i = 0; i < keys.Size(); i++) {
       const auto key_iter = hash_table_.find(keys[i]);
       if(key_iter == hash_table_.end()){
@@ -273,12 +275,10 @@ public:
       if(info->in_cache){
         info->hit_cnt++;
         values->emplace_back((float *)(cache_ + info->cache_offset * value_size), value_size / sizeof(float));
-        continue;
       } else {
         int64_t count_offset = -1;
         count_offset = key_iter->second;
         timer_kvell_submitCommand.CumStart();
-        CHECK_LE(value_size, ssd_->GetLBASize()) << "KISS";
         int64_t lba_no;
         int in_lba_offset;
         std::tie(lba_no, in_lba_offset) = Mapping(count_offset);
@@ -295,7 +295,9 @@ public:
     }
     timer_kvell_submitCommand.CumReport();
     index_timer.CumEnd();
-    sink();
+    if(unhit_size){
+      sink();
+    }
     ssd_timer.CumStart();
     xmh::PerfCounter::Record("unhit_size Keys", unhit_size);
     while(unhit_size != readCompleteCount.load()){

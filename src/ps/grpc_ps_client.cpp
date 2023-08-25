@@ -33,7 +33,7 @@ DEFINE_int32(get_parameter_threads, 4, "get clients per shard");
 DEFINE_bool(parameter_client_random_init, false, "");
 
 // static const int MAX_PARAMETER_BATCH = 16384;
-static const int MAX_PARAMETER_BATCH = 5000;
+static const int MAX_PARAMETER_BATCH = 500;
 
 ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
     : host_(host),
@@ -158,13 +158,10 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
   get_param_requests_.resize(request_num);
   get_param_responses_.resize(request_num);
 
-  std::vector<std::shared_ptr<std::promise<bool>>> promise_vec;
   for (int start = 0, index = 0; start < keys.Size();
        start += MAX_PARAMETER_BATCH, ++index) {
     int key_size = std::min((int)(keys.Size() - start), MAX_PARAMETER_BATCH);
     get_param_key_sizes_.emplace_back(key_size);
-    auto ret = std::make_shared<std::promise<bool>>();
-    promise_vec.push_back(ret);
     auto &status = get_param_status_[index];
     auto &request = get_param_requests_[index];
     auto &response = get_param_responses_[index];
@@ -184,7 +181,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
     void *got_tag;
     bool ok = false;
     cq.Next(&got_tag, &ok);
-    if(!ok){
+    if(unlikely(!ok)){
       LOG(ERROR) << "error";
     }
     get++;
@@ -196,7 +193,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
     auto parameters = reinterpret_cast<const ParameterCompressReader *>(
         response.parameter_value().data());
 
-    if (parameters->size != key_size) {
+    if (unlikely(parameters->size != key_size)) {
       LOG(ERROR) << "GetParameter error: " << parameters->size << " vs "
                  << key_size;
       return false;

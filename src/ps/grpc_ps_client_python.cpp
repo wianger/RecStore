@@ -3,7 +3,7 @@
 #include <torch/extension.h>
 #include <torch/torch.h>
 
-static const int MAX_PARAMETER_BATCH = 5000;
+static const int MAX_PARAMETER_BATCH = 500;
 
 class PythonParameterClient : public torch::CustomClassHolder, public ParameterClient {
 private:
@@ -30,7 +30,6 @@ public:
     for (int start = 0, index = 0; start < keys.size(0);
         start += MAX_PARAMETER_BATCH, ++index) {
       int key_size = std::min((int)(keys.size(0) - start), MAX_PARAMETER_BATCH);
-      auto ret = std::make_shared<std::promise<bool>>();
 
       PutParameterRequest request;
       PutParameterResponse response;
@@ -49,12 +48,9 @@ public:
       grpc::ClientContext context;
       grpc::Status status =
           stubs_[0]->PutParameter(&context, request, &response);
-      if (status.ok()) {
-        ret->set_value(true);
-      } else {
+      if (!status.ok()) {
         std::cout << status.error_code() << ": " << status.error_message()
                   << std::endl;
-        ret->set_value(false);
       }
     }
     return true;
