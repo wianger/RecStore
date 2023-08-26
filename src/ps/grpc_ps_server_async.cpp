@@ -319,7 +319,6 @@ class GRPCParameterServer : public BaseParameterServer {
 }  // namespace recstore
 
 int main(int argc, char **argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
   std::ignore = folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread(2000);
   nlohmann::json ex = nlohmann::json::parse(R"(

@@ -245,7 +245,7 @@ private:
     }
   }
   spdk_env_opts opts_;
-  spdk_nvme_transport_id g_trid_;
+  spdk_nvme_transport_id g_trid_ = {};
   const int kLBASize_ = 512;
   std::unordered_map<std::string, spdk_nvme_ctrlr *> g_controllers_;
 

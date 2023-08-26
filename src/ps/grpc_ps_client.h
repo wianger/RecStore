@@ -28,6 +28,8 @@ using xmhps::PutParameterResponse;
 
 using base::ConstArray;
 
+static const int MAX_PARAMETER_BATCH = 2000;
+
 class ParameterClient {
 public:
   explicit ParameterClient(const std::string &host, int port, int shard);
@@ -56,7 +58,6 @@ public:
 
 protected:
   bool Initialize() { return true; }
-
   std::string host_;
   int port_;
   int shard_;

@@ -3,8 +3,6 @@
 #include <torch/extension.h>
 #include <torch/torch.h>
 
-static const int MAX_PARAMETER_BATCH = 500;
-
 class PythonParameterClient : public torch::CustomClassHolder, public ParameterClient {
 private:
   int emb_dim_;

@@ -68,15 +68,6 @@ target_link_libraries(grpc_ps_server_async PUBLIC
 
 target_include_directories(grpc_ps_server_async PRIVATE ${PROJECT_SOURCE_DIR}/third_party/atomic_queue/include)
 
-# add_executable(grpc_ps_client_with_config
-#     grpc_ps_client_with_config.cpp 
-#     ${common}
-# )
-
-# target_link_libraries(grpc_ps_client_with_config
-#     grpc_ps_client
-# )
-
 #add_library(grpc_ps_client_python SHARED
 add_library(grpc_ps_client_python MODULE
     grpc_ps_client_python.cpp
