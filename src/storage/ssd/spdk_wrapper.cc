@@ -5,6 +5,8 @@
 
 #include "spdk_wrapper.h"
 
+const char *using_ssd = "0000:17:00.0";
+
 namespace ssdps {
 
 class SpdkWrapperImplementation : public SpdkWrapper {
@@ -186,6 +188,9 @@ private:
   static bool ProbeCallBack(void *cb_ctx,
                             const struct spdk_nvme_transport_id *trid,
                             struct spdk_nvme_ctrlr_opts *opts) {
+    if(strcmp(using_ssd, trid->traddr) != 0){
+      return false;
+    }
     LOG(INFO) << "Attaching to " << trid->traddr;
     return true;
   }

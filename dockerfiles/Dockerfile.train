@@ -33,8 +33,8 @@ ARG uid
 RUN apt-get remove --auto-remove -y python3 cmake && \
     rm -rfv /usr/local/mpi /usr/local/ucx
 
-# ENV http_proxy=http://10.0.2.182:7890
-# ENV https_proxy=http://10.0.2.182:7890
+ENV http_proxy=http:///10.0.3.8:7890
+ENV https_proxy=http://10.0.3.8:7890
 # ENV http_proxy=http://192.168.1.30:7890
 # ENV https_proxy=http://192.168.1.30:7890
 
@@ -157,9 +157,7 @@ RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machi
 # RUN apt-get update \
 #     && apt-get install -y datacenter-gpu-manager
 
-# RUN echo "xieminhui ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
-# RUN echo "frw ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
-# RUN echo "jhd ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
+RUN echo "${username} ALL=(ALL) NOPASSWD:ALL" >>/etc/sudoers
 
 RUN echo "root:1234" | chpasswd
 
@@ -191,7 +189,7 @@ RUN chmod 600 .ssh/authorized_keys
 RUN alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
 ENV PYTHONPATH=/data/project/HugeCTR/build/lib
 
-# RUN sudo rm /opt/conda/lib/libtinfo*
+RUN sudo rm /opt/conda/lib/libtinfo*
 RUN sudo rm -rf /opt/conda/include/grpc*
 
 RUN sudo chown -R ${uid}:${uid} /opt/conda/
