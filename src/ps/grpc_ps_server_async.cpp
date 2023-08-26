@@ -3,6 +3,7 @@
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
 #include <boost/coroutine2/all.hpp>
+#include <gflags/gflags.h>
 
 #include <cstdint>
 #include <future>
@@ -37,6 +38,20 @@ using xmhps::PutParameterRequest;
 using xmhps::PutParameterResponse;
 
 using boost::coroutines2::coroutine;
+
+DEFINE_int32(thread_num, 16, "Thread num");
+DEFINE_int32(corotine_per_thread, 4, "Corotine per thread");
+DEFINE_string(port, "15000", "Server Port");
+DEFINE_int64(dict_capability, 33762591LL, "Dict capability");
+DEFINE_int32(value_size, 128, "Value size");
+DEFINE_int64(memory_pool_size, 1*1024*1024*1024LL, "Memory pool size");
+DEFINE_int32(max_batch_size, 16 << 20, "Max batch size");
+
+const int GET_PATA_REQ_NUM = 10240;
+const int PUT_PATA_REQ_NUM = 6400;
+const int COMMAND_REQ_NUM = 100;
+const int RESERVE_NUM = 512;
+const int TOTAL_NUM = GET_PATA_REQ_NUM + PUT_PATA_REQ_NUM + COMMAND_REQ_NUM + RESERVE_NUM;
 
 class DispatchParam {
 public:
@@ -79,12 +94,6 @@ public:
   CommandResponse reply;
   CommandRequestParam() : DispatchParam(COMMAND, "COMMAND timer"), responder(&ctx) {}
 };
-
-const int GET_PATA_REQ_NUM = 10240;
-const int PUT_PATA_REQ_NUM = 6400;
-const int COMMAND_REQ_NUM = 100;
-const int RESERVE_NUM = 512;
-const int TOTAL_NUM = GET_PATA_REQ_NUM + PUT_PATA_REQ_NUM + COMMAND_REQ_NUM + RESERVE_NUM;
 
 class ParameterServiceImpl final : public xmhps::ParameterService::AsyncService {
   
@@ -240,11 +249,10 @@ class GRPCParameterServer : public BaseParameterServer {
   GRPCParameterServer() = default;
 
   void Run() {
-    std::string server_address("0.0.0.0:15000");
-    const int THREAD_NUM = 16;
-    const int COROTINE_PER_THREAD = 4;
-    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, THREAD_NUM, COROTINE_PER_THREAD, 16ll << 20);  // 1GB dict
-    ParameterServiceImpl service(cache_ps.get(), THREAD_NUM, COROTINE_PER_THREAD);
+    std::string server_address("0.0.0.0:");
+    server_address += FLAGS_port;
+    auto cache_ps = std::make_unique<CachePS>(FLAGS_dict_capability, FLAGS_value_size, FLAGS_memory_pool_size, FLAGS_thread_num, FLAGS_corotine_per_thread, FLAGS_max_batch_size);  // 1GB dict
+    ParameterServiceImpl service(cache_ps.get(), FLAGS_thread_num, FLAGS_corotine_per_thread);
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     ServerBuilder builder;
@@ -311,7 +319,8 @@ class GRPCParameterServer : public BaseParameterServer {
 }  // namespace recstore
 
 int main(int argc, char **argv) {
-  folly::Init(&argc, &argv);
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  std::ignore = folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread(2000);
   nlohmann::json ex = nlohmann::json::parse(R"(
   {
@@ -323,5 +332,6 @@ int main(int argc, char **argv) {
   recstore::GRPCParameterServer ps;
   ps.Init(ex);
   ps.Run();
+  gflags::ShutDownCommandLineFlags();
   return 0;
 }

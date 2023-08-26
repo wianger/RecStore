@@ -36,7 +36,7 @@ class CachePS {
  public:
   using key_t = uint64_t;
 
-  CachePS(int64_t dict_capability, int value_size, int64_t memory_pool_size, int num_threads, int corotine_per_thread, int64_t max_batch_keys_size)
+  CachePS(int64_t dict_capability, int value_size, int64_t memory_pool_size, int num_threads, int corotine_per_thread, int max_batch_keys_size)
   : value_size(value_size) 
   {
     BaseKVConfig config;

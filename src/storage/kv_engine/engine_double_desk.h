@@ -25,10 +25,10 @@ class KVEngineDoubleDesk : public BaseKV {
   constexpr static int MAX_COROTINE_SIZE = MAX_THREAD_CNT * MAXCOROTINE_SIZE_PERTHREAD;
   constexpr static int kBouncedBuffer_ = 20000;
   char *cache_;
-  uint64_t cache_size;
-  uint64_t value_size;
-  uint64_t max_batch_keys_size;
-  uint64_t per_thread_buffer_size;
+  const int value_size;
+  const int max_batch_keys_size;
+  const uint64_t cache_size;
+  const uint64_t per_thread_buffer_size;
   dict_type hash_table_;
   uint64_t *unhit_array[MAX_COROTINE_SIZE];
   const int thread_num;
@@ -48,8 +48,8 @@ class KVEngineDoubleDesk : public BaseKV {
 
   std::pair<int64_t, int> Mapping(int64_t index) const {
 #if 0
-    int64_t lba_no = index * VALUE_SIZE / ssd_->GetLBASize();
-    int in_lba_offset = (index * VALUE_SIZE) % ssd_->GetLBASize();
+    int64_t lba_no = index * value_size / ssd_->GetLBASize();
+    int in_lba_offset = (index * value_size) % ssd_->GetLBASize();
     return std::make_pair(lba_no, in_lba_offset);
 #else 
 #if 0
@@ -168,10 +168,10 @@ class KVEngineDoubleDesk : public BaseKV {
 public:
   explicit KVEngineDoubleDesk(const BaseKVConfig &config)
     : BaseKV(config), 
-    cache_size(config.capacity * config.value_size * 0.05),
     value_size(config.value_size),
     max_batch_keys_size(config.max_batch_keys_size),
-    per_thread_buffer_size(value_size * max_batch_keys_size),
+    cache_size(config.capacity * config.value_size * 0.05),
+    per_thread_buffer_size((long long)value_size * (long long)max_batch_keys_size),
     thread_num(config.num_threads),
     corotine_per_thread(config.corotine_per_thread),
     corotine_num(corotine_per_thread * config.num_threads),

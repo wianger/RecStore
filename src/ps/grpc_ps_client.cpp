@@ -33,7 +33,7 @@ DEFINE_int32(get_parameter_threads, 4, "get clients per shard");
 DEFINE_bool(parameter_client_random_init, false, "");
 
 // static const int MAX_PARAMETER_BATCH = 16384;
-static const int MAX_PARAMETER_BATCH = 500;
+static const int MAX_PARAMETER_BATCH = 5000;
 
 ParameterClient ::ParameterClient(const std::string &host, int port, int shard)
     : host_(host),

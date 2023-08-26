@@ -11,13 +11,13 @@ using boost::coroutines2::coroutine;
 
 struct BaseKVConfig {
   int value_size = 0;
-  int64_t hash_size = 0;
-  size_t pool_size = 0;
   int num_threads = 0;
   int corotine_per_thread = 0;
+  int max_batch_keys_size= 0;
+  size_t pool_size = 0;
+  int64_t hash_size = 0;
   int64_t capacity = 0;
   int64_t memory_pool_size = 0;
-  uint64_t max_batch_keys_size= 0;
   std::string path = "";
   std::string library_file = "";
   std::string hash_name = "clht";
