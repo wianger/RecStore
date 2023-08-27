@@ -14,6 +14,10 @@ private:
   int *data_;
   int list_capacity_;
 public:
+  int Capacity() const {
+    return list_capacity_;
+  }
+
   void InsertFreeList(std::vector<int> &keys) {
     int free_size = free_tail.load() - free_head.load();
     if (free_size < 0) { free_size += list_capacity_; }
@@ -29,7 +33,7 @@ public:
   }
 
   std::pair<int, int> TryPop(int cnt) {
-    return {-1, -1};
+    // return {-1, -1};
     while (cnt > 0) {
       int head_now = free_head.load();
       int res = free_tail.load() - head_now;
@@ -48,8 +52,8 @@ public:
   }
 
   LFList(int capacity) {
-    list_capacity_ = capacity + 1;
-    data_ = new int[capacity + 1];
+    list_capacity_ = capacity;
+    data_ = new int[capacity];
     free_head.store(0);
     free_tail.store(0);
   }

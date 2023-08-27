@@ -7,8 +7,6 @@
 #include "base/lf_list.h" 
 #include "storage/ssd/conaiveKVell.h"
 
-DECLARE_int32(prefetch_method);
-
 class KVEngineDoubleDesk : public BaseKV {
   struct IndexInfo{
     bool in_cache = false;
@@ -170,7 +168,7 @@ public:
     : BaseKV(config), 
     value_size(config.value_size),
     max_batch_keys_size(config.max_batch_keys_size),
-    cache_size(config.capacity * config.value_size * 0.05),
+    cache_size(config.capacity * value_size * 0.05),
     per_thread_buffer_size((long long)value_size * (long long)max_batch_keys_size),
     thread_num(config.num_threads),
     corotine_per_thread(config.corotine_per_thread),
@@ -231,7 +229,7 @@ public:
     hash_table_.clear();
     lf_list.clear();
     std::vector<int> free_list;
-    for(int i = 0; i < cache_entry_size; i++){
+    for(int i = 0; i < cache_entry_size - 1; i++){
       free_list.push_back(i);
     }
     lf_list.InsertFreeList(free_list);
@@ -282,12 +280,12 @@ public:
         int64_t lba_no;
         int in_lba_offset;
         std::tie(lba_no, in_lba_offset) = Mapping(count_offset);
-        ssd_->SubmitReadCommand(bouncedBuffer_[rt] + i * ssd_->GetLBASize(),
+        ssd_->SubmitReadCommand(bouncedBuffer_[rt] + unhit_size * ssd_->GetLBASize(),
                                 value_size, lba_no, ReadCompleteCB, &readCompleteCount, t);
         timer_kvell_submitCommand.CumEnd();
 
         values->emplace_back(
-            (float *)(bouncedBuffer_[rt] + i * ssd_->GetLBASize() + in_lba_offset),
+            (float *)(bouncedBuffer_[rt] + unhit_size * ssd_->GetLBASize() + in_lba_offset),
             value_size / sizeof(float));
         unhit_array[rt][unhit_size] = key_iter->second;
         unhit_size++;
@@ -314,7 +312,7 @@ public:
       int64_t lba_no;
       int in_lba_offset;
       std::tie(lba_no, in_lba_offset) = Mapping(unhit_array[rt][j]);
-      memcpy(cache_ + pos * value_size, bouncedBuffer_[rt] + i * ssd_->GetLBASize() + in_lba_offset, value_size);
+      memcpy(cache_ + pos * value_size, bouncedBuffer_[rt] + j * ssd_->GetLBASize() + in_lba_offset, value_size);
       j++;
     }
     cache_timer.CumEnd();

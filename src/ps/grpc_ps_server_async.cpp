@@ -42,10 +42,10 @@ using boost::coroutines2::coroutine;
 DEFINE_int32(thread_num, 16, "Thread num");
 DEFINE_int32(corotine_per_thread, 4, "Corotine per thread");
 DEFINE_string(port, "15000", "Server Port");
-DEFINE_int64(dict_capability, 33762591LL, "Dict capability");
+DEFINE_int64(dict_capability, 12543770LL, "Dict capability");
 DEFINE_int32(value_size, 128, "Value size");
 DEFINE_int64(memory_pool_size, 1*1024*1024*1024LL, "Memory pool size");
-DEFINE_int32(max_batch_size, 16 << 20, "Max batch size");
+DEFINE_int32(max_batch_size, 10000, "Max batch size");
 
 const int GET_PATA_REQ_NUM = 10240;
 const int PUT_PATA_REQ_NUM = 6400;
