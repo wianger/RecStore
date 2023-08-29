@@ -206,10 +206,14 @@ def reduce_sparse_tensor(sparse_tensor, dst_rank=0):
 
     # logging.info(f"rank{dist.get_rank()}: gather keys and values done")
     if dist.get_rank() == dst_rank:
-        # logging.debug(f"rank{dist.get_rank()}: before sum sparse tensors")
+        logging.debug(f"rank{dist.get_rank()}: before sum sparse tensors")
+
+        logging.debug(f"rank{dist.get_rank()}: keys_gather_list {keys_gather_list }")
+        logging.debug(f"rank{dist.get_rank()}: values_list {values_list}")
+
         res = sum_sparse_tensor(keys_gather_list, values_list, shape)
-        res = res / dist.get_world_size()
-        # logging.info(f"rank{dist.get_rank()}: after sum sparse tensors")
+        logging.info(f"rank{dist.get_rank()}: after sum sparse tensors")
+        logging.info(f"rank{dist.get_rank()}: {res}")
     else:
         res = None
 
@@ -242,18 +246,33 @@ def all2all_sparse_tensor(keys, values, tag, verbose=False):
 def sum_sparse_tensor(keys_list, values_list, shape):
     assert len(keys_list) == len(values_list)
 
+    '''
+    # Create an empty sparse tensor with the following invariants:
+    #   1. sparse_dim + dense_dim = len(SparseTensor.shape)
+    #   2. SparseTensor._indices().shape = (sparse_dim, nnz)
+    #   3. SparseTensor._values().shape = (nnz, SparseTensor.shape[sparse_dim:])
+    #
+    # For instance, to create an empty sparse tensor with nnz = 0, dense_dim = 0 and
+    # sparse_dim = 1 (hence indices is a 2D tensor of shape = (1, 0))
+    >>> S = torch.sparse_coo_tensor(torch.empty([1, 0]), [], [1])
+    tensor(indices=tensor([], size=(1, 0)),
+        values=tensor([], size=(0,)),
+        size=(1,), nnz=0, layout=torch.sparse_coo)
+    '''
     coo_list = []
-    res = torch.sparse_coo_tensor(
-        [[], []], [], size=shape)
+    #  here, sparse_dim = 1, dense_dim = shape[1:], 
+    res = torch.sparse_coo_tensor(torch.empty([1, 0]), torch.empty([0, *shape[1:]]), size=shape)
+
     for each in range(len(keys_list)):
         if keys_list[each].nelement() == 0:
             continue
 
         temp = keys_list[each]
         # map keys_list[each] to [[k0, k1, k2, ...]]
-        if len(keys_list[each].shape) != 2:
+        if keys_list[each].dim() != 2:
             temp = keys_list[each].unsqueeze(0)
-            assert len(temp.shape) == 2
+        assert temp.dim() == 2
+        assert values_list[each].shape[1:] == shape[1:]
 
         coo_list.append(
             torch.sparse_coo_tensor(temp, values_list[each],

@@ -13,6 +13,8 @@ import torch.nn as nn
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+from DistEmb import DistEmbedding
+
 
 class CacheShardingPolicy:
     @staticmethod
@@ -45,11 +47,20 @@ class TorchNativeStdEmb(AbsEmb):
         # this standard embedding will clone (deep copy) the embedding variable <emb>
         worker_id = dist.get_rank()
         self.device = device
+
+        if type(emb) is DistEmbedding:
+            weight = emb.weight.to_dense_tensor()
+        else:
+            weight = emb
+
+            
+        print("weight.shape", weight.shape)
+        
         if device == 'cuda':
-            std_emb = nn.Embedding.from_pretrained(emb, freeze=False).cuda()
+            std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
             self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
         elif device == 'cpu':
-            std_emb = nn.Embedding.from_pretrained(emb, freeze=False)
+            std_emb = nn.Embedding.from_pretrained(weight, freeze=False)
             self.std_emb_ddp = DDP(std_emb, device_ids=None,)
         else:
             assert False

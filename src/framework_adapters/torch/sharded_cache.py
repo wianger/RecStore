@@ -5,6 +5,9 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
 import logging
+
+
+from DistEmb import DistEmbedding
 from cache_common import AbsEmb, NVGPUCache
 from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 
@@ -202,9 +205,10 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
             return cached_keys, keys[in_cache_mask.logical_not()], in_cache_mask, in_each_rank_cache_mask
 
     @staticmethod
-    def forward(ctx, keys, embedding_weight, emb_cache, fake_tensor, cached_range):
+    def forward(ctx, keys, full_emb, emb_cache, fake_tensor, cached_range):
+        logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
         rank, world_size = dist.get_rank(), dist.get_world_size()
-        emb_dim = embedding_weight.shape[1]
+        emb_dim = full_emb.shape[1]
 
         # 1. all to all keys
         # 1.1 split keys into shards
@@ -231,15 +235,24 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         # 3. all to all searched values
         logging.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
-            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype, verbose= True)
+            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype, verbose=True)
         logging.debug(f"{rank}: a2a cache_query_values done",)
-        
+
         # 5. merge into final result
         ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
-        
+
+        logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
+
         # 5.1 join missing keys
-        missing_value = F.embedding(missing_keys.cpu(
-        ),  embedding_weight, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+        if type(full_emb) is DistEmbedding:
+            missing_value = full_emb(missing_keys.cpu())
+            # F.embedding(missing_keys.cpu(
+            # ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+
+        else:
+            missing_value = F.embedding(missing_keys.cpu(
+            ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+
         ret_value[in_cache_mask.logical_not()] = missing_value.cuda()
 
         # 5.2 join in-cache keys
@@ -248,7 +261,7 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
         ctx.save_for_backward(keys, in_cache_mask, )
         ctx.emb_dim = emb_dim
-        ctx.embedding_weight = embedding_weight
+        ctx.embedding_weight = full_emb
         ctx.emb_cache = emb_cache
         ctx.in_each_rank_cache_mask = in_each_rank_cache_mask
 
@@ -272,8 +285,18 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
         reduced_missing_grads = reduce_sparse_kv_tensor(
             missing_keys, missing_grads, embedding_weight.shape, 0)
+
+        logging.debug(f"{dist.get_rank()} missing_keys = {missing_keys}")
+        logging.debug(f"{dist.get_rank()} missing_grads = {missing_grads}")
+
         if dist.get_rank() == 0:
-            embedding_weight.grad = reduced_missing_grads
+            if type(embedding_weight) is DistEmbedding:
+                reduced_missing_grads = reduced_missing_grads.coalesce()
+                logging.debug(f"reduced_missing_grads = {reduced_missing_grads}")
+                embedding_weight.record_grad(
+                    reduced_missing_grads.indices().squeeze(0), reduced_missing_grads.values())
+            else:
+                embedding_weight.grad = reduced_missing_grads / dist.get_world_size()
 
         # split keys into shards
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
@@ -283,7 +306,8 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
         # all tensors minus cached_start_key in list(keys_in_this_rank)
         cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
-        cached_keys_in_this_rank = [each - cached_start_key for each in keys_in_this_rank]
+        cached_keys_in_this_rank = [
+            each - cached_start_key for each in keys_in_this_rank]
         grad = sum_sparse_tensor(
             cached_keys_in_this_rank, values_in_this_rank, emb_cache.shape)
 
@@ -305,16 +329,18 @@ class KnownShardedCachedEmbedding(AbsEmb):
         self.cached_range = cached_range
         self.emb = emb
 
-        self.emb_cache.copy_(self.emb[start:end, :])
+        self.emb_cache.copy_(self.emb.weight[start:end])
 
     def forward(self, input_keys):
+        logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
         embed_value = KnownShardedCachedEmbeddingFn.apply(
             input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range)
         assert embed_value.requires_grad
         return embed_value
 
-
     def reg_opt(self, opt):
+        # TODO: Attenion!
         opt.add_param_group({"params": self.emb_cache})
+        return
         if dist.get_rank() == 0:
             opt.add_param_group({"params": self.emb})

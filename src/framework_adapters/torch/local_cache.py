@@ -5,6 +5,7 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
 import logging
+from DistEmb import DistEmbedding
 from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 from cache_common import AbsEmb, NVGPUCache
 
@@ -48,7 +49,6 @@ class LocalCachedEmbeddingFn(torch.autograd.Function):
         if dist.get_rank() == 0:
             embedding_weight.grad = grad / dist.get_world_size()
 
-
         # if dist.get_rank() == 0:
         #     keys_gather_list = [torch.zeros_like(
         #         keys) for _ in range(dist.get_world_size())]
@@ -87,7 +87,7 @@ class LocalCachedEmbedding(AbsEmb):
         self.emb_dim = emb.shape[1]
         self.gpu_cache = NVGPUCache(
             int(emb.shape[0]*cache_ratio), self.emb_dim)
-        
+
         raise NotImplementedError("TODO: update cache in backward ")
 
     def forward(self, input_keys):
@@ -97,6 +97,8 @@ class LocalCachedEmbedding(AbsEmb):
         return embed_value
 
     def reg_opt(self, opt):
+        # TODO: Attenion!
+        return
         if dist.get_rank() == 0:
             opt.add_param_group({"params": self.emb})
 
@@ -123,9 +125,9 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             return in_each_rank_cache_mask
 
     @staticmethod
-    def forward(ctx, keys, embedding_weight, emb_cache, fake_tensor, cached_range):
+    def forward(ctx, keys, full_emb, emb_cache, fake_tensor, cached_range):
         rank, world_size = dist.get_rank(), dist.get_world_size()
-        emb_dim = embedding_weight.shape[1]
+        emb_dim = full_emb.shape[1]
         ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
 
         # 1.1 split keys into shards
@@ -146,8 +148,13 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
         # 3.1 join missing keys
         logging.debug("join missing keys")
-        missing_value = F.embedding(missing_keys.cpu(
-        ),  embedding_weight, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+
+        if type(full_emb) is DistEmbedding:
+            missing_value = full_emb(missing_keys.cpu(), record_trace=False)
+        else:
+            missing_value = F.embedding(missing_keys.cpu(
+            ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+
         ret_value[not_in_this_rank_cache_mask] = missing_value.cuda()
 
         # 3.2 join hit keys
@@ -155,7 +162,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
         ctx.save_for_backward(keys, )
         ctx.emb_dim = emb_dim
-        ctx.embedding_weight = embedding_weight
+        ctx.embedding_weight = full_emb
         ctx.emb_cache = emb_cache
         ctx.in_each_rank_cache_mask = in_each_rank_cache_mask
 
@@ -167,7 +174,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         rank = dist.get_rank()
         keys, = ctx.saved_tensors
 
-        embedding_weight = ctx.embedding_weight
+        full_emb = ctx.embedding_weight
         emb_dim = ctx.emb_dim
         emb_cache = ctx.emb_cache
         in_each_rank_cache_mask = ctx.in_each_rank_cache_mask
@@ -195,14 +202,20 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
         # 2 aggregate grad of in-dram keys
         reduced_dram_grads = reduce_sparse_kv_tensor(
-            keys, grad_output, embedding_weight.shape, 0)
+            keys, grad_output, full_emb.shape, 0)
         logging.debug(f"rank{rank}: aggregate grad of in-dram keys done")
 
         mp.Barrier(dist.get_world_size())
-        
+
         if dist.get_rank() == 0:
-            logging.debug(f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
-            embedding_weight.grad = reduced_dram_grads
+            reduced_dram_grads = reduced_dram_grads.coalesce()
+            logging.debug(
+                f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
+            if type(full_emb) is DistEmbedding:
+                full_emb.record_grad(
+                    reduced_dram_grads.indices().squeeze(0), reduced_dram_grads.values())
+            else:
+                full_emb.grad = reduced_dram_grads / dist.get_world_size()
             logging.debug("rank0: set DRAM Emb's grad done")
         return None, None, None, torch.randn(1, 1), None
 
@@ -219,7 +232,7 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.emb_cache = torch.zeros((cached_capacity, self.emb_dim)).cuda()
         self.cached_range = cached_range
         self.emb = emb
-        self.emb_cache.copy_(self.emb[start:end, :])
+        self.emb_cache.copy_(self.emb.weight[start:end])
 
     def forward(self, input_keys):
         embed_value = KnownLocalCachedEmbeddingFn.apply(
@@ -241,6 +254,8 @@ class KnownLocalCachedEmbedding(AbsEmb):
         return cached_range
 
     def reg_opt(self, opt):
+        # TODO: Attenion!
         opt.add_param_group({"params": self.emb_cache})
+        return
         if dist.get_rank() == 0:
             opt.add_param_group({"params": self.emb})
