@@ -73,6 +73,7 @@ class TestShardedCache:
         kvinit()
         emb = DistEmbedding(TestShardedCache.EMB_LEN,
                             TestShardedCache.EMB_DIM, name="emb",)
+        # dummy LR, only register the tensor state of OSP
         opt = SparseSGD([emb], lr=100)
 
         workers = []
@@ -167,32 +168,26 @@ class TestShardedCache:
 
         # forward
 
-
         torch.set_grad_enabled(True)
         for _ in tqdm.trange(20):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
-            # for _ in tqdm.trange(2):
+
             print(f"========== Step {_} ========== ")
-            # input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
-            if worker_id == 0:
-                # input_keys = torch.tensor([1, 2,],).long().cuda()
-                input_keys = torch.tensor([0, 1,],).long().cuda()
-            else:
-                # input_keys = torch.tensor([0, 2,],).long().cuda()
-                input_keys = torch.tensor([2, 3,],).long().cuda()
+            input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
+            # if worker_id == 0:
+            #     input_keys = torch.tensor([1, 2,],).long().cuda()
+            #     # input_keys = torch.tensor([0, 1,],).long().cuda()
+            # else:
+            #     input_keys = torch.tensor([0, 2,],).long().cuda()
+            #     # input_keys = torch.tensor([2, 3,],).long().cuda()
 
-
-
-            logging.debug(f"{rank}:input_keys {input_keys}")
-
+            logging.debug(f"{rank}:step{_}, input_keys {input_keys}")
             std_embed_value = std_emb.forward(input_keys)
             std_loss = std_embed_value.sum(-1).sum(-1)
             std_loss.backward()
             logging.debug(f"{rank}:std_embed_value {std_embed_value}")
 
-
-            logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
             embed_value = abs_emb.forward(input_keys)
             loss = embed_value.sum(-1).sum(-1)
             loss.backward()
@@ -203,25 +198,28 @@ class TestShardedCache:
             assert (torch.allclose(
                 loss, std_loss))
 
-            # if worker_id == 0:
-            #     assert (torch.allclose(
-            #         emb.grad.to_dense().cpu(), std_emb.weight.grad.cpu())), "backward is error"
-
             sparse_opt.step()
             dist_opt.step()
 
             mp.Barrier(num_workers)
             torch.cuda.synchronize()
 
-            # for i in tqdm.trange(emb.shape[0]):
-            #     assert (torch.allclose(
-            #         emb[i, :], std_emb.weight[i, :].cpu(), atol=1e-6)), "opt is error"
+            # if _ < 3:
+            #     std_emb_249 = std_emb.forward(torch.tensor([249]).long().cuda())
+            #     emb_249 = abs_emb.forward(torch.tensor([249]).long().cuda())
+            #     if not torch.allclose(
+            #         emb_249 , std_emb_249):
+            #         logging.debug(f"step: {_}")
+            #         logging.debug(f"std_emb_249: {std_emb_249}")
+            #         logging.debug(f"emb_249 : {emb_249}")
+            #         assert (torch.allclose(
+            #             emb_249 , std_emb_249)), "forward is error"
 
     # @pytest.mark.parametrize("test_cache", ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"])
     # @pytest.mark.parametrize("cache_ratio", [0.1, 0.3, 0.5])
     # def test_known_sharded_cache(self, test_cache, cache_ratio):
-    def test_known_sharded_cache(self,):
 
+    def test_known_sharded_cache(self,):
         for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
             for cache_ratio in [0.1, 0.3, 0.5]:
                 args = {"test_cache": test_cache, "cache_ratio": cache_ratio}
@@ -232,7 +230,6 @@ class TestShardedCache:
     def test_local_cache(self):
         args = {"test_cache": "LocalCachedEmbedding"}
         self.main_routine(self.routine_cache_helper, args)
-
 
 
 if __name__ == "__main__":

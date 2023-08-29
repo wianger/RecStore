@@ -265,16 +265,16 @@ class DistSparseGradOptimizer(abc.ABC):
                 grads = []
                 for trace in emb._trace:
                     idx, embbed_value = trace
-                    if embbed_value.grad is not None:
-                        idics.append(idx)
-                        grads.append(embbed_value.grad.data)
-                    else:
+                    if embbed_value.grad is None:
                         logging.debug(
                             f'rank{self._rank} embbed_value={embbed_value}')
                         logging.debug(
                             f'rank{self._rank} embbed_value.grad={embbed_value.grad}')
                         logging.debug(f'rank{self._rank} idx={idx}')
                         assert len(idx) == 0
+                    else:
+                        idics.append(idx)
+                        grads.append(embbed_value.grad.data)
 
                 for each_hand_record_grad in emb._hand_grad:
                     each_idx, each_grad = each_hand_record_grad
@@ -429,6 +429,9 @@ class DistSparseGradOptimizer(abc.ABC):
     def zero_grad(self):
         """clean grad cache"""
         self._clean_grad = True
+        # xmh add the following
+        for emb in self._params:
+            emb.reset_trace()
 
 
 def initializer(shape, dtype):
@@ -590,7 +593,7 @@ class SparseSGD(DistSparseGradOptimizer):
         eps = self._eps
         clr = self._lr
 
-        print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
+        # print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
 
         state_dev = th.device("cpu")
         exec_dev = grad.device
@@ -613,5 +616,6 @@ class SparseSGD(DistSparseGradOptimizer):
         tmp = clr * grad_values
 
         tmp_dst = tmp.to(state_dev, non_blocking=True)
-
+        
+        # logging.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
         emb._tensor[grad_indices] = emb._tensor[grad_indices] - tmp_dst

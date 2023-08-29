@@ -206,7 +206,6 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, keys, full_emb, emb_cache, fake_tensor, cached_range):
-        logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
         rank, world_size = dist.get_rank(), dist.get_world_size()
         emb_dim = full_emb.shape[1]
 
@@ -235,17 +234,15 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         # 3. all to all searched values
         logging.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
-            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype, verbose=True)
+            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype)
         logging.debug(f"{rank}: a2a cache_query_values done",)
 
         # 5. merge into final result
         ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
 
-        logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
-
         # 5.1 join missing keys
         if type(full_emb) is DistEmbedding:
-            missing_value = full_emb(missing_keys.cpu())
+            missing_value = full_emb(missing_keys.cpu(), record_trace=False)
             # F.embedding(missing_keys.cpu(
             # ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
 
@@ -332,7 +329,6 @@ class KnownShardedCachedEmbedding(AbsEmb):
         self.emb_cache.copy_(self.emb.weight[start:end])
 
     def forward(self, input_keys):
-        logging.debug(f"torch.is_grad_enabled() = {torch.is_grad_enabled()}")
         embed_value = KnownShardedCachedEmbeddingFn.apply(
             input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range)
         assert embed_value.requires_grad

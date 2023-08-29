@@ -2,6 +2,8 @@ from PsKvstore import get_kvstore, kvinit
 import dist_utils
 import torch as th
 DIST_TENSOR_ID = 0
+import logging
+import torch.distributed as dist
 
 
 def _default_init_data(shape, dtype):
@@ -20,6 +22,7 @@ class DistTensor:
         is_gdata=True,
         attach=True,
     ):
+        self.debug_xmh = 0
         self.kvstore = get_kvstore()
         assert (
             self.kvstore is not None
@@ -69,7 +72,13 @@ class DistTensor:
 
     def __setitem__(self, idx, val):
         idx = dist_utils.toindex(idx)
-        # idx = idx.tousertensor()
+        
+        # if 249 in list(idx):
+        #     logging.debug(f"rank{dist.get_rank()} setitem {idx} {val}")
+        #     logging.debug(f"rank{dist.get_rank()} setitem len={len(idx)}")
+        #     self.debug_xmh += 1
+        #     if self.debug_xmh == 3:
+        #         raise Exception("xxxxxx")
         self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
 
     @property

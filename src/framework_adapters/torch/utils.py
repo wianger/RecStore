@@ -207,13 +207,11 @@ def reduce_sparse_tensor(sparse_tensor, dst_rank=0):
     # logging.info(f"rank{dist.get_rank()}: gather keys and values done")
     if dist.get_rank() == dst_rank:
         logging.debug(f"rank{dist.get_rank()}: before sum sparse tensors")
-
-        logging.debug(f"rank{dist.get_rank()}: keys_gather_list {keys_gather_list }")
-        logging.debug(f"rank{dist.get_rank()}: values_list {values_list}")
-
+        # logging.debug(f"rank{dist.get_rank()}: keys_gather_list {keys_gather_list }")
+        # logging.debug(f"rank{dist.get_rank()}: values_list {values_list}")
         res = sum_sparse_tensor(keys_gather_list, values_list, shape)
         logging.info(f"rank{dist.get_rank()}: after sum sparse tensors")
-        logging.info(f"rank{dist.get_rank()}: {res}")
+        # logging.info(f"rank{dist.get_rank()}: {res}")
     else:
         res = None
 

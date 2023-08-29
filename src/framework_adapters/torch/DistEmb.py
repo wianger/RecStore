@@ -103,6 +103,7 @@ class DistEmbedding:
             emb = dist_utils.attach_grad(emb)
             if record_trace:
                 self._trace.append((idx.to(device, non_blocking=True), emb))
+                print(f"self._trace.append(({idx}, {emb}))")
         return emb
 
     # def __getitem__(self, idx):
@@ -120,6 +121,7 @@ class DistEmbedding:
     def reset_trace(self):
         """Reset the traced data."""
         self._trace = []
+        self._hand_grad = []
 
     def set_data(self, data: th.Tensor):
         assert data.shape == (self.num_embeddings,
