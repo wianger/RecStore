@@ -17,7 +17,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
-
+from DistEmb import DistEmbedding
+from PsKvstore import kvinit
+from DistOpt import SparseSGD, SparseAdagrad
 
 import random
 random.seed(0)
@@ -29,18 +31,18 @@ torch.classes.load_library(
     "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
 
 logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                    # datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+                    # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 def get_run_config():
     def parse_args(default_run_config):
         argparser = argparse.ArgumentParser("Training")
         argparser.add_argument('--num_workers', type=int,
-                               default=2)
+                               default=8)
         argparser.add_argument('--num_embs', type=int,
-                               #    default=0.01*1e6)
-                               default=1000)
+                               default=100*1e6)
+                            #    default=100000)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
         argparser.add_argument('--batch_size', type=int,
@@ -56,10 +58,18 @@ def get_run_config():
 
 
 def init_emb_tensor(emb, worker_id, num_workers):
+    import numpy as np    
+    linspace = np.linspace(0, emb.shape[0], num_workers+1, dtype=int)
     if worker_id == 0:
-        for i in range(emb.shape[0]):
-            emb[i, :] = torch.ones(emb.shape[1]) * i
-    mp.Barrier(num_workers)
+        print(f"rank {worker_id} start initing emb")
+        for i in tqdm.trange(linspace[worker_id], linspace[worker_id + 1]):
+            emb.weight[i] = torch.ones(emb.shape[1]) * i
+    else:
+        for i in range(linspace[worker_id], linspace[worker_id + 1]):
+            emb.weight[i] = torch.ones(emb.shape[1]) * i
+    print(f"rank {worker_id} reached barrier")
+    dist.barrier()
+    print(f"rank {worker_id} escaped barrier")
 
 
 def main_routine(ARGS, routine):
@@ -68,18 +78,21 @@ def main_routine(ARGS, routine):
         torch.cuda.set_device(worker_id)
         torch.manual_seed(worker_id)
         dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
-            master_ip='127.0.0.1', master_port='12345')
+            master_ip='127.0.0.1', master_port='12335')
         world_size = ARGS['num_workers']
         torch.distributed.init_process_group(backend=None,
                                              init_method=dist_init_method,
                                              world_size=world_size,
                                              rank=worker_id,
-                                             timeout=datetime.timedelta(seconds=4))
+                                             timeout=datetime.timedelta(seconds=100))
         routine(worker_id, ARGS)
 
     print(f"========== Running Perf with routine {routine}==========")
 
-    ShmTensorStore.RegTensor("emb", (ARGS['num_embs'], ARGS['emb_dim']))
+    kvinit()
+    emb = DistEmbedding(int(ARGS['num_embs']), int(ARGS['emb_dim']), name="emb",)
+    # dummy LR, only register the tensor state of OSP
+    opt = SparseSGD([emb], lr=100)
 
     workers = []
     for worker_id in range(ARGS['num_workers']):
@@ -90,6 +103,7 @@ def main_routine(ARGS, routine):
 
     for each in workers:
         each.join()
+        assert each.exitcode == 0
 
 
 def routine_local_cache_helper(worker_id, ARGS):
@@ -97,18 +111,25 @@ def routine_local_cache_helper(worker_id, ARGS):
     # USE_SGD = False
     rank = dist.get_rank()
 
-    emb = ShmTensorStore.GetTensor("emb")
+    emb = DistEmbedding(int(ARGS['num_embs']), int(ARGS['emb_dim']), name="emb",)
+
     init_emb_tensor(emb, worker_id, ARGS['num_workers'])
 
     fake_tensor = torch.Tensor([0])
-    sparse_opt = optim.SGD(
-        [fake_tensor], lr=1,) if USE_SGD else optim.SparseAdam([fake_tensor], lr=1)
 
+    if USE_SGD:
+        sparse_opt = optim.SGD(
+            [fake_tensor], lr=1,)
+        dist_opt = SparseSGD([emb], lr=1/dist.get_world_size())
+    else:
+        sparse_opt = optim.Adam([fake_tensor], lr=1)
+        dist_opt = SparseAdagrad([emb], lr=1/dist.get_world_size())
+    
     abs_emb = None
 
     # emb_name = "TorchNativeStdEmb"
-    # emb_name = "KnownShardedCachedEmbedding"
-    emb_name = "KnownLocalCachedEmbedding"
+    emb_name = "KnownShardedCachedEmbedding" #07:20<
+    # emb_name = "KnownLocalCachedEmbedding" #05:21 1000iter
 
     if emb_name == "KnownShardedCachedEmbedding":
         cached_range = CacheShardingPolicy.generate_cached_range(
@@ -129,6 +150,9 @@ def routine_local_cache_helper(worker_id, ARGS):
 
     # forward
     for _ in tqdm.trange(1000):
+        sparse_opt.zero_grad()
+        dist_opt.zero_grad()
+
         print(f"========== Step {_} ========== ")
         input_keys = torch.randint(emb.shape[0], size=(
             ARGS['batch_size'],)).long().cuda()
@@ -137,12 +161,13 @@ def routine_local_cache_helper(worker_id, ARGS):
         loss = embed_value.sum(-1).sum(-1)
         loss.backward()
 
-        # sparse_opt.step()
-        # sparse_opt.zero_grad()
+        sparse_opt.step()
+        dist_opt.step()
 
         torch.cuda.synchronize()
         logging.debug(f"rank{rank}: before barrier")
         dist.barrier()
+
 
 if __name__ == "__main__":
     # import debugpy

@@ -616,6 +616,6 @@ class SparseSGD(DistSparseGradOptimizer):
         tmp = clr * grad_values
 
         tmp_dst = tmp.to(state_dev, non_blocking=True)
-        
+
         # logging.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
         emb._tensor[grad_indices] = emb._tensor[grad_indices] - tmp_dst

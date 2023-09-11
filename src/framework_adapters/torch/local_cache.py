@@ -150,7 +150,9 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         logging.debug("join missing keys")
 
         if type(full_emb) is DistEmbedding:
+            logging.debug(f'rank{rank}, before full_emb(missing_keys.cpu()')
             missing_value = full_emb(missing_keys.cpu(), record_trace=False)
+            logging.debug(f'rank{rank}, after full_emb(missing_keys.cpu()')
         else:
             missing_value = F.embedding(missing_keys.cpu(
             ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)

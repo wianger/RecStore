@@ -24,6 +24,7 @@ def print_rank0(msg):
 
 @torch.no_grad()
 def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=False):
+    logging.debug("before all2all_data_transfer")
     rank, world_size = dist.get_rank(), dist.get_world_size()
     if verbose:
         logging.debug(f'{rank}, a2a, input={data}')
@@ -83,6 +84,8 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
             req.wait()
 
     res[rank] = data[rank]
+
+    logging.debug("after all2all_data_transfer")
     return res
 
 
@@ -210,7 +213,7 @@ def reduce_sparse_tensor(sparse_tensor, dst_rank=0):
         # logging.debug(f"rank{dist.get_rank()}: keys_gather_list {keys_gather_list }")
         # logging.debug(f"rank{dist.get_rank()}: values_list {values_list}")
         res = sum_sparse_tensor(keys_gather_list, values_list, shape)
-        logging.info(f"rank{dist.get_rank()}: after sum sparse tensors")
+        logging.debug(f"rank{dist.get_rank()}: after sum sparse tensors")
         # logging.info(f"rank{dist.get_rank()}: {res}")
     else:
         res = None

@@ -39,14 +39,23 @@ logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)
 
 
 class TestShardedCache:
-    num_workers = 2
-    EMB_DIM = 3
-    EMB_LEN = 1000
-    # EMB_LEN = 3
+    num_workers = 8
+    EMB_DIM = 32
+    # EMB_LEN = 100000
+    EMB_LEN = int(100* 1e6)
+    BATCH_SIZE=1024
 
     def main_routine(self, routine, args=None):
         # wrap rountine with dist_init
         def worker_main(routine, worker_id, num_workers, args):
+            '''
+            if worker_id == 0:
+                time.sleep(1000)
+            print(f"yyyyrank {worker_id} reached barrier", flush=True)
+            mp.Barrier(num_workers)
+            print(f"yyyyrank {worker_id} escaped barrier", flush=True)
+            '''
+
             torch.cuda.set_device(worker_id)
             torch.manual_seed(worker_id)
             dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
@@ -56,7 +65,7 @@ class TestShardedCache:
                                                  init_method=dist_init_method,
                                                  world_size=world_size,
                                                  rank=worker_id,
-                                                 timeout=datetime.timedelta(seconds=4))
+                                                 timeout=datetime.timedelta(seconds=100))
             routine(worker_id, num_workers, args)
 
         print(
@@ -75,7 +84,7 @@ class TestShardedCache:
                             TestShardedCache.EMB_DIM, name="emb",)
         # dummy LR, only register the tensor state of OSP
         opt = SparseSGD([emb], lr=100)
-
+        
         workers = []
         for worker_id in range(TestShardedCache.num_workers):
             p = mp.Process(target=worker_main, args=(
@@ -101,27 +110,36 @@ class TestShardedCache:
         self.main_routine(self.routine_shm_tensor)
 
     def init_emb_tensor(self, emb, worker_id, num_workers):
+        import numpy as np    
+        linspace = np.linspace(0, emb.shape[0], num_workers+1, dtype=int)
         if worker_id == 0:
-            # print("pre", worker_id, emb)
-            for i in range(emb.shape[0]):
-                # emb[i, :] = torch.ones(emb.shape[1]) * i
+            print(f"rank {worker_id} start initing emb")
+            for i in tqdm.trange(linspace[worker_id], linspace[worker_id + 1]):
                 emb.weight[i] = torch.ones(emb.shape[1]) * i
-
-        # print(f"rank{worker_id} of {num_workers} arrived at barrier")
-        # mp.Barrier(num_workers)
+        else:
+            for i in range(linspace[worker_id], linspace[worker_id + 1]):
+                emb.weight[i] = torch.ones(emb.shape[1]) * i
+        print(f"rank {worker_id} reached barrier")
         dist.barrier()
-        # print(f"rank{worker_id} of {num_workers} arrived after barrier")
+        mp.Barrier(num_workers)
+        print(f"rank {worker_id} escaped barrier")
 
-        # print("post", worker_id, emb, flush=True)
-        for i in range(emb.shape[0]):
+        for i in range(100):
+            import random
+            idx = random.randint(0, emb.shape[0]-1)
             assert (torch.allclose(
-                emb.weight[i], torch.ones(emb.shape[1]) * i))
+                emb.weight[idx], torch.ones(emb.shape[1]) * idx))
+        dist.barrier()
 
     def routine_cache_helper(self, worker_id, num_workers, args):
         USE_SGD = True
         # USE_SGD = False
         rank = dist.get_rank()
 
+
+        import os
+        logging.debug(f"rank{rank}: pid={os.getpid()}")
+        
         # emb = ShmTensorStore.GetTensor("emb")
         emb = DistEmbedding(TestShardedCache.EMB_LEN,
                             TestShardedCache.EMB_DIM, name="emb",)
@@ -174,7 +192,7 @@ class TestShardedCache:
             dist_opt.zero_grad()
 
             print(f"========== Step {_} ========== ")
-            input_keys = torch.randint(emb.shape[0], size=(100,)).long().cuda()
+            input_keys = torch.randint(emb.shape[0], size=(TestShardedCache.BATCH_SIZE,)).long().cuda()
             # if worker_id == 0:
             #     input_keys = torch.tensor([1, 2,],).long().cuda()
             #     # input_keys = torch.tensor([0, 1,],).long().cuda()
