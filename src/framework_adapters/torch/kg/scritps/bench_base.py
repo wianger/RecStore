@@ -3,7 +3,10 @@ import os
 import datetime
 import time
 from bench_util import *
-from exp_config import ALL_SERVERS_INCLUDING_NOT_USED, LOG_PREFIX, PROJECT_PATH
+
+import exp_config
+
+from variables import *
 
 
 class BaseRun:
@@ -108,7 +111,7 @@ class CSRun(BaseRun):
             server_command = f'''{self.server_bin_path} --numa_id={numa_id} --global_id={global_id} \
             --num_server_processes={len(self.ps_servers)} --num_client_processes={len(self.client_servers)} \
             {config} >{self.log_dir}/ps_{ps_id} 2>&1'''
-            RemoteExecute(each_host, server_command, PROJECT_ABS_PATH)
+            RemoteExecute(each_host, server_command, PROJECT_PATH)
             dumped_config[f'server_{ps_id}'] = server_command
             global_id += 1
 
@@ -120,7 +123,7 @@ class CSRun(BaseRun):
             client_command = f'''{self.client_bin_path} --numa_id={numa_id} --global_id={global_id} \
             --num_server_processes={len(self.ps_servers)} --num_client_processes={len(self.client_servers)} \
              {config} >{self.log_dir}/client_{client_id} 2>&1 &'''
-            RemoteExecute(each_host, client_command, PROJECT_ABS_PATH)
+            RemoteExecute(each_host, client_command, PROJECT_PATH)
             dumped_config[f'client_{ps_id}'] = client_command
             global_id += 1
 
@@ -214,16 +217,14 @@ class LocalOnlyRun(BaseRun):
         print(f"mkdir {self.log_dir}")
         time.sleep(1)
         # dump config
-        dumped_config = {
-            self.config
-        }
+        dumped_config = self.config
 
         config = ' '.join(
-            [f'--{k}={v}' for k, v in self.server_config.items()])
+            [f'--{k}={v}' for k, v in self.config.items()])
         server_command = f'''{self.bin_path} \
         {config} >{self.log_dir}/log 2>&1'''
 
-        RemoteExecute(self.execute_host, server_command, PROJECT_ABS_PATH)
+        RemoteExecute(self.execute_host, server_command, PROJECT_PATH)
         
 
         with open(f'{self.log_dir}/config', 'w') as f:

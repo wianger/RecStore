@@ -3,16 +3,12 @@ import subprocess
 import os
 import datetime
 import time
-from bench_util import *
-from bench_base import *
 import concurrent.futures
 
-PROJECT_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/kg/python"
-LOG_PREFIX = f'{PROJECT_PATH}/benchmark/log'
+from bench_util import *
+from bench_base import *
+from variables import *
 
-ALL_SERVERS_INCLUDING_NOT_USED = [
-    '127.0.0.1',
-]
 
 
 def ConvertHostNumaList2Host(host_numa_lists):
@@ -23,7 +19,7 @@ class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 main.py", execute_host)
+                         log_dir, config,  "/home/xieminhui/miniconda3/bin/python3 main.py", execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -45,7 +41,7 @@ class GNNRun(LocalOnlyRun):
                 break
 
         print("tail down")
-        Pnuke([self.execute_host], "python")
+        Pnuke([self.execute_host], "main.py")
 
 
 class GNNExperiment(LocalOnlyExperiment):
@@ -63,8 +59,8 @@ class GNNExperiment(LocalOnlyExperiment):
                       run_config, execute_host)
 
     def _BeforeStartAllRun(self):
-        print("pnuke python")
-        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "python")
+        print("pnuke main.py")
+        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "main.py")
 
 
 
@@ -87,9 +83,13 @@ class ExpOverallSingle(GNNExperiment):
         NAME = "overall-single-machine"
         COMMON_CONFIGS = {
             "model_name": ["TransE_l1"],
-            "dataset": ["FB15k"],
-            "gpu": [0, 1, 2, 4, 6, 8],
-            "max_step": [2000]
+            "dataset": ["FB15k", "Freebase"],
+            # FB15k, FB15k-237, wn18, wn18rr and Freebase
+
+            "nr_gpus": [0, 1, 2, 4, 6, 8],
+            # "nr_gpus": [0, 1, 2, ],
+            "max_step": [10000],
+            **COMMON_CLIENT_CONFIGS,
         }
 
         self.name = NAME
@@ -97,7 +97,7 @@ class ExpOverallSingle(GNNExperiment):
                          "127.0.0.1")
 
     def _SortRuns(self, runs):
-        return list(sorted(runs, key=lambda run: run.server_config['db']))
+        return list(sorted(runs, key=lambda run: run.config['dataset']))
 
     def _RunHook(self, previous_run, next_run):
         return

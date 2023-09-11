@@ -41,6 +41,8 @@ class ArgParser(CommonArgParser):
     def __init__(self):
         super(ArgParser, self).__init__()
 
+        self.add_argument('--nr_gpus', type=int, default=-1,
+                          help='# of gpus')
         self.add_argument('--gpu', type=ArgParser.list_of_ints, default=[-1],
                           help='A list of gpu ids, e.g. 0,1,2,4')
         self.add_argument('--mix_cpu_gpu', action='store_true',
@@ -73,13 +75,13 @@ def prepare_save_path(args):
 
 def main():
     import sys
-    args = ArgParser().parse_args([
-                                   "--gpu=0,1,2,3",
-                                   "--mix_cpu_gpu",
-                                   "--async_update",
-                                   *sys.argv[1:]
-                                   ])
     args = ArgParser().parse_args()
+
+    if args.nr_gpus == 0:
+        args.gpu = [-1]
+    else:
+        args.gpu = list(range(args.nr_gpus))
+        
     prepare_save_path(args)
 
     init_time_start = time.time()
@@ -118,6 +120,9 @@ def main():
     # if there is no cross partition relaiton, we fall back to strict_rel_part
     args.strict_rel_part = args.mix_cpu_gpu and (train_data.cross_part == False)
     args.num_workers = 8 # fix num_worker to 8
+
+
+    print("ARGS: ", args)
 
     if args.num_proc > 1:
         train_samplers = []
@@ -329,7 +334,7 @@ def main():
             valid_samplers = [valid_sampler_head, valid_sampler_tail] if args.valid else None
         train(args, model, train_sampler, valid_samplers, rel_parts=rel_parts)
 
-    print('training takes {} seconds'.format(time.time() - start))
+    print('Successfully xmh. training takes {} seconds'.format(time.time() - start), flush=True)
 
     if not args.no_save_emb:
         save_model(args, model, emap_file, rmap_file)

@@ -7,14 +7,12 @@ import itertools
 import os
 import subprocess
 import datetime
+
 from bench_util import RemoteExecute,ParallelSSH,Pnuke
 import exp_config
 from exp_config import ALL_SERVERS_INCLUDING_NOT_USED, LOG_PREFIX, PROJECT_PATH
-from zmq import SERVER
-import concurrent.futures
 
-
-
+from variables import *
 
 
 def mount_master(hosts):
@@ -27,21 +25,18 @@ def config_each_server(hosts):
 
 
 if __name__ == "__main__":
-    Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "petps_server")
-    Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "benchmark_client")
-
     exp_lists = []
 
     each = exp_config.ExpOverallSingle()
-    each.SetLogDir(f'{LOG_PREFIX}/exp9-single-dram-rerun-1024')
+    each.SetLogDir(f'{LOG_PREFIX}/exp0-single')
     exp_lists.append(each)
 
     for i, each in enumerate(exp_lists):
         # mount NFS
         mount_master(
-            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '10.0.2.130'])
+            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
         config_each_server(
-            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '10.0.2.130'])
+            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
 
         print("=================-====================")
         print(f"Experiment {i}/{len(exp_lists)}: ", each.name)
