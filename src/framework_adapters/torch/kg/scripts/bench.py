@@ -1,0 +1,44 @@
+import enum
+from ftplib import all_errors
+from numpy import outer
+import time
+import argparse
+import itertools
+import os
+import subprocess
+import datetime
+
+from bench_util import RemoteExecute,ParallelSSH,Pnuke
+import exp_config
+from exp_config import ALL_SERVERS_INCLUDING_NOT_USED, LOG_PREFIX, PROJECT_PATH
+
+from variables import *
+
+
+def mount_master(hosts):
+    pass
+
+
+def config_each_server(hosts):
+    ParallelSSH(
+        hosts, f"sudo swapoff -a")
+
+
+if __name__ == "__main__":
+    exp_lists = []
+
+    each = exp_config.ExpOverallSingle()
+    each.SetLogDir(f'{LOG_PREFIX}/exp0-single')
+    exp_lists.append(each)
+
+    for i, each in enumerate(exp_lists):
+        # mount NFS
+        mount_master(
+            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
+        config_each_server(
+            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
+
+        print("=================-====================")
+        print(f"Experiment {i}/{len(exp_lists)}: ", each.name)
+        each.RunExperiment()
+
