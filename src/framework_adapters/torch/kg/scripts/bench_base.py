@@ -222,7 +222,7 @@ class LocalOnlyRun(BaseRun):
         config = ' '.join(
             [f'--{k}={v}' for k, v in self.config.items()])
         server_command = f'''{self.bin_path} \
-        {config} >{self.log_dir}/log 2>&1'''
+        {config} >{self.log_dir}/log 2>&1 &'''
 
         LocalExecute(server_command, PROJECT_PATH)
         

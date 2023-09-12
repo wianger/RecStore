@@ -13,4 +13,4 @@ cd python
 python setup.py develop
 cd -
 
-pip3 install paramiko
+pip3 install paramiko ogb
