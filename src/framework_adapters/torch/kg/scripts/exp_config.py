@@ -19,7 +19,7 @@ class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "/home/xieminhui/miniconda3/bin/python3 main.py", execute_host)
+                         log_dir, config,  "python3 main.py", execute_host)
 
     def check_config(self,):
         super().check_config()

@@ -18,6 +18,19 @@ def GenBinding(config_list):
     return r
 
 
+
+def LocalExecute(command, path, print_show=True):
+    import re
+    print_command = re.sub(r' +', ' ', command)
+    # print_command = command.replace('\t', ' ')
+    if print_show:
+        print(f"===Local=== {print_command}")
+    if path == '':
+        subprocess.run(command, shell=True, check=True)
+    else:
+        subprocess.run(f'cd {path}; {command}', shell=True, check=True)
+
+
 def RemoteExecute(server, command, path, print_show=True):
     import re
     print_command = re.sub(r' +', ' ', command)

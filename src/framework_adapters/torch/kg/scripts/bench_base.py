@@ -224,7 +224,7 @@ class LocalOnlyRun(BaseRun):
         server_command = f'''{self.bin_path} \
         {config} >{self.log_dir}/log 2>&1'''
 
-        RemoteExecute(self.execute_host, server_command, PROJECT_PATH)
+        LocalExecute(server_command, PROJECT_PATH)
         
 
         with open(f'{self.log_dir}/config', 'w') as f:
