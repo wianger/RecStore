@@ -19,6 +19,10 @@ def GenBinding(config_list):
 
 
 
+def GetHostName():
+    import socket
+    return socket.gethostname()
+
 def LocalExecute(command, path, print_show=True):
     import re
     print_command = re.sub(r' +', ' ', command)

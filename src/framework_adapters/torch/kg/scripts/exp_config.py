@@ -10,7 +10,6 @@ from bench_base import *
 from variables import *
 
 
-
 def ConvertHostNumaList2Host(host_numa_lists):
     return list(set([each[0] for each in host_numa_lists]))
 
@@ -63,7 +62,6 @@ class GNNExperiment(LocalOnlyExperiment):
         Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "main.py")
 
 
-
 COMMON_CLIENT_CONFIGS = {
     "no_save_emb": ['true'],
     "batch_size": [1000],
@@ -85,14 +83,14 @@ class ExpOverallSingle(GNNExperiment):
             "model_name": ["TransE_l1"],
             "dataset": ["FB15k", "Freebase"],
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
-            "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8],
+            "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2],
             # "nr_gpus": [0, 1, 2, ],
             "max_step": [10000],
             **COMMON_CLIENT_CONFIGS,
         }
 
         self.name = NAME
-        super().__init__(0, COMMON_CONFIGS, 
+        super().__init__(0, COMMON_CONFIGS,
                          "127.0.0.1")
 
     def _SortRuns(self, runs):

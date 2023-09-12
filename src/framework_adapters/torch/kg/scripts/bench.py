@@ -28,7 +28,11 @@ if __name__ == "__main__":
     exp_lists = []
 
     each = exp_config.ExpOverallSingle()
-    each.SetLogDir(f'{LOG_PREFIX}/exp0-single')
+    if GetHostName() == "node182"
+        suffix = "A30"
+    else:
+        suffix = "3090"
+    each.SetLogDir(f'{LOG_PREFIX}/exp0-single-{suffix}')
     exp_lists.append(each)
 
     for i, each in enumerate(exp_lists):
