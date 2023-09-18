@@ -21,6 +21,8 @@ from DistEmb import DistEmbedding
 from PsKvstore import kvinit
 from DistOpt import SparseSGD, SparseAdagrad
 
+import time
+
 import random
 random.seed(0)
 np.random.seed(0)
@@ -50,9 +52,9 @@ def get_run_config():
                                default=1024)
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
-        argparser.add_argument('--log_interval', type=float,
+        argparser.add_argument('--log_interval', type=int,
                                default=1000)
-        argparser.add_argument('--run_steps', type=float,
+        argparser.add_argument('--run_steps', type=int,
                                default=1000)
         argparser.add_argument('--emb_choice', choices=["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]
                                )
@@ -160,7 +162,7 @@ def routine_local_cache_helper(worker_id, ARGS):
     # Generate our embedding done
 
     # forward
-    start = datetime.datetime.now()
+    start = time.time()
     start_step = 0
     for _ in tqdm.trange(ARGS['run_steps']):
         sparse_opt.zero_grad()
@@ -177,10 +179,10 @@ def routine_local_cache_helper(worker_id, ARGS):
         sparse_opt.step()
         dist_opt.step()
 
-        if _ % ARGS['log_interval'] == (ARGS['log_interval']-1):
-            end = datetime.datetime.now()
-            print(f"Step{_}:rank{rank}, time {(end-start)/(_-start_step+1)}")
-            start = datetime.datetime.now()
+        if (_ % ARGS['log_interval']) == (ARGS['log_interval']-1):
+            end = time.time()
+            print(f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.3f}",flush=True)
+            start = time.time()
             start_step = _
 
 

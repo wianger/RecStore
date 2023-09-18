@@ -47,14 +47,18 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "PerfEmbRun"
         COMMON_CONFIGS = {
-            # "num_workers": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2],
-            # "num_embs": [int(100*1e6), int(10*1e6)],
-
-            "num_workers": [4, 8],
+            "num_workers": [1, 2, 4, 6, 8] if GetHostName() != "node182" else [0, 1, 2],
             "num_embs": [int(100*1e6), int(10*1e6)],
-            "emb_choice": ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+            "batch_size": [512, 1024, 2048, 4096,],
             "run_steps": [1000],
             "log_interval": [100],
+
+            # "num_workers": [4],
+            # "num_embs": [int(1*1e6)],
+            # "run_steps": [100],
+            # "log_interval": [10],
+
+            "emb_choice": ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
         }
 
         self.name = NAME
@@ -62,7 +66,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
                          "127.0.0.1")
 
     def _SortRuns(self, runs):
-        return list(sorted(runs, key=lambda run: run.config['num_workers']))
+        return list(sorted(runs, key=lambda run: (run.config['num_embs'], run.config['batch_size'])))
 
     def _RunHook(self, previous_run, next_run):
         return
