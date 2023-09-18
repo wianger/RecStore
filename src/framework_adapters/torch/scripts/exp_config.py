@@ -14,6 +14,81 @@ def ConvertHostNumaList2Host(host_numa_lists):
     return list(set([each[0] for each in host_numa_lists]))
 
 
+class PerfEmbRun(LocalOnlyRun):
+    def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
+        self.execute_host = execute_host
+        super().__init__(exp_id, run_id,
+                         log_dir, config,  "python3 perf_emb.py", execute_host)
+
+    def check_config(self,):
+        super().check_config()
+
+    def run(self):
+        super().run()
+        sleep_seconds = 0
+        while True:
+            ret = subprocess.run(
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+            if ret == 0:
+                break
+            time.sleep(5)
+            sleep_seconds += 5
+
+            if sleep_seconds > 30*60:
+                for _ in range(100):
+                    print("DEADLOCK in wait client finish")
+                break
+
+        print("tail down")
+        Pnuke([self.execute_host], "perf_emb.py")
+
+
+class ExpMacroPerfEmb(LocalOnlyExperiment):
+    def __init__(self, ) -> None:
+        NAME = "PerfEmbRun"
+        COMMON_CONFIGS = {
+            # "num_workers": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2],
+            # "num_embs": [int(100*1e6), int(10*1e6)],
+
+            "num_workers": [4, 8],
+            "num_embs": [int(100*1e6), int(10*1e6)],
+            "emb_choice": ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+            "run_steps": [1000],
+            "log_interval": [100],
+        }
+
+        self.name = NAME
+        super().__init__(0, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortRuns(self, runs):
+        return list(sorted(runs, key=lambda run: run.config['num_workers']))
+
+    def _RunHook(self, previous_run, next_run):
+        return
+
+        
+    def _PostprocessConfig(self, each_config, ):
+        # don't use self
+        pass
+        # client_config['key_space_m'] *= WARM_UP_RATIO
+        # client_config['key_space_m'] = int(client_config['key_space_m'])
+
+    def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
+                      run_config, execute_host)
+
+    def _BeforeStartAllRun(self):
+        print("pnuke perf_emb.py")
+        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "perf_emb.py")
+
+
+
+
+###########################
+###########################
+###########################
+###########################
 class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
@@ -90,7 +165,7 @@ class ExpOverallSingle(GNNExperiment):
         }
 
         self.name = NAME
-        super().__init__(0, COMMON_CONFIGS,
+        super().__init__(1, COMMON_CONFIGS,
                          "127.0.0.1")
 
     def _SortRuns(self, runs):

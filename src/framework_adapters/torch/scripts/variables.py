@@ -1,4 +1,4 @@
-PROJECT_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/kg/python"
+PROJECT_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch"
 
 LOG_PREFIX = f'{PROJECT_PATH}/benchmark/log'
 

@@ -32,7 +32,7 @@ torch.classes.load_library(
 
 logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
                     # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+                    datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 def get_run_config():
@@ -42,7 +42,7 @@ def get_run_config():
                                default=8)
         argparser.add_argument('--num_embs', type=int,
                                default=100*1e6)
-                            #    default=100000)
+        #    default=100000)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
         argparser.add_argument('--batch_size', type=int,
@@ -50,6 +50,13 @@ def get_run_config():
                                default=1024)
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
+        argparser.add_argument('--log_interval', type=float,
+                               default=1000)
+        argparser.add_argument('--run_steps', type=float,
+                               default=1000)
+        argparser.add_argument('--emb_choice', choices=["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]
+                               )
+        
         return vars(argparser.parse_args())
 
     run_config = {}
@@ -58,7 +65,7 @@ def get_run_config():
 
 
 def init_emb_tensor(emb, worker_id, num_workers):
-    import numpy as np    
+    import numpy as np
     linspace = np.linspace(0, emb.shape[0], num_workers+1, dtype=int)
     if worker_id == 0:
         print(f"rank {worker_id} start initing emb")
@@ -90,7 +97,8 @@ def main_routine(ARGS, routine):
     print(f"========== Running Perf with routine {routine}==========")
 
     kvinit()
-    emb = DistEmbedding(int(ARGS['num_embs']), int(ARGS['emb_dim']), name="emb",)
+    emb = DistEmbedding(int(ARGS['num_embs']),
+                        int(ARGS['emb_dim']), name="emb",)
     # dummy LR, only register the tensor state of OSP
     opt = SparseSGD([emb], lr=100)
 
@@ -111,7 +119,8 @@ def routine_local_cache_helper(worker_id, ARGS):
     # USE_SGD = False
     rank = dist.get_rank()
 
-    emb = DistEmbedding(int(ARGS['num_embs']), int(ARGS['emb_dim']), name="emb",)
+    emb = DistEmbedding(int(ARGS['num_embs']),
+                        int(ARGS['emb_dim']), name="emb",)
 
     init_emb_tensor(emb, worker_id, ARGS['num_workers'])
 
@@ -124,12 +133,14 @@ def routine_local_cache_helper(worker_id, ARGS):
     else:
         sparse_opt = optim.Adam([fake_tensor], lr=1)
         dist_opt = SparseAdagrad([emb], lr=1/dist.get_world_size())
-    
+
     abs_emb = None
 
     # emb_name = "TorchNativeStdEmb"
-    emb_name = "KnownShardedCachedEmbedding" #07:20<
+    # emb_name = "KnownShardedCachedEmbedding"  # 07:20<
     # emb_name = "KnownLocalCachedEmbedding" #05:21 1000iter
+
+    emb_name = ARGS["emb_choice"]
 
     if emb_name == "KnownShardedCachedEmbedding":
         cached_range = CacheShardingPolicy.generate_cached_range(
@@ -149,11 +160,13 @@ def routine_local_cache_helper(worker_id, ARGS):
     # Generate our embedding done
 
     # forward
-    for _ in tqdm.trange(1000):
+    start = datetime.datetime.now()
+    start_step = 0
+    for _ in tqdm.trange(ARGS['run_steps']):
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
 
-        print(f"========== Step {_} ========== ")
+        # print(f"========== Step {_} ========== ")
         input_keys = torch.randint(emb.shape[0], size=(
             ARGS['batch_size'],)).long().cuda()
 
@@ -164,9 +177,11 @@ def routine_local_cache_helper(worker_id, ARGS):
         sparse_opt.step()
         dist_opt.step()
 
-        torch.cuda.synchronize()
-        logging.debug(f"rank{rank}: before barrier")
-        dist.barrier()
+        if _ % ARGS['log_interval'] == (ARGS['log_interval']-1):
+            end = datetime.datetime.now()
+            print(f"Step{_}:rank{rank}, time {(end-start)/(_-start_step+1)}")
+            start = datetime.datetime.now()
+            start_step = _
 
 
 if __name__ == "__main__":
@@ -177,3 +192,5 @@ if __name__ == "__main__":
 
     ARGS = get_run_config()
     main_routine(ARGS, routine_local_cache_helper)
+
+    print("Successfully xmh")

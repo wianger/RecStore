@@ -8,7 +8,7 @@ import os
 import subprocess
 import datetime
 
-from bench_util import RemoteExecute,ParallelSSH,Pnuke
+from bench_util import RemoteExecute,ParallelSSH,Pnuke,GetHostName
 import exp_config
 from exp_config import ALL_SERVERS_INCLUDING_NOT_USED, LOG_PREFIX, PROJECT_PATH
 
@@ -28,12 +28,18 @@ if __name__ == "__main__":
     exp_lists = []
 
     each = exp_config.ExpOverallSingle()
-    if GetHostName() == "node182"
+    if GetHostName() == "node182":
         suffix = "A30"
     else:
         suffix = "3090"
     each.SetLogDir(f'{LOG_PREFIX}/exp0-single-{suffix}')
+    # exp_lists.append(each)
+
+
+    each = exp_config.ExpMacroPerfEmb()
     exp_lists.append(each)
+    
+    
 
     for i, each in enumerate(exp_lists):
         # mount NFS
