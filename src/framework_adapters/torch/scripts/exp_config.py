@@ -152,6 +152,7 @@ COMMON_CLIENT_CONFIGS = {
     "lr": [0.01],
     "batch_size_eval": [16],
     "test": ["true"],
+    "mix_cpu_gpu": ["true"],
 }
 
 

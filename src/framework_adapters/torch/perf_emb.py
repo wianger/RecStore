@@ -67,6 +67,7 @@ def get_run_config():
 
 
 def init_emb_tensor(emb, worker_id, num_workers):
+    return 
     import numpy as np
     linspace = np.linspace(0, emb.shape[0], num_workers+1, dtype=int)
     if worker_id == 0:

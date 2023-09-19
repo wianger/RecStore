@@ -39,7 +39,7 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
             assert len(data[0].shape) == len(each.shape)
 
         per_shard_shapes = list(torch.empty(
-            [world_size * len(each.shape)], dtype=torch.int64, device=torch.device("cuda")).chunk(world_size))
+            [world_size * len(data[0].shape)], dtype=torch.int64, device=torch.device("cuda")).chunk(world_size))
 
         dist.all_to_all(per_shard_shapes, shard_data_shapes,)
         # per_shard_size: [rank0_shape_in_mine, rank1_shape_in_mine, ....]
