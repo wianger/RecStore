@@ -45,7 +45,7 @@ class ArgParser(CommonArgParser):
                           help='# of gpus')
         self.add_argument('--gpu', type=ArgParser.list_of_ints, default=[-1],
                           help='A list of gpu ids, e.g. 0,1,2,4')
-        self.add_argument('--mix_cpu_gpu', action='store_true',
+        self.add_argument('--mix_cpu_gpu', type=bool,  
                           help='Training a knowledge graph embedding model with both CPUs and GPUs.'\
                                   'The embeddings are stored in CPU memory and the training is performed in GPUs.'\
                                   'This is usually used for training a large knowledge graph embeddings.')
@@ -53,7 +53,7 @@ class ArgParser(CommonArgParser):
                           help='Evaluate the model on the validation set in the training.')
         self.add_argument('--rel_part', action='store_true',
                           help='Enable relation partitioning for multi-GPU training.')
-        self.add_argument('--async_update', action='store_true',
+        self.add_argument('--async_update', type = bool,
                           help='Allow asynchronous update on node embedding for multi-GPU training.'\
                                   'This overlaps CPU and GPU computation to speed up.')
         self.add_argument('--has_edge_importance', action='store_true',

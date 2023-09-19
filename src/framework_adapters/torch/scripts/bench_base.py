@@ -199,7 +199,7 @@ class LocalOnlyRun(BaseRun):
     def __init__(self, 
                  exp_id, run_id, log_dir,
                  config, 
-                 bin_path, execute_host
+                 bin_path, pwd_path, execute_host
                  ) -> None:
         super().__init__(exp_id)
         self.run_id = run_id
@@ -207,6 +207,7 @@ class LocalOnlyRun(BaseRun):
         self.config = config
         self.bin_path = bin_path
         self.execute_host = execute_host
+        self.pwd_path = pwd_path
         self.check_config()
 
     def check_config(self,):
@@ -224,9 +225,9 @@ class LocalOnlyRun(BaseRun):
         server_command = f'''{self.bin_path} \
         {config} >{self.log_dir}/log 2>&1 &'''
 
-        LocalExecute(server_command, PROJECT_PATH)
+        dumped_config['command'] = server_command
+        LocalExecute(server_command, self.pwd_path)
         
-
         with open(f'{self.log_dir}/config', 'w') as f:
             import json
             json.dump(dumped_config, f, indent=2)

@@ -18,7 +18,7 @@ class PerfEmbRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_emb.py", execute_host)
+                         log_dir, config,  "python3 perf_emb.py",  "/home/xieminhui/RecStore/src/framework_adapters/torch", execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -97,7 +97,7 @@ class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 main.py", execute_host)
+                         log_dir, config,  "python3 dgl-ke-main.py", "/home/xieminhui/RecStore/src/framework_adapters/torch/python", execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -119,7 +119,7 @@ class GNNRun(LocalOnlyRun):
                 break
 
         print("tail down")
-        Pnuke([self.execute_host], "main.py")
+        Pnuke([self.execute_host], "dgl-ke-main.py")
 
 
 class GNNExperiment(LocalOnlyExperiment):
@@ -137,8 +137,8 @@ class GNNExperiment(LocalOnlyExperiment):
                       run_config, execute_host)
 
     def _BeforeStartAllRun(self):
-        print("pnuke main.py")
-        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "main.py")
+        print("pnuke dgl-ke-main.py")
+        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "dgl-ke-main.py")
 
 
 COMMON_CLIENT_CONFIGS = {
@@ -163,8 +163,9 @@ class ExpOverallSingle(GNNExperiment):
             "model_name": ["TransE_l1"],
             "dataset": ["FB15k", "Freebase"],
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
-            "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2],
-            # "nr_gpus": [0, 1, 2, ],
+            # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
+            "nr_gpus": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
+
             "max_step": [10000],
             **COMMON_CLIENT_CONFIGS,
         }
