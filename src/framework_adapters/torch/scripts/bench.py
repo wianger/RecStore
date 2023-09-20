@@ -32,7 +32,7 @@ if __name__ == "__main__":
         suffix = "A30"
     else:
         suffix = "3090"
-    each.SetLogDir(f'{LOG_PREFIX}/exp0-single-{suffix}')
+    each.SetLogDir(f'{LOG_PREFIX}/exp0-bigmodel-{suffix}')
     exp_lists.append(each)
 
 

@@ -1,9 +1,3 @@
-Using backend: pytorch
-/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/python/dgl/base.py:45: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
-  return warnings.warn(message, category=category, stacklevel=1)
-File not found. Downloading from https://data.dgl.ai/dataset/FB15k.zip
-Download finished. Unzipping the file...
-Unzip finished.
 Reading train triples....
 Finished. Read 483142 train triples.
 Reading valid triples....
@@ -11,15 +5,59 @@ Finished. Read 50000 valid triples.
 Reading test triples....
 Finished. Read 59071 test triples.
 |Train|: 483142
-ARGS:  Namespace(adversarial_temperature=1.0, async_update=None, batch_size=1000, batch_size_eval=16, data_files=None, data_path='~/dgl-data', dataset='FB15k', delimiter='\t', double_ent=False, double_rel=False, eval_filter=True, eval_interval=10000, eval_percent=1, force_sync_interval=-1, format='built_in', gamma=16.0, gpu=[-1], has_edge_importance=False, hidden_dim=400, log_interval=1000, loss_genre='Logsigmoid', lr=0.01, margin=1.0, max_step=10000, mix_cpu_gpu=True, model_name='TransE_l1', neg_adversarial_sampling=False, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size=200, neg_sample_size_eval=14951, no_eval_filter=False, no_save_emb=True, nr_gpus=0, num_proc=1, num_thread=1, num_workers=8, pairwise=False, regularization_coef=1e-07, regularization_norm=3, rel_part=False, save_path='/tmp/ckpts/TransE_l1_FB15k_2', soft_rel_part=False, strict_rel_part=True, test=True, valid=False)
+ARGS:  Namespace(adversarial_temperature=1.0, async_update=None, batch_size=1000, batch_size_eval=16, data_files=None, data_path='/home/xieminhui/dgl-data', dataset='FB15k', delimiter='\t', double_ent=False, double_rel=False, eval_filter=True, eval_interval=10000, eval_percent=1, force_sync_interval=-1, format='built_in', gamma=16.0, gpu=[0], has_edge_importance=False, hidden_dim=400, log_interval=1000, loss_genre='Logsigmoid', lr=0.01, margin=1.0, max_step=10000, mix_cpu_gpu=True, model_name='TransE_l1', neg_adversarial_sampling=False, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size=200, neg_sample_size_eval=14951, no_eval_filter=False, no_save_emb=True, nr_gpus=1, num_proc=1, num_thread=1, num_workers=8, pairwise=False, regularization_coef=1e-07, regularization_norm=3, rel_part=False, save_path='/tmp/ckpts/TransE_l1_FB15k_6', soft_rel_part=False, strict_rel_part=True, test=True, valid=False)
 |valid|: 50000
 |test|: 59071
-Total initialize time 5.203 seconds
-Traceback (most recent call last):
-  File "dgl-ke-main.py", line 395, in <module>
-    main()
-  File "dgl-ke-main.py", line 335, in main
-    train(args, model, train_sampler, valid_samplers, rel_parts=rel_parts)
-  File "/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-ke/python/dglke/train_pytorch.py", line 123, in train
-    model.prepare_relation(th.device('cuda:' + str(gpu_id)))
-RuntimeError: Invalid device string: 'cuda:-1'
+Total initialize time 1.645 seconds
+[proc 0][Train](1000/10000) average pos_loss: 0.3058012572526932
+[proc 0][Train](1000/10000) average neg_loss: 0.3132731957733631
+[proc 0][Train](1000/10000) average loss: 0.309537226498127
+[proc 0][Train](1000/10000) average regularization: 9.020189278544422e-06
+[proc 0] 1000 steps, total: 11.691, sample: 1.513, forward: 3.708, backward: 1.361, update: 5.102
+[proc 0][Train](2000/10000) average pos_loss: 0.1039876791536808
+[proc 0][Train](2000/10000) average neg_loss: 0.1382179276794195
+[proc 0][Train](2000/10000) average loss: 0.12110280353575945
+[proc 0][Train](2000/10000) average regularization: 1.3107736947858938e-05
+[proc 0] 2000 steps, total: 10.804, sample: 1.300, forward: 3.444, backward: 1.116, update: 4.939
+[proc 0][Train](3000/10000) average pos_loss: 0.08029128124564885
+[proc 0][Train](3000/10000) average neg_loss: 0.11276497999578715
+[proc 0][Train](3000/10000) average loss: 0.09652813062816858
+[proc 0][Train](3000/10000) average regularization: 1.5018940293884953e-05
+[proc 0] 3000 steps, total: 10.957, sample: 1.300, forward: 3.470, backward: 1.292, update: 4.890
+[proc 0][Train](4000/10000) average pos_loss: 0.07014436402544379
+[proc 0][Train](4000/10000) average neg_loss: 0.10123257528990508
+[proc 0][Train](4000/10000) average loss: 0.08568846950680017
+[proc 0][Train](4000/10000) average regularization: 1.6258118082987493e-05
+[proc 0] 4000 steps, total: 10.973, sample: 1.335, forward: 3.494, backward: 1.141, update: 4.997
+[proc 0][Train](5000/10000) average pos_loss: 0.06436137014254928
+[proc 0][Train](5000/10000) average neg_loss: 0.0943046616539359
+[proc 0][Train](5000/10000) average loss: 0.07933301594108343
+[proc 0][Train](5000/10000) average regularization: 1.7164240698548383e-05
+[proc 0] 5000 steps, total: 10.887, sample: 1.307, forward: 3.424, backward: 1.266, update: 4.884
+[proc 0][Train](6000/10000) average pos_loss: 0.06035958282649517
+[proc 0][Train](6000/10000) average neg_loss: 0.08946898838877677
+[proc 0][Train](6000/10000) average loss: 0.07491428554803133
+[proc 0][Train](6000/10000) average regularization: 1.7883428237837506e-05
+[proc 0] 6000 steps, total: 10.884, sample: 1.372, forward: 3.341, backward: 1.296, update: 4.870
+[proc 0][Train](7000/10000) average pos_loss: 0.057550368942320344
+[proc 0][Train](7000/10000) average neg_loss: 0.08598669417575001
+[proc 0][Train](7000/10000) average loss: 0.07176853152364493
+[proc 0][Train](7000/10000) average regularization: 1.847965072738589e-05
+[proc 0] 7000 steps, total: 10.648, sample: 1.186, forward: 3.379, backward: 1.123, update: 4.954
+[proc 0][Train](8000/10000) average pos_loss: 0.055348596889525654
+[proc 0][Train](8000/10000) average neg_loss: 0.08325515388697385
+[proc 0][Train](8000/10000) average loss: 0.06930187549069523
+[proc 0][Train](8000/10000) average regularization: 1.8978895945110708e-05
+[proc 0] 8000 steps, total: 10.865, sample: 1.234, forward: 3.458, backward: 1.250, update: 4.917
+[proc 0][Train](9000/10000) average pos_loss: 0.05352387500926852
+[proc 0][Train](9000/10000) average neg_loss: 0.08091679536178709
+[proc 0][Train](9000/10000) average loss: 0.06722033519297838
+[proc 0][Train](9000/10000) average regularization: 1.9418181178480153e-05
+[proc 0] 9000 steps, total: 11.094, sample: 1.322, forward: 3.499, backward: 1.364, update: 4.902
+[proc 0][Train](10000/10000) average pos_loss: 0.05210012270510197
+[proc 0][Train](10000/10000) average neg_loss: 0.07916900227963924
+[proc 0][Train](10000/10000) average loss: 0.0656345625706017
+[proc 0][Train](10000/10000) average regularization: 1.980382397050562e-05
+[proc 0] 10000 steps, total: 11.059, sample: 1.439, forward: 3.445, backward: 1.225, update: 4.944
+proc 0 takes 109.862 seconds
+Successfully xmh. training takes 111.38468956947327 seconds

@@ -34,7 +34,7 @@ class PerfEmbRun(LocalOnlyRun):
             time.sleep(5)
             sleep_seconds += 5
 
-            if sleep_seconds > 30*60:
+            if sleep_seconds > 60*60:
                 for _ in range(100):
                     print("DEADLOCK in wait client finish")
                 break
@@ -113,7 +113,7 @@ class GNNRun(LocalOnlyRun):
             time.sleep(5)
             sleep_seconds += 5
 
-            if sleep_seconds > 30*60:
+            if sleep_seconds > 60*60:
                 for _ in range(100):
                     print("DEADLOCK in wait client finish")
                 break
@@ -147,7 +147,6 @@ COMMON_CLIENT_CONFIGS = {
     "log_interval": [1000],
     "neg_sample_size": [200],
     "regularization_coef": [1e-07],
-    "hidden_dim": [400],
     "gamma": [16.0],
     "lr": [0.01],
     "batch_size_eval": [16],
@@ -161,7 +160,18 @@ class ExpOverallSingle(GNNExperiment):
         NAME = "overall-single-machine"
         COMMON_CONFIGS = {
             "model_name": ["TransE_l1"],
-            "dataset": ["FB15k", "Freebase"],
+            "binding":[
+                # {
+                #     "dataset": ["FB15k",],
+                    #   "hidden_dim": [400],
+                # },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [100],
+                }
+            ],
+            
+            
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
             "nr_gpus": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
