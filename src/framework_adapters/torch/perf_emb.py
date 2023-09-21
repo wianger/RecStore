@@ -97,14 +97,16 @@ def main_routine(ARGS, routine):
                                              timeout=datetime.timedelta(seconds=100))
         routine(worker_id, ARGS)
 
-    print(f"========== Running Perf with routine {routine}==========")
 
     kvinit()
+    logging.warn("Before init DistEmbedding")
     emb = DistEmbedding(int(ARGS['num_embs']),
                         int(ARGS['emb_dim']), name="emb",)
+    logging.warn("After init DistEmbedding")
     # dummy LR, only register the tensor state of OSP
     opt = SparseSGD([emb], lr=100)
 
+    print(f"========== Running Perf with routine {routine}==========")
     workers = []
     for worker_id in range(ARGS['num_workers']):
         p = mp.Process(target=worker_main, args=(
@@ -122,6 +124,7 @@ def routine_local_cache_helper(worker_id, ARGS):
     # USE_SGD = False
     rank = dist.get_rank()
 
+    
     emb = DistEmbedding(int(ARGS['num_embs']),
                         int(ARGS['emb_dim']), name="emb",)
 

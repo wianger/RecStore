@@ -150,7 +150,7 @@ COMMON_CLIENT_CONFIGS = {
     "gamma": [16.0],
     "lr": [0.01],
     "batch_size_eval": [16],
-    "test": ["true"],
+    # "test": ["true"],
     "mix_cpu_gpu": ["true"],
 }
 

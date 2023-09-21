@@ -3,7 +3,7 @@ import os
 import datetime
 import time
 from bench_util import *
-
+import os
 import exp_config
 
 from variables import *
@@ -58,6 +58,15 @@ class Experiment:
             self._RunHook(previous_run, each_run)
             print(datetime.datetime.now(),
                   f'EXP{self.exp_id}: {each_i} / {len(all_configs)}', flush=True)
+            
+            ret = os.path.isfile("/dev/shm/fyy_is_using")
+            if ret:
+                print("wait fyy finish")
+            while ret:
+                ret = os.path.isfile("/dev/shm/fyy_is_using")
+                time.sleep(10)
+            print("wait fyy finish escape")
+            
             each_run.run()
             previous_run = each_run
 

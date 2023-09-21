@@ -33,8 +33,10 @@ assert torch.equal(query_result.missing_index.sort().values, torch.range(0, key.
 print("after replace", flush=True)
 gpu_cache.Replace(key, values)
 
-re_query = torch.Tensor([1, 5, 3]).long().cuda()
-query_result = gpu_cache.Query(re_query, empty_values)
+for step in range(10):
+    with torch.cuda.nvtx.range(f"Step{step}:forward"):
+        re_query = torch.Tensor([1, 5, 3]).long().cuda()
+        query_result = gpu_cache.Query(re_query, empty_values)
 
 print("after query", flush=True)
 print(query_result_to_str(query_result))

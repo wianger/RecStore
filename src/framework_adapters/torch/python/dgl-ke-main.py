@@ -325,6 +325,7 @@ def main():
                                                      barrier))
             procs.append(proc)
             proc.start()
+            print(f"[Rank{i}] pid = {proc.pid}")
         for proc in procs:
             proc.join()
     else:
