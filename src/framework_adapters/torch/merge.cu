@@ -31,6 +31,8 @@ void merge_emb_vec_async(float *d_vals_merge_dst_ptr,
                             d_missing_index_ptr, missing_len, emb_vec_size);
 }
 
+
+
 namespace recstore {
 
 void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
@@ -59,4 +61,5 @@ void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
                       at::cuda::getCurrentCUDAStream());
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
+
 }  // namespace recstore

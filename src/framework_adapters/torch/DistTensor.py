@@ -68,7 +68,8 @@ class DistTensor:
         idx = dist_utils.toindex(idx)
         # idx = idx.tousertensor()
         result = self.kvstore.Get(name=self._name, id_tensor=idx)
-        return th.tensor(result.reshape((len(idx), self.shape[1])))
+        # return th.tensor(result.reshape((len(idx), self.shape[1])))
+        return result.reshape((len(idx), self.shape[1]))
 
     def __setitem__(self, idx, val):
         idx = dist_utils.toindex(idx)
@@ -80,6 +81,10 @@ class DistTensor:
         #     if self.debug_xmh == 3:
         #         raise Exception("xxxxxx")
         self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
+
+
+    def get_shm_tensor(self):
+        return self.kvstore.tensor_store[self._name]
 
     @property
     def kvstore_key(self):

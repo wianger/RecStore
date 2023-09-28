@@ -6,6 +6,7 @@ set -e
 
 sudo service ssh start
 
+USER=xieminhui
 
 PROJECT_PATH="/home/${USER}/RecStore"
 
@@ -72,13 +73,14 @@ sudo rm /opt/conda/lib/libtinfo.so.6
 cd ${PROJECT_PATH}/
 cd third_party/grpc
 export MY_INSTALL_DIR=${PROJECT_PATH}/third_party/grpc-install
+rm -rf cmake/build
 mkdir -p cmake/build
 pushd cmake/build
 cmake -DgRPC_INSTALL=ON \
       -DgRPC_BUILD_TESTS=OFF \
       -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
       ../..
-make -j20
+make -j
 sudo make install -j
 popd
 

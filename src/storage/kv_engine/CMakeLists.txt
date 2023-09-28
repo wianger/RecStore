@@ -22,8 +22,7 @@ endif()
 target_link_libraries(
   kv_engine
   INTERFACE pet_kv
-  spdk_wrapper
-  ${FOLLY_LIBRARIES}
+  # spdk_wrapper
 )
   # INTERFACE pet_kv dash_hash PMHashPCLHT PMHashLevel PMHashClevel PMHashCCEHVM)
 

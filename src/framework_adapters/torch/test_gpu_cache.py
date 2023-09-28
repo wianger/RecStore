@@ -8,7 +8,7 @@ key = torch.Tensor([1,2,3]).long().cuda()
 values = torch.range(1,9).float().reshape(3,3).cuda()
 empty_values = torch.zeros_like(values).cuda()
 
-torch.classes.load_library("/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
+from recstore import GpuCache
 
 
 def query_result_to_str(query_result):
@@ -16,7 +16,7 @@ def query_result_to_str(query_result):
 
 
 
-gpu_cache = torch.classes.librecstore_pytorch.GpuCache(100,3)
+gpu_cache = GpuCache(100,3)
 
 query_result = gpu_cache.Query(key, empty_values)
 
@@ -49,8 +49,7 @@ print(query_result_to_str(query_result))
 
 
 
-torch.ops.load_library("/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
-merge_op = torch.ops.librecstore_pytorch.merge_op
+from recstore import merge_op
 
 retrived = torch.Tensor([[5, 5, 5]]).cuda()
 

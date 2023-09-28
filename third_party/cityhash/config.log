@@ -27,11 +27,7 @@ uname -v = #198-Ubuntu SMP Tue Jun 14 03:23:51 UTC 2022
 /usr/bin/oslevel       = unknown
 /bin/universe          = unknown
 
-PATH: /home/xieminhui/.local/bin
-PATH: /opt/conda/bin
-PATH: /opt/conda/condabin
 PATH: /usr/local/nvm/versions/node/v15.12.0/bin
-PATH: /usr/local/hugectr/bin
 PATH: /opt/conda/bin
 PATH: /usr/local/mpi/bin
 PATH: /usr/local/nvidia/bin
@@ -44,6 +40,7 @@ PATH: /sbin
 PATH: /bin
 PATH: /usr/local/ucx/bin
 PATH: /opt/tensorrt/bin
+PATH: /usr/local/cuda/bin
 
 
 ## ----------- ##
@@ -64,76 +61,77 @@ configure:2890: result: mawk
 configure:2901: checking whether make sets $(MAKE)
 configure:2923: result: yes
 configure:3024: checking build system type
-configure:3038: result: x86_64-conda-linux-gnu
+configure:3038: result: x86_64-unknown-linux-gnu
 configure:3058: checking host system type
-configure:3071: result: x86_64-conda-linux-gnu
+configure:3071: result: x86_64-unknown-linux-gnu
 configure:3112: checking how to print strings
 configure:3139: result: printf
 configure:3172: checking for style of include used by make
 configure:3200: result: GNU
-configure:3231: checking for x86_64-conda-linux-gnu-gcc
-configure:3258: result: /opt/conda/bin/x86_64-conda-linux-gnu-cc
+configure:3271: checking for gcc
+configure:3298: result: /usr/bin/gcc
 configure:3527: checking for C compiler version
-configure:3536: /opt/conda/bin/x86_64-conda-linux-gnu-cc --version >&5
-x86_64-conda-linux-gnu-cc (conda-forge gcc 9.5.0-19) 9.5.0
+configure:3536: /usr/bin/gcc --version >&5
+gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0
 Copyright (C) 2019 Free Software Foundation, Inc.
 This is free software; see the source for copying conditions.  There is NO
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 configure:3547: $? = 0
-configure:3536: /opt/conda/bin/x86_64-conda-linux-gnu-cc -v >&5
-Reading specs from /opt/conda/bin/../lib/gcc/x86_64-conda-linux-gnu/9.5.0/specs
-could not find specs file conda.specs
-COLLECT_GCC=/opt/conda/bin/x86_64-conda-linux-gnu-cc
-COLLECT_LTO_WRAPPER=/opt/conda/bin/../libexec/gcc/x86_64-conda-linux-gnu/9.5.0/lto-wrapper
-Target: x86_64-conda-linux-gnu
-Configured with: ../configure --prefix=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho --with-slibdir=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/lib --libdir=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/lib --mandir=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/man --build=x86_64-conda-linux-gnu --host=x86_64-conda-linux-gnu --target=x86_64-conda-linux-gnu --enable-default-pie --enable-languages=c,c++,fortran,objc,obj-c++ --enable-__cxa_atexit --disable-libmudflap --enable-libgomp --disable-libssp --enable-libquadmath --enable-libquadmath-support --enable-libsanitizer --enable-lto --enable-threads=posix --enable-target-optspace --enable-plugin --enable-gold --disable-nls --disable-bootstrap --disable-multilib --enable-long-long --with-sysroot=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/x86_64-conda-linux-gnu/sysroot --with-build-sysroot=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_build_env/x86_64-conda-linux-gnu/sysroot --with-gxx-include-dir=/home/conda/feedstock_root/build_artifacts/gcc_compilers_1666516802267/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho/x86_64-conda-linux-gnu/include/c++/9.5.0 --with-pkgversion='conda-forge gcc 9.5.0-19' --with-bugurl=https://github.com/conda-forge/ctng-compilers-feedstock/issues/new/choose
+configure:3536: /usr/bin/gcc -v >&5
+Using built-in specs.
+COLLECT_GCC=/usr/bin/gcc
+COLLECT_LTO_WRAPPER=/usr/lib/gcc/x86_64-linux-gnu/9/lto-wrapper
+OFFLOAD_TARGET_NAMES=nvptx-none:hsa
+OFFLOAD_TARGET_DEFAULT=1
+Target: x86_64-linux-gnu
+Configured with: ../src/configure -v --with-pkgversion='Ubuntu 9.3.0-17ubuntu1~20.04' --with-bugurl=file:///usr/share/doc/gcc-9/README.Bugs --enable-languages=c,ada,c++,go,brig,d,fortran,objc,obj-c++,gm2 --prefix=/usr --with-gcc-major-version-only --program-suffix=-9 --program-prefix=x86_64-linux-gnu- --enable-shared --enable-linker-build-id --libexecdir=/usr/lib --without-included-gettext --enable-threads=posix --libdir=/usr/lib --enable-nls --enable-clocale=gnu --enable-libstdcxx-debug --enable-libstdcxx-time=yes --with-default-libstdcxx-abi=new --enable-gnu-unique-object --disable-vtable-verify --enable-plugin --enable-default-pie --with-system-zlib --with-target-system-zlib=auto --enable-objc-gc=auto --enable-multiarch --disable-werror --with-arch-32=i686 --with-abi=m64 --with-multilib-list=m32,m64,mx32 --enable-multilib --with-tune=generic --enable-offload-targets=nvptx-none=/build/gcc-9-HskZEa/gcc-9-9.3.0/debian/tmp-nvptx/usr,hsa --without-cuda-driver --enable-checking=release --build=x86_64-linux-gnu --host=x86_64-linux-gnu --target=x86_64-linux-gnu
 Thread model: posix
-gcc version 9.5.0 (conda-forge gcc 9.5.0-19) 
+gcc version 9.3.0 (Ubuntu 9.3.0-17ubuntu1~20.04) 
 configure:3547: $? = 0
-configure:3536: /opt/conda/bin/x86_64-conda-linux-gnu-cc -V >&5
-x86_64-conda-linux-gnu-cc: error: unrecognized command line option '-V'
-x86_64-conda-linux-gnu-cc: fatal error: no input files
+configure:3536: /usr/bin/gcc -V >&5
+gcc: error: unrecognized command line option '-V'
+gcc: fatal error: no input files
 compilation terminated.
 configure:3547: $? = 1
-configure:3536: /opt/conda/bin/x86_64-conda-linux-gnu-cc -qversion >&5
-x86_64-conda-linux-gnu-cc: error: unrecognized command line option '-qversion'; did you mean '--version'?
-x86_64-conda-linux-gnu-cc: fatal error: no input files
+configure:3536: /usr/bin/gcc -qversion >&5
+gcc: error: unrecognized command line option '-qversion'; did you mean '--version'?
+gcc: fatal error: no input files
 compilation terminated.
 configure:3547: $? = 1
 configure:3567: checking whether the C compiler works
-configure:3589: /opt/conda/bin/x86_64-conda-linux-gnu-cc -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib conftest.c  >&5
+configure:3589: /usr/bin/gcc    conftest.c  >&5
 configure:3593: $? = 0
 configure:3641: result: yes
 configure:3644: checking for C compiler default output file name
 configure:3646: result: a.out
 configure:3652: checking for suffix of executables
-configure:3659: /opt/conda/bin/x86_64-conda-linux-gnu-cc -o conftest -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib conftest.c  >&5
+configure:3659: /usr/bin/gcc -o conftest    conftest.c  >&5
 configure:3663: $? = 0
 configure:3685: result: 
 configure:3707: checking whether we are cross compiling
-configure:3715: /opt/conda/bin/x86_64-conda-linux-gnu-cc -o conftest -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib conftest.c  >&5
+configure:3715: /usr/bin/gcc -o conftest    conftest.c  >&5
 configure:3719: $? = 0
 configure:3726: ./conftest
 configure:3730: $? = 0
 configure:3718: result: no
 configure:3723: checking for suffix of object files
-configure:3745: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:3745: /usr/bin/gcc -c   conftest.c >&5
 configure:3749: $? = 0
 configure:3770: result: o
 configure:3774: checking whether we are using the GNU C compiler
-configure:3793: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:3793: /usr/bin/gcc -c   conftest.c >&5
 configure:3793: $? = 0
 configure:3802: result: yes
-configure:3811: checking whether /opt/conda/bin/x86_64-conda-linux-gnu-cc accepts -g
-configure:3831: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -g -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:3811: checking whether /usr/bin/gcc accepts -g
+configure:3831: /usr/bin/gcc -c -g  conftest.c >&5
 configure:3831: $? = 0
 configure:3872: result: yes
-configure:3889: checking for /opt/conda/bin/x86_64-conda-linux-gnu-cc option to accept ISO C89
-configure:3952: /opt/conda/bin/x86_64-conda-linux-gnu-cc  -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:3889: checking for /usr/bin/gcc option to accept ISO C89
+configure:3952: /usr/bin/gcc  -c -g -O2  conftest.c >&5
 configure:3952: $? = 0
 configure:3965: result: none needed
-configure:3987: checking dependency style of /opt/conda/bin/x86_64-conda-linux-gnu-cc
+configure:3987: checking dependency style of /usr/bin/gcc
 configure:4098: result: gcc3
 configure:4113: checking for a sed that does not truncate output
 configure:4177: result: /usr/bin/sed
@@ -143,15 +141,15 @@ configure:4258: checking for egrep
 configure:4320: result: /usr/bin/grep -E
 configure:4325: checking for fgrep
 configure:4387: result: /usr/bin/grep -F
-configure:4422: checking for ld used by /opt/conda/bin/x86_64-conda-linux-gnu-cc
-configure:4489: result: /opt/conda/bin/x86_64-conda-linux-gnu-ld
-configure:4496: checking if the linker (/opt/conda/bin/x86_64-conda-linux-gnu-ld) is GNU ld
+configure:4422: checking for ld used by /usr/bin/gcc
+configure:4489: result: /usr/bin/ld
+configure:4496: checking if the linker (/usr/bin/ld) is GNU ld
 configure:4511: result: yes
 configure:4523: checking for BSD- or MS-compatible name lister (nm)
-configure:4572: result: /opt/conda/bin/x86_64-conda-linux-gnu-nm
-configure:4702: checking the name lister (/opt/conda/bin/x86_64-conda-linux-gnu-nm) interface
-configure:4709: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
-configure:4712: /opt/conda/bin/x86_64-conda-linux-gnu-nm "conftest.o"
+configure:4572: result: /usr/bin/nm -B
+configure:4702: checking the name lister (/usr/bin/nm -B) interface
+configure:4709: /usr/bin/gcc -c -g -O2  conftest.c >&5
+configure:4712: /usr/bin/nm -B "conftest.o"
 configure:4715: output
 0000000000000000 B some_variable
 configure:4716: result: BSD nm
@@ -163,61 +161,81 @@ configure:4873: checking whether the shell understands some XSI constructs
 configure:4882: result: yes
 configure:4886: checking whether the shell understands "+="
 configure:4890: result: yes
-configure:4925: checking how to convert x86_64-conda-linux-gnu file names to x86_64-conda-linux-gnu format
+configure:4925: checking how to convert x86_64-unknown-linux-gnu file names to x86_64-unknown-linux-gnu format
 configure:4965: result: func_convert_file_noop
-configure:4972: checking how to convert x86_64-conda-linux-gnu file names to toolchain format
+configure:4972: checking how to convert x86_64-unknown-linux-gnu file names to toolchain format
 configure:4992: result: func_convert_file_noop
-configure:4999: checking for /opt/conda/bin/x86_64-conda-linux-gnu-ld option to reload object files
+configure:4999: checking for /usr/bin/ld option to reload object files
 configure:5006: result: -r
-configure:5040: checking for x86_64-conda-linux-gnu-objdump
-configure:5067: result: /opt/conda/bin/x86_64-conda-linux-gnu-objdump
+configure:5080: checking for objdump
+configure:5096: found /usr/bin/objdump
+configure:5107: result: objdump
 configure:5139: checking how to recognize dependent libraries
 configure:5341: result: pass_all
-configure:5386: checking for x86_64-conda-linux-gnu-dlltool
-configure:5416: result: no
 configure:5426: checking for dlltool
 configure:5456: result: no
 configure:5486: checking how to associate runtime and link libraries
 configure:5513: result: printf %s\n
-configure:5530: checking for x86_64-conda-linux-gnu-ar
-configure:5557: result: /opt/conda/bin/x86_64-conda-linux-gnu-ar
+configure:5574: checking for ar
+configure:5590: found /usr/bin/ar
+configure:5601: result: ar
 configure:5638: checking for archiver @FILE support
-configure:5655: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:5655: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:5655: $? = 0
-configure:5658: /opt/conda/bin/x86_64-conda-linux-gnu-ar cru libconftest.a @conftest.lst >&5
+configure:5658: ar cru libconftest.a @conftest.lst >&5
+ar: `u' modifier ignored since `D' is the default (see `U')
 configure:5661: $? = 0
-configure:5666: /opt/conda/bin/x86_64-conda-linux-gnu-ar cru libconftest.a @conftest.lst >&5
-/opt/conda/bin/x86_64-conda-linux-gnu-ar: conftest.o: No such file or directory
+configure:5666: ar cru libconftest.a @conftest.lst >&5
+ar: `u' modifier ignored since `D' is the default (see `U')
+ar: conftest.o: No such file or directory
 configure:5669: $? = 1
 configure:5668: result: @
-configure:5686: checking for x86_64-conda-linux-gnu-strip
-configure:5713: result: /opt/conda/bin/x86_64-conda-linux-gnu-strip
-configure:5785: checking for x86_64-conda-linux-gnu-ranlib
-configure:5812: result: /opt/conda/bin/x86_64-conda-linux-gnu-ranlib
-configure:5954: checking command to parse /opt/conda/bin/x86_64-conda-linux-gnu-nm output from /opt/conda/bin/x86_64-conda-linux-gnu-cc object
-configure:6073: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:5726: checking for strip
+configure:5742: found /usr/bin/strip
+configure:5753: result: strip
+configure:5825: checking for ranlib
+configure:5841: found /usr/bin/ranlib
+configure:5852: result: ranlib
+configure:5954: checking command to parse /usr/bin/nm -B output from /usr/bin/gcc object
+configure:6073: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:6076: $? = 0
-configure:6080: /opt/conda/bin/x86_64-conda-linux-gnu-nm conftest.o \| sed -n -e 's/^.*[ ]\([ABCDGIRSTW][ABCDGIRSTW]*\)[ ][ ]*\([_A-Za-z][_A-Za-z0-9]*\)$/\1 \2 \2/p' | sed '/ __gnu_lto/d' \> conftest.nm
+configure:6080: /usr/bin/nm -B conftest.o \| sed -n -e 's/^.*[ ]\([ABCDGIRSTW][ABCDGIRSTW]*\)[ ][ ]*\([_A-Za-z][_A-Za-z0-9]*\)$/\1 \2 \2/p' | sed '/ __gnu_lto/d' \> conftest.nm
 configure:6083: $? = 0
-configure:6149: /opt/conda/bin/x86_64-conda-linux-gnu-cc -o conftest -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib conftest.c conftstm.o >&5
+configure:6149: /usr/bin/gcc -o conftest -g -O2   conftest.c conftstm.o >&5
 configure:6152: $? = 0
 configure:6190: result: ok
 configure:6227: checking for sysroot
 configure:6257: result: no
-configure:6334: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:6334: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:6337: $? = 0
-configure:6460: checking for x86_64-conda-linux-gnu-mt
-configure:6490: result: no
 configure:6500: checking for mt
 configure:6530: result: no
 configure:6550: checking if : is a manifest tool
 configure:6556: : '-?'
 configure:6564: result: no
 configure:7196: checking how to run the C preprocessor
-configure:7266: result: /opt/conda/bin/x86_64-conda-linux-gnu-cpp
-configure:7286: /opt/conda/bin/x86_64-conda-linux-gnu-cpp -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c
+configure:7227: /usr/bin/gcc -E  conftest.c
+configure:7227: $? = 0
+configure:7241: /usr/bin/gcc -E  conftest.c
+conftest.c:9:10: fatal error: ac_nonexistent.h: No such file or directory
+    9 | #include <ac_nonexistent.h>
+      |          ^~~~~~~~~~~~~~~~~~
+compilation terminated.
+configure:7241: $? = 1
+configure: failed program was:
+| /* confdefs.h */
+| #define PACKAGE_NAME "CityHash"
+| #define PACKAGE_TARNAME "cityhash"
+| #define PACKAGE_VERSION "1.1.1"
+| #define PACKAGE_STRING "CityHash 1.1.1"
+| #define PACKAGE_BUGREPORT "cityhash-discuss@googlegroups.com"
+| #define PACKAGE_URL ""
+| /* end confdefs.h.  */
+| #include <ac_nonexistent.h>
+configure:7266: result: /usr/bin/gcc -E
+configure:7286: /usr/bin/gcc -E  conftest.c
 configure:7286: $? = 0
-configure:7300: /opt/conda/bin/x86_64-conda-linux-gnu-cpp -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c
+configure:7300: /usr/bin/gcc -E  conftest.c
 conftest.c:9:10: fatal error: ac_nonexistent.h: No such file or directory
     9 | #include <ac_nonexistent.h>
       |          ^~~~~~~~~~~~~~~~~~
@@ -234,84 +252,84 @@ configure: failed program was:
 | /* end confdefs.h.  */
 | #include <ac_nonexistent.h>
 configure:7329: checking for ANSI C header files
-configure:7349: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7349: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7349: $? = 0
-configure:7422: /opt/conda/bin/x86_64-conda-linux-gnu-cc -o conftest -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib conftest.c  >&5
+configure:7422: /usr/bin/gcc -o conftest -g -O2   conftest.c  >&5
 configure:7422: $? = 0
 configure:7422: ./conftest
 configure:7422: $? = 0
 configure:7433: result: yes
 configure:7446: checking for sys/types.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for sys/stat.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for stdlib.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for string.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for memory.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for strings.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for inttypes.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for stdint.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7446: checking for unistd.h
-configure:7446: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7446: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7446: $? = 0
 configure:7446: result: yes
 configure:7460: checking for dlfcn.h
-configure:7460: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:7460: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:7460: $? = 0
 configure:7460: result: yes
 configure:7647: checking for objdir
 configure:7662: result: .libs
-configure:7933: checking if /opt/conda/bin/x86_64-conda-linux-gnu-cc supports -fno-rtti -fno-exceptions
-configure:7951: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -fno-rtti -fno-exceptions conftest.c >&5
+configure:7933: checking if /usr/bin/gcc supports -fno-rtti -fno-exceptions
+configure:7951: /usr/bin/gcc -c -g -O2  -fno-rtti -fno-exceptions conftest.c >&5
 cc1: warning: command line option '-fno-rtti' is valid for C++/D/ObjC++ but not for C
 configure:7955: $? = 0
 configure:7968: result: no
-configure:8278: checking for /opt/conda/bin/x86_64-conda-linux-gnu-cc option to produce PIC
+configure:8278: checking for /usr/bin/gcc option to produce PIC
 configure:8285: result: -fPIC -DPIC
-configure:8293: checking if /opt/conda/bin/x86_64-conda-linux-gnu-cc PIC flag -fPIC -DPIC works
-configure:8311: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -fPIC -DPIC -DPIC conftest.c >&5
+configure:8293: checking if /usr/bin/gcc PIC flag -fPIC -DPIC works
+configure:8311: /usr/bin/gcc -c -g -O2  -fPIC -DPIC -DPIC conftest.c >&5
 configure:8315: $? = 0
 configure:8328: result: yes
-configure:8357: checking if /opt/conda/bin/x86_64-conda-linux-gnu-cc static flag -static works
+configure:8357: checking if /usr/bin/gcc static flag -static works
 configure:8385: result: yes
-configure:8400: checking if /opt/conda/bin/x86_64-conda-linux-gnu-cc supports -c -o file.o
-configure:8421: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -o out/conftest2.o conftest.c >&5
+configure:8400: checking if /usr/bin/gcc supports -c -o file.o
+configure:8421: /usr/bin/gcc -c -g -O2  -o out/conftest2.o conftest.c >&5
 configure:8425: $? = 0
 configure:8447: result: yes
-configure:8455: checking if /opt/conda/bin/x86_64-conda-linux-gnu-cc supports -c -o file.o
+configure:8455: checking if /usr/bin/gcc supports -c -o file.o
 configure:8502: result: yes
-configure:8535: checking whether the /opt/conda/bin/x86_64-conda-linux-gnu-cc linker (/opt/conda/bin/x86_64-conda-linux-gnu-ld) supports shared libraries
+configure:8535: checking whether the /usr/bin/gcc linker (/usr/bin/ld) supports shared libraries
 configure:9693: result: yes
 configure:9730: checking whether -lc should be explicitly linked in
-configure:9738: /opt/conda/bin/x86_64-conda-linux-gnu-cc -c -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.c >&5
+configure:9738: /usr/bin/gcc -c -g -O2  conftest.c >&5
 configure:9741: $? = 0
-configure:9756: /opt/conda/bin/x86_64-conda-linux-gnu-cc -shared  -fPIC -DPIC conftest.o  -v -Wl,-soname -Wl,conftest -o conftest 2\>\&1 \| /usr/bin/grep  -lc  \>/dev/null 2\>\&1
+configure:9756: /usr/bin/gcc -shared  -fPIC -DPIC conftest.o  -v -Wl,-soname -Wl,conftest -o conftest 2\>\&1 \| /usr/bin/grep  -lc  \>/dev/null 2\>\&1
 configure:9759: $? = 0
 configure:9773: result: no
 configure:9938: checking dynamic linker characteristics
-configure:10452: /opt/conda/bin/x86_64-conda-linux-gnu-cc -o conftest -march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib -Wl,-rpath -Wl,/foo conftest.c  >&5
+configure:10452: /usr/bin/gcc -o conftest -g -O2   -Wl,-rpath -Wl,/foo conftest.c  >&5
 configure:10452: $? = 0
 configure:10674: result: GNU/Linux ld.so
 configure:10781: checking how to hardcode library paths into programs
@@ -354,19 +372,19 @@ g++: fatal error: no input files
 compilation terminated.
 configure:8604: $? = 1
 configure:8608: checking whether we are using the GNU C++ compiler
-configure:8627: /usr/bin/g++ -c  -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:8627: /usr/bin/g++ -c   conftest.cpp >&5
 configure:8627: $? = 0
 configure:8636: result: yes
 configure:8645: checking whether /usr/bin/g++ accepts -g
-configure:8665: /usr/bin/g++ -c -g -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:8665: /usr/bin/g++ -c -g  conftest.cpp >&5
 configure:8665: $? = 0
 configure:8706: result: yes
 configure:8731: checking dependency style of /usr/bin/g++
 configure:8842: result: gcc3
 configure:8875: checking how to run the C++ preprocessor
-configure:8902: /usr/bin/g++ -E -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp
+configure:8902: /usr/bin/g++ -E  conftest.cpp
 configure:8902: $? = 0
-configure:8916: /usr/bin/g++ -E -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp
+configure:8916: /usr/bin/g++ -E  conftest.cpp
 conftest.cpp:21:10: fatal error: ac_nonexistent.h: No such file or directory
    21 | #include <ac_nonexistent.h>
       |          ^~~~~~~~~~~~~~~~~~
@@ -395,9 +413,9 @@ configure: failed program was:
 | /* end confdefs.h.  */
 | #include <ac_nonexistent.h>
 configure:8941: result: /usr/bin/g++ -E
-configure:8961: /usr/bin/g++ -E -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp
+configure:8961: /usr/bin/g++ -E  conftest.cpp
 configure:8961: $? = 0
-configure:8975: /usr/bin/g++ -E -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp
+configure:8975: /usr/bin/g++ -E  conftest.cpp
 conftest.cpp:21:10: fatal error: ac_nonexistent.h: No such file or directory
    21 | #include <ac_nonexistent.h>
       |          ^~~~~~~~~~~~~~~~~~
@@ -426,35 +444,35 @@ configure: failed program was:
 | /* end confdefs.h.  */
 | #include <ac_nonexistent.h>
 configure:9145: checking for ld used by /usr/bin/g++
-configure:9212: result: /opt/conda/bin/x86_64-conda-linux-gnu-ld
-configure:9219: checking if the linker (/opt/conda/bin/x86_64-conda-linux-gnu-ld) is GNU ld
+configure:9212: result: /usr/bin/ld
+configure:9219: checking if the linker (/usr/bin/ld) is GNU ld
 configure:9234: result: yes
-configure:9289: checking whether the /usr/bin/g++ linker (/opt/conda/bin/x86_64-conda-linux-gnu-ld) supports shared libraries
+configure:9289: checking whether the /usr/bin/g++ linker (/usr/bin/ld) supports shared libraries
 configure:10293: result: yes
-configure:10328: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:10328: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:10331: $? = 0
 configure:10851: checking for /usr/bin/g++ option to produce PIC
 configure:10858: result: -fPIC -DPIC
 configure:10866: checking if /usr/bin/g++ PIC flag -fPIC -DPIC works
-configure:10884: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -fPIC -DPIC -DPIC conftest.cpp >&5
+configure:10884: /usr/bin/g++ -c -g -O2  -fPIC -DPIC -DPIC conftest.cpp >&5
 configure:10888: $? = 0
 configure:10901: result: yes
 configure:10924: checking if /usr/bin/g++ static flag -static works
 configure:10952: result: yes
 configure:10964: checking if /usr/bin/g++ supports -c -o file.o
-configure:10985: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include -o out/conftest2.o conftest.cpp >&5
+configure:10985: /usr/bin/g++ -c -g -O2  -o out/conftest2.o conftest.cpp >&5
 configure:10989: $? = 0
 configure:11011: result: yes
 configure:11016: checking if /usr/bin/g++ supports -c -o file.o
 configure:11063: result: yes
-configure:11093: checking whether the /usr/bin/g++ linker (/opt/conda/bin/x86_64-conda-linux-gnu-ld) supports shared libraries
+configure:11093: checking whether the /usr/bin/g++ linker (/usr/bin/ld) supports shared libraries
 configure:11127: result: yes
 configure:11270: checking dynamic linker characteristics
 configure:11940: result: GNU/Linux ld.so
 configure:11993: checking how to hardcode library paths into programs
 configure:12018: result: immediate
 configure:11001: checking whether byte ordering is bigendian
-configure:11016: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11016: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 conftest.cpp:22:9: error: expected unqualified-id before 'not' token
    22 |         not a universal capable compiler
       |         ^~~
@@ -485,9 +503,9 @@ configure: failed program was:
 | 	     #endif
 | 	     typedef int dummy;
 | 
-configure:11061: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11061: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11061: $? = 0
-configure:11079: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11079: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 conftest.cpp: In function 'int main()':
 conftest.cpp:28:8: error: 'big' was not declared in this scope
    28 |    not big endian
@@ -533,13 +551,13 @@ configure:11233: result: yes
 configure:11233: checking for stdlib.h
 configure:11233: result: yes
 configure:11245: checking for inline
-configure:11261: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11261: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11261: $? = 0
 configure:11269: result: inline
 configure:11287: checking for size_t
-configure:11287: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11287: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11287: $? = 0
-configure:11287: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11287: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 conftest.cpp: In function 'int main()':
 conftest.cpp:59:20: error: expected primary-expression before ')' token
    59 | if (sizeof ((size_t)))
@@ -611,9 +629,9 @@ configure: failed program was:
 | }
 configure:11287: result: yes
 configure:11298: checking for ssize_t
-configure:11298: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11298: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11298: $? = 0
-configure:11298: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11298: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 conftest.cpp: In function 'int main()':
 conftest.cpp:59:21: error: expected primary-expression before ')' token
    59 | if (sizeof ((ssize_t)))
@@ -685,19 +703,19 @@ configure: failed program was:
 | }
 configure:11298: result: yes
 configure:11309: checking for uint32_t
-configure:11309: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11309: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11309: $? = 0
 configure:11309: result: yes
 configure:11323: checking for uint64_t
-configure:11323: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11323: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11323: $? = 0
 configure:11323: result: yes
 configure:11337: checking for uint8_t
-configure:11337: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11337: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11337: $? = 0
 configure:11337: result: yes
 configure:11353: checking if the compiler supports __builtin_expect
-configure:11366: /usr/bin/g++ -c -g -O2 -DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include conftest.cpp >&5
+configure:11366: /usr/bin/g++ -c -g -O2  conftest.cpp >&5
 configure:11366: $? = 0
 configure:11369: result: yes
 configure:11517: creating ./config.status
@@ -717,18 +735,18 @@ generated by GNU Autoconf 2.69.  Invocation command line was
 
 on stresstest
 
-config.status:1142: creating Makefile
-config.status:1142: creating src/Makefile
-config.status:1142: creating config.h
-config.status:1323: config.h is unchanged
-config.status:1371: executing depfiles commands
-config.status:1371: executing libtool commands
+config.status:1141: creating Makefile
+config.status:1141: creating src/Makefile
+config.status:1141: creating config.h
+config.status:1322: config.h is unchanged
+config.status:1370: executing depfiles commands
+config.status:1370: executing libtool commands
 
 ## ---------------- ##
 ## Cache variables. ##
 ## ---------------- ##
 
-ac_cv_build=x86_64-conda-linux-gnu
+ac_cv_build=x86_64-unknown-linux-gnu
 ac_cv_c_bigendian=no
 ac_cv_c_compiler_gnu=yes
 ac_cv_c_inline=inline
@@ -739,27 +757,27 @@ ac_cv_cxx_compiler_gnu=yes
 ac_cv_env_CCC_set=
 ac_cv_env_CCC_value=
 ac_cv_env_CC_set=set
-ac_cv_env_CC_value=/opt/conda/bin/x86_64-conda-linux-gnu-cc
-ac_cv_env_CFLAGS_set=set
-ac_cv_env_CFLAGS_value='-march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include'
-ac_cv_env_CPPFLAGS_set=set
-ac_cv_env_CPPFLAGS_value='-DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include'
-ac_cv_env_CPP_set=set
-ac_cv_env_CPP_value=/opt/conda/bin/x86_64-conda-linux-gnu-cpp
+ac_cv_env_CC_value=/usr/bin/gcc
+ac_cv_env_CFLAGS_set=
+ac_cv_env_CFLAGS_value=
+ac_cv_env_CPPFLAGS_set=
+ac_cv_env_CPPFLAGS_value=
+ac_cv_env_CPP_set=
+ac_cv_env_CPP_value=
 ac_cv_env_CXXCPP_set=
 ac_cv_env_CXXCPP_value=
 ac_cv_env_CXXFLAGS_set=
 ac_cv_env_CXXFLAGS_value=
 ac_cv_env_CXX_set=set
 ac_cv_env_CXX_value=/usr/bin/g++
-ac_cv_env_LDFLAGS_set=set
-ac_cv_env_LDFLAGS_value='-Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib'
+ac_cv_env_LDFLAGS_set=
+ac_cv_env_LDFLAGS_value=
 ac_cv_env_LIBS_set=
 ac_cv_env_LIBS_value=
-ac_cv_env_build_alias_set=set
-ac_cv_env_build_alias_value=x86_64-conda-linux-gnu
-ac_cv_env_host_alias_set=set
-ac_cv_env_host_alias_value=x86_64-conda-linux-gnu
+ac_cv_env_build_alias_set=
+ac_cv_env_build_alias_value=
+ac_cv_env_host_alias_set=
+ac_cv_env_host_alias_value=
 ac_cv_env_target_alias_set=
 ac_cv_env_target_alias_value=
 ac_cv_header_dlfcn_h=yes
@@ -773,7 +791,7 @@ ac_cv_header_strings_h=yes
 ac_cv_header_sys_stat_h=yes
 ac_cv_header_sys_types_h=yes
 ac_cv_header_unistd_h=yes
-ac_cv_host=x86_64-conda-linux-gnu
+ac_cv_host=x86_64-unknown-linux-gnu
 ac_cv_objext=o
 ac_cv_path_EGREP='/usr/bin/grep -E'
 ac_cv_path_FGREP='/usr/bin/grep -F'
@@ -781,14 +799,14 @@ ac_cv_path_GREP=/usr/bin/grep
 ac_cv_path_SED=/usr/bin/sed
 ac_cv_path_install='/usr/bin/install -c'
 ac_cv_path_mkdir=/usr/bin/mkdir
-ac_cv_prog_AR=/opt/conda/bin/x86_64-conda-linux-gnu-ar
 ac_cv_prog_AWK=mawk
-ac_cv_prog_CC=/opt/conda/bin/x86_64-conda-linux-gnu-cc
-ac_cv_prog_CPP=/opt/conda/bin/x86_64-conda-linux-gnu-cpp
+ac_cv_prog_CPP='/usr/bin/gcc -E'
 ac_cv_prog_CXXCPP='/usr/bin/g++ -E'
-ac_cv_prog_OBJDUMP=/opt/conda/bin/x86_64-conda-linux-gnu-objdump
-ac_cv_prog_RANLIB=/opt/conda/bin/x86_64-conda-linux-gnu-ranlib
-ac_cv_prog_STRIP=/opt/conda/bin/x86_64-conda-linux-gnu-strip
+ac_cv_prog_ac_ct_AR=ar
+ac_cv_prog_ac_ct_CC=/usr/bin/gcc
+ac_cv_prog_ac_ct_OBJDUMP=objdump
+ac_cv_prog_ac_ct_RANLIB=ranlib
+ac_cv_prog_ac_ct_STRIP=strip
 ac_cv_prog_cc_c89=
 ac_cv_prog_cc_g=yes
 ac_cv_prog_cxx_g=yes
@@ -805,9 +823,9 @@ lt_cv_file_magic_test_file=
 lt_cv_ld_reload_flag=-r
 lt_cv_nm_interface='BSD nm'
 lt_cv_objdir=.libs
-lt_cv_path_LD=/opt/conda/bin/x86_64-conda-linux-gnu-ld
-lt_cv_path_LDCXX=/opt/conda/bin/x86_64-conda-linux-gnu-ld
-lt_cv_path_NM=/opt/conda/bin/x86_64-conda-linux-gnu-nm
+lt_cv_path_LD=/usr/bin/ld
+lt_cv_path_LDCXX=/usr/bin/ld
+lt_cv_path_NM='/usr/bin/nm -B'
 lt_cv_path_mainfest_tool=no
 lt_cv_prog_compiler_c_o=yes
 lt_cv_prog_compiler_c_o_CXX=yes
@@ -821,7 +839,7 @@ lt_cv_prog_compiler_static_works_CXX=yes
 lt_cv_prog_gnu_ld=yes
 lt_cv_prog_gnu_ldcxx=yes
 lt_cv_sharedlib_from_linklib_cmd='printf %s\n'
-lt_cv_shlibpath_overrides_runpath=no
+lt_cv_shlibpath_overrides_runpath=yes
 lt_cv_sys_global_symbol_pipe='sed -n -e '\''s/^.*[	 ]\([ABCDGIRSTW][ABCDGIRSTW]*\)[	 ][	 ]*\([_A-Za-z][_A-Za-z0-9]*\)$/\1 \2 \2/p'\'' | sed '\''/ __gnu_lto/d'\'''
 lt_cv_sys_global_symbol_to_c_name_address='sed -n -e '\''s/^: \([^ ]*\)[ ]*$/  {\"\1\", (void *) 0},/p'\'' -e '\''s/^[ABCDGIRSTW]* \([^ ]*\) \([^ ]*\)$/  {"\2", (void *) \&\2},/p'\'''
 lt_cv_sys_global_symbol_to_c_name_address_lib_prefix='sed -n -e '\''s/^: \([^ ]*\)[ ]*$/  {\"\1\", (void *) 0},/p'\'' -e '\''s/^[ABCDGIRSTW]* \([^ ]*\) \(lib[^ ]*\)$/  {"\2", (void *) \&\2},/p'\'' -e '\''s/^[ABCDGIRSTW]* \([^ ]*\) \([^ ]*\)$/  {"lib\2", (void *) \&\2},/p'\'''
@@ -839,16 +857,16 @@ AMDEPBACKSLASH='\'
 AMDEP_FALSE='#'
 AMDEP_TRUE=''
 AMTAR='$${TAR-tar}'
-AR='/opt/conda/bin/x86_64-conda-linux-gnu-ar'
+AR='ar'
 AUTOCONF='${SHELL} /home/xieminhui/RecStore/third_party/cityhash/missing --run autoconf'
 AUTOHEADER='${SHELL} /home/xieminhui/RecStore/third_party/cityhash/missing --run autoheader'
 AUTOMAKE='${SHELL} /home/xieminhui/RecStore/third_party/cityhash/missing --run automake-1.11'
 AWK='mawk'
-CC='/opt/conda/bin/x86_64-conda-linux-gnu-cc'
+CC='/usr/bin/gcc'
 CCDEPMODE='depmode=gcc3'
-CFLAGS='-march=nocona -mtune=haswell -ftree-vectorize -fPIC -fstack-protector-strong -fno-plt -O2 -ffunction-sections -pipe -isystem /opt/conda/include'
-CPP='/opt/conda/bin/x86_64-conda-linux-gnu-cpp'
-CPPFLAGS='-DNDEBUG -D_FORTIFY_SOURCE=2 -O2 -isystem /opt/conda/include'
+CFLAGS='-g -O2'
+CPP='/usr/bin/gcc -E'
+CPPFLAGS=''
 CXX='/usr/bin/g++'
 CXXCPP='/usr/bin/g++ -E'
 CXXDEPMODE='depmode=gcc3'
@@ -870,8 +888,8 @@ INSTALL_DATA='${INSTALL} -m 644'
 INSTALL_PROGRAM='${INSTALL}'
 INSTALL_SCRIPT='${INSTALL}'
 INSTALL_STRIP_PROGRAM='$(install_sh) -c -s'
-LD='/opt/conda/bin/x86_64-conda-linux-gnu-ld'
-LDFLAGS='-Wl,-O2 -Wl,--sort-common -Wl,--as-needed -Wl,-z,relro -Wl,-z,now -Wl,--disable-new-dtags -Wl,--gc-sections -Wl,--allow-shlib-undefined -Wl,-rpath,/opt/conda/lib -Wl,-rpath-link,/opt/conda/lib -L/opt/conda/lib'
+LD='/usr/bin/ld'
+LDFLAGS=''
 LIBOBJS=''
 LIBS=''
 LIBTOOL='$(SHELL) $(top_builddir)/libtool'
@@ -881,9 +899,9 @@ LTLIBOBJS=''
 MAKEINFO='${SHELL} /home/xieminhui/RecStore/third_party/cityhash/missing --run makeinfo'
 MANIFEST_TOOL=':'
 MKDIR_P='/usr/bin/mkdir -p'
-NM='/opt/conda/bin/x86_64-conda-linux-gnu-nm'
+NM='/usr/bin/nm -B'
 NMEDIT=''
-OBJDUMP='/opt/conda/bin/x86_64-conda-linux-gnu-objdump'
+OBJDUMP='objdump'
 OBJEXT='o'
 OTOOL64=''
 OTOOL=''
@@ -895,16 +913,16 @@ PACKAGE_TARNAME='cityhash'
 PACKAGE_URL=''
 PACKAGE_VERSION='1.1.1'
 PATH_SEPARATOR=':'
-RANLIB='/opt/conda/bin/x86_64-conda-linux-gnu-ranlib'
+RANLIB='ranlib'
 SED='/usr/bin/sed'
 SET_MAKE=''
 SHELL='/bin/sh'
 SSE42_FALSE=''
 SSE42_TRUE='#'
-STRIP='/opt/conda/bin/x86_64-conda-linux-gnu-strip'
+STRIP='strip'
 VERSION='1.1.1'
-ac_ct_AR=''
-ac_ct_CC=''
+ac_ct_AR='ar'
+ac_ct_CC='/usr/bin/gcc'
 ac_ct_CXX=''
 ac_ct_DUMPBIN=''
 am__EXEEXT_FALSE=''
@@ -921,21 +939,21 @@ am__quote=''
 am__tar='$${TAR-tar} chof - "$$tardir"'
 am__untar='$${TAR-tar} xf -'
 bindir='${exec_prefix}/bin'
-build='x86_64-conda-linux-gnu'
-build_alias='x86_64-conda-linux-gnu'
+build='x86_64-unknown-linux-gnu'
+build_alias=''
 build_cpu='x86_64'
 build_os='linux-gnu'
-build_vendor='conda'
+build_vendor='unknown'
 datadir='${datarootdir}'
 datarootdir='${prefix}/share'
 docdir='${datarootdir}/doc/${PACKAGE_TARNAME}'
 dvidir='${docdir}'
 exec_prefix='${prefix}'
-host='x86_64-conda-linux-gnu'
-host_alias='x86_64-conda-linux-gnu'
+host='x86_64-unknown-linux-gnu'
+host_alias=''
 host_cpu='x86_64'
 host_os='linux-gnu'
-host_vendor='conda'
+host_vendor='unknown'
 htmldir='${docdir}'
 includedir='${prefix}/include'
 infodir='${datarootdir}/info'

@@ -35,14 +35,14 @@ class AbsEmb(ABC):
     def __init__(self):
         raise NotImplementedError
 
-    def forward(self, input_keys):
+    def forward(self, input_keys, trace=True):
         raise NotImplementedError
 
     def reg_opt(self, opt):
         raise NotImplementedError
 
 
-class TorchNativeStdEmb(AbsEmb):
+class TorchNativeStdEmbDDP(AbsEmb):
     def __init__(self, emb, device):
         # this standard embedding will clone (deep copy) the embedding variable <emb>
         worker_id = dist.get_rank()
@@ -67,7 +67,7 @@ class TorchNativeStdEmb(AbsEmb):
 
     def forward(self, input_keys):
         if self.device == 'cpu':
-            return self.std_emb_ddp(input_keys)
+            return self.std_emb_ddp(input_keys.cpu())
         elif self.device == 'cuda':
             return self.std_emb_ddp(input_keys.cuda())
         else:
@@ -75,6 +75,42 @@ class TorchNativeStdEmb(AbsEmb):
 
     def reg_opt(self, opt):
         opt.add_param_group({"params": self.std_emb_ddp.parameters()})
+
+
+
+class TorchNativeStdEmb(AbsEmb):
+    def __init__(self, emb, device):
+        # this standard embedding will clone (deep copy) the embedding variable <emb>
+        worker_id = dist.get_rank()
+        self.device = device
+
+        if type(emb) is DistEmbedding:
+            weight = emb.weight.to_dense_tensor()
+        else:
+            weight = emb
+
+            
+        print("weight.shape", weight.shape)
+        
+        if device == 'cuda':
+            std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
+            self.std_emb = std_emb
+        elif device == 'cpu':
+            std_emb = nn.Embedding.from_pretrained(weight, freeze=False)
+            self.std_emb = std_emb
+        else:
+            assert False
+
+    def forward(self, input_keys):
+        if self.device == 'cpu':
+            return self.std_emb(input_keys.cpu()).cuda()
+        elif self.device == 'cuda':
+            return self.std_emb(input_keys.cuda()).cuda()
+        else:
+            assert False
+
+    def reg_opt(self, opt):
+        opt.add_param_group({"params": self.std_emb.parameters()})
 
 
 class NVGPUCache:

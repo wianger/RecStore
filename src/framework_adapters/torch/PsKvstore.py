@@ -1,7 +1,7 @@
 from operator import itemgetter
 import torch as th
 from abc import ABC
-
+import torch.nn.functional as F
 
 class AbsKVStore(ABC):
     def __init__(self):
@@ -34,8 +34,10 @@ class ShmKVStore(AbsKVStore):
     # only can be called by the master process (before fork)
     def init_data(self, name, shape, dtype, part_policy=None, init_func=None, is_gdata=None):
         assert name not in self.tensor_store.keys()
-        self.tensor_store[name] = init_func(
+        temp = init_func(
             shape=shape, dtype=dtype).share_memory_()
+        self.tensor_store[name] = temp
+
 
     def data_name_list(self):
         return self.tensor_store.keys()
@@ -45,13 +47,28 @@ class ShmKVStore(AbsKVStore):
         return tensor.dtype, tensor.shape, None
 
     def Get(self, name, id_tensor):
-        return self.tensor_store[name][id_tensor]
+        if type(id_tensor) is list:
+            id_tensor = th.tensor(id_tensor)
+        
+        if id_tensor.dtype == th.int64 or id_tensor.dtype == th.int32:
+            pass
+        else:
+            assert False
+        
+        return F.embedding(id_tensor, self.tensor_store[name])
 
     def Put(self, name, id_tensor, data_tensor):
         self.tensor_store[name][id_tensor, :] = data_tensor
 
     def Delete(self, name):
         del self.tensor_store[name]
+
+    def GetUVAMap(self, name):
+        # temp = self.tensor_store[name]
+        # cudart = th.cuda.cudart()
+        # r = cudart.cudaHostRegister(temp.data_ptr(), temp.numel() * temp.element_size(), 0)
+        # print("cudaHostRegister", r)
+        pass
 
 
 KVSTORE = None

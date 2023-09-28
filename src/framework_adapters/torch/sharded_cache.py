@@ -328,10 +328,14 @@ class KnownShardedCachedEmbedding(AbsEmb):
 
         self.emb_cache.copy_(self.emb.weight[start:end])
 
-    def forward(self, input_keys):
+    def forward(self, input_keys, trace=True):
+        assert input_keys.is_cuda
         embed_value = KnownShardedCachedEmbeddingFn.apply(
             input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range)
-        assert embed_value.requires_grad
+        if trace:
+            assert embed_value.requires_grad
+        else:
+            assert not embed_value.requires_grad
         return embed_value
 
     def reg_opt(self, opt):

@@ -5,6 +5,7 @@ from abc import abstractmethod
 from os.path import exists
 from DistEmb import DistEmbedding
 from DistTensor import DistTensor
+import torch.distributed as dist
 import utils
 import torch as th
 import logging
@@ -576,6 +577,8 @@ class SparseSGD(DistSparseGradOptimizer):
 
             name = emb.name + "_sum"
 
+
+
     def update(self, idx, grad, emb):
         """Update embeddings in a sparse manner
         Sparse embeddings are updated in mini batches. We maintain gradient states for
@@ -594,6 +597,9 @@ class SparseSGD(DistSparseGradOptimizer):
         clr = self._lr
 
         # print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
+
+        if len(idx) == 0:
+            return
 
         state_dev = th.device("cpu")
         exec_dev = grad.device
@@ -619,3 +625,71 @@ class SparseSGD(DistSparseGradOptimizer):
 
         # logging.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
         emb._tensor[grad_indices] = emb._tensor[grad_indices] - tmp_dst
+
+
+
+
+class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
+    def __init__(self, params, lr, eps=1e-10):
+        super(SparseRowWiseAdaGrad, self).__init__(params, lr)
+        self._eps = eps
+        self._defaults = {"_lr": lr, "_eps": eps}
+        # We need to register a state sum for each embedding in the kvstore.
+        for emb in params:
+            assert isinstance(
+                emb, DistEmbedding
+            ), "SparseRowWiseAdaGrad only supports dgl.distributed.DistEmbedding"
+
+            name = emb.name + "_sum"
+
+            state = DistTensor(
+                (emb.num_embeddings, 1),
+                th.float32,
+                name,
+                init_func=initializer,
+                part_policy=emb.part_policy,
+                persistent=True,
+                is_gdata=False,
+            )
+            assert (
+                emb.name not in self._state
+            ), "{} already registered in the optimizer".format(emb.name)
+            self._state[emb.name] = state
+
+
+    def update(self, idx, grad, emb):
+        """Update embeddings in a sparse manner
+        Sparse embeddings are updated in mini batches. We maintain gradient states for
+        each embedding so they can be updated separately.
+
+        Parameters
+        ----------
+        idx : tensor
+            Index of the embeddings to be updated.
+        grad : tensor
+            Gradient of each embedding.
+        emb : dgl.distributed.DistEmbedding
+            Sparse embedding to update.
+        """
+        eps = self._eps
+        clr = self._lr
+
+        # print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
+
+        state_dev = th.device("cpu")
+        exec_dev = grad.device
+        state_block = state_dev == th.device("cpu") and exec_dev != state_dev
+
+        
+        grad_sum = (grad * grad).mean(1)
+        grad_state = self._state[emb.name][idx].to(exec_dev).squeeze(1)
+        # print(f"rank{dist.get_rank()}: grad_sum={grad_sum.shape}")
+        # print(f"rank{dist.get_rank()}: grad_state={grad_state.shape}")
+        grad_state += grad_sum
+        grad_state_dst = grad_state.to(state_dev, non_blocking=False)
+        
+        # update emb
+        std_values = grad_state_dst.sqrt_().add(self._eps).unsqueeze(1)
+        tmp = - clr * grad / std_values
+
+        emb._tensor[idx] = emb._tensor[idx] + tmp

@@ -45,7 +45,8 @@ class GpuCache : public torch::CustomClassHolder {
       : emb_dim(emb_dim),
         cache((num_items + bucket_size - 1) / bucket_size, emb_dim) {}
 
-  c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys, torch::Tensor values) {
+  c10::intrusive_ptr<CacheQueryResult> Query(torch::Tensor keys,
+                                             torch::Tensor values) {
     // std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> Query(
     // torch::Tensor keys) {
     const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
@@ -114,6 +115,67 @@ class GpuCache : public torch::CustomClassHolder {
 void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
               const at::Tensor missing_index);
 
+__global__ void uva_cache_query_kernel(
+    float *merge_dst, const int64_t *id_tensor, const float *hbm_tensor,
+    const float *dram_tensor, const int64_t cached_start_key,
+    const int64_t cached_end_key, const size_t len, const size_t emb_vec_size,
+    const size_t dram_tensor_size, const size_t hbm_tensor_size) {
+  const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= (len * emb_vec_size)) {
+    return;
+  }
+
+  size_t emb_idx = idx / emb_vec_size;
+  size_t float_idx = idx % emb_vec_size;
+
+  int64_t key = id_tensor[emb_idx];
+
+  if (key < cached_start_key || key >= cached_end_key) {
+    assert(key * emb_vec_size + float_idx < dram_tensor_size);
+    assert(key * emb_vec_size + float_idx >= 0);
+    float read = dram_tensor[key * emb_vec_size + float_idx];
+    // merge_dst[idx] = dram_tensor[key * emb_vec_size + float_idx];
+
+    merge_dst[idx] = read;
+  } else {
+    key -= cached_start_key;
+    assert(key * emb_vec_size + float_idx < hbm_tensor_size);
+    assert(key * emb_vec_size + float_idx >= 0);
+    // merge_dst[idx] = hbm_tensor[key * emb_vec_size + float_idx];
+    float read = hbm_tensor[key * emb_vec_size + float_idx];
+
+    merge_dst[idx] = read;
+  }
+}
+void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
+                        const at::Tensor hbm_tensor,
+                        const at::Tensor dram_tensor,
+                        const long cached_start_key,
+                        const long cached_end_key) {
+  const size_t BLOCK_SIZE = 256;
+  const size_t emb_vec_size = merge_dst.size(1);
+  const size_t len = merge_dst.size(0);
+  TORCH_CHECK(merge_dst.size(0) == id_tensor.size(0));
+  TORCH_CHECK(id_tensor.dtype() == at::kLong);
+
+  TORCH_CHECK(hbm_tensor.size(0) == cached_end_key - cached_start_key);
+
+  const size_t len_in_float = len * emb_vec_size;
+  const size_t num_blocks = (len_in_float - 1) / BLOCK_SIZE + 1;
+
+  uva_cache_query_kernel<<<num_blocks, BLOCK_SIZE, 0,
+                           at::cuda::getCurrentCUDAStream()>>>(
+      merge_dst.data_ptr<float>(), id_tensor.data_ptr<int64_t>(),
+      hbm_tensor.data_ptr<float>(), dram_tensor.data_ptr<float>(),
+      cached_start_key, cached_end_key, len, emb_vec_size, dram_tensor.numel(),
+      hbm_tensor.numel());
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+
+// at::Tensor CreateShm Tensor(at::IntArrayRef sizes)
+
+
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")
       .def("__str__", &CacheQueryResult::__repr__)
@@ -125,12 +187,12 @@ TORCH_LIBRARY(librecstore_pytorch, m) {
       .def(torch::init<int64_t, int64_t>())
       .def("Query", &GpuCache::Query)
       .def("Replace", &GpuCache::Replace);
-  
-  m.def("merge_op", &merge_op);
 
+  m.def("merge_op", &merge_op);
+  m.def("uva_cache_query_op", &uva_cache_query_op);
 
   m.class_<GPUCacheWithNoHashTorch>("GpuCacheWithNoHash")
-    .def(torch::init<int64_t, int64_t, int64_t,int64_t>());
+      .def(torch::init<int64_t, int64_t, int64_t, int64_t>());
 }
 
 }  // namespace recstore

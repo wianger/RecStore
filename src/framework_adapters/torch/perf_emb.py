@@ -7,6 +7,7 @@ import debugpy
 import tqdm
 
 import torch
+import torch as th
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
@@ -19,7 +20,7 @@ from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import kvinit
-from DistOpt import SparseSGD, SparseAdagrad
+from DistOpt import SparseSGD, SparseAdagrad, SparseRowWiseAdaGrad
 
 import time
 
@@ -29,6 +30,8 @@ np.random.seed(0)
 torch.use_deterministic_algorithms(True)
 
 
+from pyinstrument import Profiler
+
 torch.classes.load_library(
     "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
 
@@ -36,27 +39,46 @@ logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)
                     # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
                     datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
+from contextlib import contextmanager
+@contextmanager
+def xmh_nvtx_range(msg, condition=True):
+    """
+    Context manager / decorator that pushes an NVTX range at the beginning
+    of its scope, and pops it at the end. If extra arguments are given,
+    they are passed as arguments to msg.format().
+
+    Args:
+        msg (str): message to associate with the range
+    """
+    if condition:
+        th.cuda.nvtx.range_push(msg)
+        yield
+        th.cuda.nvtx.range_pop()
+    else:
+        yield
+        
 
 def get_run_config():
     def parse_args(default_run_config):
         argparser = argparse.ArgumentParser("Training")
         argparser.add_argument('--num_workers', type=int,
-                               default=8)
+                               default=4)
         argparser.add_argument('--num_embs', type=int,
-                               default=100*1e6)
-        #    default=100000)
+                            #    default=100*1e6)
+                               default=100000)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
         argparser.add_argument('--batch_size', type=int,
-                               #    default=1024*26)
-                               default=1024)
+                                  default=1024*26)
+                            #    default=1024)
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
         argparser.add_argument('--log_interval', type=int,
                                default=1000)
         argparser.add_argument('--run_steps', type=int,
                                default=1000)
-        argparser.add_argument('--emb_choice', choices=["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]
+        argparser.add_argument('--emb_choice', choices=["TorchNativeStdEmb", "KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+                               default="KnownShardedCachedEmbedding"
                                )
         
         return vars(argparser.parse_args())
@@ -103,8 +125,10 @@ def main_routine(ARGS, routine):
     emb = DistEmbedding(int(ARGS['num_embs']),
                         int(ARGS['emb_dim']), name="emb",)
     logging.warn("After init DistEmbedding")
+
     # dummy LR, only register the tensor state of OSP
     opt = SparseSGD([emb], lr=100)
+    dist_opt = SparseRowWiseAdaGrad([emb], lr=1)
 
     print(f"========== Running Perf with routine {routine}==========")
     workers = []
@@ -112,6 +136,7 @@ def main_routine(ARGS, routine):
         p = mp.Process(target=worker_main, args=(
             routine, worker_id, ARGS))
         p.start()
+        print(f"Worker {worker_id} pid={p.pid}")
         workers.append(p)
 
     for each in workers:
@@ -132,13 +157,19 @@ def routine_local_cache_helper(worker_id, ARGS):
 
     fake_tensor = torch.Tensor([0])
 
-    if USE_SGD:
-        sparse_opt = optim.SGD(
-            [fake_tensor], lr=1,)
-        dist_opt = SparseSGD([emb], lr=1/dist.get_world_size())
-    else:
-        sparse_opt = optim.Adam([fake_tensor], lr=1)
-        dist_opt = SparseAdagrad([emb], lr=1/dist.get_world_size())
+    # if USE_SGD:
+    #     sparse_opt = optim.SGD(
+    #         [fake_tensor], lr=1,)
+    #     dist_opt = SparseSGD([emb], lr=1/dist.get_world_size())
+    # else:
+    #     sparse_opt = optim.Adam([fake_tensor], lr=1)
+    #     dist_opt = SparseAdagrad([emb], lr=1/dist.get_world_size())
+
+    sparse_opt = optim.SGD(
+        [fake_tensor], lr=1,)
+
+    dist_opt = SparseRowWiseAdaGrad([emb], lr=1/dist.get_world_size())
+    # dist_opt = SparseSGD([emb], lr=1/dist.get_world_size())
 
     abs_emb = None
 
@@ -155,7 +186,7 @@ def routine_local_cache_helper(worker_id, ARGS):
     elif emb_name == "LocalCachedEmbedding":
         abs_emb = LocalCachedEmbedding(emb, cache_ratio=ARGS['cache_ratio'],)
     elif emb_name == "TorchNativeStdEmb":
-        abs_emb = TorchNativeStdEmb(emb, device='cuda')
+        abs_emb = TorchNativeStdEmb(emb, device='cpu')
     elif emb_name == "KnownLocalCachedEmbedding":
         cached_range = CacheShardingPolicy.generate_cached_range(
             emb, ARGS['cache_ratio'])
@@ -165,23 +196,52 @@ def routine_local_cache_helper(worker_id, ARGS):
     abs_emb.reg_opt(sparse_opt)
     # Generate our embedding done
 
+    std_emb = TorchNativeStdEmb(emb, device='cpu')
+
     # forward
     start = time.time()
     start_step = 0
+
+    if rank == 0:
+        print("cudaProfilerStart")
+        torch.cuda.cudart().cudaProfilerStart()
+
+    warm_up_iters = 100
+
+    profiler = Profiler()
     for _ in tqdm.trange(ARGS['run_steps']):
+        if _ == warm_up_iters:
+            if rank ==0:
+                profiler.start()
+        if _ == warm_up_iters + 100:
+            if rank ==0:
+                profiler.stop()
+                profiler.print()
+            break
+
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
+        
+        a = torch.randn((1000, 1000)).cuda()
+        b = torch.randn((1000, 1000)).cuda()
 
-        # print(f"========== Step {_} ========== ")
+        c = (a*b)
+
         input_keys = torch.randint(emb.shape[0], size=(
             ARGS['batch_size'],)).long().cuda()
 
-        embed_value = abs_emb.forward(input_keys)
-        loss = embed_value.sum(-1).sum(-1)
-        loss.backward()
+        with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warm_up_iters):
+            embed_value = abs_emb.forward(input_keys)
 
-        sparse_opt.step()
-        dist_opt.step()
+
+        embed_value = std_emb.forward(input_keys)
+
+
+        loss = embed_value.sum(-1).sum(-1)
+
+        # loss.backward()
+        # sparse_opt.step()
+        # dist_opt.step()
 
         if (_ % ARGS['log_interval']) == (ARGS['log_interval']-1):
             end = time.time()
@@ -189,6 +249,9 @@ def routine_local_cache_helper(worker_id, ARGS):
             start = time.time()
             start_step = _
 
+    if rank == 0:
+        print("cudaProfilerStop")
+        torch.cuda.cudart().cudaProfilerStop()
 
 if __name__ == "__main__":
     # import debugpy

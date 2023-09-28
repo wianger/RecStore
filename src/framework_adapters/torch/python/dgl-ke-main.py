@@ -14,12 +14,18 @@ dglke_train --model_name TransE_l2
 
 import os, gc
 import time
+import os
+
+if os.path.exists("/usr/bin/docker"):
+    os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-host:{os.environ["LD_LIBRARY_PATH"]}'
+else:
+    os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-docker:{os.environ["LD_LIBRARY_PATH"]}'
+
 
 import dglke
 
 from dglke.dataloader import ConstructGraph, EvalDataset, TrainDataset, NewBidirectionalOneShotIterator
 from dglke.dataloader import get_dataset
-
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
 
 backend = os.environ.get('DGLBACKEND', 'pytorch')
@@ -60,6 +66,9 @@ class ArgParser(CommonArgParser):
                           help='Allow providing edge importance score for each edge during training.'\
                                   'The positive score will be adjusted '\
                                   'as pos_score = pos_score * edge_importance')
+        self.add_argument('--cached_emb_type', type=str,  
+                          help='.')
+        self.add_argument('--cache_ratio', type=float, help='.')
 
 def prepare_save_path(args):
     if not os.path.exists(args.save_path):
@@ -75,7 +84,11 @@ def prepare_save_path(args):
 
 def main():
     import sys
-    args = ArgParser().parse_args()
+    cli_args = '--cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+    args = ArgParser().parse_args(cli_args.split())
+
+    from PsKvstore import kvinit
+    kvinit()
 
     if args.nr_gpus == 0:
         args.gpu = [-1]
@@ -328,6 +341,7 @@ def main():
             print(f"[Rank{i}] pid = {proc.pid}")
         for proc in procs:
             proc.join()
+            assert proc.exitcode == 0
     else:
         if args.dataset == "wikikg90M":
             valid_samplers = [valid_sampler_tail] if args.valid else None
@@ -383,6 +397,7 @@ def main():
 
             for proc in procs:
                 proc.join()
+                assert proc.exitcode == 0
         else:
             if args.dataset == "wikikg90M":
                 test(args, model, [test_sampler_tail])
@@ -393,4 +408,8 @@ def main():
         print('testing takes {:.3f} seconds'.format(time.time() - start))
 
 if __name__ == '__main__':
+    # import debugpy
+    # debugpy.listen(5678)
+    # print("wait debugpy connect", flush=True)
+    # debugpy.wait_for_client()
     main()

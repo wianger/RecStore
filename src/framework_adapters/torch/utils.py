@@ -7,10 +7,7 @@ import torch.optim as optim
 
 import logging
 
-
-torch.ops.load_library(
-    "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
-merge_op = torch.ops.librecstore_pytorch.merge_op
+from recstore import merge_op
 
 _send_cpu, _recv_cpu = {}, {}
 
