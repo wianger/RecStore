@@ -90,7 +90,7 @@ class TorchNativeStdEmb(AbsEmb):
             weight = emb
 
             
-        print("weight.shape", weight.shape)
+        print("weight.shape", weight.shape, flush=True)
         
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()

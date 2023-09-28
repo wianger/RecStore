@@ -47,22 +47,14 @@ class TestShardedCache:
     num_workers = 8
     EMB_DIM = 32
 
-    EMB_LEN = 1000
-    BATCH_SIZE=10
-    # EMB_LEN = int(100* 1e6)
-    # BATCH_SIZE=1024
+    # EMB_LEN = 1000
+    # BATCH_SIZE=10
+    EMB_LEN = int(10 * 1e6)
+    BATCH_SIZE=1024
 
     def main_routine(self, routine, args=None):
         # wrap rountine with dist_init
         def worker_main(routine, worker_id, num_workers, emb_context, args):
-            '''
-            if worker_id == 0:
-                time.sleep(1000)
-            print(f"yyyyrank {worker_id} reached barrier", flush=True)
-            mp.Barrier(num_workers)
-            print(f"yyyyrank {worker_id} escaped barrier", flush=True)
-            '''
-
             torch.cuda.set_device(worker_id)
             torch.manual_seed(worker_id)
             dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
@@ -108,7 +100,6 @@ class TestShardedCache:
         print("join all processes done")
 
     def routine_shm_tensor(self, worker_id, num_workers, args):
-        # emb = ShmTensorStore.GetTensor("emb")
         emb = DistEmbedding(TestShardedCache.EMB_LEN,
                             TestShardedCache.EMB_DIM, name="emb",)
         self.init_emb_tensor(emb, worker_id, num_workers)
@@ -220,13 +211,9 @@ class TestShardedCache:
             #         assert (torch.allclose(
             #             emb_249 , std_emb_249)), "forward is error"
 
-    # @pytest.mark.parametrize("test_cache", ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"])
-    # @pytest.mark.parametrize("cache_ratio", [0.1, 0.3, 0.5])
-    # def test_known_sharded_cache(self, test_cache, cache_ratio):
-
     def test_known_sharded_cache(self,):
-        # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
-        for test_cache in ["KnownLocalCachedEmbedding"]:
+        for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
+        # for test_cache in ["KnownLocalCachedEmbedding"]:
             for cache_ratio in [0.1, 0.3, 0.5]:
                 args = {"test_cache": test_cache, "cache_ratio": cache_ratio}
                 print("xmh: ", args)

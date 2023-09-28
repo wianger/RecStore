@@ -65,9 +65,11 @@ def get_run_config():
                                default=4)
         argparser.add_argument('--num_embs', type=int,
                             #    default=100*1e6)
-                               default=100000)
+                               default=10*1e6)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
+        argparser.add_argument('--with_perf', type=bool,
+                               default=False)
         argparser.add_argument('--batch_size', type=int,
                                   default=1024*26)
                             #    default=1024)
@@ -167,15 +169,11 @@ def routine_local_cache_helper(worker_id, ARGS):
 
     sparse_opt = optim.SGD(
         [fake_tensor], lr=1,)
+    dist_opt = SparseSGD([emb], lr=1/dist.get_world_size())
 
-    dist_opt = SparseRowWiseAdaGrad([emb], lr=1/dist.get_world_size())
-    # dist_opt = SparseSGD([emb], lr=1/dist.get_world_size())
+    # dist_opt = SparseRowWiseAdaGrad([emb], lr=1/dist.get_world_size())
 
     abs_emb = None
-
-    # emb_name = "TorchNativeStdEmb"
-    # emb_name = "KnownShardedCachedEmbedding"  # 07:20<
-    # emb_name = "KnownLocalCachedEmbedding" #05:21 1000iter
 
     emb_name = ARGS["emb_choice"]
 
@@ -202,41 +200,31 @@ def routine_local_cache_helper(worker_id, ARGS):
     start = time.time()
     start_step = 0
 
-    if rank == 0:
-        print("cudaProfilerStart")
-        torch.cuda.cudart().cudaProfilerStart()
-
     warm_up_iters = 100
 
     profiler = Profiler()
     for _ in tqdm.trange(ARGS['run_steps']):
-        if _ == warm_up_iters:
-            if rank ==0:
-                profiler.start()
-        if _ == warm_up_iters + 100:
-            if rank ==0:
-                profiler.stop()
-                profiler.print()
+        if _ == warm_up_iters and rank ==0 and ARGS['with_perf']:
+            profiler.start()
+            print("cudaProfilerStart")
+            torch.cuda.cudart().cudaProfilerStart()
+        if _ == warm_up_iters + 10 and rank ==0 and ARGS['with_perf']:
+            profiler.stop()
+            profiler.print()
+            print("cudaProfilerStop")
+            torch.cuda.cudart().cudaProfilerStop()
             break
 
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
         
-        a = torch.randn((1000, 1000)).cuda()
-        b = torch.randn((1000, 1000)).cuda()
-
-        c = (a*b)
-
         input_keys = torch.randint(emb.shape[0], size=(
             ARGS['batch_size'],)).long().cuda()
 
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warm_up_iters):
             embed_value = abs_emb.forward(input_keys)
 
-
-        embed_value = std_emb.forward(input_keys)
-
-
+        # embed_value = std_emb.forward(input_keys)
         loss = embed_value.sum(-1).sum(-1)
 
         # loss.backward()
@@ -249,9 +237,6 @@ def routine_local_cache_helper(worker_id, ARGS):
             start = time.time()
             start_step = _
 
-    if rank == 0:
-        print("cudaProfilerStop")
-        torch.cuda.cudart().cudaProfilerStop()
 
 if __name__ == "__main__":
     # import debugpy

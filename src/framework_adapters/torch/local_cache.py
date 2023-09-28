@@ -5,10 +5,11 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
 import logging
+
 from DistEmb import DistEmbedding
+from PsKvstore import get_kvstore
 from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 from cache_common import AbsEmb, NVGPUCache
-
 from recstore import uva_cache_query_op
 
 
@@ -240,9 +241,9 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
 
 class KnownLocalCachedEmbedding(AbsEmb):
-    def __init__(self, emb, cached_range, ) -> None:
+    def __init__(self, full_emb, cached_range, ) -> None:
         self.fake_tensor = torch.randn(1, 1, requires_grad=True)
-        self.emb_dim = emb.shape[1]
+        self.emb_dim = full_emb.shape[1]
         rank = dist.get_rank()
 
         start, end = cached_range[rank][0], cached_range[rank][1]
@@ -250,8 +251,14 @@ class KnownLocalCachedEmbedding(AbsEmb):
 
         self.emb_cache = torch.zeros((cached_capacity, self.emb_dim)).cuda()
         self.cached_range = cached_range
-        self.emb = emb
-        self.emb_cache.copy_(self.emb.weight[start:end])
+        self.full_emb = full_emb
+        
+        self.kvstore = get_kvstore()
+        self.kvstore.GetUVAMap(full_emb._name)
+        
+        # assert False
+
+        self.emb_cache.copy_(self.full_emb.weight[start:end])
         self.ret_value = None
 
 
@@ -262,7 +269,7 @@ class KnownLocalCachedEmbedding(AbsEmb):
             self.ret_value = torch.zeros((input_keys.shape[0], self.emb_dim)).cuda()
         
         embed_value = KnownLocalCachedEmbeddingFn.apply(
-            input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range, self.ret_value)
+            input_keys, self.full_emb, self.emb_cache, self.fake_tensor, self.cached_range, self.ret_value)
         if trace:
             assert embed_value.requires_grad
         else:

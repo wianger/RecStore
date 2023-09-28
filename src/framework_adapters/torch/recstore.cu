@@ -131,20 +131,14 @@ __global__ void uva_cache_query_kernel(
   int64_t key = id_tensor[emb_idx];
 
   if (key < cached_start_key || key >= cached_end_key) {
-    assert(key * emb_vec_size + float_idx < dram_tensor_size);
-    assert(key * emb_vec_size + float_idx >= 0);
-    float read = dram_tensor[key * emb_vec_size + float_idx];
-    // merge_dst[idx] = dram_tensor[key * emb_vec_size + float_idx];
-
-    merge_dst[idx] = read;
+    // assert(key * emb_vec_size + float_idx < dram_tensor_size);
+    // assert(key * emb_vec_size + float_idx >= 0);
+    merge_dst[idx] = dram_tensor[key * emb_vec_size + float_idx];
   } else {
     key -= cached_start_key;
-    assert(key * emb_vec_size + float_idx < hbm_tensor_size);
-    assert(key * emb_vec_size + float_idx >= 0);
-    // merge_dst[idx] = hbm_tensor[key * emb_vec_size + float_idx];
-    float read = hbm_tensor[key * emb_vec_size + float_idx];
-
-    merge_dst[idx] = read;
+    // assert(key * emb_vec_size + float_idx < hbm_tensor_size);
+    // assert(key * emb_vec_size + float_idx >= 0);
+    merge_dst[idx] = hbm_tensor[key * emb_vec_size + float_idx];
   }
 }
 void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
@@ -171,9 +165,6 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
       hbm_tensor.numel());
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
-
-
-// at::Tensor CreateShm Tensor(at::IntArrayRef sizes)
 
 
 TORCH_LIBRARY(librecstore_pytorch, m) {

@@ -176,7 +176,7 @@ class DistTensor:
 
     def to_dense_tensor(self):
         assert self.dim() == 2
-        return th.concat([self[each] for each in range(len(self))], dim=0)
+        return self.kvstore.GetRowTensor(self._name)
 
 
 if __name__ == "__main__":
