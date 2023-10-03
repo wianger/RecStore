@@ -7,6 +7,7 @@ from utils import print_rank0
 class CacheEmbFactory:
     @staticmethod
     def New(cache_type, emb, args) ->AbsEmb:
+        print_rank0(f"New CachedEmbedding, name={emb.name}, shape={emb.shape}, cache_type={cache_type}")
         if cache_type == "KnownShardedCachedEmbedding":
             cached_range = CacheShardingPolicy.generate_cached_range(
                 emb, args['cache_ratio'])

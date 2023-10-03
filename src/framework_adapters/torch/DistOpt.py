@@ -671,9 +671,11 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
         emb : dgl.distributed.DistEmbedding
             Sparse embedding to update.
         """
+        if len(idx) == 0:
+            return
+
         eps = self._eps
         clr = self._lr
-
         # print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
 
         state_dev = th.device("cpu")

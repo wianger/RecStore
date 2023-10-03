@@ -49,6 +49,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         COMMON_CONFIGS = {
             "num_workers": [1, 2, 4, 6, 8] if GetHostName() != "node182" else [0, 1, 2],
             "num_embs": [int(100*1e6), int(10*1e6)],
+            # "num_embs": [int(10*1e6)],
             "batch_size": [512, 1024, 2048, 4096,],
             "run_steps": [1000],
             "log_interval": [100],
@@ -58,7 +59,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
             # "run_steps": [100],
             # "log_interval": [10],
 
-            "emb_choice": ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+            "emb_choice": ["TorchNativeStdEmb", "KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
         }
 
         self.name = NAME

@@ -266,6 +266,7 @@ class KnownLocalCachedEmbedding(AbsEmb):
         assert input_keys.is_cuda
 
         if self.ret_value is None:
+            #TODO(xieminhui): fix this! Now len(input_keys) of each iter IS NOT constant
             self.ret_value = torch.zeros((input_keys.shape[0], self.emb_dim)).cuda()
         
         embed_value = KnownLocalCachedEmbeddingFn.apply(

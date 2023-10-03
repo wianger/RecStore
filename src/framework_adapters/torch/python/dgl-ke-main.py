@@ -66,9 +66,10 @@ class ArgParser(CommonArgParser):
                           help='Allow providing edge importance score for each edge during training.'\
                                   'The positive score will be adjusted '\
                                   'as pos_score = pos_score * edge_importance')
-        self.add_argument('--cached_emb_type', type=str,  
+        self.add_argument('--cached_emb_type', type=str, required=True,  
                           help='.')
-        self.add_argument('--cache_ratio', type=float, help='.')
+        self.add_argument('--cache_ratio', type=float, required=True, help='.')
+        self.add_argument('--use_my_emb', type=bool, required=True, help='.')
 
 def prepare_save_path(args):
     if not os.path.exists(args.save_path):
@@ -84,7 +85,8 @@ def prepare_save_path(args):
 
 def main():
     import sys
-    cli_args = '--cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+    # cli_args = '--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+    cli_args = '--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
     args = ArgParser().parse_args(cli_args.split())
 
     from PsKvstore import kvinit

@@ -233,7 +233,7 @@ def routine_local_cache_helper(worker_id, ARGS):
 
         if (_ % ARGS['log_interval']) == (ARGS['log_interval']-1):
             end = time.time()
-            print(f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.3f}",flush=True)
+            print(f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.6f}",flush=True)
             start = time.time()
             start_step = _
 
