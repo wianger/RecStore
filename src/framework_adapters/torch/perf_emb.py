@@ -200,15 +200,15 @@ def routine_local_cache_helper(worker_id, ARGS):
     start = time.time()
     start_step = 0
 
-    warm_up_iters = 100
+    warmup_iters = 100
 
     profiler = Profiler()
     for _ in tqdm.trange(ARGS['run_steps']):
-        if _ == warm_up_iters and rank ==0 and ARGS['with_perf']:
+        if _ == warmup_iters and rank ==0 and ARGS['with_perf']:
             profiler.start()
             print("cudaProfilerStart")
             torch.cuda.cudart().cudaProfilerStart()
-        if _ == warm_up_iters + 10 and rank ==0 and ARGS['with_perf']:
+        if _ == warmup_iters + 10 and rank ==0 and ARGS['with_perf']:
             profiler.stop()
             profiler.print()
             print("cudaProfilerStop")
@@ -221,15 +221,15 @@ def routine_local_cache_helper(worker_id, ARGS):
         input_keys = torch.randint(emb.shape[0], size=(
             ARGS['batch_size'],)).long().cuda()
 
-        with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warm_up_iters):
+        with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and ARGS['with_perf']):
             embed_value = abs_emb.forward(input_keys)
 
         # embed_value = std_emb.forward(input_keys)
         loss = embed_value.sum(-1).sum(-1)
 
-        # loss.backward()
-        # sparse_opt.step()
-        # dist_opt.step()
+        loss.backward()
+        sparse_opt.step()
+        dist_opt.step()
 
         if (_ % ARGS['log_interval']) == (ARGS['log_interval']-1):
             end = time.time()

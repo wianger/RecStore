@@ -259,18 +259,21 @@ class KnownLocalCachedEmbedding(AbsEmb):
         # assert False
 
         self.emb_cache.copy_(self.full_emb.weight[start:end])
-        self.ret_value = None
+        self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
 
 
     def forward(self, input_keys, trace=True):
         assert input_keys.is_cuda
 
-        if self.ret_value is None:
-            #TODO(xieminhui): fix this! Now len(input_keys) of each iter IS NOT constant
-            self.ret_value = torch.zeros((input_keys.shape[0], self.emb_dim)).cuda()
+        # if self.ret_value is None:
+        #     #TODO(xieminhui): fix this! Now len(input_keys) of each iter IS NOT constant
+        #     self.ret_value = torch.zeros((input_keys.shape[0], self.emb_dim)).cuda()
+
+        assert input_keys.shape[0] <= self.ret_value.shape[0]
+        ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
         
         embed_value = KnownLocalCachedEmbeddingFn.apply(
-            input_keys, self.full_emb, self.emb_cache, self.fake_tensor, self.cached_range, self.ret_value)
+            input_keys, self.full_emb, self.emb_cache, self.fake_tensor, self.cached_range, ret_value)
         if trace:
             assert embed_value.requires_grad
         else:

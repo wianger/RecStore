@@ -259,19 +259,13 @@ class DistSparseGradOptimizer(abc.ABC):
             device = th.device("cpu")
             for emb in self._params:
                 name = emb.weight.name
-                # kvstore = emb.weight.kvstore
-                # trainers_per_server = self._world_size // kvstore.num_servers
-
                 idics = []
                 grads = []
+                print(f"name", emb.name, len(emb._hand_grad))
+                assert len(emb._trace) == 0
                 for trace in emb._trace:
                     idx, embbed_value = trace
                     if embbed_value.grad is None:
-                        logging.debug(
-                            f'rank{self._rank} embbed_value={embbed_value}')
-                        logging.debug(
-                            f'rank{self._rank} embbed_value.grad={embbed_value.grad}')
-                        logging.debug(f'rank{self._rank} idx={idx}')
                         assert len(idx) == 0
                     else:
                         idics.append(idx)
