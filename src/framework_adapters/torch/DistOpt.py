@@ -254,14 +254,11 @@ class DistSparseGradOptimizer(abc.ABC):
         of the embeddings involved in a mini-batch to DGL's servers and update the embeddings.
         """
         with th.no_grad():
-            local_indics = {emb.name: [] for emb in self._params}
-            local_grads = {emb.name: [] for emb in self._params}
             device = th.device("cpu")
             for emb in self._params:
                 name = emb.weight.name
                 idics = []
                 grads = []
-                print(f"name", emb.name, len(emb._hand_grad))
                 assert len(emb._trace) == 0
                 for trace in emb._trace:
                     idx, embbed_value = trace
@@ -279,126 +276,28 @@ class DistSparseGradOptimizer(abc.ABC):
                     else:
                         assert len(idx) == 0
 
-                # If the sparse embedding is not used in the previous forward step
-                # The idx and grad will be empty, initialize them as empty tensors to
-                # avoid crashing the optimizer step logic.
-                #
-                # Note: we cannot skip the gradient exchange and update steps as other
-                # working processes may send gradient update requests corresponding
-                # to certain embedding to this process.
-                idics = (
-                    th.cat(idics, dim=0)
-                    if len(idics) != 0
-                    else th.zeros((0,), dtype=th.long, device=th.device("cpu"))
-                )
-                grads = (
-                    th.cat(grads, dim=0)
-                    if len(grads) != 0
-                    else th.zeros(
-                        (0, emb.embedding_dim),
-                        dtype=th.float32,
-                        device=th.device("cpu"),
-                    )
-                )
-                device = grads.device
-                """
-                # will send grad to each corresponding trainer
-                if self._world_size > 1:
-                    # get idx split from kvstore
-                    idx_split = kvstore.get_partid(emb.data_name, idics)
-                    idx_split_size = []
-                    idics_list = []
-                    grad_list = []
-                    # split idx and grad first
-                    for i in range(kvstore.num_servers):
-                        mask = idx_split == i
-                        idx_i = idics[mask]
-                        grad_i = grads[mask]
-
-                        if trainers_per_server <= 1:
-                            idx_split_size.append(
-                                th.tensor([idx_i.shape[0]], dtype=th.int64)
-                            )
-                            idics_list.append(idx_i)
-                            grad_list.append(grad_i)
-                        else:
-                            kv_idx_split = th.remainder(
-                                idx_i, trainers_per_server
-                            ).long()
-                            for j in range(trainers_per_server):
-                                mask = kv_idx_split == j
-                                idx_j = idx_i[mask]
-                                grad_j = grad_i[mask]
-                                idx_split_size.append(
-                                    th.tensor([idx_j.shape[0]], dtype=th.int64)
-                                )
-                                idics_list.append(idx_j)
-                                grad_list.append(grad_j)
-
-                    # if one machine launch multiple KVServer, they share the same storage.
-                    # For each machine, the pytorch rank is num_trainers *
-                    # machine_id + i
-
-                    # use scatter to sync across trainers about the p2p tensor size
-                    # Note: If we have GPU nccl support, we can use all_to_all to
-                    # sync information here
-                    gather_list = list(
-                        th.empty([self._world_size], dtype=th.int64).chunk(
-                            self._world_size
-                        )
-                    )
-                    alltoall_cpu(
-                        self._rank,
-                        self._world_size,
-                        gather_list,
-                        idx_split_size,
-                    )
-                    # use cpu until we have GPU alltoallv
-                    idx_gather_list = [
-                        th.empty((int(num_emb),), dtype=idics.dtype)
-                        for num_emb in gather_list
-                    ]
-                    alltoallv_cpu(
-                        self._rank,
-                        self._world_size,
-                        idx_gather_list,
-                        idics_list,
-                    )
-                    local_indics[name] = idx_gather_list
-                    grad_gather_list = [
-                        th.empty(
-                            (int(num_emb), grads.shape[1]), dtype=grads.dtype
-                        )
-                        for num_emb in gather_list
-                    ]
-                    alltoallv_cpu(
-                        self._rank,
-                        self._world_size,
-                        grad_gather_list,
-                        grad_list,
-                    )
-                    local_grads[name] = grad_gather_list
+                if len(idics) == 0:
+                    return
+                elif len(idics) == 1:
+                    idics = idics[0]
+                    grads = grads[0]
                 else:
-                """
-                local_indics[name] = [idics]
-                local_grads[name] = [grads]
-
+                    idics = th.cat(idics, dim=0)
+                    grads = th.cat(grads, dim=0)
+                
+                self.update(
+                    idics,
+                    grads,
+                    emb,
+                )
+                
             if self._clean_grad:
                 # clean gradient track
                 for emb in self._params:
                     emb.reset_trace()
                 self._clean_grad = False
 
-            # do local update
-            for emb in self._params:
-                name = emb.weight.name
-                idx = th.cat(local_indics[name], dim=0)
-                grad = th.cat(local_grads[name], dim=0)
-                self.update(
-                    idx.to(device, non_blocking=True),
-                    grad.to(device, non_blocking=True),
-                    emb,
-                )
+
         """
         # synchronized gradient update
         if self._world_size > 1:
@@ -590,19 +489,19 @@ class SparseSGD(DistSparseGradOptimizer):
         eps = self._eps
         clr = self._lr
 
-        # print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
-
         if len(idx) == 0:
             return
+
 
         state_dev = th.device("cpu")
         exec_dev = grad.device
 
-        # only perform async copies cpu -> gpu, or gpu-> gpu, but block
-        # when copying to the cpu, so as to ensure the copy is finished
-        # before operating on the data on the cpu
-        assert exec_dev == th.device("cpu")
+        # tmp = - clr * grad
+        # if tmp.device != state_dev:
+        #     tmp = tmp.to(state_dev)
+        # emb.get_shm_tensor().index_add(0, idx, tmp)
 
+        assert exec_dev == th.device("cpu")
         # the update is non-linear so indices must be unique
         grad_indices, inverse, cnt = th.unique(
             idx, return_inverse=True, return_counts=True
@@ -614,9 +513,7 @@ class SparseSGD(DistSparseGradOptimizer):
         grad_values = grad_values / cnt.unsqueeze(1)
         # update emb
         tmp = clr * grad_values
-
         tmp_dst = tmp.to(state_dev, non_blocking=True)
-
         # logging.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
         emb._tensor[grad_indices] = emb._tensor[grad_indices] - tmp_dst
 
@@ -634,10 +531,10 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
                 emb, DistEmbedding
             ), "SparseRowWiseAdaGrad only supports dgl.distributed.DistEmbedding"
 
-            name = emb.name + "_sum"
+            name = emb.name + "_SparseRowWiseAdaGrad_sum"
 
             state = DistTensor(
-                (emb.num_embeddings, 1),
+                (emb.num_embeddings,),
                 th.float32,
                 name,
                 init_func=initializer,
@@ -651,7 +548,7 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
             self._state[emb.name] = state
 
 
-    def update(self, idx, grad, emb):
+    def update(self, idxs, grads, emb):
         """Update embeddings in a sparse manner
         Sparse embeddings are updated in mini batches. We maintain gradient states for
         each embedding so they can be updated separately.
@@ -665,27 +562,34 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
         emb : dgl.distributed.DistEmbedding
             Sparse embedding to update.
         """
-        if len(idx) == 0:
+        if len(idxs) == 0:
             return
 
+        grads = grads.cuda()
+        assert idxs.is_cpu
+        assert grads.is_cuda
+        
         eps = self._eps
         clr = self._lr
-        # print(f"rank {self._rank}/ {self._world_size}: idx {idx}, grad {grad}")
-
         state_dev = th.device("cpu")
-        exec_dev = grad.device
+        exec_dev = grads.device
         state_block = state_dev == th.device("cpu") and exec_dev != state_dev
 
-        
-        grad_sum = (grad * grad).mean(1)
-        grad_state = self._state[emb.name][idx].to(exec_dev).squeeze(1)
-        # print(f"rank{dist.get_rank()}: grad_sum={grad_sum.shape}")
-        # print(f"rank{dist.get_rank()}: grad_state={grad_state.shape}")
-        grad_state += grad_sum
-        grad_state_dst = grad_state.to(state_dev, non_blocking=False)
-        
-        # update emb
-        std_values = grad_state_dst.sqrt_().add(self._eps).unsqueeze(1)
-        tmp = - clr * grad / std_values
+        grad_sum = (grads * grads).mean(1)
 
-        emb._tensor[idx] = emb._tensor[idx] + tmp
+        if state_dev != idxs.device:
+            idxs = idxs.to(state_dev)
+        if state_dev != grad_sum.device:
+            grad_sum = grad_sum.to(state_dev)
+        
+        self._state[emb.name].get_shm_tensor().index_add_(0, idxs, grad_sum)
+        
+        std = self._state[emb.name].get_shm_tensor()[idxs]
+        std = std.cuda()
+        std_values = std.sqrt_().add_(self._eps).unsqueeze(1)
+        
+        tmp = - clr * grads / std_values
+
+        if tmp.device != state_dev:
+            tmp = tmp.to(state_dev)
+        emb.get_shm_tensor().index_add(0, idxs, tmp)

@@ -203,7 +203,13 @@ def routine_local_cache_helper(worker_id, ARGS):
     warmup_iters = 100
 
     profiler = Profiler()
-    for _ in tqdm.trange(ARGS['run_steps']):
+    
+    if ARGS['with_perf']:
+        for_range = tqdm.trange(ARGS['run_steps'])
+    else:
+        for_range = range(ARGS['run_steps'])
+    
+    for _ in for_range:
         if _ == warmup_iters and rank ==0 and ARGS['with_perf']:
             profiler.start()
             print("cudaProfilerStart")

@@ -22,7 +22,8 @@ class DistTensor:
         is_gdata=True,
         attach=True,
     ):
-        self.debug_xmh = 0
+
+        assert type(shape) is tuple
         self.kvstore = get_kvstore()
         assert (
             self.kvstore is not None
@@ -73,13 +74,6 @@ class DistTensor:
 
     def __setitem__(self, idx, val):
         idx = dist_utils.toindex(idx)
-        
-        # if 249 in list(idx):
-        #     logging.debug(f"rank{dist.get_rank()} setitem {idx} {val}")
-        #     logging.debug(f"rank{dist.get_rank()} setitem len={len(idx)}")
-        #     self.debug_xmh += 1
-        #     if self.debug_xmh == 3:
-        #         raise Exception("xxxxxx")
         self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
 
 

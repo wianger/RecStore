@@ -220,3 +220,6 @@ class DistEmbedding:
             The tensor storing the node embeddings
         """
         return self._tensor
+
+    def get_shm_tensor(self):
+        return self.weight.get_shm_tensor()

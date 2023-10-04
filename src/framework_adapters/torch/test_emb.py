@@ -24,7 +24,7 @@ from local_cache import LocalCachedEmbedding, KnownLocalCachedEmbedding
 from utils import print_rank0
 from DistEmb import DistEmbedding
 from PsKvstore import kvinit
-from DistOpt import SparseSGD, SparseAdagrad
+import DistOpt
 
 from cache_emb_factory import CacheEmbFactory
 
@@ -49,7 +49,7 @@ class TestShardedCache:
 
     # EMB_LEN = 1000
     # BATCH_SIZE=10
-    EMB_LEN = int(10 * 1e6)
+    EMB_LEN = int(1 * 1e6)
     BATCH_SIZE=1024
 
     def main_routine(self, routine, args=None):
@@ -78,10 +78,10 @@ class TestShardedCache:
         if USE_SGD:
             sparse_opt = optim.SGD(
                 [fake_tensor], lr=1,)
-            dist_opt = SparseSGD([emb], lr=1/TestShardedCache.num_workers)
+            dist_opt = DistOpt.SparseSGD([emb], lr=1/TestShardedCache.num_workers)
         else:
             sparse_opt = optim.Adam([fake_tensor], lr=1)
-            dist_opt = SparseAdagrad([emb], lr=1/TestShardedCache.num_workers)
+            dist_opt = DistOpt.SparseAdagrad([emb], lr=1/TestShardedCache.num_workers)
         
         
         emb_context = EmbContext(emb=emb, sparse_opt=sparse_opt, dist_opt=dist_opt)
