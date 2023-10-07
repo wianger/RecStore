@@ -8,7 +8,8 @@ from DistTensor import DistTensor
 import torch.distributed as dist
 import utils
 import torch as th
-import logging
+
+from utils import XLOG
 
 EMB_STATES = "emb_states"
 WORLD_SIZE = "world_size"
@@ -273,36 +274,32 @@ class DistSparseGradOptimizer(abc.ABC):
                     if each_grad is not None:
                         idics.append(each_idx)
                         grads.append(each_grad)
+
                     else:
                         assert len(idx) == 0
+                        
+                for each_idx, each_grad in zip(idics, grads):
+                    self.update(each_idx, each_grad, emb)
 
-                if len(idics) == 0:
-                    return
-                elif len(idics) == 1:
-                    idics = idics[0]
-                    grads = grads[0]
-                else:
-                    idics = th.cat(idics, dim=0)
-                    grads = th.cat(grads, dim=0)
+                # if len(idics) == 0:
+                #     return
+                # elif len(idics) == 1:
+                #     idics = idics[0]
+                #     grads = grads[0]
+                # else:
+                #     idics = th.cat(idics, dim=0)
+                #     grads = th.cat(grads, dim=0)
                 
-                self.update(
-                    idics,
-                    grads,
-                    emb,
-                )
+                # self.update(
+                #     idics,
+                #     grads,
+                #     emb,
+                # )
+
                 
-            if self._clean_grad:
-                # clean gradient track
-                for emb in self._params:
-                    emb.reset_trace()
-                self._clean_grad = False
+                
 
 
-        """
-        # synchronized gradient update
-        if self._world_size > 1:
-            th.distributed.barrier()
-        """
 
     @abstractmethod
     def update(self, idx, grad, emb):
@@ -514,7 +511,7 @@ class SparseSGD(DistSparseGradOptimizer):
         # update emb
         tmp = clr * grad_values
         tmp_dst = tmp.to(state_dev, non_blocking=True)
-        # logging.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
+        XLOG.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
         emb._tensor[grad_indices] = emb._tensor[grad_indices] - tmp_dst
 
 
@@ -565,11 +562,13 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
         if len(idxs) == 0:
             return
 
-        grads = grads.cuda()
-        assert idxs.is_cpu
+        if not grads.is_cuda:
+            grads = grads.cuda()
+
+        # assert idxs.is_cpu
         assert grads.is_cuda
+        assert idxs.shape[0] == grads.shape[0]
         
-        eps = self._eps
         clr = self._lr
         state_dev = th.device("cpu")
         exec_dev = grads.device
@@ -589,7 +588,7 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
         std_values = std.sqrt_().add_(self._eps).unsqueeze(1)
         
         tmp = - clr * grads / std_values
-
         if tmp.device != state_dev:
             tmp = tmp.to(state_dev)
-        emb.get_shm_tensor().index_add(0, idxs, tmp)
+
+        c = emb.get_shm_tensor().index_add_(0, idxs, tmp)

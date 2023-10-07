@@ -1,7 +1,6 @@
 import numpy as np
 import unittest
 import datetime
-import logging
 import argparse
 import debugpy
 import tqdm
@@ -21,7 +20,7 @@ from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import kvinit
 from DistOpt import SparseSGD, SparseAdagrad, SparseRowWiseAdaGrad
-
+from utils import XLOG
 import time
 
 import random
@@ -32,12 +31,6 @@ torch.use_deterministic_algorithms(True)
 
 from pyinstrument import Profiler
 
-torch.classes.load_library(
-    "/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so")
-
-logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                    # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                    datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 from contextlib import contextmanager
 @contextmanager
@@ -123,10 +116,10 @@ def main_routine(ARGS, routine):
 
 
     kvinit()
-    logging.warn("Before init DistEmbedding")
+    XLOG.warn("Before init DistEmbedding")
     emb = DistEmbedding(int(ARGS['num_embs']),
                         int(ARGS['emb_dim']), name="emb",)
-    logging.warn("After init DistEmbedding")
+    XLOG.warn("After init DistEmbedding")
 
     # dummy LR, only register the tensor state of OSP
     opt = SparseSGD([emb], lr=100)

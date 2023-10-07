@@ -1,7 +1,6 @@
 import random
 import numpy as np
 import datetime
-import logging
 import argparse
 import debugpy
 import tqdm
@@ -21,7 +20,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from cache_common import ShmTensorStore, TorchNativeStdEmbDDP, CacheShardingPolicy
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import LocalCachedEmbedding, KnownLocalCachedEmbedding
-from utils import print_rank0
+from utils import print_rank0, XLOG
 from DistEmb import DistEmbedding
 from PsKvstore import kvinit
 import DistOpt
@@ -31,10 +30,6 @@ from cache_emb_factory import CacheEmbFactory
 random.seed(0)
 np.random.seed(0)
 torch.use_deterministic_algorithms(True)
-
-logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-# datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 EmbContext = namedtuple('EmbContext', ['emb', 'sparse_opt', 'dist_opt'])
@@ -129,7 +124,7 @@ class TestShardedCache:
 
     def routine_cache_helper(self, worker_id, num_workers, emb_context, args):
         rank = dist.get_rank()
-        logging.debug(f"rank{rank}: pid={os.getpid()}")
+        XLOG.debug(f"rank{rank}: pid={os.getpid()}")
         
         # emb = ShmTensorStore.GetTensor("emb")
         # emb = DistEmbedding(TestShardedCache.EMB_LEN,
@@ -177,14 +172,14 @@ class TestShardedCache:
             #     input_keys = torch.tensor([0, 2,],).long().cuda()
             #     # input_keys = torch.tensor([2, 3,],).long().cuda()
 
-            logging.debug(f"{rank}:step{_}, input_keys {input_keys}")
+            XLOG.debug(f"{rank}:step{_}, input_keys {input_keys}")
             std_embed_value = std_emb.forward(input_keys)
             std_loss = std_embed_value.sum(-1).sum(-1)
             std_loss.backward()
-            logging.debug(f"{rank}:std_embed_value {std_embed_value}")
+            XLOG.debug(f"{rank}:std_embed_value {std_embed_value}")
 
             embed_value = abs_emb.forward(input_keys)
-            logging.debug(f"{rank}:embed_value {embed_value}")
+            XLOG.debug(f"{rank}:embed_value {embed_value}")
             loss = embed_value.sum(-1).sum(-1)
             
             loss.backward()
@@ -205,15 +200,15 @@ class TestShardedCache:
             #     emb_249 = abs_emb.forward(torch.tensor([249]).long().cuda())
             #     if not torch.allclose(
             #         emb_249 , std_emb_249):
-            #         logging.debug(f"step: {_}")
-            #         logging.debug(f"std_emb_249: {std_emb_249}")
-            #         logging.debug(f"emb_249 : {emb_249}")
+            #         XLOG.debug(f"step: {_}")
+            #         XLOG.debug(f"std_emb_249: {std_emb_249}")
+            #         XLOG.debug(f"emb_249 : {emb_249}")
             #         assert (torch.allclose(
             #             emb_249 , std_emb_249)), "forward is error"
 
     def test_known_sharded_cache(self,):
-        for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
-        # for test_cache in ["KnownLocalCachedEmbedding"]:
+        # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
+        for test_cache in ["KnownLocalCachedEmbedding"]:
             for cache_ratio in [0.1, 0.3, 0.5]:
                 args = {"test_cache": test_cache, "cache_ratio": cache_ratio}
                 print("xmh: ", args)

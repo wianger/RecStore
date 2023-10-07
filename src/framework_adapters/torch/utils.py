@@ -13,6 +13,14 @@ _send_cpu, _recv_cpu = {}, {}
 
 # data: [rank0_data, rank1_data, ...]
 
+logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
+                # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+                datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+
+
+XLOG = logging
+
+
 
 def print_rank0(msg):
     if dist.get_rank() == 0:
@@ -21,10 +29,10 @@ def print_rank0(msg):
 
 @torch.no_grad()
 def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=False):
-    logging.debug("before all2all_data_transfer")
+    XLOG.debug("before all2all_data_transfer")
     rank, world_size = dist.get_rank(), dist.get_world_size()
     if verbose:
-        logging.debug(f'{rank}, a2a, input={data}')
+        XLOG.debug(f'{rank}, a2a, input={data}')
 
     if recv_shape is None:
         # first
@@ -43,7 +51,7 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
         recv_shape = per_shard_shapes
 
     if verbose:
-        logging.debug(f'{rank}, recv_shape={recv_shape}')
+        XLOG.debug(f'{rank}, recv_shape={recv_shape}')
 
     msg, res = [None] * world_size, [None] * world_size
     for i in range(1, world_size):
@@ -62,19 +70,19 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
         right = (rank + i) % world_size
         msg[right].copy_(data[right])
         if verbose:
-            logging.debug(f"{rank}, data[right]={data[right]}")
-            logging.debug(f"{rank}, msg[right]={msg[right]}")
+            XLOG.debug(f"{rank}, data[right]={data[right]}")
+            XLOG.debug(f"{rank}, msg[right]={msg[right]}")
 
         if msg[right].nelement() != 0:
             req = dist.isend(msg[right], dst=right, tag=tag)
             if verbose:
-                logging.debug(f"{rank}->{right}, dist.isend, {msg[right]}")
+                XLOG.debug(f"{rank}->{right}, dist.isend, {msg[right]}")
 
-        # logging.debug(f"{rank}, {res[left]}")
+        # XLOG.debug(f"{rank}, {res[left]}")
         if res[left].nelement() != 0:
-            # logging.debug(f"{rank}<-{left}, before dist.recv, {res[left]}")
+            # XLOG.debug(f"{rank}<-{left}, before dist.recv, {res[left]}")
             dist.recv(res[left], src=left, tag=tag)
-            # logging.debug(f"{rank}<-{left}, after dist.recv, {res[left]}")
+            # XLOG.debug(f"{rank}<-{left}, after dist.recv, {res[left]}")
         res[left] = res[left].cuda(non_blocking=True)
 
         if msg[right].nelement() != 0:
@@ -82,14 +90,14 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
 
     res[rank] = data[rank]
 
-    logging.debug("after all2all_data_transfer")
+    XLOG.debug("after all2all_data_transfer")
     return res
 
 
 # def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=False):
 #     rank, world_size = dist.get_rank(), dist.get_world_size()
 #     if verbose:
-#         logging.debug(f'{rank}, a2a, input={data}')
+#         XLOG.debug(f'{rank}, a2a, input={data}')
 
 #     if recv_shape is None:
 #         # first
@@ -108,7 +116,7 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
 #         recv_shape = per_shard_shapes
 
 #     if verbose:
-#         logging.debug(f'{rank}, recv_shape={recv_shape}')
+#         XLOG.debug(f'{rank}, recv_shape={recv_shape}')
 
 #     msg, res = [None] * world_size, [None] * world_size
 #     for i in range(1, world_size):
@@ -127,19 +135,19 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
 #         right = (rank + i) % world_size
 #         msg[right].copy_(data[right])
 #         if verbose:
-#             logging.debug(f"{rank}, data[right]={data[right]}")
-#             logging.debug(f"{rank}, msg[right]={msg[right]}")
+#             XLOG.debug(f"{rank}, data[right]={data[right]}")
+#             XLOG.debug(f"{rank}, msg[right]={msg[right]}")
 
 #         if msg[right].nelement() != 0:
 #             req = dist.isend(msg[right], dst=right, tag=tag)
 #             if verbose:
-#                 logging.debug(f"{rank}->{right}, dist.isend, {msg[right]}")
+#                 XLOG.debug(f"{rank}->{right}, dist.isend, {msg[right]}")
 
-#         # logging.debug(f"{rank}, {res[left]}")
+#         # XLOG.debug(f"{rank}, {res[left]}")
 #         if res[left].nelement() != 0:
-#             # logging.debug(f"{rank}<-{left}, before dist.recv, {res[left]}")
+#             # XLOG.debug(f"{rank}<-{left}, before dist.recv, {res[left]}")
 #             dist.recv(res[left], src=left, tag=tag)
-#             # logging.debug(f"{rank}<-{left}, after dist.recv, {res[left]}")
+#             # XLOG.debug(f"{rank}<-{left}, after dist.recv, {res[left]}")
 #         res[left] = res[left].cuda(non_blocking=True)
 
 #         if msg[right].nelement() != 0:
@@ -204,19 +212,25 @@ def reduce_sparse_tensor(sparse_tensor, dst_rank=0):
     values_list = gather_variable_shape_tensor(
         values.contiguous(), dst_rank=dst_rank)
 
-    # logging.info(f"rank{dist.get_rank()}: gather keys and values done")
+    # XLOG.info(f"rank{dist.get_rank()}: gather keys and values done")
     if dist.get_rank() == dst_rank:
-        logging.debug(f"rank{dist.get_rank()}: before sum sparse tensors")
-        # logging.debug(f"rank{dist.get_rank()}: keys_gather_list {keys_gather_list }")
-        # logging.debug(f"rank{dist.get_rank()}: values_list {values_list}")
+        XLOG.debug(f"rank{dist.get_rank()}: before sum sparse tensors")
+        # XLOG.debug(f"rank{dist.get_rank()}: keys_gather_list {keys_gather_list }")
+        # XLOG.debug(f"rank{dist.get_rank()}: values_list {values_list}")
         res = sum_sparse_tensor(keys_gather_list, values_list, shape)
-        logging.debug(f"rank{dist.get_rank()}: after sum sparse tensors")
-        # logging.info(f"rank{dist.get_rank()}: {res}")
+        XLOG.debug(f"rank{dist.get_rank()}: after sum sparse tensors")
+        # XLOG.info(f"rank{dist.get_rank()}: {res}")
     else:
         res = None
 
     return res
 
+@torch.no_grad()
+def kv_to_sparse_tensor(keys, values, shape):
+    if keys.dim() != 2:
+        temp = keys.unsqueeze(0)
+        assert temp.dim() == 2 
+    return torch.sparse_coo_tensor(temp, values, size=shape)
 
 @torch.no_grad()
 def reduce_sparse_kv_tensor(keys, values, shape, dst_rank=0):

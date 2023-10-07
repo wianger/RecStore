@@ -6,7 +6,7 @@ import torch.distributed as dist
 from DistTensor import DistTensor
 import dist_utils
 
-import logging
+from utils import XLOG
 
 
 class DistEmbedding:
@@ -106,15 +106,8 @@ class DistEmbedding:
                 print(f"self._trace.append(({idx}, {emb}))")
         return emb
 
-    # def __getitem__(self, idx):
-    #     return self._tensor.__getitem__(idx)
-
-    # def __setitem__(self, idx, val):
-    #     return self._tensor.__setitem__(idx, val)
-
     def record_grad(self, idx, grad):
-        logging.debug(f"record_grad {idx} {grad}")
-
+        # XLOG.debug(f"record_grad {idx} {grad}")
         assert len(idx) == len(grad)
         self._hand_grad.append((idx, grad))
 

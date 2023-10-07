@@ -4,12 +4,11 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
-import logging
-
 
 from DistEmb import DistEmbedding
 from cache_common import AbsEmb, NVGPUCache
 from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
+from utils import XLOG
 
 
 class ShardedCachedEmbeddingFn(torch.autograd.Function):
@@ -58,16 +57,16 @@ class ShardedCachedEmbeddingFn(torch.autograd.Function):
         missing_keys = [each.missing_keys for each in cache_query_results]
         missing_indexs = [each.missing_index for each in cache_query_results]
 
-        logging.debug(f"{rank}: a2a cache_query_values",)
+        XLOG.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
             cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype)
 
         # 4. all to all missing keys
-        logging.debug(f"{rank}: a2a missing_keys_in_mine",)
+        XLOG.debug(f"{rank}: a2a missing_keys_in_mine",)
         missing_keys_in_mine = all2all_data_transfer(
             missing_keys, None, tag=122, dtype=missing_keys[0].dtype)
 
-        logging.debug("a2a missing_indexs_in_mine ",)
+        XLOG.debug("a2a missing_indexs_in_mine ",)
         missing_indexs_in_mine = all2all_data_transfer(
             missing_indexs, None, tag=123, dtype=missing_indexs[0].dtype)
 
@@ -87,9 +86,9 @@ class ShardedCachedEmbeddingFn(torch.autograd.Function):
             # join together
 
             # if rank == 0 and i == 0:
-            # logging.debug(cache_query_value.dtype)
-            # logging.debug(missing_value.dtype)
-            # logging.debug(missing_indexs.dtype)
+            # XLOG.debug(cache_query_value.dtype)
+            # XLOG.debug(missing_value.dtype)
+            # XLOG.debug(missing_indexs.dtype)
             merge_op(cache_query_value, missing_value, missing_indexs)
 
         # 6. merge values
@@ -232,10 +231,10 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
                 emb_cache[each_shard_recv_keys - cached_start_key])
 
         # 3. all to all searched values
-        logging.debug(f"{rank}: a2a cache_query_values",)
+        XLOG.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
             cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype)
-        logging.debug(f"{rank}: a2a cache_query_values done",)
+        XLOG.debug(f"{rank}: a2a cache_query_values done",)
 
         # 5. merge into final result
         ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
@@ -283,13 +282,13 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         reduced_missing_grads = reduce_sparse_kv_tensor(
             missing_keys, missing_grads, embedding_weight.shape, 0)
 
-        logging.debug(f"{dist.get_rank()} missing_keys = {missing_keys}")
-        logging.debug(f"{dist.get_rank()} missing_grads = {missing_grads}")
+        XLOG.debug(f"{dist.get_rank()} missing_keys = {missing_keys}")
+        XLOG.debug(f"{dist.get_rank()} missing_grads = {missing_grads}")
 
         if dist.get_rank() == 0:
             if type(embedding_weight) is DistEmbedding:
                 reduced_missing_grads = reduced_missing_grads.coalesce()
-                logging.debug(f"reduced_missing_grads = {reduced_missing_grads}")
+                XLOG.debug(f"reduced_missing_grads = {reduced_missing_grads}")
                 embedding_weight.record_grad(
                     reduced_missing_grads.indices().squeeze(0), reduced_missing_grads.values())
             else:

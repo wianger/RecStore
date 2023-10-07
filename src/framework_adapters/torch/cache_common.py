@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
-import logging
+from utils import XLOG
 
 
 from abc import ABC

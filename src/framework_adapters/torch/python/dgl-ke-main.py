@@ -21,9 +21,16 @@ if os.path.exists("/usr/bin/docker"):
 else:
     os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-docker:{os.environ["LD_LIBRARY_PATH"]}'
 
+import dgl
+import random
+import torch
+import numpy as np
+random.seed(0)
+np.random.seed(0)
+torch.use_deterministic_algorithms(True)
+# dgl.seed(0)
 
 import dglke
-
 from dglke.dataloader import ConstructGraph, EvalDataset, TrainDataset, NewBidirectionalOneShotIterator
 from dglke.dataloader import get_dataset
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
@@ -39,6 +46,8 @@ else:
     from dglke.train_pytorch import load_model
     from dglke.train_pytorch import train, train_mp
     from dglke.train_pytorch import test, test_mp
+
+
 
 class ArgParser(CommonArgParser):
     def list_of_ints(arg):
@@ -91,9 +100,13 @@ def prepare_save_path(args):
 
 def main():
     import sys
-    # cli_args = '--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
-    cli_args = '--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
-    # cli_args = ' --use_my_emb=false --cache_ratio=0.1 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --log_interval=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+    common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+    
+    # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 {common_args}'
+
+    cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 {common_args}'
+    # cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
+
     args = ArgParser().parse_args(cli_args.split())
 
     from PsKvstore import kvinit
@@ -145,6 +158,7 @@ def main():
 
 
     print("ARGS: ", args)
+    SHUFFLE = False
 
     if args.num_proc > 1:
         train_samplers = []
@@ -155,7 +169,7 @@ def main():
                                                            args.neg_sample_size,
                                                            mode='head',
                                                            num_workers=args.num_workers,
-                                                           shuffle=True,
+                                                           shuffle=SHUFFLE,
                                                            exclude_positive=False,
                                                            rank=i)
             train_sampler_tail = train_data.create_sampler(args.batch_size,
@@ -163,7 +177,7 @@ def main():
                                                            args.neg_sample_size,
                                                            mode='tail',
                                                            num_workers=args.num_workers,
-                                                           shuffle=True,
+                                                           shuffle=SHUFFLE,
                                                            exclude_positive=False,
                                                            rank=i)
             train_samplers.append(NewBidirectionalOneShotIterator(train_sampler_head, train_sampler_tail,
@@ -181,14 +195,14 @@ def main():
                                                        args.neg_sample_size,
                                                        mode='head',
                                                        num_workers=args.num_workers,
-                                                       shuffle=True,
+                                                       shuffle=SHUFFLE,
                                                        exclude_positive=False)
         train_sampler_tail = train_data.create_sampler(args.batch_size,
                                                        args.neg_sample_size,
                                                        args.neg_sample_size,
                                                        mode='tail',
                                                        num_workers=args.num_workers,
-                                                       shuffle=True,
+                                                       shuffle=SHUFFLE,
                                                        exclude_positive=False)
         train_sampler = NewBidirectionalOneShotIterator(train_sampler_head, train_sampler_tail,
                                                         args.neg_sample_size, args.neg_sample_size,
@@ -348,7 +362,7 @@ def main():
             procs.append(proc)
             proc.start()
             print(f"[Rank{i}] pid = {proc.pid}")
-        for proc in procs:
+        for i, proc in enumerate(procs):
             proc.join()
             assert proc.exitcode == 0
     else:

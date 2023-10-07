@@ -2,7 +2,7 @@ from PsKvstore import get_kvstore, kvinit
 import dist_utils
 import torch as th
 DIST_TENSOR_ID = 0
-import logging
+from utils import XLOG
 import torch.distributed as dist
 
 

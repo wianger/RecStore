@@ -4,11 +4,11 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
-import logging
+from utils import XLOG
 
 from DistEmb import DistEmbedding
 from PsKvstore import get_kvstore
-from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
+from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 from cache_common import AbsEmb, NVGPUCache
 from recstore import uva_cache_query_op
 
@@ -157,7 +157,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         missing_keys = keys[not_in_this_rank_cache_mask]
 
         # 2. search local cache
-        logging.debug("search local cache")
+        XLOG.debug("search local cache")
         cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
@@ -165,12 +165,12 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         # 3. merge into final result
 
         # 3.1 join missing keys
-        logging.debug("join missing keys")
+        XLOG.debug("join missing keys")
 
         if type(full_emb) is DistEmbedding:
-            logging.debug(f'rank{rank}, before full_emb(missing_keys.cpu()')
+            XLOG.debug(f'rank{rank}, before full_emb(missing_keys.cpu()')
             missing_value = full_emb(missing_keys.cpu(), record_trace=False)
-            logging.debug(f'rank{rank}, after full_emb(missing_keys.cpu()')
+            XLOG.debug(f'rank{rank}, after full_emb(missing_keys.cpu()')
         else:
             missing_value = F.embedding(missing_keys.cpu(
             ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
@@ -203,13 +203,13 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         assert emb_dim == grad_output.shape[1]
 
         # 1. update local cache's grad
-        logging.debug("backward: update local cache's grad")
+        XLOG.debug("backward: update local cache's grad")
         # 1.1 all to all keys's grad
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
         sharded_grads = [grad_output[each] for each in in_each_rank_cache_mask]
         keys_in_this_rank, values_in_this_rank = all2all_sparse_tensor(
             sharded_keys, sharded_grads, tag=124)
-        logging.debug("backward: all to all keys's grad done")
+        XLOG.debug("backward: all to all keys's grad done")
 
         # 1.2 update grad of local cache
         cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
@@ -219,24 +219,37 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             cached_keys_in_this_rank, values_in_this_rank, emb_cache.shape)
         grad = grad.cuda() / dist.get_world_size()
         emb_cache.grad = grad
-
+        
+        
+        
+        '''
         # 2 aggregate grad of in-dram keys
         reduced_dram_grads = reduce_sparse_kv_tensor(
             keys, grad_output, full_emb.shape, 0)
-        logging.debug(f"rank{rank}: aggregate grad of in-dram keys done")
+        XLOG.debug(f"rank{rank}: aggregate grad of in-dram keys done")
 
         mp.Barrier(dist.get_world_size())
 
         if dist.get_rank() == 0:
             reduced_dram_grads = reduced_dram_grads.coalesce()
-            logging.debug(
+            XLOG.debug(
                 f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
             if type(full_emb) is DistEmbedding:
                 full_emb.record_grad(
                     reduced_dram_grads.indices().squeeze(0), reduced_dram_grads.values())
             else:
                 full_emb.grad = reduced_dram_grads / dist.get_world_size()
-            logging.debug("rank0: set DRAM Emb's grad done")
+            XLOG.debug("rank0: set DRAM Emb's grad done")
+        '''
+        # 实际中发现上面的方式会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的
+        if type(full_emb) is DistEmbedding:
+            full_emb.record_grad(
+               keys, grad_output)
+            # if rank == 0:
+            #     XLOG.warn(f"in local cache's back {keys.shape}, {full_emb.name}")
+        else:
+            dram_grads = kv_to_sparse_tensor(keys, grad_output, full_emb.shape)
+            full_emb.grad = dram_grads / dist.get_world_size()  
         return None, None, None, torch.randn(1, 1), None, None
 
 
