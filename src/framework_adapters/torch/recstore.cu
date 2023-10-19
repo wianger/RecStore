@@ -55,8 +55,8 @@ class GpuCache : public torch::CustomClassHolder {
     TORCH_CHECK(device.is_cuda(),
                 "The tensor of requested indices must be on GPU.");
 
-    TORCH_CHECK_EQ(keys.scalar_type(), torch::kLong)
-        << "The tensor of requested indices must be of type int64.";
+    TORCH_CHECK(keys.scalar_type() == torch::kLong,
+        "The tensor of requested indices must be of type int64.");
 
     // torch::Tensor values = at::zeros(
     //     torch::IntArrayRef({(int64_t)keys.sizes()[0], (int64_t)emb_dim}),
@@ -78,8 +78,8 @@ class GpuCache : public torch::CustomClassHolder {
 
     auto missing_len_host = missing_len.cpu().item<int64_t>();
 
-    TORCH_CHECK_GE(missing_len_host, 0);
-    TORCH_CHECK_LE(missing_len_host, keys.sizes()[0]);
+    TORCH_CHECK(missing_len_host >= 0, "");
+    TORCH_CHECK(missing_len_host <= keys.sizes()[0], "");
 
     torch::Tensor ret_missing_index =
         missing_index.slice(0, 0, missing_len_host);
@@ -92,12 +92,12 @@ class GpuCache : public torch::CustomClassHolder {
 
   void Replace(torch::Tensor keys, torch::Tensor values) {
     const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
-    TORCH_CHECK_EQ(keys.scalar_type(), torch::kLong)
-        << "The tensor of requested indices must be of type int64.";
-    TORCH_CHECK_EQ(keys.sizes()[0], values.sizes()[0])
-        << "First dimensions of keys and values must match";
-    TORCH_CHECK_EQ(values.sizes()[1], emb_dim)
-        << "Embedding dimension must match ";
+    TORCH_CHECK(keys.scalar_type() == torch::kLong,
+        "The tensor of requested indices must be of type int64.");
+    TORCH_CHECK(keys.sizes()[0] == values.sizes()[0],
+        "First dimensions of keys and values must match");
+    TORCH_CHECK(values.sizes()[1] == emb_dim,
+        "Embedding dimension must match ");
 
     cache.Replace(keys.data_ptr<key_t>(), keys.sizes()[0],
                   values.data_ptr<float>(), stream);
@@ -149,10 +149,10 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
   const size_t BLOCK_SIZE = 256;
   const size_t emb_vec_size = merge_dst.size(1);
   const size_t len = merge_dst.size(0);
-  TORCH_CHECK(merge_dst.size(0) == id_tensor.size(0));
-  TORCH_CHECK(id_tensor.dtype() == at::kLong);
+  TORCH_CHECK(merge_dst.size(0) == id_tensor.size(0), "");
+  TORCH_CHECK(id_tensor.dtype() == at::kLong, "");
 
-  TORCH_CHECK(hbm_tensor.size(0) == cached_end_key - cached_start_key);
+  TORCH_CHECK(hbm_tensor.size(0) == cached_end_key - cached_start_key, "");
 
   const size_t len_in_float = len * emb_vec_size;
   const size_t num_blocks = (len_in_float - 1) / BLOCK_SIZE + 1;
@@ -165,7 +165,6 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
       hbm_tensor.numel());
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
-
 
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")

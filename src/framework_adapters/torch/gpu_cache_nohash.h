@@ -17,7 +17,7 @@ class GPUCacheWithNoHash {
  public:
   GPUCacheWithNoHash(int64_t capacity, int emb_dim, ID_Type start, ID_Type end)
       : capacity_(capacity), emb_dim_(emb_dim), start_(start), end_(end) {
-    TORCH_CHECK_EQ(end - start, capacity);
+    TORCH_CHECK(end - start == capacity);
     if (nullptr == d_cache_db_) {
       cudaMalloc(&d_cache_db_, capacity * emb_dim * sizeof(float));
     }
@@ -52,8 +52,8 @@ class GPUCacheWithNoHashTorch : public torch::CustomClassHolder {
     torch::Device device = keys.device();
     TORCH_CHECK(device.is_cuda(),
                 "The tensor of requested indices must be on GPU.");
-    TORCH_CHECK_EQ(keys.scalar_type(), torch::kLong)
-        << "The tensor of requested indices must be of type int64.";
+    TORCH_CHECK(keys.scalar_type() == torch::kLong,
+                "The tensor of requested indices must be of type int64.");
 
     cache_->Query(keys.data_ptr<int64_t>(), keys.size(0),
                   values.data_ptr<float>(), stream);

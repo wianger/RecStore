@@ -130,11 +130,9 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, keys, full_emb, emb_cache, fake_tensor, cached_range, ret_value):
         rank, world_size = dist.get_rank(), dist.get_world_size()
+
         emb_dim = full_emb.shape[1]
-        
-        
-        in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
-            keys, cached_range)
+        # keys 并不保序
         cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
@@ -184,7 +182,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         ctx.emb_dim = emb_dim
         ctx.embedding_weight = full_emb
         ctx.emb_cache = emb_cache
-        ctx.in_each_rank_cache_mask = in_each_rank_cache_mask
+        ctx.cached_range = cached_range
 
         return ret_value
 
@@ -197,8 +195,11 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         full_emb = ctx.embedding_weight
         emb_dim = ctx.emb_dim
         emb_cache = ctx.emb_cache
-        in_each_rank_cache_mask = ctx.in_each_rank_cache_mask
+        in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
+            keys, ctx.cached_range)
 
+        # 下面的1.待优化
+        '''
         assert keys.shape[0] == grad_output.shape[0]
         assert emb_dim == grad_output.shape[1]
 
@@ -219,10 +220,8 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             cached_keys_in_this_rank, values_in_this_rank, emb_cache.shape)
         grad = grad.cuda() / dist.get_world_size()
         emb_cache.grad = grad
-        
-        
-        
-        '''
+
+        # 上面的1.待优化
         # 2 aggregate grad of in-dram keys
         reduced_dram_grads = reduce_sparse_kv_tensor(
             keys, grad_output, full_emb.shape, 0)
@@ -241,7 +240,8 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
                 full_emb.grad = reduced_dram_grads / dist.get_world_size()
             XLOG.debug("rank0: set DRAM Emb's grad done")
         '''
-        # 实际中发现上面的方式会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的
+
+        # 实际中发现上面的方式2.会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的，只测性能，正确性有问题
         if type(full_emb) is DistEmbedding:
             full_emb.record_grad(
                keys, grad_output)

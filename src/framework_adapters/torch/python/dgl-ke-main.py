@@ -16,10 +16,10 @@ import os, gc
 import time
 import os
 
-if os.path.exists("/usr/bin/docker"):
-    os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-host:{os.environ["LD_LIBRARY_PATH"]}'
-else:
-    os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-docker:{os.environ["LD_LIBRARY_PATH"]}'
+# if os.path.exists("/usr/bin/docker"):
+#     os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-host:{os.environ["LD_LIBRARY_PATH"]}'
+# else:
+#     os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-docker:{os.environ["LD_LIBRARY_PATH"]}'
 
 import dgl
 import random
@@ -28,7 +28,6 @@ import numpy as np
 random.seed(0)
 np.random.seed(0)
 torch.use_deterministic_algorithms(True)
-# dgl.seed(0)
 
 import dglke
 from dglke.dataloader import ConstructGraph, EvalDataset, TrainDataset, NewBidirectionalOneShotIterator
@@ -99,8 +98,14 @@ def prepare_save_path(args):
         os.makedirs(args.save_path)
 
 def main():
+    #  BUG!!!!
+    # dgl.seed(0) 
     import sys
-    common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 --max_step=10000 --no_save_emb=true --batch_size=1000 --neg_sample_size=200 --regularization_coef=1e-07 --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+    common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=8\
+        --max_step=1000000 --no_save_emb=true --batch_size=1000\
+        --neg_sample_size=200 --regularization_coef=1e-07\
+        --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
+        --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
     
     # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 {common_args}'
 
@@ -152,6 +157,8 @@ def main():
     args.soft_rel_part = args.mix_cpu_gpu and args.rel_part
     g = ConstructGraph(dataset, args)
     train_data = TrainDataset(g, dataset, args, ranks=args.num_proc, has_importance=args.has_edge_importance)
+   
+       
     # if there is no cross partition relaiton, we fall back to strict_rel_part
     args.strict_rel_part = args.mix_cpu_gpu and (train_data.cross_part == False)
     args.num_workers = 8 # fix num_worker to 8
@@ -347,6 +354,9 @@ def main():
         procs = []
         barrier = mp.Barrier(args.num_proc)
         for i in range(args.num_proc):
+            if i == 0:
+                continue
+            
             if args.dataset == "wikikg90M":
                 valid_sampler = [valid_sampler_tails[i]] if args.valid else None
             else:
@@ -362,6 +372,15 @@ def main():
             procs.append(proc)
             proc.start()
             print(f"[Rank{i}] pid = {proc.pid}")
+        
+        train_mp(args, model,
+                      train_samplers[0],
+                      None,
+                      0,
+                      rel_parts,
+                      cross_rels,
+                      barrier)
+
         for i, proc in enumerate(procs):
             proc.join()
             assert proc.exitcode == 0
