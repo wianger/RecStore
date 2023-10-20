@@ -99,7 +99,6 @@ def prepare_save_path(args):
 
 def main():
     #  BUG!!!!
-    # dgl.seed(0) 
     import sys
     common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=8\
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
