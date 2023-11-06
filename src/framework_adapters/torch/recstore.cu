@@ -56,7 +56,7 @@ class GpuCache : public torch::CustomClassHolder {
                 "The tensor of requested indices must be on GPU.");
 
     TORCH_CHECK(keys.scalar_type() == torch::kLong,
-        "The tensor of requested indices must be of type int64.");
+                "The tensor of requested indices must be of type int64.");
 
     // torch::Tensor values = at::zeros(
     //     torch::IntArrayRef({(int64_t)keys.sizes()[0], (int64_t)emb_dim}),
@@ -93,11 +93,11 @@ class GpuCache : public torch::CustomClassHolder {
   void Replace(torch::Tensor keys, torch::Tensor values) {
     const cudaStream_t stream = at::cuda::getDefaultCUDAStream();
     TORCH_CHECK(keys.scalar_type() == torch::kLong,
-        "The tensor of requested indices must be of type int64.");
+                "The tensor of requested indices must be of type int64.");
     TORCH_CHECK(keys.sizes()[0] == values.sizes()[0],
-        "First dimensions of keys and values must match");
+                "First dimensions of keys and values must match");
     TORCH_CHECK(values.sizes()[1] == emb_dim,
-        "Embedding dimension must match ");
+                "Embedding dimension must match ");
 
     cache.Replace(keys.data_ptr<key_t>(), keys.sizes()[0],
                   values.data_ptr<float>(), stream);
@@ -164,6 +164,29 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
       cached_start_key, cached_end_key, len, emb_vec_size, dram_tensor.numel(),
       hbm_tensor.numel());
   C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+at::Tensor renumberingGraphID(const at::Tensor originalID,
+                              const at::Tensor cached_keys,
+                              const int64_t num_gid) {
+  TORCH_CHECK(originalID.dtype() == at::kLong, "");
+  TORCH_CHECK(cached_keys.dtype() == at::kLong, "");
+
+  at::Tensor ret = originalID.clone();
+  int64_t originalIDPtr = originalID.data_ptr<int64_t>();
+  int length = originalID.numel();
+
+  int num_cached_keys = cached_keys.numel();
+  std::unordered_map<int64_t, int64_t> renumbering_map;
+  renumbering_map.reserve(length);
+
+  for (int i = 0; i < num_cached_keys; i++) {
+    renumbering_map[cached_keys[i]] = i;
+  }
+
+  std::atomic<int64_t>
+
+      return ret;
 }
 
 TORCH_LIBRARY(librecstore_pytorch, m) {
