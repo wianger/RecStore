@@ -166,28 +166,28 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-at::Tensor renumberingGraphID(const at::Tensor originalID,
-                              const at::Tensor cached_keys,
-                              const int64_t num_gid) {
-  TORCH_CHECK(originalID.dtype() == at::kLong, "");
-  TORCH_CHECK(cached_keys.dtype() == at::kLong, "");
+// at::Tensor renumberingGraphID(const at::Tensor originalID,
+//                               const at::Tensor cached_keys,
+//                               const int64_t num_gid) {
+//   TORCH_CHECK(originalID.dtype() == at::kLong, "");
+//   TORCH_CHECK(cached_keys.dtype() == at::kLong, "");
 
-  at::Tensor ret = originalID.clone();
-  int64_t originalIDPtr = originalID.data_ptr<int64_t>();
-  int length = originalID.numel();
+//   at::Tensor ret = originalID.clone();
+//   int64_t originalIDPtr = originalID.data_ptr<int64_t>();
+//   int length = originalID.numel();
 
-  int num_cached_keys = cached_keys.numel();
-  std::unordered_map<int64_t, int64_t> renumbering_map;
-  renumbering_map.reserve(length);
+//   int num_cached_keys = cached_keys.numel();
+//   std::unordered_map<int64_t, int64_t> renumbering_map;
+//   renumbering_map.reserve(length);
 
-  for (int i = 0; i < num_cached_keys; i++) {
-    renumbering_map[cached_keys[i]] = i;
-  }
+//   for (int i = 0; i < num_cached_keys; i++) {
+//     renumbering_map[cached_keys[i]] = i;
+//   }
 
-  std::atomic<int64_t>
+//   std::atomic<int64_t>
 
-      return ret;
-}
+//       return ret;
+// }
 
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")

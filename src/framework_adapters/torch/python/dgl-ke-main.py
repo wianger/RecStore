@@ -12,6 +12,9 @@ dglke_train --model_name TransE_l2
 '''
 
 
+from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
+from controller_process import ControllerServer, CachedSampler
+import test_utils
 import pickle
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
 from dglke.dataloader import get_dataset
@@ -32,8 +35,11 @@ import random
 import torch
 import torch as th
 import numpy as np
+import sys
 
-import test_utils
+sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+from cache_common import CacheShardingPolicy  # nopep8
+
 
 random.seed(0)
 np.random.seed(0)
@@ -51,6 +57,42 @@ else:
     from dglke.train_pytorch import load_model
     from dglke.train_pytorch import train, train_mp
     from dglke.train_pytorch import test, test_mp
+
+
+def CreateSamplers(args, kg_dataset: KGDataset, train_data: TrainDataset):
+    train_samplers = []
+    for i in range(args.num_proc):
+        # for each GPU, allocate num_proc // num_GPU processes
+        train_sampler_head = train_data.create_sampler(args.batch_size,
+                                                       args.neg_sample_size,
+                                                       args.neg_sample_size,
+                                                       mode='head',
+                                                       num_workers=args.num_workers,
+                                                       shuffle=args.shuffle,
+                                                       exclude_positive=False,
+                                                       rank=i,
+                                                       real_train=True,
+                                                       )
+        train_sampler_tail = train_data.create_sampler(args.batch_size,
+                                                       args.neg_sample_size,
+                                                       args.neg_sample_size,
+                                                       mode='tail',
+                                                       num_workers=args.num_workers,
+                                                       shuffle=args.shuffle,
+                                                       exclude_positive=False,
+                                                       rank=i,
+                                                       real_train=True,
+                                                       )
+        bidirect_oneshot_iter = NewBidirectionalOneShotIterator(train_sampler_head, train_sampler_tail,
+                                                                args.neg_sample_size, args.neg_sample_size,
+                                                                True, kg_dataset.n_entities,
+                                                                args.has_edge_importance,
+                                                                # renumbering_dict,
+                                                                None,
+                                                                True,
+                                                                )
+        train_samplers.append(bidirect_oneshot_iter)
+    return train_samplers
 
 
 class ArgParser(CommonArgParser):
@@ -90,6 +132,8 @@ class ArgParser(CommonArgParser):
         self.add_argument(
             '--use_my_emb', type=ArgParser._str_to_bool, required=True, help='.')
         self.add_argument('--cache_ratio', type=float, required=True, help='.')
+        self.add_argument('--shuffle', type=bool, default=False, help='.')
+        self.add_argument('--L', type=int, default=10, help='lookahead value')
 
 
 def prepare_save_path(args):
@@ -115,7 +159,6 @@ def main():
         --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
 
     # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 {common_args}'
-
     cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 {common_args}'
     # cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
 
@@ -157,7 +200,8 @@ def main():
             'The number of processes needs to be divisible by the number of GPUs'
     # For multiprocessing training, we need to ensure that training processes are synchronized periodically.
     if args.num_proc > 1:
-        args.force_sync_interval = 1000
+        # args.force_sync_interval = 1000
+        args.force_sync_interval = 1
 
     args.eval_filter = not args.no_eval_filter
     if args.neg_deg_sample_eval:
@@ -166,8 +210,6 @@ def main():
     args.soft_rel_part = args.mix_cpu_gpu and args.rel_part
 
     print("ARGS: ", args)
-    SHUFFLE = False
-
     g = ConstructGraph(dataset, args)
     train_data = TrainDataset(
         g, dataset, args, ranks=args.num_proc, has_importance=args.has_edge_importance)
@@ -176,51 +218,29 @@ def main():
         train_data.cross_part == False)
     args.num_workers = 8  # fix num_worker to 8
 
-    renumbering_dict = train_data.PreSampling(args.batch_size,
-                                              0.1,
-                                              args.neg_sample_size,
-                                              args.neg_sample_size,
-                                              #   args.num_workers,
-                                              1,
-                                              SHUFFLE,
-                                              exclude_positive=False,
-                                              has_edge_importance=False,
-                                              )
-    train_data.RenumberingGraph(renumbering_dict)
-
+    renumbering_dict, cache_sizes_all_rank = train_data.PreSampling(args.batch_size,
+                                                                    args.cache_ratio,
+                                                                    args.neg_sample_size,
+                                                                    args.neg_sample_size,
+                                                                    #   args.num_workers,
+                                                                    num_workers=1,
+                                                                    shuffle=args.shuffle,
+                                                                    exclude_positive=False,
+                                                                    has_edge_importance=False,
+                                                                    )
     test_utils.diff_tensor(renumbering_dict, "renumbering_dict")
 
-    train_samplers = []
-    for i in range(args.num_proc):
-        # for each GPU, allocate num_proc // num_GPU processes
-        train_sampler_head = train_data.create_sampler(args.batch_size,
-                                                       args.neg_sample_size,
-                                                       args.neg_sample_size,
-                                                       mode='head',
-                                                       num_workers=args.num_workers,
-                                                       shuffle=SHUFFLE,
-                                                       exclude_positive=False,
-                                                       rank=i,
-                                                       real_train=True,
-                                                       )
-        train_sampler_tail = train_data.create_sampler(args.batch_size,
-                                                       args.neg_sample_size,
-                                                       args.neg_sample_size,
-                                                       mode='tail',
-                                                       num_workers=args.num_workers,
-                                                       shuffle=SHUFFLE,
-                                                       exclude_positive=False,
-                                                       rank=i,
-                                                       real_train=True,
-                                                       )
-        bidirect_oneshot_iter = NewBidirectionalOneShotIterator(train_sampler_head, train_sampler_tail,
-                                                                args.neg_sample_size, args.neg_sample_size,
-                                                                True, dataset.n_entities,
-                                                                args.has_edge_importance,
-                                                                # renumbering_dict,
-                                                                None
-                                                                )
-        train_samplers.append(bidirect_oneshot_iter)
+    CacheShardingPolicy.set_presampling(cache_sizes_all_rank)
+    train_data.RenumberingGraph(renumbering_dict)
+
+    controller = ControllerServer(args)
+    controller.StartControlProcess()
+
+    train_samplers = CreateSamplers(
+        args, kg_dataset=dataset, train_data=train_data)
+
+    train_samplers = CachedSampler.BatchCreateCachedSamplers(
+        args.L, train_samplers, controller.GetMessageQueues())
 
     rel_parts = train_data.rel_parts if args.strict_rel_part or args.soft_rel_part else None
     cross_rels = train_data.cross_rels if args.soft_rel_part else None

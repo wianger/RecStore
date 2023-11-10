@@ -269,7 +269,7 @@ class DistSparseGradOptimizer(abc.ABC):
                         idics.append(idx)
                         grads.append(embbed_value.grad.data)
 
-                for each_hand_record_grad in emb._hand_grad:
+                for each_hand_record_grad in emb.get_grad():
                     each_idx, each_grad = each_hand_record_grad
                     if each_grad is not None:
                         idics.append(each_idx)

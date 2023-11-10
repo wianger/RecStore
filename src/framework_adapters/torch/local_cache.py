@@ -293,18 +293,18 @@ class KnownLocalCachedEmbedding(AbsEmb):
             assert not embed_value.requires_grad
         return embed_value
 
-    @staticmethod
-    def generate_cached_range(emb, cache_ratio):
-        rank, world_size = dist.get_rank(), dist.get_world_size()
-        capacity = emb.shape[0]
+    # @staticmethod
+    # def generate_cached_range(emb, cache_ratio):
+    #     rank, world_size = dist.get_rank(), dist.get_world_size()
+    #     capacity = emb.shape[0]
 
-        per_shard_size = (capacity + world_size-1) // world_size
-        cached_range = []
-        for i in range(world_size):
-            start = i * per_shard_size
-            end = min((i+1) * per_shard_size, capacity)
-            cached_range.append((start, end))
-        return cached_range
+    #     per_shard_size = (capacity + world_size-1) // world_size
+    #     cached_range = []
+    #     for i in range(world_size):
+    #         start = i * per_shard_size
+    #         end = min((i+1) * per_shard_size, capacity)
+    #         cached_range.append((start, end))
+    #     return cached_range
 
     def reg_opt(self, opt):
         # TODO: Attenion!

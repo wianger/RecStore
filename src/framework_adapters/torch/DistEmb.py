@@ -115,6 +115,9 @@ class DistEmbedding:
         """Reset the traced data."""
         self._trace = []
         self._hand_grad = []
+    
+    def get_grad(self):
+        return self._hand_grad
 
     def set_data(self, data: th.Tensor):
         assert data.shape == (self.num_embeddings,

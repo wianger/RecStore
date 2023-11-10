@@ -30,6 +30,23 @@ class CacheShardingPolicy:
             cached_range.append((start, end))
         return cached_range
 
+    
+    @staticmethod
+    def set_presampling(cache_size_per_rank):
+        CacheShardingPolicy.cache_size_per_rank = cache_size_per_rank
+    
+    @staticmethod
+    def generate_cached_range_from_presampling():
+        cache_size_per_rank = CacheShardingPolicy.cache_size_per_rank
+        world_size = len(cache_size_per_rank)
+        cached_range = []
+        start = 0
+        for i in range(world_size):
+            end = start + cache_size_per_rank[i]
+            cached_range.append((start, end))
+            start = end
+        return cached_range
+
 
 class AbsEmb(ABC):
     def __init__(self):
@@ -53,9 +70,8 @@ class TorchNativeStdEmbDDP(AbsEmb):
         else:
             weight = emb
 
-            
         print("weight.shape", weight.shape)
-        
+
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
             self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
@@ -77,7 +93,6 @@ class TorchNativeStdEmbDDP(AbsEmb):
         opt.add_param_group({"params": self.std_emb_ddp.parameters()})
 
 
-
 class TorchNativeStdEmb(AbsEmb):
     def __init__(self, emb, device):
         # this standard embedding will clone (deep copy) the embedding variable <emb>
@@ -89,9 +104,8 @@ class TorchNativeStdEmb(AbsEmb):
         else:
             weight = emb
 
-            
         print("weight.shape", weight.shape, flush=True)
-        
+
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
             self.std_emb = std_emb
