@@ -7,7 +7,6 @@ set -e
 sudo service ssh start
 
 USER=xieminhui
-
 PROJECT_PATH="/home/${USER}/RecStore"
 
 
@@ -81,7 +80,7 @@ cmake -DgRPC_INSTALL=ON \
       -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
       ../..
 make -j
-sudo make install -j
+make install -j
 popd
 
 sudo apt install -y sshpass

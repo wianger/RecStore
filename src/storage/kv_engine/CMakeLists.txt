@@ -26,6 +26,8 @@ target_link_libraries(
 )
   # INTERFACE pet_kv dash_hash PMHashPCLHT PMHashLevel PMHashClevel PMHashCCEHVM)
 
+cmake_policy(SET CMP0076 NEW)
+
 target_sources(
   kv_engine INTERFACE kv_engine_register.cc)
 # KV engine factory done

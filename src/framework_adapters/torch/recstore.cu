@@ -1,11 +1,11 @@
-#include "storage/gpu_cache/nv_gpu_cache.hpp"
-
-#include "gpu_cache_nohash.h"
-
 #include <ATen/cuda/CUDAContext.h>
 #include <torch/custom_class.h>
 #include <torch/extension.h>
 #include <torch/torch.h>
+
+#include "IPCTensor.h"
+#include "gpu_cache_nohash.h"
+#include "storage/gpu_cache/nv_gpu_cache.hpp"
 
 namespace recstore {
 
@@ -206,6 +206,8 @@ TORCH_LIBRARY(librecstore_pytorch, m) {
 
   m.class_<GPUCacheWithNoHashTorch>("GpuCacheWithNoHash")
       .def(torch::init<int64_t, int64_t, int64_t, int64_t>());
+
+  RegisterIPCTensorFactory(m);
 }
 
 }  // namespace recstore

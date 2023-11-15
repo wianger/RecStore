@@ -87,7 +87,8 @@ find_package(glog CONFIG REQUIRED)
 
 
 # set(Torch_DIR "/opt/conda/lib/python3.8/site-packages/torch/share/cmake/Torch/")
-set(Torch_DIR "/home/xieminhui/anaconda3/lib/python3.10/site-packages/torch/share/cmake/Torch")
+set(Torch_DIR "/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/share/cmake/Torch")
+# set(Torch_DIR "/home/xieminhui/pytorch/torch/share/cmake/Torch")
 
 if(OPENMP_FOUND)
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler -fopenmp")

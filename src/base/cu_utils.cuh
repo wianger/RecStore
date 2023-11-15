@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 
 #define CUDA_CHECK(val) \
@@ -17,8 +19,6 @@ inline void cuda_check_(cudaError_t val, const char* file, int line) {
                         cudaGetErrorString(val));
   }
 }
-}  // namespace nv
-
 class CudaDeviceRestorer {
  public:
   CudaDeviceRestorer() { CUDA_CHECK(cudaGetDevice(&dev_)); }
@@ -35,3 +35,4 @@ class CudaDeviceRestorer {
  private:
   int dev_;
 };
+}  // namespace nv

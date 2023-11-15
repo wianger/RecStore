@@ -1,3 +1,4 @@
+#include <cstdint>
 __global__ static void UVAQueryKernel(const int64_t *d_indices,
                                       const float *d_db, const int emb_dim,
                                       float *d_output_buffer,

@@ -82,8 +82,9 @@ macro(DO_FIND_CITYHASH_DOWNLOAD)
 	include(ExternalProject)
 	ExternalProject_Add(
 		Cityhash
-		URL https://github.com/formath/cityhash/archive/1.1.1.tar.gz
-		URL_HASH SHA256=01dd4080050dc5fbd806c4c66b5f09f9b86fb9ba73e4f1076ba31e907ac58f84
+		GIT_REPOSITORY https://github.com/google/cityhash
+		# URL https://github.com/formath/cityhash/archive/1.1.1.tar.gz
+		# URL_HASH SHA256=01dd4080050dc5fbd806c4c66b5f09f9b86fb9ba73e4f1076ba31e907ac58f84
 		UPDATE_COMMAND ""
 		CONFIGURE_COMMAND ./configure --prefix=${CITYHASH_ROOT_DIR}
 		BUILD_COMMAND make all

@@ -35,9 +35,10 @@ import random
 import torch
 import torch as th
 import numpy as np
-import sys
 
+import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+
 from cache_common import CacheShardingPolicy  # nopep8
 
 
