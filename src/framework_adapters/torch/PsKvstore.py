@@ -36,6 +36,8 @@ class ShmKVStore(AbsKVStore):
         assert name not in self.tensor_store.keys()
         temp = init_func(
             shape=shape, dtype=dtype).share_memory_()
+            # shape=shape, dtype=dtype)
+
         # Don't use share_memory_().pinned_memory(). It will cause BUG!
         self.tensor_store[name] = temp
 
@@ -64,12 +66,21 @@ class ShmKVStore(AbsKVStore):
     def Delete(self, name):
         del self.tensor_store[name]
 
-    def GetUVAMap(self, name):
-        temp = self.tensor_store[name]
+
+    @staticmethod
+    def GetUVAMap(tensor):
+        temp = tensor
         cudart = th.cuda.cudart()
         r = cudart.cudaHostRegister(temp.data_ptr(), temp.numel() * temp.element_size(), 0)
-        print(f"cudaHostRegister {r}, type(r)={type(r)}")
+        print(f"cudaHostRegister {r}")
         return r
+
+    # def GetUVAMap(self, name):
+    #     temp = self.tensor_store[name]
+    #     cudart = th.cuda.cudart()
+    #     r = cudart.cudaHostRegister(temp.data_ptr(), temp.numel() * temp.element_size(), 0)
+    #     print(f"cudaHostRegister {r}")
+    #     return r
 
     def GetRowTensor(self, name):
         return self.tensor_store[name]

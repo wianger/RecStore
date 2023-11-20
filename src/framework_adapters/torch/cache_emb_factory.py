@@ -10,10 +10,11 @@ class CacheEmbFactory:
         print_rank0(
             f"New CachedEmbedding, name={emb.name}, shape={emb.shape}, cache_type={cache_type}")
 
-        # cached_range = CacheShardingPolicy.generate_cached_range(
-        #     emb, args['cache_ratio'])
-        cached_range = CacheShardingPolicy.generate_cached_range_from_presampling()
-        print_rank0(f"cache_range is {cached_range}")
+        cached_range = CacheShardingPolicy.generate_cached_range(
+            emb, args['cache_ratio'])
+
+        # cached_range = CacheShardingPolicy.generate_cached_range_from_presampling()
+        print_rank0(f"fixed cache_range is {cached_range}")
 
         if cache_type == "KnownShardedCachedEmbedding":
             abs_emb = KnownShardedCachedEmbedding(

@@ -7,10 +7,11 @@ import torch.optim as optim
 from utils import XLOG
 
 from DistEmb import DistEmbedding
-from PsKvstore import get_kvstore
+from PsKvstore import get_kvstore, ShmKVStore
 from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 from cache_common import AbsEmb, NVGPUCache
-from recstore import uva_cache_query_op
+
+from recstore import uva_cache_query_op,load_recstore_library
 
 
 class LocalCachedEmbeddingFn(torch.autograd.Function):
@@ -93,6 +94,8 @@ class LocalCachedEmbedding(AbsEmb):
 
         raise NotImplementedError("TODO: update cache in backward ")
 
+        
+
     def forward(self, input_keys):
         embed_value = LocalCachedEmbeddingFn.apply(
             input_keys, self.emb, self.gpu_cache, self.fake_tensor)
@@ -136,7 +139,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
-        
+
         uva_cache_query_op(ret_value,
                            keys,
                            emb_cache,
@@ -199,7 +202,6 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             keys, ctx.cached_range)
 
         # 下面的1.待优化
-        '''
         assert keys.shape[0] == grad_output.shape[0]
         assert emb_dim == grad_output.shape[1]
 
@@ -239,17 +241,18 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             else:
                 full_emb.grad = reduced_dram_grads / dist.get_world_size()
             XLOG.debug("rank0: set DRAM Emb's grad done")
-        '''
 
+        '''
         # 实际中发现上面的方式2.会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的，只测性能，正确性有问题
         if type(full_emb) is DistEmbedding:
             full_emb.record_grad(
                keys, grad_output)
             # if rank == 0:
-            #     XLOG.warn(f"in local cache's back {keys.shape}, {full_emb.name}")
+            #     XLOG.warn(f"in local cache's back {keys.shape}, {grad_output}")
         else:
             dram_grads = kv_to_sparse_tensor(keys, grad_output, full_emb.shape)
             full_emb.grad = dram_grads / dist.get_world_size()  
+        '''
         return None, None, None, torch.randn(1, 1), None, None
 
 
@@ -266,13 +269,12 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.cached_range = cached_range
         self.full_emb = full_emb
         
-        self.kvstore = get_kvstore()
-        self.kvstore.GetUVAMap(full_emb._name)
-        
-        # assert False
+        # self.kvstore = get_kvstore()
 
+        ShmKVStore.GetUVAMap(full_emb.get_shm_tensor())
         self.emb_cache.copy_(self.full_emb.weight[start:end])
         self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
+
 
 
     def forward(self, input_keys, trace=True):

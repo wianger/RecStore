@@ -262,21 +262,22 @@ class DistSparseGradOptimizer(abc.ABC):
                 grads = []
                 assert len(emb._trace) == 0
                 for trace in emb._trace:
-                    idx, embbed_value = trace
+                    each_idx, embbed_value = trace
                     if embbed_value.grad is None:
-                        assert len(idx) == 0
+                        assert len(each_idx) == 0
                     else:
-                        idics.append(idx)
+                        idics.append(each_idx)
                         grads.append(embbed_value.grad.data)
+                    # print("autotrace", each_idx, each_grad)
 
-                for each_hand_record_grad in emb.get_grad():
+                for each_hand_record_grad in emb.get_hand_grad():
                     each_idx, each_grad = each_hand_record_grad
                     if each_grad is not None:
                         idics.append(each_idx)
                         grads.append(each_grad)
-
                     else:
-                        assert len(idx) == 0
+                        assert len(each_idx) == 0
+                    # print("get_hand_grad", each_idx, each_grad)
                         
                 for each_idx, each_grad in zip(idics, grads):
                     self.update(each_idx, each_grad, emb)
@@ -489,32 +490,32 @@ class SparseSGD(DistSparseGradOptimizer):
         if len(idx) == 0:
             return
 
-
         state_dev = th.device("cpu")
+
         exec_dev = grad.device
+        # assert exec_dev == th.device("cpu")
 
         # tmp = - clr * grad
         # if tmp.device != state_dev:
-        #     tmp = tmp.to(state_dev)
-        # emb.get_shm_tensor().index_add(0, idx, tmp)
+        #     tmp = tmp.to(state_dev, non_blocking=True)
+        #     idx= idx.to(state_dev, non_blocking=True)
+        # emb.get_shm_tensor().index_add_(0, idx, tmp)
 
-        assert exec_dev == th.device("cpu")
         # the update is non-linear so indices must be unique
-        grad_indices, inverse, cnt = th.unique(
+        uniq_grad_indices, inverse, cnt = th.unique(
             idx, return_inverse=True, return_counts=True
         )
-        grad_values = th.zeros(
-            (grad_indices.shape[0], grad.shape[1]), device=exec_dev
+        uniq_grad_values = th.zeros(
+            (uniq_grad_indices.shape[0], grad.shape[1]), device=exec_dev
         )
-        grad_values.index_add_(0, inverse, grad)
-        grad_values = grad_values / cnt.unsqueeze(1)
+        uniq_grad_values.index_add_(0, inverse, grad)
+        uniq_grad_values = uniq_grad_values / cnt.unsqueeze(1)
+
         # update emb
-        tmp = clr * grad_values
+        tmp = clr * uniq_grad_values
         tmp_dst = tmp.to(state_dev, non_blocking=True)
-        XLOG.debug(f"OPT: grad_indices={grad_indices}, tmp_dst={tmp_dst}")
-        emb._tensor[grad_indices] = emb._tensor[grad_indices] - tmp_dst
-
-
+        XLOG.debug(f"OPT: grad_indices={uniq_grad_indices}, tmp_dst={tmp_dst}")
+        emb._tensor[uniq_grad_indices] = emb._tensor[uniq_grad_indices] - tmp_dst
 
 
 class SparseRowWiseAdaGrad(DistSparseGradOptimizer):

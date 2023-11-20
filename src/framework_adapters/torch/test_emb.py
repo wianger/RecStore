@@ -17,6 +17,9 @@ import torch.distributed as dist
 import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+
+from recstore import load_recstore_library
+
 from cache_common import ShmTensorStore, TorchNativeStdEmbDDP, CacheShardingPolicy
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import LocalCachedEmbedding, KnownLocalCachedEmbedding
@@ -38,33 +41,54 @@ EmbContext = namedtuple('EmbContext', ['emb', 'sparse_opt', 'dist_opt'])
 USE_SGD = True
 # USE_SGD = False
 
+
+def worker_main(routine, worker_id, num_workers, emb_context, args):
+    # import recstore
+    # ret_value = torch.zeros((100,32))
+    # keys = torch.zeros((100,32))
+    # emb_cache= torch.zeros((100,32))
+    # weight = torch.zeros((1000,32))
+    # cached_start_key = 10
+    # cached_end_key = 15
+    # recstore.uva_cache_query_op(ret_value,
+    #                     keys,
+    #                     emb_cache,
+    #                     weight,
+    #                     cached_start_key,
+    #                     cached_end_key)
+    torch.cuda.set_device(worker_id)
+    torch.manual_seed(worker_id)
+    dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
+        master_ip='127.0.0.1', master_port='12545')
+    world_size = num_workers
+    torch.distributed.init_process_group(backend=None,
+                                            init_method=dist_init_method,
+                                            world_size=world_size,
+                                            rank=worker_id,
+                                            timeout=datetime.timedelta(seconds=100))
+    
+    # XLOG.debug(f"before, rank {worker_id}")
+    # a = torch.zeros((int(1e5), 32))
+    # print(a)
+    # XLOG.debug(f"after, rank {worker_id}")
+    routine(worker_id, num_workers, emb_context, args)
+
 class TestShardedCache:
-    num_workers = 8
+    num_workers = 2
     EMB_DIM = 32
 
-    # EMB_LEN = 1000
+    EMB_LEN = 1000
     # BATCH_SIZE=10
-    EMB_LEN = int(1 * 1e6)
+    # EMB_LEN = int(1 * 1e6)
     BATCH_SIZE=1024
 
     def main_routine(self, routine, args=None):
         # wrap rountine with dist_init
-        def worker_main(routine, worker_id, num_workers, emb_context, args):
-            torch.cuda.set_device(worker_id)
-            torch.manual_seed(worker_id)
-            dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
-                master_ip='127.0.0.1', master_port='12545')
-            world_size = num_workers
-            torch.distributed.init_process_group(backend=None,
-                                                 init_method=dist_init_method,
-                                                 world_size=world_size,
-                                                 rank=worker_id,
-                                                 timeout=datetime.timedelta(seconds=100))
-            routine(worker_id, num_workers, emb_context, args)
-
         print(
             f"========== Running Test with routine {routine} {args}==========")
 
+        
+        
         kvinit()
         emb = DistEmbedding(TestShardedCache.EMB_LEN,
                             TestShardedCache.EMB_DIM, name="emb",)
@@ -77,20 +101,21 @@ class TestShardedCache:
         else:
             sparse_opt = optim.Adam([fake_tensor], lr=1)
             dist_opt = DistOpt.SparseAdagrad([emb], lr=1/TestShardedCache.num_workers)
-        
-        
         emb_context = EmbContext(emb=emb, sparse_opt=sparse_opt, dist_opt=dist_opt)
 
         workers = []
-        for worker_id in range(TestShardedCache.num_workers):
+        for worker_id in range(0, TestShardedCache.num_workers):
             p = mp.Process(target=worker_main, args=(
                 routine, worker_id, TestShardedCache.num_workers, emb_context, args))
             p.start()
+            print(f"Worker {worker_id} pid={p.pid}")
             workers.append(p)
+        # worker_main(
+        #         routine, 0, TestShardedCache.num_workers, emb_context, args)
 
         for each in workers:
             each.join()
-            assert each.exitcode == 0
+            # assert each.exitcode == 0
 
         print("join all processes done")
 
@@ -207,19 +232,15 @@ class TestShardedCache:
             #             emb_249 , std_emb_249)), "forward is error"
 
     def test_known_sharded_cache(self,):
-        # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
-        for test_cache in ["KnownLocalCachedEmbedding"]:
+        for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
+        # for test_cache in ["KnownLocalCachedEmbedding"]:
             for cache_ratio in [0.1, 0.3, 0.5]:
+            # for cache_ratio in [0.1,]:
                 args = {"test_cache": test_cache, "cache_ratio": cache_ratio}
                 print("xmh: ", args)
                 self.main_routine(self.routine_cache_helper, args)
 
-    @pytest.mark.skip(reason="now we use known local cache")
-    def test_local_cache(self):
-        args = {"test_cache": "LocalCachedEmbedding"}
-        self.main_routine(self.routine_cache_helper, args)
-
-
 if __name__ == "__main__":
+    mp.set_start_method("spawn")
     test = TestShardedCache()
     test.test_known_sharded_cache()

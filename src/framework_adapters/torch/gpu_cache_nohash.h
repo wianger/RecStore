@@ -59,6 +59,8 @@ class GPUCacheWithNoHashTorch : public torch::CustomClassHolder {
                   values.data_ptr<float>(), stream);
   }
 
+
+
  private:
   std::unique_ptr<GPUCacheWithNoHash<int64_t>> cache_;
 };

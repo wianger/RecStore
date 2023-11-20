@@ -1,6 +1,5 @@
-pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
-
-
+# pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
+set -e
 
 cd dgl-0.9.1
 
@@ -12,9 +11,9 @@ else
     temp_dir="build"
 fi
 
+rm -rf ${temp_dir}
 mkdir ${temp_dir}
 cd ${temp_dir}
-
 cmake -DUSE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda  ..
 make -j
 cd ..
@@ -22,6 +21,7 @@ cd python
 python setup.py develop
 
 
+cd ..
 cd dgl-ke
 cd python
 python setup.py develop

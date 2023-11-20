@@ -146,13 +146,15 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
                         const at::Tensor dram_tensor,
                         const long cached_start_key,
                         const long cached_end_key) {
+  // std::cout << "called uva_cache_query_op" << std::endl << std::flush;
   const size_t BLOCK_SIZE = 256;
   const size_t emb_vec_size = merge_dst.size(1);
   const size_t len = merge_dst.size(0);
-  TORCH_CHECK(merge_dst.size(0) == id_tensor.size(0), "");
-  TORCH_CHECK(id_tensor.dtype() == at::kLong, "");
-
-  TORCH_CHECK(hbm_tensor.size(0) == cached_end_key - cached_start_key, "");
+  TORCH_CHECK(merge_dst.size(0) == id_tensor.size(0),
+              "len(merge_dst)!=len(id_tensor)");
+  TORCH_CHECK(id_tensor.dtype() == at::kLong, "id_tensor must be int64");
+  TORCH_CHECK(hbm_tensor.size(0) == cached_end_key - cached_start_key,
+              "len(hbm_tensor) != end-start");
 
   const size_t len_in_float = len * emb_vec_size;
   const size_t num_blocks = (len_in_float - 1) / BLOCK_SIZE + 1;

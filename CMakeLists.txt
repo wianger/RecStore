@@ -28,7 +28,7 @@ endif()
 
 # setting compiler flags
 
-set(SM "86")
+set(SM "80;86")
 foreach(arch_name ${SM})
     if (arch_name STREQUAL 86 OR 
         arch_name STREQUAL 80 OR 
@@ -81,8 +81,12 @@ include("${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake")
 
 set(folly_DIR "${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/lib/cmake/folly")
 set(FOLLY_ROOT_DIR "${folly_DIR}")
+
+
 find_package(folly REQUIRED)
 find_package(gflags REQUIRED)
+
+set(glog_DIR "${PROJECT_SOURCE_DIR}/third_party/glog/glog-install-fPIC/usr/local/lib/cmake/glog")
 find_package(glog CONFIG REQUIRED)
 
 
