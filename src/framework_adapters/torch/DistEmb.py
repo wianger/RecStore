@@ -116,8 +116,27 @@ class DistEmbedding:
         self._trace = []
         self._hand_grad = []
     
-    def get_hand_grad(self):
-        return self._hand_grad
+    def get_grad(self,):
+        assert len(self._trace) == 0
+        for trace in self._trace:
+            each_idx, embbed_value = trace
+            if embbed_value.grad is None:
+                assert len(each_idx) == 0
+            else:
+                # idics.append(each_idx)
+                # grads.append(embbed_value.grad.data)
+                yield (each_idx, embbed_value.grad.data)
+            # print("autotrace", each_idx, each_grad)
+
+        for each_hand_record_grad in self._hand_grad:
+            each_idx, each_grad = each_hand_record_grad
+            if each_grad is not None:
+                # idics.append(each_idx)
+                # grads.append(each_grad)
+                yield (each_idx, each_grad)
+            else:
+                assert len(each_idx) == 0
+    
 
     def set_data(self, data: th.Tensor):
         assert data.shape == (self.num_embeddings,

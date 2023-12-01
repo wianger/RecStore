@@ -1,3 +1,4 @@
+set(CITYHASH_ROOT_DIR ${PROJECT_SOURCE_DIR}/third_party/cityhash-install)
 include(${PROJECT_SOURCE_DIR}/cmake/FindCityhash.cmake)
 
 add_library(base base.cc)

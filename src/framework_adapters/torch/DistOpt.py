@@ -258,28 +258,7 @@ class DistSparseGradOptimizer(abc.ABC):
             device = th.device("cpu")
             for emb in self._params:
                 name = emb.weight.name
-                idics = []
-                grads = []
-                assert len(emb._trace) == 0
-                for trace in emb._trace:
-                    each_idx, embbed_value = trace
-                    if embbed_value.grad is None:
-                        assert len(each_idx) == 0
-                    else:
-                        idics.append(each_idx)
-                        grads.append(embbed_value.grad.data)
-                    # print("autotrace", each_idx, each_grad)
-
-                for each_hand_record_grad in emb.get_hand_grad():
-                    each_idx, each_grad = each_hand_record_grad
-                    if each_grad is not None:
-                        idics.append(each_idx)
-                        grads.append(each_grad)
-                    else:
-                        assert len(each_idx) == 0
-                    # print("get_hand_grad", each_idx, each_grad)
-                        
-                for each_idx, each_grad in zip(idics, grads):
+                for each_idx, each_grad in emb.get_grad():
                     self.update(each_idx, each_grad, emb)
 
                 # if len(idics) == 0:

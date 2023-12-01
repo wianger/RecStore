@@ -153,7 +153,7 @@ def prepare_save_path(args):
 def main():
     #  BUG!!!!
     import sys
-    common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=8\
+    common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 \
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
         --neg_sample_size=200 --regularization_coef=1e-07\
         --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
@@ -161,7 +161,7 @@ def main():
 
     # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 {common_args}'
     cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 {common_args}'
-    # cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
+    cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
 
     args = ArgParser().parse_args(cli_args.split())
 
@@ -234,14 +234,18 @@ def main():
     CacheShardingPolicy.set_presampling(cache_sizes_all_rank)
     train_data.RenumberingGraph(renumbering_dict)
 
-    controller = ControllerServer(args)
+    controller = ControllerServer(args, None)
     controller.StartControlProcess()
 
     train_samplers = CreateSamplers(
         args, kg_dataset=dataset, train_data=train_data)
 
-    train_samplers = CachedSampler.BatchCreateCachedSamplers(
-        args.L, train_samplers, controller.GetMessageQueues())
+    # train_samplers = CachedSampler.BatchCreateCachedSamplers(
+    #     args.L, train_samplers, controller.GetMessageQueues())
+
+
+    grad_clients = controller.CreateGradClients()
+
 
     rel_parts = train_data.rel_parts if args.strict_rel_part or args.soft_rel_part else None
     cross_rels = train_data.cross_rels if args.soft_rel_part else None
@@ -394,7 +398,8 @@ def main():
                                                      i,
                                                      rel_parts,
                                                      cross_rels,
-                                                     barrier))
+                                                     barrier, 
+                                                     grad_clients[i]))
             procs.append(proc)
             proc.start()
             print(f"[Rank{i}] pid = {proc.pid}")
@@ -405,7 +410,8 @@ def main():
                  0,
                  rel_parts,
                  cross_rels,
-                 barrier)
+                 barrier,
+                 grad_clients[i])
 
         for i, proc in enumerate(procs):
             proc.join()

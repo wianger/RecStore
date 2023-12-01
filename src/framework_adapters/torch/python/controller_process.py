@@ -92,18 +92,34 @@ class ControllerServer:
         self.L = args.L
         self.manager = mp.Manager()
         self.manager.__enter__()
-        self.async_qs = self.manager.list()
+        
+        # queues for sample
+        self.async_sample_qs = self.manager.list()
         for i in range(args.nr_gpus):
-            self.async_qs.append(self.manager.Queue(2))
+            self.async_sample_qs.append(self.manager.Queue(100))
+
+        # queues for grad
+        self.async_grad_qs = self.manager.list()
+        for i in range(args.nr_gpus):
+            self.async_grad_qs.append(self.manager.Queue(200))
 
     def __del__(self):
         for i in range(self.args.nr_gpus):
-            self.async_qs[i].put(None)
+            self.async_sample_qs[i].put(None)
         self.async_p.join()
         self.manager.__exit__(None, None, None)
 
+
+    def CreateGradClients(self):
+        ret = []
+        for each_q in self.async_grad_qs:
+            # ret.append(GradClient(each_q))
+            ret.append(None)
+        return ret
+
+
     def GetMessageQueues(self):
-        return self.async_qs
+        return self.async_sample_qs
 
     def StartControlProcess(self,):
         self.async_p = mp.Process(
@@ -111,9 +127,9 @@ class ControllerServer:
         self.async_p.start()
 
     def ControlProcess(self, ):
-        assert len(self.async_qs) == 8
+        assert len(self.async_sample_qs) == self.args.nr_gpus
         while True:
-            for each_q in self.async_qs:
+            for each_q in self.async_sample_qs:
                 try:
                     ret = each_q.get_nowait()
                     if ret is None:
@@ -121,17 +137,20 @@ class ControllerServer:
                 except queue.Empty:
                     pass
 
-    def PushGrad(self, keys, grads):
+    def ProcessGrad(self, name, keys, grads):
 
         pass
 
 
-class GradServer:
-    def __init__(self) -> None:
-        pass
+class GradClient:
+    def __init__(self, async_q) -> None:
+        self.async_q = async_q
 
-    def GradProcess(self):
+    def push(self, name, id_tensor, data_tensor):
+        id_tensor.share_memory_()
+        data_tensor.share_memory_()
+        self.async_q.put((name, id_tensor, data_tensor))
+        
+    def barrier(self):
         pass
-
-    def PushGrads(self):
-        pass
+        

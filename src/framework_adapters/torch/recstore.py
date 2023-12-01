@@ -13,4 +13,3 @@ uva_cache_query_op = torch.ops.librecstore_pytorch.uva_cache_query_op
 
 GpuCache = torch.classes.librecstore_pytorch.GpuCache
 IPCTensorFactory = torch.classes.librecstore_pytorch.IPCTensorFactory
-IPCGPUMemoryHandle = torch.classes.librecstore_pytorch.IPCGPUMemoryHandle
