@@ -14,19 +14,36 @@ def worker_main(worker_id, barrier, d):
     th.cuda.set_device(0)
 
     if worker_id == 0:
-        shm_tensor = recstore.IPCTensorFactory.NewIPCGPUTensor(
+        # master process: change the tensor from 1 to 100
+        gpu_tensor = recstore.IPCTensorFactory.NewIPCGPUTensor(
             "gpu0_tensor", (1000,), th.int64, 0)
-        shm_tensor.zero_()
-        shm_tensor[:10] = 1
+        gpu_tensor.zero_()
+        gpu_tensor[:10] = 1
+
+        barrier.wait()
+
+        cpu_tensor = recstore.IPCTensorFactory.NewIPCTensor(
+            "cpu0_tensor", (1000,), th.int64)
+        cpu_tensor.zero_()
+        cpu_tensor[:10] = 1
         barrier.wait()
 
     else:
         barrier.wait()
-        shm_tensor = recstore.IPCTensorFactory.GetIPCTensorFromName(
+        gpu_tensor = recstore.IPCTensorFactory.GetIPCTensorFromName(
             "gpu0_tensor")
-        print(f"in worker{worker_id} process", shm_tensor[:10])
-        shm_tensor[:10] = 100
-        print(f"in worker{worker_id} process", shm_tensor[:10])
+        print(f"in worker{worker_id} process", gpu_tensor[:10])
+        gpu_tensor[:10] = 100
+        print(f"in worker{worker_id} process", gpu_tensor[:10])
+
+        barrier.wait()
+
+        
+        cpu_tensor = recstore.IPCTensorFactory.GetIPCTensorFromName(
+            "cpu0_tensor")
+        print(f"in worker{worker_id} process", cpu_tensor[:10])
+        cpu_tensor[:10] = 100
+        print(f"in worker{worker_id} process", cpu_tensor[:10])
         return
 
 
@@ -35,7 +52,6 @@ nr_workers = 2
 
 
 barrier = mp.Barrier(nr_workers)
-
 
 
 recstore.IPCTensorFactory.ClearIPCMemory()

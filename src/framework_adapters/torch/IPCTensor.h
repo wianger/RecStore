@@ -1,3 +1,5 @@
+#pragma once
+
 #include <ATen/cuda/CUDAContext.h>
 #include <folly/system/MemoryMapping.h>
 #include <torch/custom_class.h>
@@ -10,16 +12,11 @@
 
 #include "base/cu_utils.cuh"
 #include "base/debug_utils.h"
+#include "base/sleep.h"
 
 namespace recstore {
 
-int64_t numel(const at::IntArrayRef shape) {
-  int64_t ret = 1;
-  for (auto i : shape) {
-    ret *= i;
-  }
-  return ret;
-}
+int64_t numel(const at::IntArrayRef shape);
 
 enum IPCTensorType {
   kCPUIPCTensor = 0,
@@ -29,7 +26,7 @@ enum IPCTensorType {
 class IPCTensorMemoryHandle {
   static constexpr int kShapeDimMax = 3;
 
-public:
+ public:
   IPCTensorMemoryHandle(const std::string &name, at::IntArrayRef shape,
                         at::ScalarType dtype)
       : dtype_(dtype) {
@@ -43,13 +40,16 @@ public:
     assert(name.size() < 96);
     strcpy(name_, name.c_str());
     size_ = numel(shape_vec()) * c10::elementSize(dtype_);
+    pid_ = getpid();
   }
 
   IPCTensorMemoryHandle(const std::string &name, at::IntArrayRef shape,
                         at::ScalarType dtype, int64_t dev_id,
                         cudaIpcMemHandle_t memHandle, void *dev_ptr)
-      : dev_ptr_(dev_ptr), dev_id_(dev_id), dtype_(dtype),
-        memHandle_(memHandle) {
+      : dtype_(dtype),
+        dev_ptr_(dev_ptr),
+        memHandle_(memHandle),
+        dev_id_(dev_id) {
     type_ = kGPUIPCTensor;
     memset(shape_, -1, kShapeDimMax * sizeof(int));
     for (int i = 0; i < shape.size(); i++) {
@@ -60,10 +60,7 @@ public:
     assert(name.size() < 96);
     strcpy(name_, name.c_str());
     size_ = numel(shape_vec()) * c10::elementSize(dtype_);
-
-    std::cout << "this = " << this << std::endl;
-    std::cout << "this->dev_ptr = " << this->dev_ptr_ << std::endl;
-    std::cout << "this->type_= " << this->type_ << std::endl;
+    pid_ = getpid();
   }
 
   std::vector<int64_t> shape_vec() const {
@@ -98,33 +95,48 @@ public:
     }
   }
 
+  std::string __repr__() const {
+    std::stringstream ss;
+    if (type_ == kCPUIPCTensor)
+      ss << "IPCTensor(" << name_ << ", " << shape_vec() << ", " << dtype_
+         << ")";
+    else if (type_ == kGPUIPCTensor)
+      ss << "IPCGPUTensor(" << name_ << ", " << shape_vec() << ", " << dtype_
+         << ", " << GetDeviceID() << ")";
+    else
+      assert(false);
+    return ss.str();
+  }
+
   auto CheckMagic() const { assert(magic_ == 0xdeadbeef); }
 
   auto GetDtype() const { return dtype_; }
 
   auto GetName() const { return name_; }
 
-  auto GetDeviceID() const {
+  int GetDeviceID() const {
     assert(type_ == kGPUIPCTensor);
     return dev_id_;
   }
 
   auto GetIPCType() const { return type_; }
 
+  auto GetPID() const { return pid_; }
+
   cudaIpcMemHandle_t GetCUDAIPCMemHandle() const {
     assert(type_ == kGPUIPCTensor);
     return memHandle_;
   }
 
-private:
+ private:
   IPCTensorType type_;
   char name_[96];
   int shape_[kShapeDimMax];
   int shape_dim_;
   int64_t size_;
   at::ScalarType dtype_;
+  int pid_;
   const int magic_ = 0xdeadbeef;
-
   union {
     struct {
       void *dev_ptr_;
@@ -152,7 +164,7 @@ class IPCMemory {
                  folly::MemoryMapping::writable().setPrefault(true)),
         header_((IPCShmRegion *)mapping_.writableRange().begin()) {}
 
-public:
+ public:
   static IPCMemory *GetInstance() {
     static IPCMemory instance;
     return &instance;
@@ -191,7 +203,6 @@ public:
 
     void *d_ptr;
     cudaMalloc(&d_ptr, size);
-    std::cout << "xmh1 = " << d_ptr << std::endl;
     cudaIpcMemHandle_t memHandle;
     cudaIpcGetMemHandle(&memHandle, d_ptr);
 
@@ -206,10 +217,6 @@ public:
 
     auto *p = new ((char *)header_ + offset)
         IPCTensorMemoryHandle(name, shape, dtype, dev_id, memHandle, d_ptr);
-
-    std::cout << "new p = " << p << std::endl;
-    std::cout << "p->GetIPCType=" << p->GetIPCType() << std::endl;
-    std::cout << "p->GetTensorPtr = " << p->GetTensorPtr() << std::endl;
 
     for (int i = 0; i < kMaxRegTensorNum; i++) {
       int64_t &malloced_offset = header_->malloced_offsets_[i];
@@ -234,8 +241,21 @@ public:
         return p;
       }
     }
-    std::cerr << "not find handle for name = " << name << std::endl;
+    LOG(FATAL) << "Can not find handle in this process: " << name;
     assert(false);
+  }
+
+  void ListIPCTensors() {
+    std::cout << "ListIPCTensors:\n";
+    for (int i = 0; i < kMaxRegTensorNum; i++) {
+      int64_t offset = header_->malloced_offsets_[i];
+      if (offset == 0) {
+        break;
+      }
+      auto *p = (IPCTensorMemoryHandle *)((char *)header_ + offset);
+      p->CheckMagic();
+      std::cout << p->__repr__() << std::endl;
+    }
   }
 
   void ClearIPCMemory() {
@@ -245,18 +265,19 @@ public:
     header_->accumulated_offset_ = sizeof(IPCShmRegion);
   }
 
-private:
+ private:
   folly::MemoryMapping mapping_;
   IPCShmRegion *header_;
 };
 
 class IPCTensorFactory : public torch::CustomClassHolder {
-public:
+ public:
   static void ClearIPCMemory() { IPCMemory::GetInstance()->ClearIPCMemory(); }
 
   static torch::Tensor NewIPCTensor(const std::string &name,
                                     const at::IntArrayRef shape,
                                     const at::ScalarType dtype) {
+    LOG(INFO) << "NewIPCTensor: " << name << " " << shape << "\n";
     int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
     auto handle = IPCMemory::GetInstance()->RegisterMemory(name, shape, dtype);
     assert(handle->GetIPCType() == kCPUIPCTensor);
@@ -266,20 +287,21 @@ public:
     return tensor;
   }
 
+  static void ListIPCTensors() { IPCMemory::GetInstance()->ListIPCTensors(); }
+
   static torch::Tensor NewIPCGPUTensor(const std::string &name,
                                        const at::IntArrayRef shape,
                                        const at::ScalarType dtype,
                                        const int64_t dev_id) {
+    LOG(WARNING) << "NewIPCGPUTensor: " << name << " " << shape << " "
+                 << dev_id;
+
     int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
     auto handle =
         IPCMemory::GetInstance()->RegisterGPUMemory(name, shape, dtype, dev_id);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     assert(handle->GetIPCType() == kGPUIPCTensor);
-
-    std::cout << "handle = " << handle << std::endl;
-    std::cout << "handle->GetTensorPtr() = " << handle->GetTensorPtr()
-              << std::endl;
 
     auto tensor = torch::from_blob(handle->GetTensorPtr(), handle->shape_vec(),
                                    torch::TensorOptions()
@@ -293,9 +315,14 @@ public:
     handle->CheckMagic();
     if (handle->GetIPCType() == kGPUIPCTensor) {
       void *ptr;
-      cudaIpcOpenMemHandle(&ptr, handle->GetCUDAIPCMemHandle(),
-                           cudaIpcMemLazyEnablePeerAccess);
-      // printf("Get memhandle = %s\n", handle->memHandle_.reserved);
+
+      int current_pid = getpid();
+      if (handle->GetPID() == current_pid) {
+        ptr = handle->GetTensorPtr();
+      } else {
+        cudaIpcOpenMemHandle(&ptr, handle->GetCUDAIPCMemHandle(),
+                             cudaIpcMemLazyEnablePeerAccess);
+      }
       C10_CUDA_KERNEL_LAUNCH_CHECK();
       return torch::from_blob(ptr, handle->shape_vec(),
                               torch::TensorOptions()
@@ -310,16 +337,9 @@ public:
     }
   }
 
-private:
+ private:
 };
 
-void RegisterIPCTensorFactory(torch::Library &m) {
-  m.class_<IPCTensorFactory>("IPCTensorFactory")
-      .def_static("ClearIPCMemory", &IPCTensorFactory::ClearIPCMemory)
-      .def_static("NewIPCTensor", &IPCTensorFactory::NewIPCTensor)
-      .def_static("NewIPCGPUTensor", &IPCTensorFactory::NewIPCGPUTensor)
-      .def_static("GetIPCTensorFromName",
-                  &IPCTensorFactory::GetIPCTensorFromName);
-}
+void RegisterIPCTensorFactory(torch::Library &m);
 
-} // namespace recstore
+}  // namespace recstore

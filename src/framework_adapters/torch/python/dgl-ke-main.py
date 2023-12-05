@@ -38,6 +38,7 @@ import numpy as np
 
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+import recstore
 
 from cache_common import CacheShardingPolicy  # nopep8
 
@@ -153,7 +154,8 @@ def prepare_save_path(args):
 def main():
     #  BUG!!!!
     import sys
-    common_args = '--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 \
+    nr_gpus = 2
+    common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus={nr_gpus} \
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
         --neg_sample_size=200 --regularization_coef=1e-07\
         --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
@@ -161,12 +163,14 @@ def main():
 
     # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 {common_args}'
     cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 {common_args}'
-    cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
+    # cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
 
     args = ArgParser().parse_args(cli_args.split())
 
     from PsKvstore import kvinit
     kvinit()
+
+    recstore.IPCTensorFactory.ClearIPCMemory()
 
     if args.nr_gpus == 0:
         args.gpu = [-1]
@@ -234,8 +238,8 @@ def main():
     CacheShardingPolicy.set_presampling(cache_sizes_all_rank)
     train_data.RenumberingGraph(renumbering_dict)
 
-    controller = ControllerServer(args, None)
-    controller.StartControlProcess()
+    # controller = ControllerServer(args, None)
+    # controller.StartControlProcess()
 
     train_samplers = CreateSamplers(
         args, kg_dataset=dataset, train_data=train_data)
@@ -243,9 +247,8 @@ def main():
     # train_samplers = CachedSampler.BatchCreateCachedSamplers(
     #     args.L, train_samplers, controller.GetMessageQueues())
 
-
-    grad_clients = controller.CreateGradClients()
-
+    # grad_clients = controller.CreateGradClients()
+    grad_clients = [None for _ in range(args.num_proc)]
 
     rel_parts = train_data.rel_parts if args.strict_rel_part or args.soft_rel_part else None
     cross_rels = train_data.cross_rels if args.soft_rel_part else None
@@ -398,7 +401,7 @@ def main():
                                                      i,
                                                      rel_parts,
                                                      cross_rels,
-                                                     barrier, 
+                                                     barrier,
                                                      grad_clients[i]))
             procs.append(proc)
             proc.start()

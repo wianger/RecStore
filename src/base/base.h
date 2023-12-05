@@ -1,11 +1,11 @@
 #pragma once
+#include <cstdint>
+
+#include "base/log.h"
 #include "folly/Format.h"
 #include "folly/Random.h"
 #include "folly/init/Init.h"
 #include "folly/portability/GFlags.h"
-#include "base/log.h"
-
-#include <cstdint>
 
 #ifndef __has_include
 static_assert(false, "__has_include not supported");
@@ -62,7 +62,11 @@ inline int64 GetTimestamp() {
       .count();
 }
 
-inline void bind_core(int n){
+inline void SleepMs(int64 ms) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+}
+
+inline void bind_core(int n) {
   cpu_set_t mask;
   CPU_ZERO(&mask);
   CPU_SET(n, &mask);

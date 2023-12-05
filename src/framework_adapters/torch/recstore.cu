@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 
 #include "IPCTensor.h"
+#include "kg_controller.h"
 #include "gpu_cache_nohash.h"
 #include "storage/gpu_cache/nv_gpu_cache.hpp"
 
@@ -210,6 +211,7 @@ TORCH_LIBRARY(librecstore_pytorch, m) {
       .def(torch::init<int64_t, int64_t, int64_t, int64_t>());
 
   RegisterIPCTensorFactory(m);
+  RegisterKGCacheController(m);
 }
 
 }  // namespace recstore

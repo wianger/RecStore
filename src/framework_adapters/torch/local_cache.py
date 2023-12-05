@@ -11,7 +11,8 @@ from PsKvstore import get_kvstore, ShmKVStore
 from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 from cache_common import AbsEmb, NVGPUCache
 
-from recstore import uva_cache_query_op,load_recstore_library
+import recstore
+from recstore import uva_cache_query_op, load_recstore_library
 
 
 class LocalCachedEmbeddingFn(torch.autograd.Function):
@@ -94,8 +95,6 @@ class LocalCachedEmbedding(AbsEmb):
 
         raise NotImplementedError("TODO: update cache in backward ")
 
-        
-
     def forward(self, input_keys):
         embed_value = LocalCachedEmbeddingFn.apply(
             input_keys, self.emb, self.gpu_cache, self.fake_tensor)
@@ -146,7 +145,6 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
                            full_emb.weight.get_shm_tensor(),
                            cached_start_key,
                            cached_end_key)
-
 
         '''
         # 1.1 split keys into shards
@@ -265,28 +263,30 @@ class KnownLocalCachedEmbedding(AbsEmb):
         start, end = cached_range[rank][0], cached_range[rank][1]
         cached_capacity = end - start
 
-        self.emb_cache = torch.zeros((cached_capacity, self.emb_dim)).cuda()
+        # self.emb_cache = torch.zeros((cached_capacity, self.emb_dim)).cuda()
+        self.emb_cache = recstore.IPCTensorFactory.NewIPCGPUTensor(
+            f"embedding_cache_{rank}", [cached_capacity, self.emb_dim], torch.float32, rank)
+
+        self.input_keys = recstore.IPCTensorFactory.NewIPCGPUTensor(
+            f"input_keys_{rank}", [int(1e5),], torch.int64, rank)
+
         self.cached_range = cached_range
         self.full_emb = full_emb
-        
-        # self.kvstore = get_kvstore()
 
         ShmKVStore.GetUVAMap(full_emb.get_shm_tensor())
         self.emb_cache.copy_(self.full_emb.weight[start:end])
         self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
 
-
-
     def forward(self, input_keys, trace=True):
         assert input_keys.is_cuda
-
-        # if self.ret_value is None:
-        #     #TODO(xieminhui): fix this! Now len(input_keys) of each iter IS NOT constant
-        #     self.ret_value = torch.zeros((input_keys.shape[0], self.emb_dim)).cuda()
-
         assert input_keys.shape[0] <= self.ret_value.shape[0]
+
         ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
-        
+
+        input_keys_shm = torch.narrow(
+            self.input_keys, 0, 0, input_keys.shape[0])
+        input_keys_shm.copy_(input_keys, non_blocking=True)
+
         embed_value = KnownLocalCachedEmbeddingFn.apply(
             input_keys, self.full_emb, self.emb_cache, self.fake_tensor, self.cached_range, ret_value)
         if trace:
@@ -294,19 +294,6 @@ class KnownLocalCachedEmbedding(AbsEmb):
         else:
             assert not embed_value.requires_grad
         return embed_value
-
-    # @staticmethod
-    # def generate_cached_range(emb, cache_ratio):
-    #     rank, world_size = dist.get_rank(), dist.get_world_size()
-    #     capacity = emb.shape[0]
-
-    #     per_shard_size = (capacity + world_size-1) // world_size
-    #     cached_range = []
-    #     for i in range(world_size):
-    #         start = i * per_shard_size
-    #         end = min((i+1) * per_shard_size, capacity)
-    #         cached_range.append((start, end))
-    #     return cached_range
 
     def reg_opt(self, opt):
         # TODO: Attenion!
