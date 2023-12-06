@@ -244,8 +244,8 @@ def main():
     train_samplers = CreateSamplers(
         args, kg_dataset=dataset, train_data=train_data)
 
-    # train_samplers = CachedSampler.BatchCreateCachedSamplers(
-    #     args.L, train_samplers, controller.GetMessageQueues())
+    train_samplers = CachedSampler.BatchCreateCachedSamplers(
+        args.L, train_samplers)
 
     # grad_clients = controller.CreateGradClients()
     grad_clients = [None for _ in range(args.num_proc)]

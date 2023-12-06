@@ -267,8 +267,10 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.emb_cache = recstore.IPCTensorFactory.NewIPCGPUTensor(
             f"embedding_cache_{rank}", [cached_capacity, self.emb_dim], torch.float32, rank)
 
-        self.input_keys = recstore.IPCTensorFactory.NewIPCGPUTensor(
+        _ = recstore.IPCTensorFactory.NewIPCGPUTensor(
             f"input_keys_{rank}", [int(1e5),], torch.int64, rank)
+        self.input_keys_shm = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
+            f"input_keys_{rank}")
 
         self.cached_range = cached_range
         self.full_emb = full_emb
@@ -283,9 +285,8 @@ class KnownLocalCachedEmbedding(AbsEmb):
 
         ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
 
-        input_keys_shm = torch.narrow(
-            self.input_keys, 0, 0, input_keys.shape[0])
-        input_keys_shm.copy_(input_keys, non_blocking=True)
+        self.input_keys_shm.Copy_(input_keys, non_blocking=True)
+        assert self.input_keys_shm.GetSlicedTensor().shape[0] == input_keys.shape[0]
 
         embed_value = KnownLocalCachedEmbeddingFn.apply(
             input_keys, self.full_emb, self.emb_cache, self.fake_tensor, self.cached_range, ret_value)

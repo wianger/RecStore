@@ -7,67 +7,105 @@ import torch.multiprocessing as mp
 import queue
 from threading import Thread
 
+import sys
+sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+import recstore
+
 
 class ProxySubGraph:
     def __init__(self, ) -> None:
         pass
 
 
+class CircleBuffer:
+    def __init__(self, L, rank) -> None:
+        self.L = L
+
+        self.buffer = []
+        for i in range(L):
+            _ = recstore.IPCTensorFactory.NewIPCTensor(
+                f"cached_sampler_{rank}_{i}", (int(1e5), ), th.int64, )
+            sliced_tensor = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
+                f"cached_sampler_{rank}_{i}")
+            self.buffer.append(sliced_tensor)
+
+        self.start = 0
+        self.end = 0
+
+    def push(self, item):
+        assert item.ndim == 1
+        self.buffer[self.end].Copy_(item, non_blocking=True)
+        self.end = (self.end + 1) % self.L
+        if self.end == self.start:
+            self.start = (self.start + 1) % self.L
+
+    def pop(self):
+        if self.start == self.end:
+            return None
+        ret = self.buffer[self.start]
+
+        self.start = (self.start + 1) % self.L
+        return ret
+
+    def __len__(self):
+        return (self.end - self.start + self.L) % self.L
+
+
 class CachedSampler:
-    def __init__(self, rank, L, sampler, message_q) -> None:
-        # self.sample_q = Queue(L)
-        self.sample_q = []
+    @staticmethod
+    def BatchCreateCachedSamplers(L, samplers):
+        ret = []
+        for i in range(len(samplers)):
+            ret.append(CachedSampler(i, L, samplers[i],))
+        return ret
+
+    def __init__(self, rank, L, sampler) -> None:
         self.rank = rank
         self.L = L
         self.sampler = sampler
-        self.message_q = message_q
         self.sampler_iter_num = 0
 
+        self.graph_samples_queue = []
+
+        self.ids_circle_buffer = CircleBuffer(L, rank)
 
         # Prefill L samples
         for _ in range(L):
             pos_g, neg_g = next(self.sampler)
-            self.sample_q.append((self.sampler_iter_num, pos_g, neg_g))
-            self.SendSample(self.sampler_iter_num, pos_g, neg_g)
+            self.graph_samples_queue.append(
+                (self.sampler_iter_num, pos_g, neg_g))
+            self.CopyID(self.sampler_iter_num, pos_g, neg_g)
             self.sampler_iter_num += 1
-
-
 
         # self.fetching_thread = mp.Process(target=self.FetchingThread, args=())
         # self.fetching_thread = Thread(target=self.FetchingThread, args=())
         # self.fetching_thread.start()
 
-    def FetchingThread(self):
-        while True:
-            pos_g, neg_g = next(self.sampler)
-            try:
-                # print("FetchingThread Put sample")
-                self.sample_q.put_nowait((self.sampler_iter_num, pos_g, neg_g))
-                print("FetchingThread Put sample done")
-                self.SendSample(self.sampler_iter_num, pos_g, neg_g)
-                self.sampler_iter_num += 1
-            except queue.Full:
-                pass
-
-    @staticmethod
-    def BatchCreateCachedSamplers(L, samplers, message_qs):
-        assert len(samplers) == len(message_qs)
-        ret = []
-        for i in range(len(samplers)):
-            ret.append(CachedSampler(i, L, samplers[i], message_qs[i]))
-        return ret
+    # def FetchingThread(self):
+    #     while True:
+    #         pos_g, neg_g = next(self.sampler)
+    #         try:
+    #             # print("FetchingThread Put sample")
+    #             self.graph_samples_queue.append(
+    #                 (self.sampler_iter_num, pos_g, neg_g))
+    #             print("FetchingThread Put sample done")
+    #             self.CopyID(self.sampler_iter_num, pos_g, neg_g)
+    #             self.sampler_iter_num += 1
+    #         except queue.Full:
+    #             pass
 
     def __next__(self):
-        pos_g, neg_g = next(self.sampler)
+        # pos_g, neg_g = next(self.sampler)
 
-        # try:
-        #     pos_g, neg_g = next(self.sampler)
-        #     self.sample_q.append((self.sampler_iter_num, pos_g, neg_g))
-        #     self.SendSample(self.sampler_iter_num, pos_g, neg_g)
-        #     self.sampler_iter_num += 1
-        # except StopIteration as e:
-        #     pass
-        # _, pos_g, neg_g = self.sample_q.pop(0)
+        try:
+            pos_g, neg_g = next(self.sampler)
+            self.graph_samples_queue.append(
+                (self.sampler_iter_num, pos_g, neg_g))
+            self.CopyID(self.sampler_iter_num, pos_g, neg_g)
+            self.sampler_iter_num += 1
+        except StopIteration as e:
+            pass
+        _, pos_g, neg_g = self.graph_samples_queue.pop(0)
         return pos_g, neg_g
 
         # while True:
@@ -80,10 +118,9 @@ class CachedSampler:
         #         pass
         # return pos_g, neg_g
 
-    def SendSample(self, step, pos_g, neg_g):
+    def CopyID(self, step, pos_g, neg_g):
         entity_id = th.cat([pos_g.ndata['id'], neg_g.ndata['id']], dim=0)
-        entity_id.share_memory_()
-        self.message_q.put((step, entity_id))
+        self.ids_circle_buffer.push(entity_id)
 
 
 class ControllerServer:
@@ -92,7 +129,7 @@ class ControllerServer:
         self.L = args.L
         self.manager = mp.Manager()
         self.manager.__enter__()
-        
+
         # queues for sample
         self.async_sample_qs = self.manager.list()
         for i in range(args.nr_gpus):
@@ -109,14 +146,12 @@ class ControllerServer:
         self.async_p.join()
         self.manager.__exit__(None, None, None)
 
-
     def CreateGradClients(self):
         ret = []
         for each_q in self.async_grad_qs:
             # ret.append(GradClient(each_q))
             ret.append(None)
         return ret
-
 
     def GetMessageQueues(self):
         return self.async_sample_qs
@@ -150,7 +185,6 @@ class GradClient:
         id_tensor.share_memory_()
         data_tensor.share_memory_()
         self.async_q.put((name, id_tensor, data_tensor))
-        
+
     def barrier(self):
         pass
-        
