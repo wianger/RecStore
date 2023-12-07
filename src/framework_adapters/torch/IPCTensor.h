@@ -300,6 +300,7 @@ class IPCTensorFactory : public torch::CustomClassHolder {
                                        const int64_t dev_id) {
     if (IPCMemory::GetInstance()->GetHandle(name) != nullptr) {
       LOG(FATAL) << "IPCTensor " << name << " already exists";
+      assert(0);
     }
 
     LOG(WARNING) << "NewIPCGPUTensor: " << name << " " << shape << " "
@@ -350,6 +351,7 @@ class IPCTensorFactory : public torch::CustomClassHolder {
     IPCTensorMemoryHandle *handle = IPCMemory::GetInstance()->GetHandle(name);
     if (nullptr == handle) {
       LOG(FATAL) << "IPCTensor " << name << " not found";
+      assert(0);
     }
     return GetIPCTensorFromHandle(handle);
   }

@@ -259,6 +259,7 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.fake_tensor = torch.randn(1, 1, requires_grad=True)
         self.emb_dim = full_emb.shape[1]
         rank = dist.get_rank()
+        self.rank = rank
 
         start, end = cached_range[rank][0], cached_range[rank][1]
         cached_capacity = end - start
@@ -272,6 +273,11 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.input_keys_shm = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
             f"input_keys_{rank}")
 
+        _ = recstore.IPCTensorFactory.NewIPCGPUTensor(
+            f"input_keys_neg_{rank}", [int(1e5),], torch.int64, rank)
+        self.input_keys_shm_neg = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
+            f"input_keys_neg_{rank}")
+
         self.cached_range = cached_range
         self.full_emb = full_emb
 
@@ -279,14 +285,26 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.emb_cache.copy_(self.full_emb.weight[start:end])
         self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
 
+        self.iter = 0
+
     def forward(self, input_keys, trace=True):
         assert input_keys.is_cuda
         assert input_keys.shape[0] <= self.ret_value.shape[0]
-
         ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
 
-        self.input_keys_shm.Copy_(input_keys, non_blocking=True)
-        assert self.input_keys_shm.GetSlicedTensor().shape[0] == input_keys.shape[0]
+        if self.rank == 0:
+            print("in forward", input_keys[:10])
+
+        if self.iter % 2 == 0:
+            self.input_keys_shm.Copy_(input_keys, non_blocking=False)
+            assert self.input_keys_shm.GetSlicedTensor(
+            ).shape[0] == input_keys.shape[0]
+        else:
+            self.input_keys_shm_neg.Copy_(input_keys, non_blocking=False)
+            assert self.input_keys_shm_neg.GetSlicedTensor(
+            ).shape[0] == input_keys.shape[0]
+
+        self.iter += 1
 
         embed_value = KnownLocalCachedEmbeddingFn.apply(
             input_keys, self.full_emb, self.emb_cache, self.fake_tensor, self.cached_range, ret_value)

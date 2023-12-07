@@ -24,17 +24,23 @@ class CircleBuffer:
         self.buffer = []
         for i in range(L):
             _ = recstore.IPCTensorFactory.NewIPCTensor(
-                f"cached_sampler_{rank}_{i}", (int(1e5), ), th.int64, )
-            sliced_tensor = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
-                f"cached_sampler_{rank}_{i}")
-            self.buffer.append(sliced_tensor)
+                f"cached_sampler_r{rank}_{i}", (int(1e5), ), th.int64, )
+            sliced_id_tensor = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
+                f"cached_sampler_r{rank}_{i}")
+            self.buffer.append(sliced_id_tensor)
+
+        self.step_tensor = recstore.IPCTensorFactory.NewIPCTensor(
+            f"step_r{rank}", (int(L), ), th.int64, )
 
         self.start = 0
         self.end = 0
 
-    def push(self, item):
+    def push(self, step, item):
         assert item.ndim == 1
-        self.buffer[self.end].Copy_(item, non_blocking=True)
+        # self.buffer[self.end].Copy_(item, non_blocking=True)
+        self.buffer[self.end].Copy_(item, non_blocking=False)
+        self.step_tensor[self.end] = step
+
         self.end = (self.end + 1) % self.L
         if self.end == self.start:
             self.start = (self.start + 1) % self.L
@@ -76,6 +82,15 @@ class CachedSampler:
                 (self.sampler_iter_num, pos_g, neg_g))
             self.CopyID(self.sampler_iter_num, pos_g, neg_g)
             self.sampler_iter_num += 1
+
+            if neg_g.neg_head:
+                neg_nids = neg_g.ndata['id'][neg_g.head_nid]
+            else:
+                neg_nids = neg_g.ndata['id'][neg_g.tail_nid]
+
+            if rank == 0:
+                print(f"-------Step {_}-------")
+                print(pos_g.ndata['id'][:10], neg_nids[:10])
 
         # self.fetching_thread = mp.Process(target=self.FetchingThread, args=())
         # self.fetching_thread = Thread(target=self.FetchingThread, args=())
@@ -119,12 +134,17 @@ class CachedSampler:
         # return pos_g, neg_g
 
     def CopyID(self, step, pos_g, neg_g):
-        entity_id = th.cat([pos_g.ndata['id'], neg_g.ndata['id']], dim=0)
-        self.ids_circle_buffer.push(entity_id)
+        if neg_g.neg_head:
+            neg_nids = neg_g.ndata['id'][neg_g.head_nid]
+        else:
+            neg_nids = neg_g.ndata['id'][neg_g.tail_nid]
+
+        entity_id = th.cat([pos_g.ndata['id'], neg_nids], dim=0)
+        self.ids_circle_buffer.push(step, entity_id)
 
 
 class ControllerServer:
-    def __init__(self, args, embedding_cache):
+    def __init__(self, args, ):
         self.args = args
         self.L = args.L
         self.manager = mp.Manager()

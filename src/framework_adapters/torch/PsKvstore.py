@@ -72,15 +72,8 @@ class ShmKVStore(AbsKVStore):
         temp = tensor
         cudart = th.cuda.cudart()
         r = cudart.cudaHostRegister(temp.data_ptr(), temp.numel() * temp.element_size(), 0)
-        print(f"cudaHostRegister {r}")
+        # print(f"cudaHostRegister {r}")
         return r
-
-    # def GetUVAMap(self, name):
-    #     temp = self.tensor_store[name]
-    #     cudart = th.cuda.cudart()
-    #     r = cudart.cudaHostRegister(temp.data_ptr(), temp.numel() * temp.element_size(), 0)
-    #     print(f"cudaHostRegister {r}")
-    #     return r
 
     def GetRowTensor(self, name):
         return self.tensor_store[name]
