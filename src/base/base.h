@@ -5,7 +5,6 @@
 #include "folly/Format.h"
 #include "folly/Random.h"
 #include "folly/init/Init.h"
-#include "folly/portability/GFlags.h"
 
 #ifndef __has_include
 static_assert(false, "__has_include not supported");
@@ -60,10 +59,6 @@ inline int64 GetTimestamp() {
   return std::chrono::duration_cast<std::chrono::microseconds>(
              p1.time_since_epoch())
       .count();
-}
-
-inline void SleepMs(int64 ms) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }
 
 inline void bind_core(int n) {

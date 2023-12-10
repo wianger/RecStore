@@ -23,10 +23,8 @@ class CircleBuffer:
 
         self.buffer = []
         for i in range(L):
-            _ = recstore.IPCTensorFactory.NewIPCTensor(
+            sliced_id_tensor = recstore.IPCTensorFactory.NewSlicedIPCTensor(
                 f"cached_sampler_r{rank}_{i}", (int(1e5), ), th.int64, )
-            sliced_id_tensor = recstore.IPCTensorFactory.GetSlicedIPCTensorFromName(
-                f"cached_sampler_r{rank}_{i}")
             self.buffer.append(sliced_id_tensor)
 
         self.step_tensor = recstore.IPCTensorFactory.NewIPCTensor(

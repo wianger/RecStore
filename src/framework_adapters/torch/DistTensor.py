@@ -1,13 +1,13 @@
+import torch.distributed as dist
+from utils import XLOG
 from PsKvstore import get_kvstore, kvinit
 import dist_utils
 import torch as th
 DIST_TENSOR_ID = 0
-from utils import XLOG
-import torch.distributed as dist
 
 
-def _default_init_data(shape, dtype):
-    return th.zeros(size=shape, dtype=dtype, device='cpu')
+def _default_init_data(tensor, shape, dtype):
+    return tensor.zero_()
 
 
 class DistTensor:
@@ -75,7 +75,6 @@ class DistTensor:
     def __setitem__(self, idx, val):
         idx = dist_utils.toindex(idx)
         self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
-
 
     def get_shm_tensor(self):
         return self.kvstore.tensor_store[self._name]

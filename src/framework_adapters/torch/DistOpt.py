@@ -305,7 +305,7 @@ class DistSparseGradOptimizer(abc.ABC):
             emb.reset_trace()
 
 
-def initializer(shape, dtype):
+def initializer(tensor, shape, dtype):
     """Sparse optimizer state initializer
 
     Parameters
@@ -315,8 +315,7 @@ def initializer(shape, dtype):
     dtype : torch dtype
         The data type of the state tensor
     """
-    arr = th.zeros(shape, dtype=dtype)
-    return arr
+    tensor.zero_()
 
 
 class SparseAdagrad(DistSparseGradOptimizer):

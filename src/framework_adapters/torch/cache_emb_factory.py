@@ -11,7 +11,7 @@ class CacheEmbFactory:
             f"New CachedEmbedding, name={emb.name}, shape={emb.shape}, cache_type={cache_type}")
 
         cached_range = CacheShardingPolicy.generate_cached_range(
-            emb, args['cache_ratio'])
+            emb.shape[0], args['cache_ratio'])
 
         # cached_range = CacheShardingPolicy.generate_cached_range_from_presampling()
         print_rank0(f"fixed cache_range is {cached_range}")
@@ -23,7 +23,9 @@ class CacheEmbFactory:
             abs_emb = LocalCachedEmbedding(
                 emb, cache_ratio=args['cache_ratio'],)
         elif cache_type == "KnownLocalCachedEmbedding":
-            abs_emb = KnownLocalCachedEmbedding(emb, cached_range=cached_range)
+            abs_emb = KnownLocalCachedEmbedding(emb,
+                                                cached_range=cached_range,
+                                                kForwardItersPerStep=args['kForwardItersPerStep'])
         else:
             assert False
         return abs_emb

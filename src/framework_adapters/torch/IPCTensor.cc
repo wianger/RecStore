@@ -31,6 +31,20 @@ c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::GetSlicedIPCTensorFromName(
   return c10::make_intrusive<SlicedTensor>(handle);
 }
 
+c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::NewSlicedIPCGPUTensor(
+    const std::string &name, const at::IntArrayRef shape,
+    const at::ScalarType dtype, const int64_t dev_id) {
+  IPCTensorFactory::NewIPCGPUTensor(name, shape, dtype, dev_id);
+  return IPCTensorFactory::GetSlicedIPCTensorFromName(name);
+}
+
+c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::NewSlicedIPCTensor(
+    const std::string &name, const at::IntArrayRef shape,
+    const at::ScalarType dtype) {
+  IPCTensorFactory::NewIPCTensor(name, shape, dtype);
+  return IPCTensorFactory::GetSlicedIPCTensorFromName(name);
+}
+
 void RegisterIPCTensorFactory(torch::Library &m) {
   m.class_<SlicedTensor>("SlicedTensor")
       .def("GetSlicedTensor", &SlicedTensor::GetSlicedTensor)
@@ -46,7 +60,10 @@ void RegisterIPCTensorFactory(torch::Library &m) {
       .def_static("GetIPCTensorFromName",
                   &IPCTensorFactory::GetIPCTensorFromName)
       .def_static("GetSlicedIPCTensorFromName",
-                  &IPCTensorFactory::GetSlicedIPCTensorFromName);
+                  &IPCTensorFactory::GetSlicedIPCTensorFromName)
+      .def_static("NewSlicedIPCTensor", &IPCTensorFactory::NewSlicedIPCTensor)
+      .def_static("NewSlicedIPCGPUTensor",
+                  &IPCTensorFactory::NewSlicedIPCGPUTensor);
 }
 
 }  // namespace recstore

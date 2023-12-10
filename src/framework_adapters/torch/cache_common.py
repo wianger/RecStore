@@ -18,9 +18,8 @@ from DistEmb import DistEmbedding
 
 class CacheShardingPolicy:
     @staticmethod
-    def generate_cached_range(emb, cache_ratio):
+    def generate_cached_range(whole_capacity, cache_ratio):
         rank, world_size = dist.get_rank(), dist.get_world_size()
-        whole_capacity = emb.shape[0]
         cache_capacity = int(whole_capacity * cache_ratio)
         per_shard_cachesize = (cache_capacity + world_size-1) // world_size
         cached_range = []

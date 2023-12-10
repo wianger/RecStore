@@ -153,8 +153,14 @@ def prepare_save_path(args):
 
 def main():
     #  BUG!!!!
+    
+    with open("/home/xieminhui/RecStore/src/framework_adapters/torch/config.json", "r") as f:
+        json_str = f.read()
+        import json
+        json_config = json.loads(json_str)
+    
     import sys
-    nr_gpus = 2
+    nr_gpus = json_config['num_gpus']
     common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus={nr_gpus} \
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
         --neg_sample_size=200 --regularization_coef=1e-07\

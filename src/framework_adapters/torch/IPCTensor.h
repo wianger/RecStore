@@ -12,6 +12,7 @@
 
 #include "base/cu_utils.cuh"
 #include "base/debug_utils.h"
+#include "base/log.h"
 #include "base/sleep.h"
 
 namespace recstore {
@@ -298,21 +299,35 @@ class IPCTensorFactory : public torch::CustomClassHolder {
                                        const at::IntArrayRef shape,
                                        const at::ScalarType dtype,
                                        const int64_t dev_id) {
-    if (IPCMemory::GetInstance()->GetHandle(name) != nullptr) {
-      LOG(FATAL) << "IPCTensor " << name << " already exists";
-      assert(0);
+    auto handle = IPCMemory::GetInstance()->GetHandle(name);
+    if (handle != nullptr) {
+      LOG(WARNING) << "IPCTensor " << name << " already exists";
+
+      CHECK_EQ(handle->shape_vec().size(), shape.size());
+      for (int i = 0; i < shape.size(); i++) {
+        CHECK(handle->shape_vec()[i] == shape[i]);
+      }
+      CHECK(handle->GetDtype() == dtype);
+      CHECK(handle->GetDeviceID() == dev_id);
+      assert(handle->GetIPCType() == kGPUIPCTensor);
+
+      auto tensor =
+          torch::from_blob(handle->GetTensorPtr(), handle->shape_vec(),
+                           torch::TensorOptions()
+                               .dtype(handle->GetDtype())
+                               .device(torch::kCUDA, dev_id));
+      return tensor;
     }
 
     LOG(WARNING) << "NewIPCGPUTensor: " << name << " " << shape << " "
                  << dev_id;
 
     int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
-    auto handle =
+    handle =
         IPCMemory::GetInstance()->RegisterGPUMemory(name, shape, dtype, dev_id);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     assert(handle->GetIPCType() == kGPUIPCTensor);
-
     auto tensor = torch::from_blob(handle->GetTensorPtr(), handle->shape_vec(),
                                    torch::TensorOptions()
                                        .dtype(handle->GetDtype())
@@ -359,6 +374,14 @@ class IPCTensorFactory : public torch::CustomClassHolder {
   static c10::intrusive_ptr<SlicedTensor> GetSlicedIPCTensorFromName(
       const std::string &name);
 
+  static c10::intrusive_ptr<SlicedTensor> NewSlicedIPCGPUTensor(
+      const std::string &name, const at::IntArrayRef shape,
+      const at::ScalarType dtype, const int64_t dev_id);
+
+  static c10::intrusive_ptr<SlicedTensor> NewSlicedIPCTensor(
+      const std::string &name, const at::IntArrayRef shape,
+      const at::ScalarType dtype);
+
  private:
 };
 
@@ -381,7 +404,8 @@ class SlicedTensor : public torch::CustomClassHolder {
   void Copy_(torch::Tensor right, bool non_blocking) {
     int end = right.sizes()[0];
     auto tensor = IPCTensorFactory::GetIPCTensorFromHandle(handle_);
-    assert(tensor.sizes()[0] >= end);
+    CHECK(tensor.sizes()[0] >= end)
+        << "Please increase the space of pre-allocated tensor";
     handle_->SetSlicedEnd(end);
     tensor.slice(0, 0, end).copy_(right, non_blocking);
   }

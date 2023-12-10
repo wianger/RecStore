@@ -3,6 +3,9 @@ import torch as th
 from abc import ABC
 import torch.nn.functional as F
 
+import recstore
+
+
 class AbsKVStore(ABC):
     def __init__(self):
         raise NotImplementedError
@@ -34,13 +37,17 @@ class ShmKVStore(AbsKVStore):
     # only can be called by the master process (before fork)
     def init_data(self, name, shape, dtype, part_policy=None, init_func=None, is_gdata=None):
         assert name not in self.tensor_store.keys()
-        temp = init_func(
-            shape=shape, dtype=dtype).share_memory_()
-            # shape=shape, dtype=dtype)
+
+        temp = recstore.IPCTensorFactory.NewIPCTensor(
+            name, shape, th.float32)
+
+        init_func(temp, shape, th.float32)
+
+        # temp = init_func(
+        #     shape=shape, dtype=dtype).share_memory_()
 
         # Don't use share_memory_().pinned_memory(). It will cause BUG!
         self.tensor_store[name] = temp
-
 
     def data_name_list(self):
         return self.tensor_store.keys()
@@ -52,12 +59,12 @@ class ShmKVStore(AbsKVStore):
     def Get(self, name, id_tensor):
         if type(id_tensor) is list:
             id_tensor = th.tensor(id_tensor)
-        
+
         if id_tensor.dtype == th.int64 or id_tensor.dtype == th.int32:
             pass
         else:
             assert False
-        
+
         return F.embedding(id_tensor, self.tensor_store[name])
 
     def Put(self, name, id_tensor, data_tensor):
@@ -66,12 +73,12 @@ class ShmKVStore(AbsKVStore):
     def Delete(self, name):
         del self.tensor_store[name]
 
-
     @staticmethod
     def GetUVAMap(tensor):
         temp = tensor
         cudart = th.cuda.cudart()
-        r = cudart.cudaHostRegister(temp.data_ptr(), temp.numel() * temp.element_size(), 0)
+        r = cudart.cudaHostRegister(
+            temp.data_ptr(), temp.numel() * temp.element_size(), 0)
         # print(f"cudaHostRegister {r}")
         return r
 
