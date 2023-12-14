@@ -48,6 +48,13 @@ c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::NewSlicedIPCTensor(
   return IPCTensorFactory::GetSlicedIPCTensorFromName(name);
 }
 
+class Mfence: public torch::CustomClassHolder {
+ public:
+  static void mfence() { asm volatile("mfence" ::: "memory"); }
+  static void lfence() { asm volatile("lfence" ::: "memory"); }
+  static void sfence() { asm volatile("sfence" ::: "memory"); }
+};
+
 void RegisterIPCTensorFactory(torch::Library &m) {
   m.class_<SlicedTensor>("SlicedTensor")
       .def("GetSlicedTensor", &SlicedTensor::GetSlicedTensor)
@@ -67,6 +74,11 @@ void RegisterIPCTensorFactory(torch::Library &m) {
       .def_static("NewSlicedIPCTensor", &IPCTensorFactory::NewSlicedIPCTensor)
       .def_static("NewSlicedIPCGPUTensor",
                   &IPCTensorFactory::NewSlicedIPCGPUTensor);
+
+  m.class_<Mfence>("Mfence")
+      .def_static("mfence", &Mfence::mfence)
+      .def_static("lfence", &Mfence::lfence)
+      .def_static("sfence", &Mfence::sfence);
 }
 
 }  // namespace recstore

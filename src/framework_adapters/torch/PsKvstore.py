@@ -35,6 +35,9 @@ class ShmKVStore(AbsKVStore):
     def __init__(self):
         self.tensor_store = dict()
         ShmKVStore.tensor_store = self.tensor_store
+        if hasattr(ShmKVStore, "instance_inited"):
+            assert not ShmKVStore.instance_inited
+        ShmKVStore.instance_inited = True
 
     # only can be called by the master process (before fork)
     def init_data(self, name, shape, dtype, part_policy=None, init_func=None, is_gdata=None):

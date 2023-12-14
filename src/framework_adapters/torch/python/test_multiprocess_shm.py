@@ -17,7 +17,7 @@ def worker_main(worker_id, shm):
 shm_tensor = torch.zeros((1000, 32)).share_memory_()
 
 workers = []
-for worker_id in range(2):
+for worker_id in range(4):
     p = mp.Process(target=worker_main,
         args=(worker_id, shm_tensor))
     p.start()

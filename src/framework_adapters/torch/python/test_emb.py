@@ -20,7 +20,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
-from recstore import IPCTensorFactory, KGCacheController, load_recstore_library
+from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from PsKvstore import ShmKVStore
 
 from controller_process import TestPerfSampler
@@ -60,9 +60,11 @@ def worker_main(routine, worker_id, num_workers, emb_context, args):
 
 class TestShardedCache:
     num_workers = 2
-    # EMB_DIM = 32
-    EMB_DIM = 3
-    EMB_LEN = 20
+    EMB_DIM = 32
+    # EMB_DIM = 3
+    # EMB_LEN = 20
+    EMB_LEN = 20000
+
     # BATCH_SIZE=10
     # EMB_LEN = int(1 * 1e6)
     BATCH_SIZE = 1024
@@ -113,42 +115,23 @@ class TestShardedCache:
         print("join all processes done")
 
     def init_emb_tensor(self, emb, rank, num_workers):
+        dist.barrier()
         XLOG.info(f"emb.data_ptr={hex(emb.get_shm_tensor().data_ptr())}")
-        XLOG.info(f"emb={emb.get_shm_tensor()}")
-        XLOG.info(f"emb={emb.shape} {emb.get_shm_tensor().is_cpu}")
         linspace = np.linspace(0, emb.shape[0], num_workers+1, dtype=int)
 
         assert rank == dist.get_rank()
-
         if rank == 0:
             print(f"rank {rank} start initing emb")
-            # for i in tqdm.trange(linspace[worker_id], linspace[worker_id + 1]):
-            #     emb.weight[i] = torch.ones(emb.shape[1]) * i
-            #     XLOG.info(f"rank{worker_id}, i={i}, {emb.weight[i]}")
-
-            emb.weight[0] = torch.ones(emb.shape[1]) * 123
+            for i in tqdm.trange(linspace[rank], linspace[rank + 1]):
+                emb.weight[i] = torch.ones(emb.shape[1]) * i
         else:
             for i in range(linspace[rank], linspace[rank + 1]):
                 emb.weight[i] = torch.ones(emb.shape[1]) * i
-                XLOG.info(f"rank{rank}, i={i}, {emb.weight[i]}")
-
-        if rank == 0:
-            time.sleep(100)
-        XLOG.info(f"rank{rank} before barrier")
         dist.barrier()
-        XLOG.info(f"rank{rank} after barrier")
-        XLOG.info(f"rank{rank} emb={emb.get_shm_tensor()}")
-
-        if rank == 0:
-            emb.weight[0] = torch.ones(emb.shape[1]) * 123
-        dist.barrier()
-
-        # XLOG.info(f"emb.data_ptr={hex(emb.get_shm_tensor().data_ptr())}")
-        XLOG.info(f"rank{rank} emb={emb.get_shm_tensor()}")
-
-        for i in range(min(100, emb.shape[0])):
-            # idx = random.randint(0, emb.shape[0]-1)
-            idx = i
+        Mfence.mfence()
+        for i in range(1000):
+            idx = random.randint(0, emb.shape[0]-1)
+            # idx = i
             if not (torch.allclose(
                     emb.weight[idx], torch.ones(emb.shape[1]) * idx)):
                 XLOG.error(
@@ -158,13 +141,26 @@ class TestShardedCache:
 
     def routine_cache_helper(self, worker_id, num_workers, emb_context, args):
         rank = dist.get_rank()
-        XLOG.debug(f"rank{rank}: pid={os.getpid()}")
-        # XLOG.cdebug(
-        #     f"ShmKVStore.tensor_store {hex(ShmKVStore.tensor_store['full_emb'].data_ptr())}")
+        
+        # import logging
+        # logger = logging.getLogger()
+        # logger.setLevel(logging.DEBUG)
 
+        # file_handler = logging.FileHandler(f'log/rank{rank}.log', mode="w")
+        # file_handler.setLevel(logging.DEBUG)
+        # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        # file_handler.setFormatter(formatter)
+        # logger.addHandler(file_handler)
+        # XLOG = logger
+        # XLOG.cdebug = XLOG.debug
+        
+        
+        XLOG.debug(f"rank{rank}: pid={os.getpid()}")
         kvinit()
         emb = DistEmbedding(TestShardedCache.EMB_LEN,
                             TestShardedCache.EMB_DIM, name=emb_context.emb_name)
+        dist.barrier()
+
         sparse_opt = emb_context.sparse_opt
         dist_opt = emb_context.dist_opt
 
@@ -212,14 +208,11 @@ class TestShardedCache:
         # Generate our embedding done
 
         # forward
-        for _ in tqdm.trange(20):
+        for _ in tqdm.trange(100):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
-
-            print(f"========== Step {_} ========== ", flush=True)
-            input_keys = torch.randint(emb.shape[0], size=(
-                TestShardedCache.BATCH_SIZE,)).long().cuda()
-
+            
+            # print(f"========== Step {_} ========== ", flush=True)
             input_keys = next(test_perf_sampler)
 
             XLOG.debug(f"{rank}:step{_}, input_keys {input_keys}")
@@ -235,8 +228,8 @@ class TestShardedCache:
 
             XLOG.cdebug(
                 f"{rank}: full_emb {abs_emb.full_emb.get_shm_tensor()}")
-            XLOG.cdebug(
-                f"{rank}: full_emb.addr={hex(abs_emb.full_emb.get_shm_tensor().data_ptr())}")
+            # XLOG.cdebug(
+            #     f"{rank}: full_emb.addr={hex(abs_emb.full_emb.get_shm_tensor().data_ptr())}")
 
             embed_value = abs_emb.forward(input_keys)
             XLOG.cdebug(f"{rank}:embed_value {embed_value}")
@@ -252,11 +245,10 @@ class TestShardedCache:
             sparse_opt.step()
             dist_opt.step()
 
+            dist.barrier()
             if args['BackwardMode'] == "CppSync" and rank == 0:
                 controller.ProcessOneStep()
-
-            dist.barrier()
-            torch.cuda.synchronize()
+            # dist.barrier()
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:

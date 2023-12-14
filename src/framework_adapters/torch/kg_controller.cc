@@ -133,10 +133,10 @@ class KGCacheController : public torch::CustomClassHolder {
     // auto input_keys = input_keys_per_rank_;
     // auto input_grads = backward_grads_per_rank_;
 
-    std::vector<std::vector<torch::Tensor>> shuffled_keys;
-    std::vector<std::vector<torch::Tensor>> shuffled_grads;
-    shuffled_keys.resize(num_gpus_);
-    shuffled_grads.resize(num_gpus_);
+    std::vector<std::vector<torch::Tensor>> shuffled_keys_in_each_rank_cache;
+    std::vector<std::vector<torch::Tensor>> shuffled_grads_in_each_rank_cache;
+    shuffled_keys_in_each_rank_cache.resize(num_gpus_);
+    shuffled_grads_in_each_rank_cache.resize(num_gpus_);
 
     for (int rank = 0; rank < num_gpus_; rank++) {
       // CHECK(!input_keys[rank].is_cuda());
@@ -150,54 +150,62 @@ class KGCacheController : public torch::CustomClassHolder {
 
       // shuffle keys and grads
       for (int i = 0; i < num_gpus_; i++) {
-        shuffled_keys[i].push_back(sharded_keys_in_this_rank[i]);
-        shuffled_grads[i].push_back(sharded_grads_in_this_rank[i]);
+        shuffled_keys_in_each_rank_cache[i].push_back(
+            sharded_keys_in_this_rank[i]);
+        shuffled_grads_in_each_rank_cache[i].push_back(
+            sharded_grads_in_this_rank[i]);
       }
     }
     // shuffle done
 
-    SGDGradUpdate(shuffled_keys, shuffled_grads);
+    SGDGradUpdate(shuffled_keys_in_each_rank_cache,
+                  shuffled_grads_in_each_rank_cache, input_keys, input_grads);
   }
 
-  void SGDGradUpdate(
-      const std::vector<std::vector<torch::Tensor>> &shuffled_keys,
-      const std::vector<std::vector<torch::Tensor>> &shuffled_grads) {
-    // std::vector<std::vector<torch::Tensor>> shuffled_keys_cuda;
-    // std::vector<std::vector<torch::Tensor>> shuffled_grads_cuda;
-
+  void SGDGradUpdate(const std::vector<std::vector<torch::Tensor>>
+                         &shuffled_keys_in_each_rank_cache,
+                     const std::vector<std::vector<torch::Tensor>>
+                         &shuffled_grads_in_each_rank_cache,
+                     const std::vector<torch::Tensor> &input_keys,
+                     const std::vector<torch::Tensor> &input_grads) {
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
         // update per rank cache
         // CUDA_CHECK(cudaSetDevice(rank));
         torch::Device device(torch::kCUDA, rank);
         auto in_rank_keys =
-            shuffled_keys[rank][j].to(device, true) - cached_range_[rank][0];
-        auto shuffle_grads_cuda = shuffled_grads[rank][j].to(device, true);
+            shuffled_keys_in_each_rank_cache[rank][j].to(device, true) -
+            cached_range_[rank][0];
+        auto shuffle_grads_cuda =
+            shuffled_grads_in_each_rank_cache[rank][j].to(device, true);
         cache_per_rank_[rank].index_add_(0, in_rank_keys, -shuffle_grads_cuda);
       }
     }
 
+#if 0
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
-        // LOG(WARNING) << rank << ": shuffled_keys[rank][j] shape="
-        //              << shuffled_keys[rank][j].sizes();
-        LOG(WARNING) << rank << ": shuffled_keys[rank][j]"
-                     << toString(shuffled_keys[rank][j], false);
-        // LOG(WARNING) << rank << ": shuffled_grads[rank][j] shape="
-        //              << shuffled_grads[rank][j].sizes();
-        LOG(WARNING) << rank << ": shuffled_grads[rank][j]"
-                     << toString(shuffled_grads[rank][j], false);
+        // LOG(WARNING) << rank << ": shuffled_keys_in_each_rank_cache[rank][j]
+        // shape="
+        //              << shuffled_keys_in_each_rank_cache[rank][j].sizes();
+        LOG(WARNING) << rank << ": shuffled_keys_in_each_rank_cache[rank][j]"
+                     << toString(shuffled_keys_in_each_rank_cache[rank][j],
+                                 false);
+        // LOG(WARNING) << rank << ": shuffled_grads_in_each_rank_cache[rank][j]
+        // shape="
+        //              << shuffled_grads_in_each_rank_cache[rank][j].sizes();
+        LOG(WARNING) << rank << ": shuffled_grads_in_each_rank_cache[rank][j]"
+                     << toString(shuffled_grads_in_each_rank_cache[rank][j],
+                                 false);
 
-        // update full emb
-        full_emb_.index_add_(0, shuffled_keys[rank][j].cpu(),
-                             -shuffled_grads[rank][j].cpu());
       }
     }
+#endif
 
-    // full_emb_.zero_();
-    // LOG(ERROR) << "is_cpu" << full_emb_.is_cpu();
-    // LOG(ERROR) << "full_emb.addr=" << full_emb_.data_ptr<float>();
-    // LOG(ERROR) << toString(full_emb_, false);
+    // update full emb
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      full_emb_.index_add_(0, input_keys[rank].cpu(), -input_grads[rank].cpu());
+    }
   }
 
   void ProcessBackwardAsync() {}
