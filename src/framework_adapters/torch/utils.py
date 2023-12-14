@@ -13,12 +13,45 @@ _send_cpu, _recv_cpu = {}, {}
 
 # data: [rank0_data, rank1_data, ...]
 
-logging.basicConfig(format='%(levelname)-2s [%(filename)s:%(lineno)d] %(message)s',
-                # datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
+                datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+                # datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 XLOG = logging
+
+def XLOG_debug(str):
+    rank =None
+    try:
+        rank = dist.get_rank()
+    except:
+        pass
+    
+    if rank == 0:
+        color = "red"
+    elif rank is not None:
+        color = "green"
+    else:
+        color = "red"
+
+    if color == "red":
+        if rank is None:
+            XLOG.debug(f'\033[31m{str}\033[0m')
+        else:
+            XLOG.debug(f'\033[31m{rank}:{str}\033[0m')
+    elif color == "green":
+        if rank is None:
+            XLOG.debug(f'\033[32m{str}\033[0m')
+        else:
+            XLOG.debug(f'\033[32m{rank}:{str}\033[0m')
+    else:
+        if rank is None:
+            XLOG.debug(f'{str}')
+        else:
+            XLOG.debug(f'{rank}:{str}')
+    
+
+XLOG.cdebug = XLOG_debug
 
 
 

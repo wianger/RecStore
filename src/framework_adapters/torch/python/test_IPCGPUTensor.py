@@ -30,7 +30,7 @@ def worker_main(worker_id, barrier, d):
 
     else:
         barrier.wait()
-        gpu_tensor = recstore.IPCTensorFactory.GetIPCTensorFromName(
+        gpu_tensor = recstore.IPCTensorFactory.FindIPCTensorFromName(
             "gpu0_tensor")
         print(f"in worker{worker_id} process", gpu_tensor[:10])
         gpu_tensor[:10] = 100
@@ -39,7 +39,7 @@ def worker_main(worker_id, barrier, d):
         barrier.wait()
 
         
-        cpu_tensor = recstore.IPCTensorFactory.GetIPCTensorFromName(
+        cpu_tensor = recstore.IPCTensorFactory.FindIPCTensorFromName(
             "cpu0_tensor")
         print(f"in worker{worker_id} process", cpu_tensor[:10])
         cpu_tensor[:10] = 100

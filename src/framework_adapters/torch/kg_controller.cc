@@ -28,6 +28,8 @@ class KGCacheController : public torch::CustomClassHolder {
     L_ = json_config["L"];
     kForwardItersPerStep_ = json_config["kForwardItersPerStep"];
     clr_ = json_config["clr"];
+
+    LOG(WARNING) << folly::sformat("KGCacheController, config={}", json_str);
   }
 
   void RegTensorsPerProcess() {
@@ -35,38 +37,42 @@ class KGCacheController : public torch::CustomClassHolder {
     for (int rank = 0; rank < num_gpus_; ++rank) {
       nv::CudaDeviceRestorer _;
       CUDA_CHECK(cudaSetDevice(rank));
-      input_keys_per_rank_.push_back(IPCTensorFactory::GetIPCTensorFromName(
-          folly::sformat("input_keys_{}", rank)));
-      input_keys_neg_per_rank_.push_back(IPCTensorFactory::GetIPCTensorFromName(
-          folly::sformat("input_keys_neg_{}", rank)));
+      input_keys_per_rank_.push_back(
+          IPCTensorFactory::GetSlicedIPCTensorFromName(
+              folly::sformat("input_keys_{}", rank)));
+      input_keys_neg_per_rank_.push_back(
+          IPCTensorFactory::GetSlicedIPCTensorFromName(
+              folly::sformat("input_keys_neg_{}", rank)));
 
       // cache tensor
-      cache_per_rank_.push_back(IPCTensorFactory::GetIPCTensorFromName(
+      cache_per_rank_.push_back(IPCTensorFactory::FindIPCTensorFromName(
           folly::sformat("embedding_cache_{}", rank)));
 
       // L buffer of input ids
       cached_id_circle_buffer_.push_back(std::vector<torch::Tensor>());
       for (int j = 0; j < L_; ++j) {
         cached_id_circle_buffer_[rank].push_back(
-            IPCTensorFactory::GetIPCTensorFromName(
+            IPCTensorFactory::FindIPCTensorFromName(
                 folly::sformat("cached_sampler_r{}_{}", rank, j)));
       }
       // step tensor
-      step_tensor_per_rank_.push_back(IPCTensorFactory::GetIPCTensorFromName(
+      step_tensor_per_rank_.push_back(IPCTensorFactory::FindIPCTensorFromName(
           folly::sformat("step_r{}", rank)));
 
-      backward_grads_per_rank_.push_back(IPCTensorFactory::GetIPCTensorFromName(
-          folly::sformat("backward_grads_{}", rank)));
+      backward_grads_per_rank_.push_back(
+          IPCTensorFactory::GetSlicedIPCTensorFromName(
+              folly::sformat("backward_grads_{}", rank)));
 
       backward_grads_neg_per_rank_.push_back(
-          IPCTensorFactory::GetIPCTensorFromName(
+          IPCTensorFactory::GetSlicedIPCTensorFromName(
               folly::sformat("backward_grads_neg_{}", rank)));
     }
 
-    full_emb_ = IPCTensorFactory::GetIPCTensorFromName("emb");
+    full_emb_ = IPCTensorFactory::FindIPCTensorFromName("full_emb");
   }
 
   void ProcessOneStep() {
+    torch::AutoGradMode guard_false(false);
     // show tensors of the first rank
     std::cout << "input_keys_per_rank" << std::endl;
     std::cout << toString(input_keys_per_rank_[0]) << std::endl;
@@ -79,10 +85,20 @@ class KGCacheController : public torch::CustomClassHolder {
     std::cout << toString(cached_id_circle_buffer_[0][cnt]) << std::endl;
     cnt = (cnt + 1) % cached_id_circle_buffer_[0].size();
 
-    ProcessBackwardSync(input_keys_per_rank_, backward_grads_per_rank_);
+    auto input_keys_per_rank_tensors =
+        SlicedTensor::BatchConvertToTensors(input_keys_per_rank_);
+    auto backward_grads_per_rank_tensors =
+        SlicedTensor::BatchConvertToTensors(backward_grads_per_rank_);
+
+    ProcessBackwardSync(input_keys_per_rank_tensors,
+                        backward_grads_per_rank_tensors);
     if (kForwardItersPerStep_ > 1) {
-      ProcessBackwardSync(input_keys_neg_per_rank_,
-                          backward_grads_neg_per_rank_);
+      auto input_keys_neg_per_rank_tensors =
+          SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
+      auto backward_grads_neg_per_rank_tensors =
+          SlicedTensor::BatchConvertToTensors(backward_grads_neg_per_rank_);
+      ProcessBackwardSync(input_keys_neg_per_rank_tensors,
+                          backward_grads_neg_per_rank_tensors);
     }
   }
 
@@ -111,7 +127,9 @@ class KGCacheController : public torch::CustomClassHolder {
   //         (start, end),    # rank7
   //        ]
   void ProcessBackwardSync(const std::vector<torch::Tensor> &input_keys,
-                           const std::vector<torch::Tensor> &input_grads) {
+                           const std::vector<torch::Tensor> &input_grads
+
+  ) {
     // auto input_keys = input_keys_per_rank_;
     // auto input_grads = backward_grads_per_rank_;
 
@@ -155,17 +173,31 @@ class KGCacheController : public torch::CustomClassHolder {
         auto in_rank_keys =
             shuffled_keys[rank][j].to(device, true) - cached_range_[rank][0];
         auto shuffle_grads_cuda = shuffled_grads[rank][j].to(device, true);
-        cache_per_rank_[rank].index_add_(0, in_rank_keys, shuffle_grads_cuda);
+        cache_per_rank_[rank].index_add_(0, in_rank_keys, -shuffle_grads_cuda);
       }
     }
 
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
+        // LOG(WARNING) << rank << ": shuffled_keys[rank][j] shape="
+        //              << shuffled_keys[rank][j].sizes();
+        LOG(WARNING) << rank << ": shuffled_keys[rank][j]"
+                     << toString(shuffled_keys[rank][j], false);
+        // LOG(WARNING) << rank << ": shuffled_grads[rank][j] shape="
+        //              << shuffled_grads[rank][j].sizes();
+        LOG(WARNING) << rank << ": shuffled_grads[rank][j]"
+                     << toString(shuffled_grads[rank][j], false);
+
         // update full emb
         full_emb_.index_add_(0, shuffled_keys[rank][j].cpu(),
                              -shuffled_grads[rank][j].cpu());
       }
     }
+
+    // full_emb_.zero_();
+    // LOG(ERROR) << "is_cpu" << full_emb_.is_cpu();
+    // LOG(ERROR) << "full_emb.addr=" << full_emb_.data_ptr<float>();
+    // LOG(ERROR) << toString(full_emb_, false);
   }
 
   void ProcessBackwardAsync() {}
@@ -184,10 +216,10 @@ class KGCacheController : public torch::CustomClassHolder {
 
   // runtime tensor
   std::vector<torch::Tensor> step_tensor_per_rank_;
-  std::vector<torch::Tensor> input_keys_per_rank_;
-  std::vector<torch::Tensor> input_keys_neg_per_rank_;
-  std::vector<torch::Tensor> backward_grads_per_rank_;
-  std::vector<torch::Tensor> backward_grads_neg_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_neg_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_per_rank_;
 
   std::vector<std::vector<torch::Tensor>> cached_id_circle_buffer_;
 };

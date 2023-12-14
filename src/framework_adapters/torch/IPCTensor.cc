@@ -24,6 +24,7 @@ int64_t numel(const at::IntArrayRef shape) {
 
 c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::GetSlicedIPCTensorFromName(
     const std::string &name) {
+  _mm_mfence();
   IPCTensorMemoryHandle *handle = IPCMemory::GetInstance()->GetHandle(name);
   if (nullptr == handle) {
     LOG(FATAL) << "IPCTensor " << name << " not found";
@@ -34,6 +35,7 @@ c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::GetSlicedIPCTensorFromName(
 c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::NewSlicedIPCGPUTensor(
     const std::string &name, const at::IntArrayRef shape,
     const at::ScalarType dtype, const int64_t dev_id) {
+  _mm_mfence();
   IPCTensorFactory::NewIPCGPUTensor(name, shape, dtype, dev_id);
   return IPCTensorFactory::GetSlicedIPCTensorFromName(name);
 }
@@ -41,6 +43,7 @@ c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::NewSlicedIPCGPUTensor(
 c10::intrusive_ptr<SlicedTensor> IPCTensorFactory::NewSlicedIPCTensor(
     const std::string &name, const at::IntArrayRef shape,
     const at::ScalarType dtype) {
+  _mm_mfence();
   IPCTensorFactory::NewIPCTensor(name, shape, dtype);
   return IPCTensorFactory::GetSlicedIPCTensorFromName(name);
 }
@@ -57,8 +60,8 @@ void RegisterIPCTensorFactory(torch::Library &m) {
       .def_static("NewIPCTensor", &IPCTensorFactory::NewIPCTensor)
       .def_static("NewIPCGPUTensor", &IPCTensorFactory::NewIPCGPUTensor)
       .def_static("ListIPCTensors", &IPCTensorFactory::ListIPCTensors)
-      .def_static("GetIPCTensorFromName",
-                  &IPCTensorFactory::GetIPCTensorFromName)
+      .def_static("FindIPCTensorFromName",
+                  &IPCTensorFactory::FindIPCTensorFromName)
       .def_static("GetSlicedIPCTensorFromName",
                   &IPCTensorFactory::GetSlicedIPCTensorFromName)
       .def_static("NewSlicedIPCTensor", &IPCTensorFactory::NewSlicedIPCTensor)

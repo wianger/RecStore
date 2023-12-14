@@ -6,6 +6,12 @@ from utils import print_rank0
 
 class CacheEmbFactory:
     @staticmethod
+    def ReturnCachedRange(emb, args):
+        cached_range = CacheShardingPolicy.generate_cached_range(
+            emb.shape[0], args['cache_ratio'])
+        return cached_range
+
+    @staticmethod
     def New(cache_type, emb, args) -> AbsEmb:
         print_rank0(
             f"New CachedEmbedding, name={emb.name}, shape={emb.shape}, cache_type={cache_type}")
@@ -25,7 +31,9 @@ class CacheEmbFactory:
         elif cache_type == "KnownLocalCachedEmbedding":
             abs_emb = KnownLocalCachedEmbedding(emb,
                                                 cached_range=cached_range,
-                                                kForwardItersPerStep=args['kForwardItersPerStep'])
+                                                kForwardItersPerStep=args['kForwardItersPerStep'],
+                                                backward_mode=args['BackwardMode'],
+                                                )
         else:
             assert False
         return abs_emb

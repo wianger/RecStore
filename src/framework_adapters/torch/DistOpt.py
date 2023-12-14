@@ -248,6 +248,10 @@ class DistSparseGradOptimizer(abc.ABC):
                 "Cannot support policy: %s " % part_policy.policy_str
             )
 
+    @property
+    def lr(self):
+        return self._lr
+
     def step(self):
         """The step function.
 
@@ -269,17 +273,12 @@ class DistSparseGradOptimizer(abc.ABC):
                 # else:
                 #     idics = th.cat(idics, dim=0)
                 #     grads = th.cat(grads, dim=0)
-                
+
                 # self.update(
                 #     idics,
                 #     grads,
                 #     emb,
                 # )
-
-                
-                
-
-
 
     @abstractmethod
     def update(self, idx, grad, emb):
@@ -344,6 +343,7 @@ class SparseAdagrad(DistSparseGradOptimizer):
     """
 
     def __init__(self, params, lr, eps=1e-10):
+        assert False
         super(SparseAdagrad, self).__init__(params, lr)
         self._eps = eps
         self._defaults = {"_lr": lr, "_eps": eps}
@@ -446,8 +446,6 @@ class SparseSGD(DistSparseGradOptimizer):
 
             name = emb.name + "_sum"
 
-
-
     def update(self, idx, grad, emb):
         """Update embeddings in a sparse manner
         Sparse embeddings are updated in mini batches. We maintain gradient states for
@@ -523,7 +521,6 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
             ), "{} already registered in the optimizer".format(emb.name)
             self._state[emb.name] = state
 
-
     def update(self, idxs, grads, emb):
         """Update embeddings in a sparse manner
         Sparse embeddings are updated in mini batches. We maintain gradient states for
@@ -547,7 +544,7 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
         # assert idxs.is_cpu
         assert grads.is_cuda
         assert idxs.shape[0] == grads.shape[0]
-        
+
         clr = self._lr
         state_dev = th.device("cpu")
         exec_dev = grads.device
@@ -559,13 +556,13 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
             idxs = idxs.to(state_dev)
         if state_dev != grad_sum.device:
             grad_sum = grad_sum.to(state_dev)
-        
+
         self._state[emb.name].get_shm_tensor().index_add_(0, idxs, grad_sum)
-        
+
         std = self._state[emb.name].get_shm_tensor()[idxs]
         std = std.cuda()
         std_values = std.sqrt_().add_(self._eps).unsqueeze(1)
-        
+
         tmp = - clr * grads / std_values
         if tmp.device != state_dev:
             tmp = tmp.to(state_dev)

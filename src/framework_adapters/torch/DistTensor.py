@@ -52,6 +52,8 @@ class DistTensor:
                 self._name, shape, dtype, part_policy, init_func, is_gdata
             )
         else:
+            XLOG.warning("The tensor name already exists in the kvstore")
+            
             self._owner = False
             dtype1, shape1, _ = self.kvstore.get_data_meta(self._name)
             assert (
@@ -77,7 +79,7 @@ class DistTensor:
         self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
 
     def get_shm_tensor(self):
-        return self.kvstore.tensor_store[self._name]
+        return self.kvstore.GetRowTensor(self._name)
 
     @property
     def kvstore_key(self):

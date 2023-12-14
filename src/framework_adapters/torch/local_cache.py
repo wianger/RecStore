@@ -260,18 +260,25 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     @staticmethod
     @torch.no_grad()
     def backward(ctx, grad_output):
-        return KnownLocalCachedEmbeddingFn.backward_py_sync(ctx, grad_output)
-
-        rank = dist.get_rank()
-        keys, = ctx.saved_tensors
-        backward_grads = ctx.backward_grads
-        backward_grads.Copy_(grad_output, non_blocking=False)
-        return None, None, None, torch.randn(1, 1), None, None, None
+        if KnownLocalCachedEmbeddingFn.backward_mode == "PySync":
+            return KnownLocalCachedEmbeddingFn.backward_py_sync(ctx, grad_output)
+        elif KnownLocalCachedEmbeddingFn.backward_mode == "CppSync":
+            rank = dist.get_rank()
+            keys, = ctx.saved_tensors
+            backward_grads = ctx.backward_grads
+            backward_grads.Copy_(
+                grad_output / dist.get_world_size(), non_blocking=False)
+            return None, None, None, torch.randn(1, 1), None, None, None
+        else:
+            assert False
 
 
 class KnownLocalCachedEmbedding(AbsEmb):
-    def __init__(self, full_emb, cached_range, kForwardItersPerStep) -> None:
+    def __init__(self, full_emb, cached_range, kForwardItersPerStep, backward_mode) -> None:
         self.kForwardItersPerStep = kForwardItersPerStep
+
+        KnownLocalCachedEmbeddingFn.backward_mode = backward_mode
+
         self.fake_tensor = torch.randn(1, 1, requires_grad=True)
         self.emb_dim = full_emb.shape[1]
         rank = dist.get_rank()
@@ -302,6 +309,11 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
 
         self.iter = 0
+
+    
+    def GetCache(self):
+        return self.emb_cache
+
 
     def forward(self, input_keys, trace=True):
         assert input_keys.is_cuda

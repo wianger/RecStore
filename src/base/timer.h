@@ -50,13 +50,6 @@ class XDebug {
 
 namespace xmh {
 
-class MathUtil {
- public:
-  static inline int round_up_to(int num, int factor) {
-    return num + factor - 1 - (num + factor - 1) % factor;
-  }
-};
-
 class DrawTable {
   static void DrawLine(std::stringstream &ss, const std::vector<int> &max,
                        int columns) {

@@ -4,6 +4,7 @@ from abc import ABC
 import torch.nn.functional as F
 
 import recstore
+from utils import XLOG
 
 
 class AbsKVStore(ABC):
@@ -33,6 +34,7 @@ class AbsKVStore(ABC):
 class ShmKVStore(AbsKVStore):
     def __init__(self):
         self.tensor_store = dict()
+        ShmKVStore.tensor_store = self.tensor_store
 
     # only can be called by the master process (before fork)
     def init_data(self, name, shape, dtype, part_policy=None, init_func=None, is_gdata=None):
@@ -40,6 +42,13 @@ class ShmKVStore(AbsKVStore):
 
         temp = recstore.IPCTensorFactory.NewIPCTensor(
             name, shape, th.float32)
+        if temp is None:
+            temp = recstore.IPCTensorFactory.FindIPCTensorFromName(name)
+            assert temp.shape == shape
+            assert temp.dtype == th.float32
+            assert temp.is_cpu
+            XLOG.debug(
+                f"rank{th.distributed.get_rank()}: NewIPCTensor failed, already exists, {hex(temp.data_ptr())}")
 
         init_func(temp, shape, th.float32)
 
@@ -47,6 +56,7 @@ class ShmKVStore(AbsKVStore):
         #     shape=shape, dtype=dtype).share_memory_()
 
         # Don't use share_memory_().pinned_memory(). It will cause BUG!
+
         self.tensor_store[name] = temp
 
     def data_name_list(self):
@@ -79,10 +89,12 @@ class ShmKVStore(AbsKVStore):
         cudart = th.cuda.cudart()
         r = cudart.cudaHostRegister(
             temp.data_ptr(), temp.numel() * temp.element_size(), 0)
-        # print(f"cudaHostRegister {r}")
+        print(f"cudaHostRegister {hex(temp.data_ptr())}: {r}")
         return r
 
     def GetRowTensor(self, name):
+        # XLOG.debug(
+        #     f"get dict, {name}.data_ptr={hex(self.tensor_store[name].data_ptr())}")
         return self.tensor_store[name]
 
 
