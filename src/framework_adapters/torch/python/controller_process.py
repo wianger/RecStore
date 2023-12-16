@@ -74,15 +74,16 @@ class TestPerfSampler:
             self.sampler_iter_num += 1
 
     def gen_next_sample(self):
-        if self.rank == 0:
-            input_keys = th.tensor([1, 2,],).long().cuda()
-            # input_keys = torch.tensor([0, 1,],).long().cuda()
-        else:
-            input_keys = th.tensor([0, 2,],).long().cuda()
-            # input_keys = torch.tensor([2, 3,],).long().cuda()
-        return input_keys
-        # return entity_id = th.randint(self.full_emb_capacity, size=(
-        #     self.num_ids_per_step,)).long().cuda()
+        # if self.rank == 0:
+        #     input_keys = th.tensor([1, 2,],).long().cuda()
+        #     # input_keys = torch.tensor([0, 1,],).long().cuda()
+        # else:
+        #     input_keys = th.tensor([0, 2,],).long().cuda()
+        #     # input_keys = torch.tensor([2, 3,],).long().cuda()
+        # return input_keys
+        entity_id = th.randint(self.full_emb_capacity, size=(
+            self.num_ids_per_step,)).long().cuda()
+        return entity_id
 
     def __next__(self):
         entity_id = self.gen_next_sample()

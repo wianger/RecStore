@@ -202,7 +202,7 @@ class TestShardedCache:
                                             num_ids_per_step=TestShardedCache.BATCH_SIZE,
                                             full_emb_capacity=emb.shape[0])
         if rank == 0:
-            controller = KGCacheController(
+            controller = KGCacheController.Init(
                 json_str, CacheEmbFactory.ReturnCachedRange(emb, args))
             controller.RegTensorsPerProcess()
         # Generate our embedding done

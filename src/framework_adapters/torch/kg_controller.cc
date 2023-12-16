@@ -18,10 +18,23 @@
 
 namespace recstore {
 
-class KGCacheController : public torch::CustomClassHolder {
+class GraphEnv {
  public:
-  KGCacheController(const std::string &json_str,
-                    const std::vector<std::vector<int64_t>> &cached_range) {
+  static GraphEnv *instance_;
+
+  static void Init(const std::string &json_str,
+                   const std::vector<std::vector<int64_t>> &cached_range) {
+    if (instance_ == nullptr) instance_ = new GraphEnv(json_str, cached_range);
+  }
+
+  static GraphEnv *GetInstance() {
+    CHECK(instance_ != nullptr);
+    return instance_;
+  }
+
+ private:
+  GraphEnv(const std::string &json_str,
+           const std::vector<std::vector<int64_t>> &cached_range) {
     cached_range_ = cached_range;
     auto json_config = json::parse(json_str);
     num_gpus_ = json_config["num_gpus"];
@@ -32,6 +45,7 @@ class KGCacheController : public torch::CustomClassHolder {
     LOG(WARNING) << folly::sformat("KGCacheController, config={}", json_str);
   }
 
+ public:
   void RegTensorsPerProcess() {
     // IPCTensorFactory::ListIPCTensors();
     for (int rank = 0; rank < num_gpus_; ++rank) {
@@ -49,10 +63,11 @@ class KGCacheController : public torch::CustomClassHolder {
           folly::sformat("embedding_cache_{}", rank)));
 
       // L buffer of input ids
-      cached_id_circle_buffer_.push_back(std::vector<torch::Tensor>());
+      cached_id_circle_buffer_.push_back(
+          std::vector<c10::intrusive_ptr<SlicedTensor>>());
       for (int j = 0; j < L_; ++j) {
         cached_id_circle_buffer_[rank].push_back(
-            IPCTensorFactory::FindIPCTensorFromName(
+            IPCTensorFactory::GetSlicedIPCTensorFromName(
                 folly::sformat("cached_sampler_r{}_{}", rank, j)));
       }
       // step tensor
@@ -71,6 +86,95 @@ class KGCacheController : public torch::CustomClassHolder {
     full_emb_ = IPCTensorFactory::FindIPCTensorFromName("full_emb");
   }
 
+ public:
+  //  config
+  int num_gpus_;
+  int L_;
+  std::vector<std::vector<int64_t>> cached_range_;
+  int kForwardItersPerStep_;
+  float clr_;
+
+  // state tensor
+  torch::Tensor full_emb_;
+  std::vector<torch::Tensor> cache_per_rank_;
+  // runtime tensor
+  std::vector<torch::Tensor> step_tensor_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_neg_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_per_rank_;
+  // different rank's L buffer
+  std::vector<std::vector<c10::intrusive_ptr<SlicedTensor>>>
+      cached_id_circle_buffer_;
+};
+
+GraphEnv *GraphEnv::instance_;
+
+class KGCacheController : public torch::CustomClassHolder {
+  static KGCacheController *instance_;
+
+ public:
+  static c10::intrusive_ptr<KGCacheController> Init(
+      const std::string &json_str,
+      const std::vector<std::vector<int64_t>> &cached_range) {
+    GraphEnv::Init(json_str, cached_range);
+    return c10::make_intrusive<KGCacheController>(json_str, cached_range);
+  }
+
+  static KGCacheController *GetInstance() {
+    CHECK(instance_ != nullptr);
+    return instance_;
+  }
+
+  KGCacheController(const std::string &json_str,
+                    const std::vector<std::vector<int64_t>> &cached_range)
+      : full_emb_(GraphEnv::GetInstance()->full_emb_),
+        cache_per_rank_(GraphEnv::GetInstance()->cache_per_rank_),
+        step_tensor_per_rank_(GraphEnv::GetInstance()->step_tensor_per_rank_),
+        input_keys_per_rank_(GraphEnv::GetInstance()->input_keys_per_rank_),
+        input_keys_neg_per_rank_(
+            GraphEnv::GetInstance()->input_keys_neg_per_rank_),
+        backward_grads_per_rank_(
+            GraphEnv::GetInstance()->backward_grads_per_rank_),
+        backward_grads_neg_per_rank_(
+            GraphEnv::GetInstance()->backward_grads_neg_per_rank_),
+        cached_id_circle_buffer_(
+            GraphEnv::GetInstance()->cached_id_circle_buffer_) {
+    CHECK(instance_ == nullptr);
+
+    GraphEnv::Init(json_str, cached_range);
+    cached_range_ = cached_range;
+    auto json_config = json::parse(json_str);
+    num_gpus_ = json_config["num_gpus"];
+    L_ = json_config["L"];
+    kForwardItersPerStep_ = json_config["kForwardItersPerStep"];
+    clr_ = json_config["clr"];
+
+    LOG(WARNING) << folly::sformat("KGCacheController, config={}", json_str);
+    GraphEnv::Init(json_str, cached_range_);
+  }
+
+ public:
+  void RegTensorsPerProcess() {
+    GraphEnv::GetInstance()->RegTensorsPerProcess();
+
+    // config
+    full_emb_ = GraphEnv::GetInstance()->full_emb_;
+    cache_per_rank_ = GraphEnv::GetInstance()->cache_per_rank_;
+    // runtime tensor
+    step_tensor_per_rank_ = GraphEnv::GetInstance()->step_tensor_per_rank_;
+    input_keys_per_rank_ = GraphEnv::GetInstance()->input_keys_per_rank_;
+    input_keys_neg_per_rank_ =
+        GraphEnv::GetInstance()->input_keys_neg_per_rank_;
+    backward_grads_per_rank_ =
+        GraphEnv::GetInstance()->backward_grads_per_rank_;
+    backward_grads_neg_per_rank_ =
+        GraphEnv::GetInstance()->backward_grads_neg_per_rank_;
+    // different rank's L buffer
+    cached_id_circle_buffer_ =
+        GraphEnv::GetInstance()->cached_id_circle_buffer_;
+  }
+
   void ProcessOneStep() {
     torch::AutoGradMode guard_false(false);
     // show tensors of the first rank
@@ -82,7 +186,8 @@ class KGCacheController : public torch::CustomClassHolder {
     std::cout << "cached_id_circle_buffer" << std::endl;
     std::cout << "Step " << step_tensor_per_rank_[0][cnt].item<int64_t>()
               << " ";
-    std::cout << toString(cached_id_circle_buffer_[0][cnt]) << std::endl;
+    std::cout << toString(cached_id_circle_buffer_[0][cnt]->GetSlicedTensor())
+              << std::endl;
     cnt = (cnt + 1) % cached_id_circle_buffer_[0].size();
 
     auto input_keys_per_rank_tensors =
@@ -219,23 +324,32 @@ class KGCacheController : public torch::CustomClassHolder {
   float clr_;
 
   // state tensor
-  torch::Tensor full_emb_;
-  std::vector<torch::Tensor> cache_per_rank_;
-
+  torch::Tensor &full_emb_;
+  std::vector<torch::Tensor> &cache_per_rank_;
   // runtime tensor
-  std::vector<torch::Tensor> step_tensor_per_rank_;
-  std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_per_rank_;
-  std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_neg_per_rank_;
-  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_per_rank_;
-  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_per_rank_;
-
-  std::vector<std::vector<torch::Tensor>> cached_id_circle_buffer_;
+  std::vector<torch::Tensor> &step_tensor_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> &input_keys_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> &input_keys_neg_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> &backward_grads_per_rank_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> &backward_grads_neg_per_rank_;
+  // different rank's L buffer
+  std::vector<std::vector<c10::intrusive_ptr<SlicedTensor>>>
+      &cached_id_circle_buffer_;
 };
+
+class AsyncFlusher {
+  void WhenNewSampleComes() {}
+
+ private:
+};
+
+KGCacheController *KGCacheController::instance_;
 
 void RegisterKGCacheController(torch::Library &m) {
   m.class_<KGCacheController>("KGCacheController")
-      .def(torch::init<const std::string,
-                       const std::vector<std::vector<int64_t>>>())
+      .def_static("Init", &KGCacheController::Init)
+      // .def(torch::init<const std::string,
+      //                  const std::vector<std::vector<int64_t>>>())
       .def("RegTensorsPerProcess", &KGCacheController::RegTensorsPerProcess)
       .def("ProcessOneStep", &KGCacheController::ProcessOneStep);
 }
