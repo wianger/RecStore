@@ -116,5 +116,11 @@ include_directories(
 )
 
 
+set(ONEAPI_ROOT /opt/intel/oneapi)
+set(TBB_ROOT ${ONEAPI_ROOT}/tbb/latest/lib)
+list(APPEND CMAKE_PREFIX_PATH ${TBB_ROOT}/cmake)
+find_package(TBB REQUIRED)
+
+
 message(STATUS "CMAKE_CUDA_FLAGS: ${CMAKE_CUDA_FLAGS}")
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)

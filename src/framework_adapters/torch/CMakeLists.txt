@@ -14,6 +14,7 @@ add_library(recstore_pytorch MODULE
 
 target_link_libraries(recstore_pytorch PUBLIC base)
 target_link_libraries(recstore_pytorch PUBLIC ${TORCH_LIBRARIES} gpu_cache)
+target_link_libraries(recstore_pytorch PUBLIC TBB::tbb)
 target_include_directories(recstore_pytorch PUBLIC ${TORCH_INCLUDE_DIRS})
 set_target_properties(recstore_pytorch PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(recstore_pytorch PROPERTIES CUDA_ARCHITECTURES OFF)
