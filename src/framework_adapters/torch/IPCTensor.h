@@ -321,6 +321,8 @@ class IPCTensorFactory : public torch::CustomClassHolder {
     }
 
     int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
+    CHECK_NE(size_in_bytes, 0) << "malloc size = 0";
+
     handle = IPCMemory::GetInstance()->RegisterMemory(name, shape, dtype);
     assert(handle->GetIPCType() == kCPUIPCTensor);
 
@@ -365,6 +367,8 @@ class IPCTensorFactory : public torch::CustomClassHolder {
                  << dev_id;
 
     int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
+    CHECK_NE(size_in_bytes, 0) << "malloc size = 0";
+
     handle =
         IPCMemory::GetInstance()->RegisterGPUMemory(name, shape, dtype, dev_id);
     C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -459,7 +463,8 @@ class SlicedTensor : public torch::CustomClassHolder {
     nv::CudaDeviceRestorer _;
     std::vector<torch::Tensor> ret;
     for (auto each : tensors) {
-      CUDA_CHECK(cudaSetDevice(each->handle_->GetDeviceID()));
+      if (each->handle_->GetIPCType() == kGPUIPCTensor)
+        CUDA_CHECK(cudaSetDevice(each->handle_->GetDeviceID()));
       ret.push_back(each->GetSlicedTensor());
     }
     return ret;

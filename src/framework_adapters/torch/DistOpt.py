@@ -383,7 +383,7 @@ class SparseAdagrad(DistSparseGradOptimizer):
             Sparse embedding to update.
         """
         eps = self._eps
-        clr = self._lr
+        clr = self._lr / self._world_size
 
         state_dev = th.device("cpu")
         exec_dev = grad.device
@@ -461,7 +461,7 @@ class SparseSGD(DistSparseGradOptimizer):
             Sparse embedding to update.
         """
         eps = self._eps
-        clr = self._lr
+        clr = self._lr / self._world_size
 
         if len(idx) == 0:
             return
@@ -545,7 +545,7 @@ class SparseRowWiseAdaGrad(DistSparseGradOptimizer):
         assert grads.is_cuda
         assert idxs.shape[0] == grads.shape[0]
 
-        clr = self._lr
+        clr = self._lr / self._world_size
         state_dev = th.device("cpu")
         exec_dev = grads.device
         state_block = state_dev == th.device("cpu") and exec_dev != state_dev

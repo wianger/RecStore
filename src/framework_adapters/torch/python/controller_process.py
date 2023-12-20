@@ -4,10 +4,12 @@ from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIte
 
 import torch as th
 import torch.multiprocessing as mp
+import torch.distributed as dist
 import queue
 from threading import Thread
 
 import sys
+from cache_emb_factory import CacheEmbFactory
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
 import recstore
 
@@ -30,8 +32,13 @@ class CircleBuffer:
         self.step_tensor = recstore.IPCTensorFactory.NewIPCTensor(
             f"step_r{rank}", (int(L), ), th.int64, )
 
+        self.circle_buffer_end = recstore.IPCTensorFactory.NewIPCTensor(
+            f"circle_buffer_end_r{rank}", (int(1), ), th.int64, )
+        # [start, end)
         self.start = 0
         self.end = 0
+
+        self.circle_buffer_end[0] = 0
 
     def push(self, step, item):
         assert item.ndim == 1
@@ -74,16 +81,16 @@ class TestPerfSampler:
             self.sampler_iter_num += 1
 
     def gen_next_sample(self):
-        # if self.rank == 0:
-        #     input_keys = th.tensor([1, 2,],).long().cuda()
-        #     # input_keys = torch.tensor([0, 1,],).long().cuda()
-        # else:
-        #     input_keys = th.tensor([0, 2,],).long().cuda()
-        #     # input_keys = torch.tensor([2, 3,],).long().cuda()
-        # return input_keys
-        entity_id = th.randint(self.full_emb_capacity, size=(
-            self.num_ids_per_step,)).long().cuda()
-        return entity_id
+        if self.rank == 0:
+            input_keys = th.tensor([1, 2,],).long().cuda()
+            # input_keys = torch.tensor([0, 1,],).long().cuda()
+        else:
+            input_keys = th.tensor([0, 2,],).long().cuda()
+            # input_keys = torch.tensor([2, 3,],).long().cuda()
+        return input_keys
+        # entity_id = th.randint(self.full_emb_capacity, size=(
+        #     self.num_ids_per_step,)).long().cuda()
+        # return entity_id
 
     def __next__(self):
         entity_id = self.gen_next_sample()
@@ -183,68 +190,35 @@ class CachedSampler:
         self.ids_circle_buffer.push(step, entity_id)
 
 
-class ControllerServer:
-    def __init__(self, args, ):
+class KGCacheControllerWrapper:
+    def __init__(self, json_str, emb, args) -> None:
+        dist.barrier()
+        self.rank = dist.get_rank()
         self.args = args
-        self.L = args.L
-        self.manager = mp.Manager()
-        self.manager.__enter__()
+        if (self.args['BackwardMode'] == "CppSync"
+                or self.args['BackwardMode'] == "CppAsync"
+                ) and self.rank == 0:
+            cache_range = CacheEmbFactory.ReturnCachedRange(emb, args)
+            self.controller = recstore.KGCacheController.Init(
+                json_str, cache_range)
+        dist.barrier()
 
-        # queues for sample
-        self.async_sample_qs = self.manager.list()
-        for i in range(args.nr_gpus):
-            self.async_sample_qs.append(self.manager.Queue(100))
+    def init(self):
+        if (self.args['BackwardMode'] == "CppSync"
+                or self.args['BackwardMode'] == "CppAsync"
+                ) and self.rank == 0:
+            self.controller.RegTensorsPerProcess()
+        self.step = 0
+        dist.barrier()
 
-        # queues for grad
-        self.async_grad_qs = self.manager.list()
-        for i in range(args.nr_gpus):
-            self.async_grad_qs.append(self.manager.Queue(200))
+    def OnNextStep(self,):
+        if self.rank == 0:
+            self.controller.BlockToStepN(self.step)
+        dist.barrier()
+        self.step += 1
 
-    def __del__(self):
-        for i in range(self.args.nr_gpus):
-            self.async_sample_qs[i].put(None)
-        self.async_p.join()
-        self.manager.__exit__(None, None, None)
-
-    def CreateGradClients(self):
-        ret = []
-        for each_q in self.async_grad_qs:
-            # ret.append(GradClient(each_q))
-            ret.append(None)
-        return ret
-
-    def GetMessageQueues(self):
-        return self.async_sample_qs
-
-    def StartControlProcess(self,):
-        self.async_p = mp.Process(
-            target=self.ControlProcess, args=())
-        self.async_p.start()
-
-    def ControlProcess(self, ):
-        assert len(self.async_sample_qs) == self.args.nr_gpus
-        while True:
-            for each_q in self.async_sample_qs:
-                try:
-                    ret = each_q.get_nowait()
-                    if ret is None:
-                        return
-                except queue.Empty:
-                    pass
-
-    def ProcessGrad(self, name, keys, grads):
-
-        pass
-
-
-class GradClient:
-    def __init__(self, async_q) -> None:
-        self.async_q = async_q
-
-    def push(self, name, id_tensor, data_tensor):
-        id_tensor.share_memory_()
-        data_tensor.share_memory_()
-        self.async_q.put((name, id_tensor, data_tensor))
-
-    def barrier(self):
-        pass
+    def AfterBackward(self,):
+        dist.barrier()
+        if self.args['BackwardMode'] == "CppSync" and self.rank == 0:
+            self.controller.ProcessOneStep()
+        dist.barrier()

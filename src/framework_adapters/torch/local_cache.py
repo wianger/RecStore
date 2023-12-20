@@ -291,10 +291,15 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.emb_cache = recstore.IPCTensorFactory.NewIPCGPUTensor(
             f"embedding_cache_{rank}", [cached_capacity, self.emb_dim], torch.float32, rank)
 
-        self.input_keys_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-            f"input_keys_{rank}", [int(1e5),], torch.int64, rank)
-        self.input_keys_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-            f"input_keys_neg_{rank}", [int(1e5),], torch.int64, rank)
+        # self.input_keys_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
+        #     f"input_keys_{rank}", [int(1e5),], torch.int64, rank)
+        # self.input_keys_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
+        #     f"input_keys_neg_{rank}", [int(1e5),], torch.int64, rank)
+
+        self.input_keys_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
+            f"input_keys_{rank}", [int(1e5),], torch.int64, )
+        self.input_keys_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
+            f"input_keys_neg_{rank}", [int(1e5),], torch.int64, )
 
         self.backward_grads_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
             f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
@@ -310,10 +315,8 @@ class KnownLocalCachedEmbedding(AbsEmb):
 
         self.iter = 0
 
-    
     def GetCache(self):
         return self.emb_cache
-
 
     def forward(self, input_keys, trace=True):
         assert input_keys.is_cuda
@@ -348,6 +351,6 @@ class KnownLocalCachedEmbedding(AbsEmb):
     def reg_opt(self, opt):
         # TODO: Attenion!
         opt.add_param_group({"params": self.emb_cache})
-        return
-        if dist.get_rank() == 0:
-            opt.add_param_group({"params": self.emb})
+        
+        # if dist.get_rank() == 0:
+        #     opt.add_param_group({"params": self.full_emb.weight})

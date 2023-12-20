@@ -23,7 +23,7 @@ sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nope
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from PsKvstore import ShmKVStore
 
-from controller_process import TestPerfSampler
+from controller_process import KGCacheControllerWrapper, TestPerfSampler
 from cache_common import ShmTensorStore, TorchNativeStdEmbDDP
 from utils import print_rank0, XLOG
 from DistEmb import DistEmbedding
@@ -42,6 +42,7 @@ EmbContext = namedtuple('EmbContext', ["emb_name", 'sparse_opt', 'dist_opt'])
 
 USE_SGD = True
 # USE_SGD = False
+LR = 1
 
 
 def worker_main(routine, worker_id, num_workers, emb_context, args):
@@ -60,10 +61,12 @@ def worker_main(routine, worker_id, num_workers, emb_context, args):
 
 class TestShardedCache:
     num_workers = 2
-    EMB_DIM = 32
-    # EMB_DIM = 3
-    # EMB_LEN = 20
-    EMB_LEN = 20000
+
+    EMB_DIM = 3
+    EMB_LEN = 20
+
+    # EMB_DIM = 32
+    # EMB_LEN = 20000
 
     # BATCH_SIZE=10
     # EMB_LEN = int(1 * 1e6)
@@ -81,19 +84,18 @@ class TestShardedCache:
         fake_tensor = torch.Tensor([0])
         if USE_SGD:
             sparse_opt = optim.SGD(
-                [fake_tensor], lr=1,)
+                [fake_tensor], lr=LR,)
             dist_opt = DistOpt.SparseSGD(
-                [emb], lr=1/TestShardedCache.num_workers)
+                [emb], lr=LR)
         else:
-            sparse_opt = optim.Adam([fake_tensor], lr=1)
+            sparse_opt = optim.Adam([fake_tensor], lr=LR)
             dist_opt = DistOpt.SparseAdagrad(
-                [emb], lr=1/TestShardedCache.num_workers)
+                [emb], lr=LR)
 
-        import copy
-        deep_copy_dist_opt = copy.deepcopy(dist_opt)
-
+        # import copy
+        # deep_copy_dist_opt = copy.deepcopy(dist_opt)
         emb_context = EmbContext(
-            emb_name=emb.name, sparse_opt=sparse_opt, dist_opt=deep_copy_dist_opt)
+            emb_name=emb.name, sparse_opt=sparse_opt, dist_opt=None)
 
         XLOG.cdebug(
             f"ShmKVStore.tensor_store {hex(ShmKVStore.tensor_store['full_emb'].data_ptr())}")
@@ -141,20 +143,6 @@ class TestShardedCache:
 
     def routine_cache_helper(self, worker_id, num_workers, emb_context, args):
         rank = dist.get_rank()
-        
-        # import logging
-        # logger = logging.getLogger()
-        # logger.setLevel(logging.DEBUG)
-
-        # file_handler = logging.FileHandler(f'log/rank{rank}.log', mode="w")
-        # file_handler.setLevel(logging.DEBUG)
-        # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        # file_handler.setFormatter(formatter)
-        # logger.addHandler(file_handler)
-        # XLOG = logger
-        # XLOG.cdebug = XLOG.debug
-        
-        
         XLOG.debug(f"rank{rank}: pid={os.getpid()}")
         kvinit()
         emb = DistEmbedding(TestShardedCache.EMB_LEN,
@@ -162,7 +150,12 @@ class TestShardedCache:
         dist.barrier()
 
         sparse_opt = emb_context.sparse_opt
-        dist_opt = emb_context.dist_opt
+        # dist_opt = emb_context.dist_opt
+
+        dist_opt = DistOpt.SparseSGD(
+            [emb], lr=LR)
+
+        XLOG.debug(f'dist_opt._params = {dist_opt._params}')
 
         XLOG.debug(
             f"in rank{rank}, full_emb.data_ptr={hex(emb.get_shm_tensor().data_ptr())}")
@@ -174,12 +167,14 @@ class TestShardedCache:
             "L": {L},
             "kForwardItersPerStep": {kForwardItersPerStep},
             "clr": {lr},
-            "BackwardMode": "{BackwardMode}"
+            "BackwardMode": "{BackwardMode}",
+            "nr_background_threads": {nr_background_threads}
         }}'''.format(num_workers=num_workers,
                      kForwardItersPerStep=args['kForwardItersPerStep'],
                      L=args['L'],
                      lr=dist_opt.lr,
                      BackwardMode=args['BackwardMode'],
+                     nr_background_threads=args['nr_background_threads'],
                      )
 
         if rank == 0:
@@ -201,18 +196,19 @@ class TestShardedCache:
                                             L=args['L'],
                                             num_ids_per_step=TestShardedCache.BATCH_SIZE,
                                             full_emb_capacity=emb.shape[0])
-        if rank == 0:
-            controller = KGCacheController.Init(
-                json_str, CacheEmbFactory.ReturnCachedRange(emb, args))
-            controller.RegTensorsPerProcess()
+        kg_cache_controller = KGCacheControllerWrapper(
+            json_str, emb, args
+        )
+        kg_cache_controller.init()
+
         # Generate our embedding done
 
         # forward
         for _ in tqdm.trange(100):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
-            
-            # print(f"========== Step {_} ========== ", flush=True)
+
+            print(f"========== Step {_} ========== ", flush=True)
             input_keys = next(test_perf_sampler)
 
             XLOG.debug(f"{rank}:step{_}, input_keys {input_keys}")
@@ -228,14 +224,14 @@ class TestShardedCache:
 
             XLOG.cdebug(
                 f"{rank}: full_emb {abs_emb.full_emb.get_shm_tensor()}")
-            # XLOG.cdebug(
-            #     f"{rank}: full_emb.addr={hex(abs_emb.full_emb.get_shm_tensor().data_ptr())}")
 
             embed_value = abs_emb.forward(input_keys)
             XLOG.cdebug(f"{rank}:embed_value {embed_value}")
 
             loss = embed_value.sum(-1).sum(-1)
             loss.backward()
+
+            XLOG.debug(f'full_emb.grad = {list(abs_emb.full_emb.get_grad())}')
 
             assert (torch.allclose(
                 embed_value, std_embed_value)), "forward is error"
@@ -245,10 +241,7 @@ class TestShardedCache:
             sparse_opt.step()
             dist_opt.step()
 
-            dist.barrier()
-            if args['BackwardMode'] == "CppSync" and rank == 0:
-                controller.ProcessOneStep()
-            # dist.barrier()
+            kg_cache_controller.AfterBackward()
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
@@ -262,6 +255,7 @@ class TestShardedCache:
                         # "BackwardMode": "PySync",
                         "BackwardMode": "CppSync",
                         "L": 10,
+                        "nr_background_threads": 4,
                         }
                 print("xmh: ", args)
                 self.main_routine(self.routine_cache_helper, args)
