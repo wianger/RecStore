@@ -44,6 +44,9 @@ USE_SGD = True
 # USE_SGD = False
 LR = 1
 
+XMH_DEBUG = True
+# XMH_DEBUG = False
+
 
 def worker_main(routine, worker_id, num_workers, emb_context, args):
     torch.cuda.set_device(worker_id)
@@ -62,15 +65,14 @@ def worker_main(routine, worker_id, num_workers, emb_context, args):
 class TestShardedCache:
     num_workers = 2
 
-    EMB_DIM = 3
-    EMB_LEN = 20
-
-    # EMB_DIM = 32
-    # EMB_LEN = 20000
-
-    # BATCH_SIZE=10
-    # EMB_LEN = int(1 * 1e6)
-    BATCH_SIZE = 1024
+    if XMH_DEBUG:
+        EMB_DIM = 3
+        EMB_LEN = 20
+        BATCH_SIZE = 1024
+    else:
+        EMB_DIM = 32
+        EMB_LEN = 20000
+        BATCH_SIZE = 1024
 
     def main_routine(self, routine, args=None):
         # wrap rountine with dist_init
@@ -101,14 +103,14 @@ class TestShardedCache:
             f"ShmKVStore.tensor_store {hex(ShmKVStore.tensor_store['full_emb'].data_ptr())}")
 
         workers = []
-        for worker_id in range(1, TestShardedCache.num_workers):
+        for worker_id in range(0, TestShardedCache.num_workers):
             p = mp.Process(target=worker_main, args=(
                 routine, worker_id, TestShardedCache.num_workers, emb_context, args))
             p.start()
             XLOG.info(f"Worker {worker_id} pid={p.pid}")
             workers.append(p)
-        worker_main(
-            routine, 0, TestShardedCache.num_workers, emb_context, args)
+        # worker_main(
+        #     routine, 0, TestShardedCache.num_workers, emb_context, args)
 
         for each in workers:
             each.join()
@@ -181,7 +183,7 @@ class TestShardedCache:
             print("------------json------------")
             print(json_str)
 
-        # Generate standard embedding done
+        # Generate standard embedding
         std_emb = TorchNativeStdEmbDDP(emb, device='cuda')
         std_emb.reg_opt(sparse_opt)
         # Generate standard embedding done
@@ -204,7 +206,7 @@ class TestShardedCache:
         # Generate our embedding done
 
         # forward
-        for _ in tqdm.trange(100):
+        for _ in tqdm.trange(1000):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
 
@@ -220,10 +222,10 @@ class TestShardedCache:
                 f"{rank}:std_embed_value {std_embed_value}")
 
             XLOG.cdebug(
-                f"{rank}: emb_cache {abs_emb.emb_cache}")
+                f"{rank}:emb_cache {abs_emb.emb_cache}")
 
             XLOG.cdebug(
-                f"{rank}: full_emb {abs_emb.full_emb.get_shm_tensor()}")
+                f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
 
             embed_value = abs_emb.forward(input_keys)
             XLOG.cdebug(f"{rank}:embed_value {embed_value}")
@@ -245,20 +247,43 @@ class TestShardedCache:
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
-        for test_cache in ["KnownLocalCachedEmbedding"]:
-            # for cache_ratio in [0.1, 0.3, 0.5]:
-            for cache_ratio in [0.1,]:
-                IPCTensorFactory.ClearIPCMemory()
-                args = {"test_cache": test_cache,
-                        "cache_ratio": cache_ratio,
-                        "kForwardItersPerStep": 1,
-                        # "BackwardMode": "PySync",
-                        "BackwardMode": "CppSync",
-                        "L": 10,
-                        "nr_background_threads": 4,
-                        }
-                print("xmh: ", args)
-                self.main_routine(self.routine_cache_helper, args)
+
+        config = {
+            "test_cache_mode": ['KnownLocalCachedEmbedding', ],
+            # "test_cache_mode": ['KnownLocalCachedEmbedding', 'KnownShardedCachedEmbedding'],
+
+            "backmode": ["PySync", "CppSync"],
+
+            # "backmode": ["PySync",],
+            # "backmode": ["CppSync",],
+            # "backmode": ["CppAsync",],
+
+            "cache_ratio": [0.1, 0.3, 0.5],
+            # "cache_ratio": [0.1,]
+        }
+
+        def GenProduct(config):
+            import itertools
+            keys, values = zip(*config.items())
+            permutations_config = [dict(zip(keys, v))
+                                   for v in itertools.product(*values)]
+            return permutations_config
+
+        for each in GenProduct(config):
+            test_cache_mode = each['test_cache_mode']
+            backmode = each['backmode']
+            cache_ratio = each['cache_ratio']
+
+            IPCTensorFactory.ClearIPCMemory()
+            args = {"test_cache": test_cache_mode,
+                    "cache_ratio": cache_ratio,
+                    "kForwardItersPerStep": 1,
+                    "BackwardMode": backmode,
+                    "L": 10,
+                    "nr_background_threads": 4,
+                    }
+            print("xmh: ", args)
+            self.main_routine(self.routine_cache_helper, args)
 
 
 if __name__ == "__main__":

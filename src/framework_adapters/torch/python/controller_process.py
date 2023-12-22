@@ -81,16 +81,19 @@ class TestPerfSampler:
             self.sampler_iter_num += 1
 
     def gen_next_sample(self):
-        if self.rank == 0:
-            input_keys = th.tensor([1, 2,],).long().cuda()
-            # input_keys = torch.tensor([0, 1,],).long().cuda()
+        from test_emb import XMH_DEBUG
+        if XMH_DEBUG:
+            if self.rank == 0:
+                input_keys = th.tensor([1, 2,],).long().cuda()
+                # input_keys = torch.tensor([0, 1,],).long().cuda()
+            else:
+                input_keys = th.tensor([0, 2,],).long().cuda()
+                # input_keys = torch.tensor([2, 3,],).long().cuda()
+            return input_keys
         else:
-            input_keys = th.tensor([0, 2,],).long().cuda()
-            # input_keys = torch.tensor([2, 3,],).long().cuda()
-        return input_keys
-        # entity_id = th.randint(self.full_emb_capacity, size=(
-        #     self.num_ids_per_step,)).long().cuda()
-        # return entity_id
+            entity_id = th.randint(self.full_emb_capacity, size=(
+                self.num_ids_per_step,)).long().cuda()
+            return entity_id
 
     def __next__(self):
         entity_id = self.gen_next_sample()
@@ -102,6 +105,47 @@ class TestPerfSampler:
 
         _, entity_id = self.samples_queue.pop(0)
         return entity_id
+
+
+class PerfSampler:
+    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity) -> None:
+        self.rank = rank
+        self.L = L
+        self.ids_circle_buffer = CircleBuffer(L, rank)
+        self.sampler_iter_num = 0
+        self.num_ids_per_step = num_ids_per_step
+        self.full_emb_capacity = full_emb_capacity
+
+        self.samples_queue = []
+
+        for _ in range(L):
+            entity_id = self.gen_next_sample()
+            self.samples_queue.append(
+                (self.sampler_iter_num, entity_id))
+            self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
+            self.sampler_iter_num += 1
+
+    def gen_next_sample(self):
+        entity_id = th.randint(self.full_emb_capacity, size=(
+            self.num_ids_per_step,)).long().cuda()
+        return entity_id
+        if self.rank == 0:
+            input_keys = th.tensor([1, 2,],).long().cuda()
+        else:
+            input_keys = th.tensor([0, 2,],).long().cuda()
+        return input_keys
+
+    def __next__(self):
+        entity_id = self.gen_next_sample()
+
+        self.samples_queue.append(
+            (self.sampler_iter_num, entity_id))
+        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
+        self.sampler_iter_num += 1
+
+        _, entity_id = self.samples_queue.pop(0)
+        return entity_id
+
 
 
 class CachedSampler:
@@ -204,6 +248,9 @@ class KGCacheControllerWrapper:
         dist.barrier()
 
     def init(self):
+        import time
+        time.sleep(5)
+
         if (self.args['BackwardMode'] == "CppSync"
                 or self.args['BackwardMode'] == "CppAsync"
                 ) and self.rank == 0:
@@ -211,8 +258,11 @@ class KGCacheControllerWrapper:
         self.step = 0
         dist.barrier()
 
+
     def OnNextStep(self,):
-        if self.rank == 0:
+        if (self.args['BackwardMode'] == "CppSync"
+                or self.args['BackwardMode'] == "CppAsync"
+                )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
         self.step += 1

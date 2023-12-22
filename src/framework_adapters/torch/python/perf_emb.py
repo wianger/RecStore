@@ -1,0 +1,306 @@
+from contextlib import contextmanager
+from pyinstrument import Profiler
+import numpy as np
+import unittest
+import datetime
+import argparse
+import debugpy
+import tqdm
+
+import torch
+import torch as th
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.multiprocessing as mp
+import torch.distributed as dist
+import torch.optim as optim
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+import sys
+sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
+
+from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
+from controller_process import PerfSampler, TestPerfSampler
+from cache_emb_factory import CacheEmbFactory
+from controller_process import KGCacheControllerWrapper
+from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
+from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
+from DistEmb import DistEmbedding
+from PsKvstore import ShmKVStore, kvinit
+from utils import XLOG
+import time
+import DistOpt
+
+
+import random
+random.seed(0)
+np.random.seed(0)
+torch.use_deterministic_algorithms(True)
+
+
+LR = 1
+# DIFF_TEST = True
+DIFF_TEST = False
+
+
+@contextmanager
+def xmh_nvtx_range(msg, condition=True):
+    """
+    Context manager / decorator that pushes an NVTX range at the beginning
+    of its scope, and pops it at the end. If extra arguments are given,
+    they are passed as arguments to msg.format().
+
+    args:
+        msg (str): message to associate with the range
+    """
+    if condition:
+        th.cuda.nvtx.range_push(msg)
+        yield
+        th.cuda.nvtx.range_pop()
+    else:
+        yield
+
+
+def get_run_config():
+    def parse_args(default_run_config):
+        argparser = argparse.ArgumentParser("Training")
+        argparser.add_argument('--num_workers', type=int,
+                               default=4)
+        argparser.add_argument('--num_embs', type=int,
+                                 default=10*1e6)
+                            #    default=1*1e6)
+        argparser.add_argument('--emb_dim', type=int,
+                               default=32)
+        argparser.add_argument('--L', type=int,
+                               default=10)
+        argparser.add_argument('--with_perf', type=bool,
+                               default=False)
+        argparser.add_argument('--batch_size', type=int,
+                               default=10000)
+        argparser.add_argument('--cache_ratio', type=float,
+                               default=0.1)
+        argparser.add_argument('--log_interval', type=int,
+                               default=100)
+        argparser.add_argument('--run_steps', type=int,
+                               default=500)
+        argparser.add_argument('--emb_choice', choices=["TorchNativeStdEmb", "KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+                               default="KnownLocalCachedEmbedding"
+                               #    default="KnownShardedCachedEmbedding"
+                               )
+        argparser.add_argument('--BackwardMode', choices=["CppSync", "CppAsync", "PySync"],
+                               #    default="PySync"
+                               default="PySync"
+                               )
+        argparser.add_argument('--kForwardItersPerStep', type=int,
+                               default=1)
+        argparser.add_argument('--nr_background_threads', type=int,
+                               default=4)
+        return vars(argparser.parse_args())
+
+    run_config = {}
+    run_config.update(parse_args(run_config))
+    return run_config
+
+
+def init_emb_tensor(emb, worker_id, num_workers):
+    if not DIFF_TEST:
+        return
+    dist.barrier()
+    linspace = np.linspace(0, emb.shape[0], num_workers+1, dtype=int)
+    if worker_id == 0:
+        print(f"rank {worker_id} start initing emb")
+        for i in tqdm.trange(linspace[worker_id], linspace[worker_id + 1]):
+            emb.weight[i] = torch.ones(emb.shape[1]) * i
+    else:
+        for i in range(linspace[worker_id], linspace[worker_id + 1]):
+            emb.weight[i] = torch.ones(emb.shape[1]) * i
+    dist.barrier()
+    Mfence.mfence()
+    for i in range(1000):
+        idx = random.randint(0, emb.shape[0]-1)
+        if not (torch.allclose(
+                emb.weight[idx], torch.ones(emb.shape[1]) * idx)):
+            XLOG.error(
+                f"init failed, idx={idx}, emb[idx]={emb.weight[idx]}")
+            assert False
+    dist.barrier()
+
+
+def main_routine(args, routine):
+    # wrap rountine with dist_init
+    def worker_main(routine, worker_id, args):
+        torch.cuda.set_device(worker_id)
+        torch.manual_seed(worker_id)
+        dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
+            master_ip='127.0.0.1', master_port='12335')
+        world_size = args['num_workers']
+        torch.distributed.init_process_group(backend=None,
+                                             init_method=dist_init_method,
+                                             world_size=world_size,
+                                             rank=worker_id,
+                                             timeout=datetime.timedelta(seconds=100))
+        routine(worker_id, args)
+
+    kvinit()
+    emb = DistEmbedding(int(args['num_embs']),
+                        int(args['emb_dim']), name="full_emb",)
+    XLOG.warn("After init DistEmbedding")
+
+    # dummy LR, only register the tensor state of OSP
+    dist_opt = DistOpt.SparseSGD([emb], lr=LR)
+
+    print(f"========== Running Perf with routine {routine}==========")
+    workers = []
+    for worker_id in range(1, args['num_workers']):
+        p = mp.Process(target=worker_main, args=(
+            routine, worker_id, args))
+        p.start()
+        print(f"Worker {worker_id} pid={p.pid}")
+        workers.append(p)
+
+    worker_main(routine, 0, args)
+
+    for each in workers:
+        each.join()
+        assert each.exitcode == 0
+
+
+def routine_local_cache_helper(worker_id, args):
+    ShmKVStore.tensor_store.clear()
+
+    USE_SGD = True
+    # USE_SGD = False
+    rank = dist.get_rank()
+    emb = DistEmbedding(int(args['num_embs']),
+                        int(args['emb_dim']), name="full_emb",)
+    XLOG.debug(
+        f"in rank{rank}, full_emb.data_ptr={hex(emb.get_shm_tensor().data_ptr())}")
+    dist.barrier()
+    # print("begin full_emb.get_shm_tensor().zero_()", flush=True)
+    # emb.get_shm_tensor().zero_()
+    # print("end full_emb.get_shm_tensor().zero_()",  flush=True)
+
+    init_emb_tensor(emb, worker_id, args['num_workers'])
+    # Generate our embedding
+    fake_tensor = torch.Tensor([0])
+    sparse_opt = optim.SGD(
+        [fake_tensor], lr=LR,)
+    dist_opt = DistOpt.SparseSGD([emb], lr=LR)
+    abs_emb = CacheEmbFactory.New(args["emb_choice"], emb, args)
+    abs_emb.reg_opt(sparse_opt)
+    dist.barrier()
+    # Generate our embedding done
+
+    if DIFF_TEST:
+        # Generate standard embedding
+        std_emb = TorchNativeStdEmbDDP(emb, device='cuda')
+        std_emb.reg_opt(sparse_opt)
+        # Generate standard embedding done
+
+    json_str = r'''{{
+        "num_gpus": {num_workers},
+        "L": {L},
+        "kForwardItersPerStep": {kForwardItersPerStep},
+        "clr": {lr},
+        "BackwardMode": "{BackwardMode}",
+        "nr_background_threads": {nr_background_threads}
+    }}'''.format(num_workers=args['num_workers'],
+                 kForwardItersPerStep=args['kForwardItersPerStep'],
+                 L=args['L'],
+                 lr=LR,
+                 BackwardMode=args['BackwardMode'],
+                 nr_background_threads=args['nr_background_threads'],
+                 )
+
+    XLOG.debug(f"{rank}:1111111111111111111111111111")
+
+    # forward
+    start = time.time()
+    start_step = 0
+    warmup_iters = 50
+
+    profiler = Profiler()
+    if args['with_perf']:
+        for_range = tqdm.trange(args['run_steps'])
+    else:
+        for_range = range(args['run_steps'])
+
+    test_perf_sampler = PerfSampler(rank=rank,
+                                    L=args['L'],
+                                    num_ids_per_step=args['batch_size'],
+                                    full_emb_capacity=emb.shape[0])
+
+    kg_cache_controller = KGCacheControllerWrapper(
+        json_str, emb, args
+    )
+    kg_cache_controller.init()
+
+    XLOG.cdebug("1111111111111111111111111111")
+
+    for _ in for_range:
+        sparse_opt.zero_grad()
+        dist_opt.zero_grad()
+
+        print(f"========== Step {_} ========== ", flush=True)
+        if _ == warmup_iters and rank == 0 and args['with_perf']:
+            profiler.start()
+            print("cudaProfilerStart")
+            torch.cuda.cudart().cudaProfilerStart()
+        if _ == warmup_iters + 10 and rank == 0 and args['with_perf']:
+            profiler.stop()
+            profiler.print()
+            print("cudaProfilerStop")
+            torch.cuda.cudart().cudaProfilerStop()
+            break
+
+        input_keys = next(test_perf_sampler)
+        XLOG.cdebug(
+            f"{rank}:input_keys {input_keys}")
+
+        with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
+            embed_value = abs_emb.forward(input_keys)
+        loss = embed_value.sum(-1).sum(-1)
+        loss.backward()
+
+        if DIFF_TEST:
+            # diff test begin
+            std_embed_value = std_emb.forward(input_keys)
+            std_loss = std_embed_value.sum(-1).sum(-1)
+            std_loss.backward()
+            XLOG.cdebug(
+                f"{rank}:std_embed_value {std_embed_value}")
+            XLOG.cdebug(
+                f"{rank}:embed_value {embed_value}")
+            XLOG.cdebug(
+                f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
+            assert (torch.allclose(
+                embed_value.cpu(), std_embed_value.cpu())), "forward is error"
+            assert torch.allclose(loss, std_loss)
+            # diff done
+
+        sparse_opt.step()
+        dist_opt.step()
+
+        kg_cache_controller.AfterBackward()
+
+        if (_ % args['log_interval']) == (args['log_interval']-1):
+            end = time.time()
+            print(
+                f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.6f}", flush=True)
+            start = time.time()
+            start_step = _
+
+
+if __name__ == "__main__":
+    # import debugpy
+    # debugpy.listen(5678)
+    # print("wait debugpy connect", flush=True)
+    # debugpy.wait_for_client()
+
+    IPCTensorFactory.ClearIPCMemory()
+
+    args = get_run_config()
+    main_routine(args, routine_local_cache_helper)
+
+    print("Successfully xmh")

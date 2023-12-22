@@ -29,11 +29,10 @@ class CacheShardingPolicy:
             cached_range.append((start, end))
         return cached_range
 
-    
     @staticmethod
     def set_presampling(cache_size_per_rank):
         CacheShardingPolicy.cache_size_per_rank = cache_size_per_rank
-    
+
     @staticmethod
     def generate_cached_range_from_presampling():
         cache_size_per_rank = CacheShardingPolicy.cache_size_per_rank
@@ -65,7 +64,7 @@ class TorchNativeStdEmbDDP(AbsEmb):
         self.device = device
 
         if type(emb) is DistEmbedding:
-            weight = emb.weight.to_dense_tensor()
+            weight = emb.weight
         else:
             weight = emb
 
@@ -75,7 +74,9 @@ class TorchNativeStdEmbDDP(AbsEmb):
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
             self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
         elif device == 'cpu':
-            std_emb = nn.Embedding.from_pretrained(weight, freeze=False)
+            raise Exception(
+                "发现.cuda()之后和不.cuda的DDP Emb行为不一致，为了diff test暂时不要用cpu")
+            std_emb = nn.Embedding.from_pretrained(weight, freeze=False).copy()
             self.std_emb_ddp = DDP(std_emb, device_ids=None,)
         else:
             assert False

@@ -165,7 +165,7 @@ class IPCTensorMemoryHandle {
 
 class IPCMemory {
   static constexpr int kMaxRegTensorNum = 200;
-  static constexpr int64_t kShmSize = 2 * (1024 * 1024 * 1024LL);
+  static constexpr int64_t kShmSize = 4 * (1024 * 1024 * 1024LL);
 
   struct IPCShmRegion {
     std::atomic<int64_t> accumulated_offset_;
@@ -202,6 +202,7 @@ class IPCMemory {
     // FAA the atomic variable in the header
     int64_t offset = header_->accumulated_offset_.fetch_add(obj_size_in_shm);
     assert(offset + obj_size_in_shm < kShmSize);
+    CHECK_LT(offset + obj_size_in_shm, kShmSize);
     auto *p = new ((char *)header_ + offset)
         IPCTensorMemoryHandle(name, shape, dtype);
     SetMallocedOffset(offset);
@@ -229,6 +230,7 @@ class IPCMemory {
     // FAA the atomic variable in the header
     int64_t offset = header_->accumulated_offset_.fetch_add(obj_size_in_shm);
     assert(offset + obj_size_in_shm < kShmSize);
+    CHECK_LT(offset + obj_size_in_shm, kShmSize);
 
     auto *p = new ((char *)header_ + offset)
         IPCTensorMemoryHandle(name, shape, dtype, dev_id, memHandle, d_ptr);
@@ -326,8 +328,8 @@ class IPCTensorFactory : public torch::CustomClassHolder {
     handle = IPCMemory::GetInstance()->RegisterMemory(name, shape, dtype);
     assert(handle->GetIPCType() == kCPUIPCTensor);
 
-    LOG(ERROR) << "NewIPCTensor: " << name << " " << shape
-               << handle->GetTensorPtr();
+    LOG(WARNING) << "NewIPCTensor: " << name << " " << shape
+                 << handle->GetTensorPtr();
 
     _mm_mfence();
 
@@ -343,6 +345,8 @@ class IPCTensorFactory : public torch::CustomClassHolder {
                                        const at::IntArrayRef shape,
                                        const at::ScalarType dtype,
                                        const int64_t dev_id) {
+    LOG(ERROR) << "Called NewIPCGPUTensor: " << name << " " << shape << " "
+               << dev_id;
     _mm_mfence();
     auto handle = IPCMemory::GetInstance()->GetHandle(name);
     if (handle != nullptr) {

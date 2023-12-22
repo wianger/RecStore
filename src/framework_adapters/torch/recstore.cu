@@ -118,7 +118,7 @@ void merge_op(at::Tensor merge_dst, const at::Tensor retrieved,
 
 __global__ void uva_cache_query_kernel(
     float *merge_dst, const int64_t *id_tensor, const float *hbm_tensor,
-    const float *dram_tensor, const int64_t cached_start_key,
+    float *dram_tensor, const int64_t cached_start_key,
     const int64_t cached_end_key, const size_t len, const size_t emb_vec_size,
     const size_t dram_tensor_size, const size_t hbm_tensor_size) {
   const size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -132,13 +132,13 @@ __global__ void uva_cache_query_kernel(
   int64_t key = id_tensor[emb_idx];
 
   if (key < cached_start_key || key >= cached_end_key) {
-    // assert(key * emb_vec_size + float_idx < dram_tensor_size);
-    // assert(key * emb_vec_size + float_idx >= 0);
+    assert(key * emb_vec_size + float_idx < dram_tensor_size);
+    assert(key * emb_vec_size + float_idx >= 0);
     merge_dst[idx] = dram_tensor[key * emb_vec_size + float_idx];
   } else {
     key -= cached_start_key;
-    // assert(key * emb_vec_size + float_idx < hbm_tensor_size);
-    // assert(key * emb_vec_size + float_idx >= 0);
+    assert(key * emb_vec_size + float_idx < hbm_tensor_size);
+    assert(key * emb_vec_size + float_idx >= 0);
     merge_dst[idx] = hbm_tensor[key * emb_vec_size + float_idx];
   }
 }

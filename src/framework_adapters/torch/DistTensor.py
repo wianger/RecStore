@@ -7,7 +7,8 @@ DIST_TENSOR_ID = 0
 
 
 def _default_init_data(tensor, shape, dtype):
-    return tensor.zero_()
+    # return tensor.zero_()
+    return 
 
 
 class DistTensor:
@@ -53,7 +54,6 @@ class DistTensor:
             )
         else:
             XLOG.warning("The tensor name already exists in the kvstore")
-            
             self._owner = False
             dtype1, shape1, _ = self.kvstore.get_data_meta(self._name)
             assert (
@@ -63,20 +63,25 @@ class DistTensor:
                 shape == shape1
             ), "The shape does not match with the existing tensor"
 
+        self._weight = self.get_shm_tensor()
+
     def __del__(self):
         if not self._persistent and self._owner:
             self.kvstore.Delete(self._name)
 
     def __getitem__(self, idx):
-        idx = dist_utils.toindex(idx)
-        # idx = idx.tousertensor()
-        result = self.kvstore.Get(name=self._name, id_tensor=idx)
-        # return th.tensor(result.reshape((len(idx), self.shape[1])))
-        return result.reshape((len(idx), self.shape[1]))
+        # idx = dist_utils.toindex(idx)
+        # result = self.kvstore.Get(name=self._name, id_tensor=idx)
+        # return result.reshape((len(idx), self.shape[1]))
+
+        return self._weight[idx]
 
     def __setitem__(self, idx, val):
-        idx = dist_utils.toindex(idx)
-        self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
+        # idx = dist_utils.toindex(idx)
+        # self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
+
+        self._weight[idx] = val
+
 
     def get_shm_tensor(self):
         return self.kvstore.GetRowTensor(self._name)

@@ -53,7 +53,8 @@ class ShmKVStore(AbsKVStore):
             XLOG.debug(
                 f"rank{th.distributed.get_rank()}: NewIPCTensor failed, already exists, {hex(temp.data_ptr())}")
 
-        init_func(temp, shape, th.float32)
+        if init_func is not None:
+            init_func(temp, shape, th.float32)
 
         # temp = init_func(
         #     shape=shape, dtype=dtype).share_memory_()
@@ -72,19 +73,20 @@ class ShmKVStore(AbsKVStore):
     def Get(self, name, id_tensor):
         if type(id_tensor) is list:
             id_tensor = th.tensor(id_tensor)
-
         if id_tensor.dtype == th.int64 or id_tensor.dtype == th.int32:
             pass
         else:
             assert False
-
         return F.embedding(id_tensor, self.tensor_store[name])
 
     def Put(self, name, id_tensor, data_tensor):
         self.tensor_store[name][id_tensor, :] = data_tensor
 
     def Delete(self, name):
-        del self.tensor_store[name]
+        if name in self.tensor_store.keys():
+            del self.tensor_store[name]
+        else:
+            XLOG.error("Delete tensor failed, not found")
 
     @staticmethod
     def GetUVAMap(tensor):

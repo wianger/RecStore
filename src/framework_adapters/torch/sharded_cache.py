@@ -240,16 +240,19 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
 
         # 5.1 join missing keys
-        if type(full_emb) is DistEmbedding:
-            missing_value = full_emb(missing_keys.cpu(), record_trace=False)
-            # F.embedding(missing_keys.cpu(
-            # ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+        if missing_keys.shape[0] > 0:
+            if type(full_emb) is DistEmbedding:
+                missing_value = full_emb(missing_keys.cpu(), record_trace=False)
+                # F.embedding(missing_keys.cpu(
+                # ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
 
+            else:
+                missing_value = F.embedding(missing_keys.cpu(
+                ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+
+            ret_value[in_cache_mask.logical_not()] = missing_value.cuda()
         else:
-            missing_value = F.embedding(missing_keys.cpu(
-            ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
-
-        ret_value[in_cache_mask.logical_not()] = missing_value.cuda()
+            pass
 
         # 5.2 join in-cache keys
         for cache_query_value, mask in zip(cache_query_values_in_mine, in_each_rank_cache_mask):

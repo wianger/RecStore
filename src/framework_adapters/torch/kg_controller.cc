@@ -266,17 +266,19 @@ class GradSyncProcessing : public GradProcessingBase {
   void ProcessOneStep() {
     torch::AutoGradMode guard_false(false);
     // show tensors of the first rank
-    std::cout << "input_keys_per_rank" << std::endl;
-    std::cout << toString(input_keys_per_rank_[0]) << std::endl;
-    std::cout << "input_keys_neg_per_rank_" << std::endl;
-    std::cout << toString(input_keys_neg_per_rank_[0]) << std::endl;
-    static int cnt = 0;
-    std::cout << "cached_id_circle_buffer" << std::endl;
-    std::cout << "Step " << step_tensor_per_rank_[0][cnt].item<int64_t>()
-              << " ";
-    std::cout << toString(cached_id_circle_buffer_[0][cnt]->GetSlicedTensor())
-              << std::endl;
-    cnt = (cnt + 1) % cached_id_circle_buffer_[0].size();
+
+    // std::cout << "input_keys_per_rank" << std::endl;
+    // std::cout << toString(input_keys_per_rank_[0]) << std::endl;
+    // std::cout << "input_keys_neg_per_rank_" << std::endl;
+    // std::cout << toString(input_keys_neg_per_rank_[0]) << std::endl;
+    // static int cnt = 0;
+    // std::cout << "cached_id_circle_buffer" << std::endl;
+    // std::cout << "Step " << step_tensor_per_rank_[0][cnt].item<int64_t>()
+    //           << " ";
+    // std::cout <<
+    // toString(cached_id_circle_buffer_[0][cnt]->GetSlicedTensor())
+    //           << std::endl;
+    // cnt = (cnt + 1) % cached_id_circle_buffer_[0].size();
 
     auto input_keys_per_rank_tensors =
         SlicedTensor::BatchConvertToTensors(input_keys_per_rank_);
@@ -618,15 +620,17 @@ class KGCacheController : public torch::CustomClassHolder {
 
     auto backward_mode = json_config.at("BackwardMode");
 
-    if (backward_mode == "CppSync")
+    if (backward_mode == "CppSync") {
       grad_processing_ = new GradSyncProcessing(json_str, cached_range);
-    else if (backward_mode == "CppAsync")
+      LOG(WARNING) << "after init GradSyncProcessing";
+    } else if (backward_mode == "CppAsync") {
       grad_processing_ = new GradAsyncProcessing(json_str, cached_range);
-    else if (backward_mode == "PySync")
+      LOG(WARNING) << "after init GradAsyncProcessing";
+    } else if (backward_mode == "PySync") {
       ;
-    else
+    } else {
       LOG(FATAL) << "invalid backward mode: " << backward_mode;
-    LOG(WARNING) << "after init GradAsyncProcessing";
+    }
   }
 
  public:

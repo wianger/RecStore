@@ -142,10 +142,19 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
 
+        # print("-----------xmh-----------")
+        # print(full_emb.get_shm_tensor().shape)
+        # print(hex(full_emb.get_shm_tensor().data_ptr()))
+        # # print("keys", keys)
+        # assert (keys < full_emb.get_shm_tensor().shape[0]).all()
+        # full_emb.get_shm_tensor().zero_()
+        # print("-----------xmh done-----------")
+        # dist.barrier()
+
         uva_cache_query_op(ret_value,
                            keys,
                            emb_cache,
-                           full_emb.weight.get_shm_tensor(),
+                           full_emb.get_shm_tensor(),
                            cached_start_key,
                            cached_end_key)
 
@@ -262,7 +271,8 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     def backward(ctx, grad_output):
         if KnownLocalCachedEmbeddingFn.backward_mode == "PySync":
             return KnownLocalCachedEmbeddingFn.backward_py_sync(ctx, grad_output)
-        elif KnownLocalCachedEmbeddingFn.backward_mode == "CppSync":
+        elif KnownLocalCachedEmbeddingFn.backward_mode == "CppSync" \
+                or KnownLocalCachedEmbeddingFn.backward_mode == "CppAsync":
             rank = dist.get_rank()
             keys, = ctx.saved_tensors
             backward_grads = ctx.backward_grads
@@ -309,11 +319,21 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.cached_range = cached_range
         self.full_emb = full_emb
 
+        # NOTE: all processes need register the UVA region
+        #  even though the region is exactly same.
         ShmKVStore.GetUVAMap(full_emb.get_shm_tensor())
+        dist.barrier()
+        XLOG.debug(f"{rank}: after UVAMap")
         self.emb_cache.copy_(self.full_emb.weight[start:end])
-        self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
+        dist.barrier()
 
+        # TODO: 检查一下为啥直接这样分配会有问题
+        self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
+        # self.ret_value = recstore.IPCTensorFactory.NewIPCGPUTensor(
+        #     f"ret_value{rank}", [int(1e5), self.emb_dim], torch.float, rank)
         self.iter = 0
+        XLOG.debug(f"{rank}: KnownLocalCachedEmbedding init done")
+        print(f"{rank}: KnownLocalCachedEmbedding init done", flush=True)
 
     def GetCache(self):
         return self.emb_cache
@@ -351,6 +371,6 @@ class KnownLocalCachedEmbedding(AbsEmb):
     def reg_opt(self, opt):
         # TODO: Attenion!
         opt.add_param_group({"params": self.emb_cache})
-        
+
         # if dist.get_rank() == 0:
         #     opt.add_param_group({"params": self.full_emb.weight})

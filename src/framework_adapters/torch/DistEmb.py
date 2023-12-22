@@ -234,7 +234,9 @@ class DistEmbedding:
         torch.Tensor
             The tensor storing the node embeddings
         """
-        return self._tensor
+        # return self._tensor
+        return self._tensor.get_shm_tensor()
 
     def get_shm_tensor(self):
-        return self.weight.get_shm_tensor()
+        # return self.weight.get_shm_tensor()
+        return self._tensor.get_shm_tensor()
