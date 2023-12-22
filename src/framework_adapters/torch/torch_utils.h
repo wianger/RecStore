@@ -9,12 +9,11 @@ std::string toStringInner(const torch::Tensor &tensor, bool simplified = true) {
   std::stringstream ss;
   if (tensor.dim() == 1) {
     if (simplified) {
-      // ss << folly::sformat("[tensor({},{},{},...,)] shape=[{}]",
-      //                      tensor[0].item<T>(), tensor[1].item<T>(),
-      //                      tensor[2].item<T>(), tensor.size(0));
-      ss << folly::sformat("[tensor({},{},...,)] shape=[{}]",
-                           tensor[0].item<T>(), tensor[1].item<T>(),
-                           tensor.size(0));
+      ss << "tensor([";
+      for (int i = 0; i < std::min(tensor.size(0), (int64_t)3); ++i) {
+        ss << folly::sformat("{},", tensor[i].item<T>());
+      }
+      ss << "])";
     } else {
       ss << "tensor([";
       for (int i = 0; i < tensor.size(0); ++i) {

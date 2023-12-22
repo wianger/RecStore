@@ -84,10 +84,10 @@ class TestPerfSampler:
         from test_emb import XMH_DEBUG
         if XMH_DEBUG:
             if self.rank == 0:
-                input_keys = th.tensor([1, 2,],).long().cuda()
+                input_keys = th.tensor([0, 1,],).long().cuda()
                 # input_keys = torch.tensor([0, 1,],).long().cuda()
             else:
-                input_keys = th.tensor([0, 2,],).long().cuda()
+                input_keys = th.tensor([1, 2,],).long().cuda()
                 # input_keys = torch.tensor([2, 3,],).long().cuda()
             return input_keys
         else:
@@ -145,7 +145,6 @@ class PerfSampler:
 
         _, entity_id = self.samples_queue.pop(0)
         return entity_id
-
 
 
 class CachedSampler:
@@ -240,8 +239,8 @@ class KGCacheControllerWrapper:
         self.rank = dist.get_rank()
         self.args = args
         if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync"
-                ) and self.rank == 0:
+            or self.args['BackwardMode'] == "CppAsync"
+            ) and self.rank == 0:
             cache_range = CacheEmbFactory.ReturnCachedRange(emb, args)
             self.controller = recstore.KGCacheController.Init(
                 json_str, cache_range)
@@ -252,23 +251,24 @@ class KGCacheControllerWrapper:
         time.sleep(5)
 
         if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync"
-                ) and self.rank == 0:
+            or self.args['BackwardMode'] == "CppAsync"
+            ) and self.rank == 0:
             self.controller.RegTensorsPerProcess()
         self.step = 0
         dist.barrier()
 
-
     def OnNextStep(self,):
         if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync"
-                )  and self.rank == 0:
+            or self.args['BackwardMode'] == "CppAsync"
+            )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
         self.step += 1
 
     def AfterBackward(self,):
         dist.barrier()
-        if self.args['BackwardMode'] == "CppSync" and self.rank == 0:
+        if (self.args['BackwardMode'] == "CppSync"
+                or self.args['BackwardMode'] == "CppAsync") \
+                and self.rank == 0:
             self.controller.ProcessOneStep()
         dist.barrier()

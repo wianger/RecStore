@@ -68,8 +68,8 @@ def get_run_config():
         argparser.add_argument('--num_workers', type=int,
                                default=4)
         argparser.add_argument('--num_embs', type=int,
-                                 default=10*1e6)
-                            #    default=1*1e6)
+                               default=10*1e6)
+        #    default=1*1e6)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
         argparser.add_argument('--L', type=int,
@@ -88,7 +88,9 @@ def get_run_config():
                                default="KnownLocalCachedEmbedding"
                                #    default="KnownShardedCachedEmbedding"
                                )
-        argparser.add_argument('--BackwardMode', choices=["CppSync", "CppAsync", "PySync"],
+        argparser.add_argument('--BackwardMode', choices=["CppSync",
+                                                          "CppAsync",
+                                                          "PySync"],
                                #    default="PySync"
                                default="PySync"
                                )

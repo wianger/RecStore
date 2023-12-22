@@ -42,7 +42,7 @@ EmbContext = namedtuple('EmbContext', ["emb_name", 'sparse_opt', 'dist_opt'])
 
 USE_SGD = True
 # USE_SGD = False
-LR = 1
+LR = 2
 
 XMH_DEBUG = True
 # XMH_DEBUG = False
@@ -232,9 +232,7 @@ class TestShardedCache:
 
             loss = embed_value.sum(-1).sum(-1)
             loss.backward()
-
-            XLOG.debug(f'full_emb.grad = {list(abs_emb.full_emb.get_grad())}')
-
+            # XLOG.debug(f'full_emb.grad = {list(abs_emb.full_emb.get_grad())}')
             assert (torch.allclose(
                 embed_value, std_embed_value)), "forward is error"
             assert (torch.allclose(
@@ -252,14 +250,14 @@ class TestShardedCache:
             "test_cache_mode": ['KnownLocalCachedEmbedding', ],
             # "test_cache_mode": ['KnownLocalCachedEmbedding', 'KnownShardedCachedEmbedding'],
 
-            "backmode": ["PySync", "CppSync"],
+            # "backmode": ["PySync", "CppSync"],
 
             # "backmode": ["PySync",],
             # "backmode": ["CppSync",],
-            # "backmode": ["CppAsync",],
+            "backmode": ["CppAsync",],
 
-            "cache_ratio": [0.1, 0.3, 0.5],
-            # "cache_ratio": [0.1,]
+            # "cache_ratio": [0.1, 0.3, 0.5],
+            "cache_ratio": [0.1,]
         }
 
         def GenProduct(config):

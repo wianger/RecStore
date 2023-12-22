@@ -227,7 +227,8 @@ class GradProcessingBase {
             cached_range_[rank][0];
         auto shuffle_grads_cuda =
             shuffled_grads_in_each_rank_cache[rank][j].to(device, true);
-        cache_per_rank_[rank].index_add_(0, in_rank_keys, -shuffle_grads_cuda);
+        cache_per_rank_[rank].index_add_(0, in_rank_keys,
+                                         -clr_ * shuffle_grads_cuda);
       }
     }
   }
@@ -339,7 +340,8 @@ class GradSyncProcessing : public GradProcessingBase {
 
     // update full emb
     for (int rank = 0; rank < num_gpus_; rank++) {
-      full_emb_.index_add_(0, input_keys[rank].cpu(), -input_grads[rank].cpu());
+      full_emb_.index_add_(0, input_keys[rank].cpu(),
+                           (-clr_) * input_grads[rank].cpu());
     }
   }
 };
@@ -547,6 +549,22 @@ class GradAsyncProcessing : public GradProcessingBase {
         ShuffleKeysAndGrads(input_keys, input_grads);
     SyncUpdateCache(shuffled_keys_in_each_rank_cache,
                     shuffled_grads_in_each_rank_cache);
+
+    LOG(WARNING) << "shuffled_keys_in_each_rank_cache";
+    LOG(WARNING) << "Rank0:" << toString(shuffled_keys_in_each_rank_cache[0][0])
+                 << "|" << toString(shuffled_keys_in_each_rank_cache[0][1]);
+    LOG(WARNING) << "Rank1:" << toString(shuffled_keys_in_each_rank_cache[1][0])
+                 << "|" << toString(shuffled_keys_in_each_rank_cache[1][1]);
+
+    LOG(WARNING) << "shuffled_grads_in_each_rank_cache";
+
+    LOG(WARNING) << "Rank0:"
+                 << toString(shuffled_grads_in_each_rank_cache[0][0]) << "|"
+                 << toString(shuffled_grads_in_each_rank_cache[0][1]);
+    LOG(WARNING) << "Rank1:"
+                 << toString(shuffled_grads_in_each_rank_cache[1][0]) << "|"
+                 << toString(shuffled_grads_in_each_rank_cache[1][1]);
+
     // record the update
     // 把 <ID>查一下堆，拿一下step号
     // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
