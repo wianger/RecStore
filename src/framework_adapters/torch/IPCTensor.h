@@ -207,6 +207,9 @@ class IPCMemory {
         IPCTensorMemoryHandle(name, shape, dtype);
     SetMallocedOffset(offset);
     p->CheckMagic();
+
+    asm volatile("" ::: "memory");
+    _mm_mfence();
     return p;
   }
 
@@ -236,11 +239,16 @@ class IPCMemory {
         IPCTensorMemoryHandle(name, shape, dtype, dev_id, memHandle, d_ptr);
     SetMallocedOffset(offset);
     p->CheckMagic();
+
+    asm volatile("" ::: "memory");
+    _mm_mfence();
     return p;
   }
 
   IPCTensorMemoryHandle *GetHandle(const std::string &name) {
     asm volatile("" ::: "memory");
+    _mm_mfence();
+
     for (int i = 0; i < kMaxRegTensorNum; i++) {
       int64_t offset = header_->malloced_offsets_[i];
       if (offset == 0) {
@@ -252,7 +260,6 @@ class IPCMemory {
         return p;
       }
     }
-    asm volatile("" ::: "memory");
     return nullptr;
   }
 

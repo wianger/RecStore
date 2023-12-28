@@ -12,6 +12,8 @@ load_recstore_library()
 
 merge_op = torch.ops.librecstore_pytorch.merge_op
 uva_cache_query_op = torch.ops.librecstore_pytorch.uva_cache_query_op
+init_folly = torch.ops.librecstore_pytorch.init_folly 
+
 
 GpuCache = torch.classes.librecstore_pytorch.GpuCache
 IPCTensorFactory = torch.classes.librecstore_pytorch.IPCTensorFactory

@@ -1,0 +1,432 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+W20231228 19:19:41.607846 3752123 IPCTensor.h:338] NewIPCTensor: full_emb [20000, 3]0x100000002000
+DEBUG [3752123 utils.py:98] [31mShmKVStore.tensor_store 0x100000002000[0m
+xmh:  {'test_cache': 'KnownLocalCachedEmbedding', 'cache_ratio': 0.1, 'kForwardItersPerStep': 1, 'BackwardMode': 'CppAsync', 'L': 10, 'nr_background_threads': 32}
+========== Running Test with routine <bound method TestShardedCache.routine_cache_helper of <__main__.TestShardedCache object at 0x7f6370af0bd0>> {'test_cache': 'KnownLocalCachedEmbedding', 'cache_ratio': 0.1, 'kForwardItersPerStep': 1, 'BackwardMode': 'CppAsync', 'L': 10, 'nr_background_threads': 32}==========
+INFO [3752123 test_emb.py:116] Worker 0 pid=3752257
+INFO [3752123 test_emb.py:116] Worker 1 pid=3752258
+INFO [3752258 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [3752258 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 2 nodes.
+DEBUG [3752258 test_emb.py:154] rank1: pid=3752258
+INFO [3752257 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [3752257 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 2 nodes.
+DEBUG [3752257 test_emb.py:154] rank0: pid=3752257
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+E20231228 19:19:44.392769 3752258 IPCTensor.h:317] IPCTensor full_emb already exists
+DEBUG [3752258 PsKvstore.py:53] rank1: NewIPCTensor failed, already exists, 0x100000002000
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+E20231228 19:19:44.469802 3752257 IPCTensor.h:317] IPCTensor full_emb already exists
+DEBUG [3752257 PsKvstore.py:53] rank0: NewIPCTensor failed, already exists, 0x100000002000
+DEBUG [3752257 test_emb.py:166] dist_opt._params = [<DistEmb.DistEmbedding object at 0x7f98dac4c850>]
+DEBUG [3752257 test_emb.py:168] in rank0, full_emb.data_ptr=0x100000002000
+DEBUG [3752258 test_emb.py:166] dist_opt._params = [<DistEmb.DistEmbedding object at 0x7fba6eff9410>]
+DEBUG [3752258 test_emb.py:168] in rank1, full_emb.data_ptr=0x100000002000
+INFO [3752257 test_emb.py:129] emb.data_ptr=0x100000002000
+INFO [3752258 test_emb.py:129] emb.data_ptr=0x100000002000
+rank 0 start initing emb
+  0%|          | 0/10000 [00:00<?, ?it/s] 62%|██████▏   | 6170/10000 [00:00<00:00, 61685.79it/s]100%|██████████| 10000/10000 [00:00<00:00, 62347.42it/s]
+E20231228 19:19:45.840659 3752258 IPCTensor.h:355] Called NewIPCGPUTensor: embedding_cache_1 [1000, 3] 1
+W20231228 19:19:45.840874 3752258 IPCTensor.h:377] NewIPCGPUTensor: embedding_cache_1 [1000, 3] 1
+E20231228 19:19:45.840898 3752257 IPCTensor.h:355] Called NewIPCGPUTensor: embedding_cache_0 [1000, 3] 0
+W20231228 19:19:45.840937 3752257 IPCTensor.h:377] NewIPCGPUTensor: embedding_cache_0 [1000, 3] 0
+W20231228 19:19:45.841073 3752258 IPCTensor.h:338] NewIPCTensor: input_keys_1 [100000]0x1000000400a0
+W20231228 19:19:45.841096 3752257 IPCTensor.h:338] NewIPCTensor: input_keys_0 [100000]0x1000001050a0
+W20231228 19:19:45.841151 3752258 IPCTensor.h:338] NewIPCTensor: input_keys_neg_1 [100000]0x1000001ca0a0
+E20231228 19:19:45.841187 3752258 IPCTensor.h:355] Called NewIPCGPUTensor: backward_grads_1 [100000, 3] 1
+W20231228 19:19:45.841187 3752257 IPCTensor.h:338] NewIPCTensor: input_keys_neg_0 [100000]0x10000028f0a0
+W20231228 19:19:45.841192 3752258 IPCTensor.h:377] NewIPCGPUTensor: backward_grads_1 [100000, 3] 1
+E20231228 19:19:45.841233 3752257 IPCTensor.h:355] Called NewIPCGPUTensor: backward_grads_0 [100000, 3] 0
+E20231228 19:19:45.841239 3752258 IPCTensor.h:355] Called NewIPCGPUTensor: backward_grads_neg_1 [100000, 3] 1
+W20231228 19:19:45.841241 3752257 IPCTensor.h:377] NewIPCGPUTensor: backward_grads_0 [100000, 3] 0
+W20231228 19:19:45.841245 3752258 IPCTensor.h:377] NewIPCGPUTensor: backward_grads_neg_1 [100000, 3] 1
+E20231228 19:19:45.841307 3752257 IPCTensor.h:355] Called NewIPCGPUTensor: backward_grads_neg_0 [100000, 3] 0
+W20231228 19:19:45.841316 3752257 IPCTensor.h:377] NewIPCGPUTensor: backward_grads_neg_0 [100000, 3] 0
+DEBUG [3752257 local_cache.py:326] 0: after UVAMap
+DEBUG [3752258 local_cache.py:326] 1: after UVAMap
+DEBUG [3752258 local_cache.py:335] 1: KnownLocalCachedEmbedding init done
+weight.shape torch.Size([20000, 3])
+cudaHostRegister 0x100000002000
+1: KnownLocalCachedEmbedding init done
+W20231228 19:19:45.859143 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_0 [100000]0x1000003581e0
+W20231228 19:19:45.859212 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_1 [100000]0x10000041d1e0
+W20231228 19:19:45.859251 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_2 [100000]0x1000004e21e0
+W20231228 19:19:45.859283 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_3 [100000]0x1000005a71e0
+W20231228 19:19:45.859319 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_4 [100000]0x10000066c1e0
+W20231228 19:19:45.859351 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_5 [100000]0x1000007311e0
+W20231228 19:19:45.859385 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_6 [100000]0x1000007f61e0
+W20231228 19:19:45.859422 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_7 [100000]0x1000008bb1e0
+W20231228 19:19:45.859465 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_8 [100000]0x1000009801e0
+W20231228 19:19:45.859499 3752258 IPCTensor.h:338] NewIPCTensor: cached_sampler_r1_9 [100000]0x100000a451e0
+W20231228 19:19:45.859534 3752258 IPCTensor.h:338] NewIPCTensor: step_r1 [10]0x100000b0a1e0
+W20231228 19:19:45.859566 3752258 IPCTensor.h:338] NewIPCTensor: circle_buffer_end_r1 [1]0x100000b0c1e0
+W20231228 19:19:45.859596 3752258 IPCTensor.h:338] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x100000b0e1e0
+DEBUG [3752257 local_cache.py:335] 0: KnownLocalCachedEmbedding init done
+------------json------------
+{
+            "num_gpus": 2,
+            "L": 10,
+            "kForwardItersPerStep": 1,
+            "clr": 2,
+            "BackwardMode": "CppAsync",
+            "nr_background_threads": 32
+        }
+weight.shape torch.Size([20000, 3])
+New CachedEmbedding, name=full_emb, shape=(20000, 3), cache_type=KnownLocalCachedEmbedding
+fixed cache_range is [(0, 1000), (1000, 2000)]
+cudaHostRegister 0x100000002000
+0: KnownLocalCachedEmbedding init done
+W20231228 19:19:45.861318 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_0 [100000]0x100000b101e0
+W20231228 19:19:45.861485 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_1 [100000]0x100000bd51e0
+W20231228 19:19:45.861543 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_2 [100000]0x100000c9a1e0
+W20231228 19:19:45.861624 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_3 [100000]0x100000d5f1e0
+W20231228 19:19:45.861675 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_4 [100000]0x100000e241e0
+W20231228 19:19:45.861727 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_5 [100000]0x100000ee91e0
+W20231228 19:19:45.861788 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_6 [100000]0x100000fae1e0
+W20231228 19:19:45.861836 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_7 [100000]0x1000010731e0
+W20231228 19:19:45.861889 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_8 [100000]0x1000011381e0
+W20231228 19:19:45.861955 3752257 IPCTensor.h:338] NewIPCTensor: cached_sampler_r0_9 [100000]0x1000011fd1e0
+W20231228 19:19:45.862017 3752257 IPCTensor.h:338] NewIPCTensor: step_r0 [10]0x1000012c21e0
+W20231228 19:19:45.862063 3752257 IPCTensor.h:338] NewIPCTensor: circle_buffer_end_r0 [1]0x1000012c41e0
+W20231228 19:19:45.862099 3752257 IPCTensor.h:338] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x1000012c61e0
+W20231228 19:19:45.864169 3752257 kg_controller.cc:51] KGCacheController, config={
+            "num_gpus": 2,
+            "L": 10,
+            "kForwardItersPerStep": 1,
+            "clr": 2,
+            "BackwardMode": "CppAsync",
+            "nr_background_threads": 32
+        }
+W20231228 19:19:45.864936 3752257 kg_controller.cc:147] Init GradProcessingBase done
+W20231228 19:19:45.869388 3752257 kg_controller.cc:756] after init GradAsyncProcessing
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+  0%|          | 0/1000 [00:00<?, ?it/s]========== Step 0 ========== 
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+  0%|          | 0/1000 [00:00<?, ?it/s]========== Step 0 ========== 
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 controller_process.py:70] polling
+DEBUG [3752257 test_emb.py:230] 0:step0, input_keys tensor([ 8963,  8379, 15427,  ...,  9963,  7446, 14624], device='cuda:0')
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752257 test_emb.py:235] std_embed_value cuda:0
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 controller_process.py:70] polling
+DEBUG [3752258 test_emb.py:230] 1:step0, input_keys tensor([11263, 10313,  8491,  ..., 15446,  7242, 17415], device='cuda:1')
+DEBUG [3752258 test_emb.py:235] std_embed_value cuda:1
+DEBUG [3752258 utils.py:105] [32m1:1:std_embed_value tensor([[11263., 11263., 11263.],
+        [10313., 10313., 10313.],
+        [ 8491.,  8491.,  8491.],
+        ...,
+        [15446., 15446., 15446.],
+        [ 7242.,  7242.,  7242.],
+        [17415., 17415., 17415.]], device='cuda:1',
+       grad_fn=<EmbeddingBackward0>)[0m
+DEBUG [3752258 utils.py:105] [32m1:1:embed_value tensor([[11263., 11263., 11263.],
+        [10313., 10313., 10313.],
+        [ 8491.,  8491.,  8491.],
+        ...,
+        [15446., 15446., 15446.],
+        [ 7242.,  7242.,  7242.],
+        [17415., 17415., 17415.]], device='cuda:1',
+       grad_fn=<KnownLocalCachedEmbeddingFnBackward>)[0m
+DEBUG [3752257 utils.py:100] [31m0:0:std_embed_value tensor([[ 8963.,  8963.,  8963.],
+        [ 8379.,  8379.,  8379.],
+        [15427., 15427., 15427.],
+        ...,
+        [ 9963.,  9963.,  9963.],
+        [ 7446.,  7446.,  7446.],
+        [14624., 14624., 14624.]], device='cuda:0',
+       grad_fn=<EmbeddingBackward0>)[0m
+DEBUG [3752257 utils.py:100] [31m0:0:embed_value tensor([[ 8963.,  8963.,  8963.],
+        [ 8379.,  8379.,  8379.],
+        [15427., 15427., 15427.],
+        ...,
+        [ 9963.,  9963.,  9963.],
+        [ 7446.,  7446.,  7446.],
+        [14624., 14624., 14624.]], device='cuda:0',
+       grad_fn=<KnownLocalCachedEmbeddingFnBackward>)[0m
+python3: /home/xieminhui/RecStore/src/base/lock.h:17: void base::SpinLock::AssertLockHold(): Assertion `locked.test_and_set(std::memory_order_acquire)' failed.
+*** Aborted at 1703762459 (Unix time, try 'date -d @1703762459') ***
+*** Signal 6 (SIGABRT) (0x3e800394141) received by PID 3752257 (pthread TID 0x7f9a18fe7740) (linux TID 3752257) (maybe from PID 3752257, UID 1000) (code: -6), stack trace: ***
+    @ 00000000008c3e2a folly::symbolizer::(anonymous namespace)::innerSignalHandler(int, siginfo_t*, void*)
+                       /home/xieminhui/RecStore/third_party/folly/folly/experimental/symbolizer/SignalHandler.cpp:449
+    @ 00000000008c3f10 folly::symbolizer::(anonymous namespace)::signalHandler(int, siginfo_t*, void*)
+                       /home/xieminhui/RecStore/third_party/folly/folly/experimental/symbolizer/SignalHandler.cpp:470
+    @ 000000000004251f (unknown)
+    @ 00000000000969fc pthread_kill
+    @ 0000000000042475 raise
+    @ 00000000000287f2 abort
+    @ 000000000002871a (unknown)
+    @ 0000000000039e95 __assert_fail
+    @ 00000000006a73a2 base::SpinLock::AssertLockHold()
+                       /home/xieminhui/RecStore/src/base/lock.h:17
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006c474f base::CustomPriorityQueue<recstore::AsyncGradElement*, recstore::CompareAsyncGradElement>::CheckConsistency(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+                       /home/xieminhui/RecStore/src/base/pq.h:103
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006b7fd5 base::CustomPriorityQueue<recstore::AsyncGradElement*, recstore::CompareAsyncGradElement>::ForDebug(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+                       /home/xieminhui/RecStore/src/base/pq.h:99
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006ac01d recstore::GradAsyncProcessing::BlockToStepN(int)
+                       /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc:638
+    @ 00000000006acf5e recstore::KGCacheController::BlockToStepN(long)
+                       /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc:772
+    @ 0000000000711422 void std::__invoke_impl<void, void (recstore::KGCacheController::* const&)(long), recstore::KGCacheController&, long&>(std::__invoke_memfun_ref, void (recstore::KGCacheController::* const&)(long), recstore::KGCacheController&, long&)
+                       /usr/include/c++/11/bits/invoke.h:67
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 000000000070ef36 std::__invoke_result<void (recstore::KGCacheController::* const&)(long), recstore::KGCacheController&, long&>::type std::__invoke<void (recstore::KGCacheController::* const&)(long), recstore::KGCacheController&, long&>(void (recstore::KGCacheController::* const&)(long), recstore::KGCacheController&, long&)
+                       /usr/include/c++/11/bits/invoke.h:96
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 000000000070bf5c decltype (__invoke((*this)._M_pmf, (forward<recstore::KGCacheController&>)({parm#1}), (forward<long&>)({parm#1}))) std::_Mem_fn_base<void (recstore::KGCacheController::*)(long), true>::operator()<recstore::KGCacheController&, long&>(recstore::KGCacheController&, long&) const
+                       /usr/include/c++/11/functional:131
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000007079b3 std::enable_if<std::is_member_pointer<std::decay<void (recstore::KGCacheController::*&)(long)>::type>::value, std::invoke_result<void (recstore::KGCacheController::*&)(long), recstore::KGCacheController&, long&>::type>::type c10::guts::invoke<void (recstore::KGCacheController::*&)(long), recstore::KGCacheController&, long&>(void (recstore::KGCacheController::*&)(long), recstore::KGCacheController&, long&)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/c10/util/C++17.h:195
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000007006c7 torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>::operator()(c10::intrusive_ptr<recstore::KGCacheController, c10::detail::intrusive_target_default_null_type<recstore::KGCacheController> >, long)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/torch/custom_class_detail.h:83
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006f7f28 c10::guts::infer_function_traits_t::return_type torch::detail::call_torchbind_method_from_stack<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, false, 0ul, 1ul>(torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>&, std::vector<c10::IValue, std::allocator<c10::IValue> >&, std::integer_sequence<unsigned long, 0ul, 1ul>)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/torch/custom_class_detail.h:139
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006e7d04 c10::guts::infer_function_traits_t::return_type torch::detail::call_torchbind_method_from_stack<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, false>(torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>&, std::vector<c10::IValue, std::allocator<c10::IValue> >&)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/torch/custom_class_detail.h:153
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006da2f8 torch::detail::BoxedProxy<void, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >::operator()(std::vector<c10::IValue, std::allocator<c10::IValue> >&, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>&)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/torch/custom_class_detail.h:174
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006c78c3 torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}::operator()(std::vector<c10::IValue, std::allocator<c10::IValue> >&)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/torch/custom_class.h:407
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 0000000000707a4c void std::__invoke_impl<void, torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}&, std::vector<c10::IValue, std::allocator<c10::IValue> >&>(std::__invoke_other, torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}&, std::vector<c10::IValue, std::allocator<c10::IValue> >&)
+                       /usr/include/c++/11/bits/invoke.h:61
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 0000000000700788 std::enable_if<is_invocable_r_v<void, torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}&, std::vector<c10::IValue, std::allocator<c10::IValue> >&>, void>::type std::__invoke_r<void, torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}&, std::vector<c10::IValue, std::allocator<c10::IValue> >&>(torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}&, std::vector<c10::IValue, std::allocator<c10::IValue> >&)
+                       /usr/include/c++/11/bits/invoke.h:111
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 00000000006f7ff2 std::_Function_handler<void (std::vector<c10::IValue, std::allocator<c10::IValue> >&), torch::class_<recstore::KGCacheController>::defineMethod<torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, torch::detail::WrapMethod<void (recstore::KGCacheController::*)(long)>, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::initializer_list<torch::arg>)::{lambda(std::vector<c10::IValue, std::allocator<c10::IValue> >&)#1}>::_M_invoke(std::_Any_data const&, std::vector<c10::IValue, std::allocator<c10::IValue> >&)
+                       /usr/include/c++/11/bits/std_function.h:290
+                       -> /home/xieminhui/RecStore/src/framework_adapters/torch/kg_controller.cc
+    @ 000000000065ac1c std::function<void (std::vector<c10::IValue, std::allocator<c10::IValue> >&)>::operator()(std::vector<c10::IValue, std::allocator<c10::IValue> >&) const
+                       /usr/include/c++/11/bits/std_function.h:590
+                       -> /tmp/tmpxft_00392f92_00000000-6_recstore.compute_86.cudafe1.cpp
+    @ 000000000064ef77 torch::jit::BuiltinOpFunction::run(std::vector<c10::IValue, std::allocator<c10::IValue> >&)
+                       /home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/include/ATen/core/builtin_function.h:31
+                       -> /tmp/tmpxft_00392f92_00000000-6_recstore.compute_86.cudafe1.cpp
+    @ 00000000008126a3 torch::jit::runAndInsertCall(torch::jit::Function&, torch::jit::tuple_slice const&, pybind11::kwargs const&, c10::optional<c10::IValue>, std::function<torch::jit::Value* (torch::jit::Graph&, torch::jit::MatchedSchema const&)> const&)
+                       /home/xieminhui/pytorch/torch/csrc/jit/python/pybind_utils.h:965
+                       -> /home/xieminhui/pytorch/torch/csrc/jit/python/python_custom_class.cpp
+    @ 0000000000812cc2 torch::jit::invokeScriptMethodFromPython(torch::jit::Method&, torch::jit::tuple_slice const&, pybind11::kwargs const&)
+                       /home/xieminhui/pytorch/torch/csrc/jit/python/pybind_utils.h:1095
+                       -> /home/xieminhui/pytorch/torch/csrc/jit/python/python_custom_class.cpp
+    @ 000000000089d51c pybind11::cpp_function::initialize<torch::jit::initJitScriptBindings(_object*)::{lambda(pybind11::args, pybind11::kwargs)#68}, pybind11::object, pybind11::args, pybind11::kwargs, pybind11::name, pybind11::is_method, pybind11::sibling>(torch::jit::initJitScriptBindings(_object*)::{lambda(pybind11::args, pybind11::kwargs)#68}&&, pybind11::object (*)(pybind11::args, pybind11::kwargs), pybind11::name const&, pybind11::is_method const&, pybind11::sibling const&)::{lambda(pybind11::detail::function_call&)#3}::_FUN(pybind11::detail::function_call&)
+                       /home/xieminhui/pytorch/torch/csrc/jit/python/script_init.cpp:1508
+    @ 0000000000357419 pybind11::cpp_function::dispatcher(_object*, _object*, _object*)
+                       /home/xieminhui/pytorch/torch/include/pybind11/pybind11.h:929
+                       -> /home/xieminhui/pytorch/torch/csrc/autograd/generated/python_functions_0.cpp
+    @ 0000000000525f06 cfunction_call
+                       /usr/local/src/conda/python-3.11.5/Objects/methodobject.c:542
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 0000000000502d53 _PyObject_MakeTpCall
+                       /usr/local/src/conda/python-3.11.5/Objects/call.c:214
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 0000000000554171 method_vectorcall
+                       /usr/local/src/conda/python-3.11.5/Objects/classobject.c:89
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 000000000046fd31 slot_tp_call.cold
+                       /usr/local/src/conda/python-3.11.5/Objects/typeobject.c:7626
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 0000000000502d53 _PyObject_MakeTpCall
+                       /usr/local/src/conda/python-3.11.5/Objects/call.c:214
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 000000000050f024 _PyEval_EvalFrameDefault
+                       /usr/local/src/conda/python-3.11.5/Python/ceval.c:4774
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 0000000000535102 _PyFunction_Vectorcall
+                       /usr/local/src/conda/python-3.11.5/Include/internal/pycore_ceval.h:73
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 0000000000512d59 _PyEval_EvalFrameDefault
+                       /usr/local/src/conda/python-3.11.5/Python/ceval.c:7357
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005c82cd _PyEval_Vector
+                       /usr/local/src/conda/python-3.11.5/Include/internal/pycore_ceval.h:73
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005c79ce PyEval_EvalCode
+                       /usr/local/src/conda/python-3.11.5/Python/ceval.c:1154
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005e8806 run_eval_code_obj
+                       /usr/local/src/conda/python-3.11.5/Python/pythonrun.c:1712
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005e4e3f run_mod
+                       /usr/local/src/conda/python-3.11.5/Python/pythonrun.c:1733
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005d713e PyRun_StringFlags
+                       /usr/local/src/conda/python-3.11.5/Python/pythonrun.c:1603
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005d700a PyRun_SimpleStringFlags
+                       /usr/local/src/conda/python-3.11.5/Python/pythonrun.c:487
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005f30e7 Py_RunMain
+                       /usr/local/src/conda/python-3.11.5/Modules/main.c:255
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 00000000005b6e18 Py_BytesMain
+                       /usr/local/src/conda/python-3.11.5/Modules/main.c:734
+                       -> /croot/python-split_1694437901252/work/build-static/<artificial>
+    @ 0000000000029d8f (unknown)
+    @ 0000000000029e3f __libc_start_main
+    @ 00000000005b6c6e (unknown)
+[W tensorpipe_agent.cpp:725] RPC agent for worker1 encountered error when reading incoming request from worker0: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+  0%|          | 0/1000 [00:21<?, ?it/s]
+Process Process-2:
+Traceback (most recent call last):
+  File "/home/xieminhui/miniconda3/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/xieminhui/miniconda3/lib/python3.11/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/xieminhui/RecStore/src/framework_adapters/torch/python/test_emb.py", line 67, in worker_main
+    routine(worker_id, num_workers, emb_context, args)
+  File "/home/xieminhui/RecStore/src/framework_adapters/torch/python/test_emb.py", line 287, in routine_cache_helper
+    kg_cache_controller.OnNextStep()
+  File "/home/xieminhui/RecStore/src/framework_adapters/torch/python/controller_process.py", line 330, in OnNextStep
+    dist.barrier()
+  File "/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/distributed/distributed_c10d.py", line 3335, in barrier
+    work.wait()
+RuntimeError: [/home/xieminhui/pytorch/third_party/gloo/gloo/transport/tcp/pair.cc:598] Connection closed by peer [127.0.1.1]:11702
+join all processes done
+/home/xieminhui/miniconda3/lib/python3.11/multiprocessing/resource_tracker.py:224: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

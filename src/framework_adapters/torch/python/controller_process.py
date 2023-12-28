@@ -1,27 +1,32 @@
+import os
 from queue import Queue
-from dglke.dataloader.sampler import TrainDataset
-from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
+import queue
+from threading import Thread
+import sys
+
 
 import torch as th
 import torch.multiprocessing as mp
 import torch.distributed as dist
-import queue
-from threading import Thread
+import torch.distributed.rpc as rpc
 
-import sys
+from dglke.dataloader.sampler import TrainDataset
+from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
+
+import recstore
 from cache_emb_factory import CacheEmbFactory
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
-import recstore
+from utils import XLOG, Timer, TimeFactory
 
 
-class ProxySubGraph:
-    def __init__(self, ) -> None:
-        pass
+os.environ['MASTER_ADDR'] = 'localhost'
+os.environ['MASTER_PORT'] = '29500'
 
 
 class CircleBuffer:
-    def __init__(self, L, rank) -> None:
+    def __init__(self, L, rank, backmode) -> None:
         self.L = L
+        self.rank = rank
 
         self.buffer = []
         for i in range(L):
@@ -34,11 +39,18 @@ class CircleBuffer:
 
         self.circle_buffer_end = recstore.IPCTensorFactory.NewIPCTensor(
             f"circle_buffer_end_r{rank}", (int(1), ), th.int64, )
+
+        self.circle_buffer_old_end = recstore.IPCTensorFactory.NewIPCTensor(
+            f"circle_buffer_end_cppseen_r{rank}", (int(1), ), th.int64, )
+
         # [start, end)
         self.start = 0
         self.end = 0
 
         self.circle_buffer_end[0] = 0
+        self.circle_buffer_old_end[0] = 0
+
+        self.backmode = backmode
 
     def push(self, step, item):
         assert item.ndim == 1
@@ -47,6 +59,18 @@ class CircleBuffer:
         self.step_tensor[self.end] = step
 
         self.end = (self.end + 1) % self.L
+        self.circle_buffer_end[0] = self.end
+
+        if self.backmode == "CppAsync":
+            # DetectNewSamplesCome
+            debug_count = 0
+            while (self.circle_buffer_end[0] != self.circle_buffer_old_end[0]):
+                debug_count += 1
+                if debug_count % 100000 == 0:
+                    XLOG.debug("polling")
+        else:
+            pass
+
         if self.end == self.start:
             self.start = (self.start + 1) % self.L
 
@@ -63,17 +87,18 @@ class CircleBuffer:
 
 
 class TestPerfSampler:
-    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity) -> None:
+    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
         self.rank = rank
         self.L = L
-        self.ids_circle_buffer = CircleBuffer(L, rank)
+        self.ids_circle_buffer = CircleBuffer(L, rank, backmode)
         self.sampler_iter_num = 0
         self.num_ids_per_step = num_ids_per_step
         self.full_emb_capacity = full_emb_capacity
-
         self.samples_queue = []
+        self.backmode = backmode
 
-        for _ in range(L):
+    def Prefill(self):
+        for _ in range(self.L):
             entity_id = self.gen_next_sample()
             self.samples_queue.append(
                 (self.sampler_iter_num, entity_id))
@@ -83,13 +108,17 @@ class TestPerfSampler:
     def gen_next_sample(self):
         from test_emb import XMH_DEBUG
         if XMH_DEBUG:
-            if self.rank == 0:
-                input_keys = th.tensor([0, 1,],).long().cuda()
-                # input_keys = torch.tensor([0, 1,],).long().cuda()
-            else:
-                input_keys = th.tensor([1, 2,],).long().cuda()
-                # input_keys = torch.tensor([2, 3,],).long().cuda()
-            return input_keys
+            # if self.rank == 0:
+            #     # input_keys = th.tensor([0, 1,],).long().cuda()
+            #     input_keys = th.tensor([0, 1, 2],).long().cuda()
+            # else:
+            #     # input_keys = th.tensor([1, 2,],).long().cuda()
+            #     input_keys = th.tensor([3, 4, 5],).long().cuda()
+            # return input_keys
+
+            entity_id = th.randint(self.full_emb_capacity, size=(
+                10,)).long().cuda()
+            return entity_id
         else:
             entity_id = th.randint(self.full_emb_capacity, size=(
                 self.num_ids_per_step,)).long().cuda()
@@ -108,14 +137,14 @@ class TestPerfSampler:
 
 
 class PerfSampler:
-    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity) -> None:
+    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
         self.rank = rank
         self.L = L
-        self.ids_circle_buffer = CircleBuffer(L, rank)
+        self.ids_circle_buffer = CircleBuffer(L, rank, backmode)
         self.sampler_iter_num = 0
         self.num_ids_per_step = num_ids_per_step
         self.full_emb_capacity = full_emb_capacity
-
+        self.backmode = backmode
         self.samples_queue = []
 
         for _ in range(L):
@@ -233,42 +262,83 @@ class CachedSampler:
         self.ids_circle_buffer.push(step, entity_id)
 
 
+def GetKGCacheControllerWrapper():
+    assert KGCacheControllerWrapper.instance is not None
+    return KGCacheControllerWrapper.instance
+
+
 class KGCacheControllerWrapper:
+    instance = None
+
     def __init__(self, json_str, emb, args) -> None:
         dist.barrier()
         self.rank = dist.get_rank()
         self.args = args
         if (self.args['BackwardMode'] == "CppSync"
-            or self.args['BackwardMode'] == "CppAsync"
+                or self.args['BackwardMode'] == "CppAsync"
             ) and self.rank == 0:
             cache_range = CacheEmbFactory.ReturnCachedRange(emb, args)
             self.controller = recstore.KGCacheController.Init(
                 json_str, cache_range)
         dist.barrier()
+        KGCacheControllerWrapper.instance = self
+
+        self.timer_OnNextStep = Timer("OnNextStep")
+        self.timer_AfterBackward = Timer("AfterBackward")
+
+        self.init_rpc()
+        self._RegisterFolly()
+
+    def init_rpc(self):
+        rpc.init_rpc(name=f"worker{self.rank}",
+                     rank=self.rank, world_size=dist.get_world_size())
+        dist.barrier()
 
     def init(self):
-        import time
-        time.sleep(5)
-
         if (self.args['BackwardMode'] == "CppSync"
-            or self.args['BackwardMode'] == "CppAsync"
+                or self.args['BackwardMode'] == "CppAsync"
             ) and self.rank == 0:
             self.controller.RegTensorsPerProcess()
         self.step = 0
         dist.barrier()
 
+    def _RegisterFolly(self):
+        recstore.init_folly()
+
+    @classmethod
+    def StopThreads_cls(cls):
+        KGCacheControllerWrapper.instance.StopThreads()
+
+    def StopThreads(self):
+        if self.rank == 0:
+            print(
+                f"On rank0, prepare to call self.controller.StopThreads(), self={self}")
+            self.controller.StopThreads()
+        else:
+            XLOG.info("call rank0 to StopThreads")
+            rpc.rpc_sync(
+                "worker0", KGCacheControllerWrapper.StopThreads_cls, args=())
+            XLOG.info("call rank0 to StopThreads done")
+
     def OnNextStep(self,):
+        self.timer_OnNextStep.start()
+        self.step += 1
         if (self.args['BackwardMode'] == "CppSync"
-            or self.args['BackwardMode'] == "CppAsync"
+                or self.args['BackwardMode'] == "CppAsync"
             )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
-        self.step += 1
+        self.timer_OnNextStep.stop()
+
+        if self.step % 100 == 0:
+            TimeFactory.Report()
 
     def AfterBackward(self,):
+        self.timer_AfterBackward.start()
         dist.barrier()
         if (self.args['BackwardMode'] == "CppSync"
                 or self.args['BackwardMode'] == "CppAsync") \
                 and self.rank == 0:
-            self.controller.ProcessOneStep()
+            self.controller.ProcessOneStep(self.step)
         dist.barrier()
+        self.timer_AfterBackward.stop()

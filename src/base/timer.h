@@ -31,7 +31,7 @@
 // #define XMH_PERF_GPU
 #endif
 
-#include "base.h"
+#include "base/log.h"
 
 class XDebug {
  public:

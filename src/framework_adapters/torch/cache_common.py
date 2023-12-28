@@ -55,6 +55,7 @@ class AbsEmb(ABC):
 
     def reg_opt(self, opt):
         raise NotImplementedError
+    
 
 
 class TorchNativeStdEmbDDP(AbsEmb):
@@ -68,15 +69,18 @@ class TorchNativeStdEmbDDP(AbsEmb):
         else:
             weight = emb
 
+        self.weight =weight
+
         print("weight.shape", weight.shape)
 
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
             self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
         elif device == 'cpu':
-            raise Exception(
-                "发现.cuda()之后和不.cuda的DDP Emb行为不一致，为了diff test暂时不要用cpu")
-            std_emb = nn.Embedding.from_pretrained(weight, freeze=False).copy()
+            # TODO(NOTE)
+            # raise Exception(
+            #     "发现.cuda()之后和不.cuda的DDP Emb行为不一致，为了diff test暂时不要用cpu")
+            std_emb = nn.Embedding.from_pretrained(weight, freeze=False)
             self.std_emb_ddp = DDP(std_emb, device_ids=None,)
         else:
             assert False
@@ -92,6 +96,13 @@ class TorchNativeStdEmbDDP(AbsEmb):
     def reg_opt(self, opt):
         opt.add_param_group({"params": self.std_emb_ddp.parameters()})
 
+    @property
+    def emb_cache(self):
+        return None
+
+    @property
+    def full_emb(self):
+        return self.weight
 
 class TorchNativeStdEmb(AbsEmb):
     def __init__(self, emb, device):
@@ -103,6 +114,8 @@ class TorchNativeStdEmb(AbsEmb):
             weight = emb.weight.to_dense_tensor()
         else:
             weight = emb
+
+        self.weight = weight
 
         print("weight.shape", weight.shape, flush=True)
 
@@ -125,6 +138,14 @@ class TorchNativeStdEmb(AbsEmb):
 
     def reg_opt(self, opt):
         opt.add_param_group({"params": self.std_emb.parameters()})
+    
+    @property
+    def emb_cache(self):
+        return None
+
+    @property
+    def full_emb(self):
+        return self.weight
 
 
 class NVGPUCache:

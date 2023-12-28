@@ -6,6 +6,7 @@ import torch.distributed as dist
 import torch.optim as optim
 
 import logging
+import time
 
 from recstore import merge_op
 
@@ -14,19 +15,77 @@ _send_cpu, _recv_cpu = {}, {}
 # data: [rank0_data, rank1_data, ...]
 
 logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
-                datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                # datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+# datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 XLOG = logging
 
+
+class TimeFactory:
+    all_timers = {}
+
+    @classmethod
+    def beautifyNs(cls, s):
+        ns = s * 1e9
+        if (int(ns / 1000) == 0):
+            return f'{ns:.3f} ns'
+        ns /= 1000
+        if (int(ns / 1000) == 0):
+            return f'{ns:.3f} us'
+        ns /= 1000
+        if (int(ns / 1000) == 0):
+            return f'{ns:.3f} ms'
+        ns /= 1000
+        return f'{ns:.3f} s'
+
+    @classmethod
+    def AddToTimer(cls, timer):
+        if timer.name not in cls.all_timers:
+            cls.all_timers[timer.name] = timer
+
+    @classmethod
+    def Report(cls):
+        print_str = f"Timer: Rank{dist.get_rank()}\n"
+        for name, timer in cls.all_timers.items():
+            print_str += f"{name}: {cls.beautifyNs(timer.average_time())}\n"
+
+        XLOG.error(print_str)
+
+
+class Timer:
+    def __init__(self, name):
+        self.start_time = 0
+        self.end_time = 0
+        self.elapsed_time = 0
+        self.runs = 0
+        self.total_time = 0
+        self.name = name
+
+        TimeFactory.AddToTimer(self)
+
+    def start(self):
+        self.start_time = time.time()
+
+    def stop(self):
+        self.end_time = time.time()
+        self.elapsed_time = self.end_time - self.start_time
+        self.total_time += self.elapsed_time
+        self.runs += 1
+
+    def average_time(self):
+        if self.runs == 0:
+            return 0
+        return self.total_time / self.runs
+
+
 def XLOG_debug(str):
-    rank =None
+    rank = None
     try:
         rank = dist.get_rank()
     except:
         pass
-    
+
     if rank == 0:
         color = "red"
     elif rank is not None:
@@ -49,10 +108,9 @@ def XLOG_debug(str):
             XLOG.debug(f'{str}')
         else:
             XLOG.debug(f'{rank}:{str}')
-    
+
 
 XLOG.cdebug = XLOG_debug
-
 
 
 def print_rank0(msg):
@@ -258,12 +316,14 @@ def reduce_sparse_tensor(sparse_tensor, dst_rank=0):
 
     return res
 
+
 @torch.no_grad()
 def kv_to_sparse_tensor(keys, values, shape):
     if keys.dim() != 2:
         temp = keys.unsqueeze(0)
-        assert temp.dim() == 2 
+        assert temp.dim() == 2
     return torch.sparse_coo_tensor(temp, values, size=shape)
+
 
 @torch.no_grad()
 def reduce_sparse_kv_tensor(keys, values, shape, dst_rank=0):
@@ -305,8 +365,9 @@ def sum_sparse_tensor(keys_list, values_list, shape):
         size=(1,), nnz=0, layout=torch.sparse_coo)
     '''
     coo_list = []
-    #  here, sparse_dim = 1, dense_dim = shape[1:], 
-    res = torch.sparse_coo_tensor(torch.empty([1, 0]), torch.empty([0, *shape[1:]]), size=shape)
+    #  here, sparse_dim = 1, dense_dim = shape[1:],
+    res = torch.sparse_coo_tensor(torch.empty(
+        [1, 0]), torch.empty([0, *shape[1:]]), size=shape)
 
     for each in range(len(keys_list)):
         if keys_list[each].nelement() == 0:

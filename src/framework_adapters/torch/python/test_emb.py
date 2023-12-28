@@ -25,12 +25,14 @@ from PsKvstore import ShmKVStore
 
 from controller_process import KGCacheControllerWrapper, TestPerfSampler
 from cache_common import ShmTensorStore, TorchNativeStdEmbDDP
-from utils import print_rank0, XLOG
+from utils import print_rank0, XLOG, Timer
 from DistEmb import DistEmbedding
 from PsKvstore import kvinit
 import DistOpt
 
 from cache_emb_factory import CacheEmbFactory
+
+
 
 random.seed(0)
 np.random.seed(0)
@@ -44,8 +46,11 @@ USE_SGD = True
 # USE_SGD = False
 LR = 2
 
-XMH_DEBUG = True
-# XMH_DEBUG = False
+# XMH_DEBUG = True
+XMH_DEBUG = False
+
+# NO_CHECK = True
+NO_CHECK = False
 
 
 def worker_main(routine, worker_id, num_workers, emb_context, args):
@@ -70,7 +75,8 @@ class TestShardedCache:
         EMB_LEN = 20
         BATCH_SIZE = 1024
     else:
-        EMB_DIM = 32
+        # EMB_DIM = 32
+        EMB_DIM = 3
         EMB_LEN = 20000
         BATCH_SIZE = 1024
 
@@ -197,13 +203,20 @@ class TestShardedCache:
         test_perf_sampler = TestPerfSampler(rank=rank,
                                             L=args['L'],
                                             num_ids_per_step=TestShardedCache.BATCH_SIZE,
-                                            full_emb_capacity=emb.shape[0])
+                                            full_emb_capacity=emb.shape[0],
+                                            backmode=args['BackwardMode'],
+                                            )
         kg_cache_controller = KGCacheControllerWrapper(
             json_str, emb, args
         )
         kg_cache_controller.init()
 
+        test_perf_sampler.Prefill()
+
         # Generate our embedding done
+        timer_Forward = Timer("Forward")
+        timer_Backward= Timer("Backward")
+        timer_Optimize = Timer("Optimize")
 
         # forward
         for _ in tqdm.trange(1000):
@@ -213,42 +226,82 @@ class TestShardedCache:
             print(f"========== Step {_} ========== ", flush=True)
             input_keys = next(test_perf_sampler)
 
+            # torch.set_printoptions(profile="full")
             XLOG.debug(f"{rank}:step{_}, input_keys {input_keys}")
-            std_embed_value = std_emb.forward(input_keys)
+            # torch.set_printoptions(profile="default")
+
+            std_embed_value = std_emb.forward(input_keys).cuda()
+
+            XLOG.debug(f"std_embed_value {std_embed_value.device}")
             std_loss = std_embed_value.sum(-1).sum(-1)
             std_loss.backward()
 
             XLOG.cdebug(
                 f"{rank}:std_embed_value {std_embed_value}")
 
-            XLOG.cdebug(
-                f"{rank}:emb_cache {abs_emb.emb_cache}")
+            # XLOG.cdebug(
+            #     f"{rank}:emb_cache {abs_emb.emb_cache}")
+            # XLOG.cdebug(
+            #     f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
 
-            XLOG.cdebug(
-                f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
+            timer_Forward.start()
+            embed_value = abs_emb.forward(input_keys).cuda()
+            timer_Forward.stop()
 
-            embed_value = abs_emb.forward(input_keys)
             XLOG.cdebug(f"{rank}:embed_value {embed_value}")
 
             loss = embed_value.sum(-1).sum(-1)
+            
+            timer_Backward.start()
             loss.backward()
-            # XLOG.debug(f'full_emb.grad = {list(abs_emb.full_emb.get_grad())}')
-            assert (torch.allclose(
-                embed_value, std_embed_value)), "forward is error"
-            assert (torch.allclose(
-                loss, std_loss))
+            timer_Backward.stop()
 
+            if not torch.allclose(
+                    embed_value, std_embed_value):
+                if NO_CHECK:
+                    pass
+                else:
+                    for i in range(len(input_keys)):
+                        if not torch.allclose(
+                                embed_value[i], std_embed_value[i]):
+                            XLOG.error(
+                                f"rank{rank}: forward failed, input_key={input_keys[i]}, \
+                                    embed_value={embed_value[i]}, \
+                                    std_embed_value={std_embed_value[i]}")
+                            kg_cache_controller.StopThreads()
+                            
+                            assert False, "forward is error"
+                    assert False, "forward is error"
+
+            if not NO_CHECK:
+                assert (torch.allclose(
+                    loss, std_loss))
+
+
+            timer_Optimize.start()
             sparse_opt.step()
             dist_opt.step()
+            timer_Optimize.stop()
 
             kg_cache_controller.AfterBackward()
+            kg_cache_controller.OnNextStep()
+            
+            
+            if rank == 0:
+                XLOG.info(f"rank{rank}: step{_} done")
+                kg_cache_controller.controller.PrintPq()
+
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
 
         config = {
+            # "test_cache_mode": ['NativeEmbedding', ],
             "test_cache_mode": ['KnownLocalCachedEmbedding', ],
-            # "test_cache_mode": ['KnownLocalCachedEmbedding', 'KnownShardedCachedEmbedding'],
+
+            # "test_cache_mode": ['KnownLocalCachedEmbedding', 
+            #                     'KnownShardedCachedEmbedding',
+            #                     'NativeEmbedding'],
 
             # "backmode": ["PySync", "CppSync"],
 
@@ -278,7 +331,7 @@ class TestShardedCache:
                     "kForwardItersPerStep": 1,
                     "BackwardMode": backmode,
                     "L": 10,
-                    "nr_background_threads": 4,
+                    "nr_background_threads": 32,
                     }
             print("xmh: ", args)
             self.main_routine(self.routine_cache_helper, args)

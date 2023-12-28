@@ -94,7 +94,7 @@ class ShmKVStore(AbsKVStore):
         cudart = th.cuda.cudart()
         r = cudart.cudaHostRegister(
             temp.data_ptr(), temp.numel() * temp.element_size(), 0)
-        print(f"cudaHostRegister {hex(temp.data_ptr())}: {r}")
+        print(f"cudaHostRegister {hex(temp.data_ptr())}")
         return r
 
     def GetRowTensor(self, name):

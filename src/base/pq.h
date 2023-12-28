@@ -3,6 +3,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "base/lock.h"
+
+#define XMH_DEBUG
+
 namespace base {
 template <typename T, typename Compare = std::less<T>>
 class CustomPriorityQueue {
@@ -15,56 +19,150 @@ class CustomPriorityQueue {
   }
 
   void push(const T& value) {
-    data_.push_back(value);
-    index_map_[value] = data_.size() - 1;
-    heapifyUp(data_.size() - 1);
+    base::LockGurad _(lock_);
+    push_inner(value);
   }
 
-  void pop() {
+  T pop() {
+    base::LockGurad _(lock_);
+    T ret;
+    ret = data_.front();
     index_map_.erase(data_.front());
+    if (data_.size() == 1) {
+      data_.pop_back();
+      CheckConsistency("pop1");
+      return ret;
+    }
+
     std::swap(data_.front(), data_.back());
     index_map_[data_.front()] = 0;
     data_.pop_back();
     heapifyDown(0);
+#ifdef XMH_DEBUG
+    CheckConsistency("pop2");
+    // LOG(WARNING) << "pop " << ret->GetID();
+#endif
+    return ret;
   }
 
-  const T& top() const { return data_.front(); }
+  void PushOrUpdate(const T& value) {
+    base::LockGurad _(lock_);
+    if (index_map_.find(value) == index_map_.end()) {
+      push_inner(value);
+    } else {
+      adjustPriority(value);
+    }
+  }
 
-  size_t size() const { return data_.size(); }
+  T top() const {
+    base::LockGurad _(lock_);
+    return data_.front();
+  }
+
+  size_t size() const {
+    base::LockGurad _(lock_);
+    return data_.size();
+  }
+
+  bool empty() const {
+    base::LockGurad _(lock_);
+    return data_.empty();
+  }
+
+  std::string ToString() const {
+    // base::LockGurad _(lock_);
+    std::stringstream ss;
+    ss << "CustomPriorityQueue:\n";
+    if (data_.empty()) {
+      ss << "\t\t"
+         << "empty\n";
+      return ss.str();
+    }
+
+    for (auto each : data_) {
+      ss << "\t\t" << each->ToString() << "\n";
+    }
+    return ss.str();
+  }
+
+  void ForDebug(const std::string& head) {
+    for (auto each : data_) {
+      if (each->GetID() == 1718) {
+        LOG(INFO) << head << " find 1718 " << each->ToString() << ".\n top is "
+                  << top()->ToString();
+        CheckConsistency();
+        return;
+      }
+    }
+    LOG(INFO) << head << " not find"
+              << ", top is " << top()->ToString();
+    CheckConsistency();
+  }
+
+  void CheckConsistency(const std::string& hint = "") {
+    lock_.AssertLockHold();
+
+    CHECK_EQ(data_.size(), index_map_.size()) << hint;
+    for (int i = 0; i < data_.size(); i++) {
+      CHECK_EQ(index_map_[data_[i]], i) << hint;
+    }
+    int64_t heap_size = data_.size();
+    for (int64_t index = 0; index < heap_size; index++) {
+      size_t leftChild = 2 * index + 1;
+      size_t rightChild = 2 * index + 2;
+      if (leftChild < heap_size) {
+        CHECK(!compare(data_[index], data_[leftChild])) << hint;
+      }
+      if (rightChild < heap_size) {
+        CHECK(!compare(data_[index], data_[rightChild])) << hint;
+      }
+    }
+  }
+
+ private:
+  std::vector<T> data_;
+  std::unordered_map<T, size_t> index_map_;
+  Compare compare;
+  mutable base::SpinLock lock_;
+
+  void push_inner(const T& value) {
+    data_.push_back(value);
+    index_map_[value] = data_.size() - 1;
+    heapifyUp(data_.size() - 1);
+#ifdef XMH_DEBUG
+    CheckConsistency("push_inner");
+    // LOG(WARNING) << "push " << value->GetID();
+#endif
+  }
 
   void adjustPriority(const T& oldValue) {
     auto it = index_map_.find(oldValue);
     if (it != index_map_.end()) {
       size_t index = it->second;
-      //   data_[index] = newValue;
-      //   index_map_.erase(oldValue);
-      //   index_map_[newValue] = index;
-
       auto& newValue = oldValue;
-      // 如果元素上升
-      if (index > 0 && compare(newValue, data_[(index - 1) / 2])) {
+      if (index > 0 && compare(data_[(index - 1) / 2], newValue)) {
         heapifyUp(index);
-      }
-      // 如果元素下降
-      else {
+      } else {
         heapifyDown(index);
       }
     } else {
       LOG(FATAL) << "adjustPriority error:"
                  << " not found";
     }
+
+#ifdef XMH_DEBUG
+    CheckConsistency("adjustPriority");
+    // LOG(WARNING) << "adjustPriority " << oldValue->GetID();
+    //  << "| pq: " << ToString();
+#endif
   }
 
-  bool empty() const { return data_.empty(); }
-
- private:
-  std::vector<T> data_;
-  std::unordered_map<T, size_t> index_map_;
-  Compare compare;
-
   void heapifyUp(size_t index) {
-    while (index > 0 && compare(data_[index], data_[(index - 1) / 2])) {
+    while (index > 0 && compare(data_[(index - 1) / 2], data_[index])) {
       std::swap(data_[index], data_[(index - 1) / 2]);
+      index_map_[data_[index]] = index;
+      index_map_[data_[(index - 1) / 2]] = (index - 1) / 2;
+
       index = (index - 1) / 2;
     }
   }
@@ -76,11 +174,11 @@ class CustomPriorityQueue {
       size_t rightChild = 2 * index + 2;
       size_t smallestChild = leftChild;
 
-      if (rightChild < size && compare(data_[rightChild], data_[leftChild])) {
+      if (rightChild < size && compare(data_[leftChild], data_[rightChild])) {
         smallestChild = rightChild;
       }
 
-      if (compare(data_[smallestChild], data_[index])) {
+      if (compare(data_[index], data_[smallestChild])) {
         std::swap(data_[index], data_[smallestChild]);
         index_map_[data_[index]] = index;
         index_map_[data_[smallestChild]] = smallestChild;

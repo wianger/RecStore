@@ -28,7 +28,7 @@ from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import ShmKVStore, kvinit
-from utils import XLOG
+from utils import XLOG, Timer
 import time
 import DistOpt
 
@@ -40,8 +40,8 @@ torch.use_deterministic_algorithms(True)
 
 
 LR = 1
-# DIFF_TEST = True
-DIFF_TEST = False
+DIFF_TEST = True
+# DIFF_TEST = False
 
 
 @contextmanager
@@ -84,7 +84,7 @@ def get_run_config():
                                default=100)
         argparser.add_argument('--run_steps', type=int,
                                default=500)
-        argparser.add_argument('--emb_choice', choices=["TorchNativeStdEmb", "KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+        argparser.add_argument('--emb_choice', choices=["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding", "NativeEmbedding"],
                                default="KnownLocalCachedEmbedding"
                                #    default="KnownShardedCachedEmbedding"
                                )
@@ -215,8 +215,6 @@ def routine_local_cache_helper(worker_id, args):
                  nr_background_threads=args['nr_background_threads'],
                  )
 
-    XLOG.debug(f"{rank}:1111111111111111111111111111")
-
     # forward
     start = time.time()
     start_step = 0
@@ -231,14 +229,18 @@ def routine_local_cache_helper(worker_id, args):
     test_perf_sampler = PerfSampler(rank=rank,
                                     L=args['L'],
                                     num_ids_per_step=args['batch_size'],
-                                    full_emb_capacity=emb.shape[0])
+                                    full_emb_capacity=emb.shape[0],
+                                    backmode=args['BackwardMode'] 
+                                    )
 
     kg_cache_controller = KGCacheControllerWrapper(
         json_str, emb, args
     )
     kg_cache_controller.init()
 
-    XLOG.cdebug("1111111111111111111111111111")
+    timer_Forward = Timer("Forward")
+    timer_Backward= Timer("Backward")
+    timer_Optimize = Timer("Optimize")
 
     for _ in for_range:
         sparse_opt.zero_grad()
@@ -260,29 +262,37 @@ def routine_local_cache_helper(worker_id, args):
         XLOG.cdebug(
             f"{rank}:input_keys {input_keys}")
 
+        
+        timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
         loss = embed_value.sum(-1).sum(-1)
+        timer_Forward.stop()
+
+        timer_Backward.start()
         loss.backward()
+        timer_Backward.stop()
 
         if DIFF_TEST:
             # diff test begin
             std_embed_value = std_emb.forward(input_keys)
             std_loss = std_embed_value.sum(-1).sum(-1)
             std_loss.backward()
-            XLOG.cdebug(
-                f"{rank}:std_embed_value {std_embed_value}")
-            XLOG.cdebug(
-                f"{rank}:embed_value {embed_value}")
-            XLOG.cdebug(
-                f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
+            # XLOG.cdebug(
+            #     f"{rank}:std_embed_value {std_embed_value}")
+            # XLOG.cdebug(
+            #     f"{rank}:embed_value {embed_value}")
+            # XLOG.cdebug(
+            #     f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
             assert (torch.allclose(
                 embed_value.cpu(), std_embed_value.cpu())), "forward is error"
             assert torch.allclose(loss, std_loss)
             # diff done
 
+        timer_Optimize.start()
         sparse_opt.step()
         dist_opt.step()
+        timer_Optimize.stop()
 
         kg_cache_controller.AfterBackward()
 

@@ -4,6 +4,8 @@
 #include <torch/torch.h>
 
 #include "IPCTensor.h"
+#include "base/timer.h"
+#include "folly/init/Init.h"
 #include "gpu_cache_nohash.h"
 #include "kg_controller.h"
 #include "storage/gpu_cache/nv_gpu_cache.hpp"
@@ -192,6 +194,18 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
 //       return ret;
 // }
 
+void init_folly() {
+  std::vector<std::string> arguments = {"program_name", "arg1", "arg2", "arg3"};
+  int argc = static_cast<int>(arguments.size());
+  char **argv = new char *[argc];
+  for (int i = 0; i < argc; ++i) {
+    argv[i] = new char[arguments[i].size() + 1];
+    std::strcpy(argv[i], arguments[i].c_str());
+  }
+  folly::init(&argc, (char ***)&argv, false);
+  xmh::Reporter::StartReportThread();
+}
+
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")
       .def("__str__", &CacheQueryResult::__repr__)
@@ -206,6 +220,7 @@ TORCH_LIBRARY(librecstore_pytorch, m) {
 
   m.def("merge_op", &merge_op);
   m.def("uva_cache_query_op", &uva_cache_query_op);
+  m.def("init_folly", &init_folly);
 
   m.class_<GPUCacheWithNoHashTorch>("GpuCacheWithNoHash")
       .def(torch::init<int64_t, int64_t, int64_t, int64_t>());
