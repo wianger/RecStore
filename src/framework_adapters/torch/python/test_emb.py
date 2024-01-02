@@ -33,7 +33,6 @@ import DistOpt
 from cache_emb_factory import CacheEmbFactory
 
 
-
 random.seed(0)
 np.random.seed(0)
 torch.use_deterministic_algorithms(True)
@@ -215,7 +214,7 @@ class TestShardedCache:
 
         # Generate our embedding done
         timer_Forward = Timer("Forward")
-        timer_Backward= Timer("Backward")
+        timer_Backward = Timer("Backward")
         timer_Optimize = Timer("Optimize")
 
         # forward
@@ -251,7 +250,7 @@ class TestShardedCache:
             XLOG.cdebug(f"{rank}:embed_value {embed_value}")
 
             loss = embed_value.sum(-1).sum(-1)
-            
+
             timer_Backward.start()
             loss.backward()
             timer_Backward.stop()
@@ -269,14 +268,13 @@ class TestShardedCache:
                                     embed_value={embed_value[i]}, \
                                     std_embed_value={std_embed_value[i]}")
                             kg_cache_controller.StopThreads()
-                            
+
                             assert False, "forward is error"
                     assert False, "forward is error"
 
             if not NO_CHECK:
                 assert (torch.allclose(
                     loss, std_loss))
-
 
             timer_Optimize.start()
             sparse_opt.step()
@@ -285,12 +283,10 @@ class TestShardedCache:
 
             kg_cache_controller.AfterBackward()
             kg_cache_controller.OnNextStep()
-            
-            
-            if rank == 0:
-                XLOG.info(f"rank{rank}: step{_} done")
-                kg_cache_controller.controller.PrintPq()
 
+            # if rank == 0:
+            #     XLOG.info(f"rank{rank}: step{_} done")
+            #     kg_cache_controller.controller.PrintPq()
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
@@ -299,7 +295,7 @@ class TestShardedCache:
             # "test_cache_mode": ['NativeEmbedding', ],
             "test_cache_mode": ['KnownLocalCachedEmbedding', ],
 
-            # "test_cache_mode": ['KnownLocalCachedEmbedding', 
+            # "test_cache_mode": ['KnownLocalCachedEmbedding',
             #                     'KnownShardedCachedEmbedding',
             #                     'NativeEmbedding'],
 

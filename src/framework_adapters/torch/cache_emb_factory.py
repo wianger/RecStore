@@ -22,7 +22,7 @@ class CacheEmbFactory:
         # cached_range = CacheShardingPolicy.generate_cached_range_from_presampling()
         print_rank0(f"fixed cache_range is {cached_range}")
 
-        if cache_type == "KnownSh ardedCachedEmbedding":
+        if cache_type == "KnownShardedCachedEmbedding":
             abs_emb = KnownShardedCachedEmbedding(
                 emb, cached_range=cached_range)
         elif cache_type == "LocalCachedEmbedding":
@@ -36,6 +36,8 @@ class CacheEmbFactory:
                                                 )
         elif cache_type == "NativeEmbedding":
             abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
+            # abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
+            # abs_emb = TorchNativeStdEmb(emb.weight, device='cpu')
         else:
             assert False
         return abs_emb

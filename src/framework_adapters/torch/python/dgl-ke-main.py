@@ -13,7 +13,7 @@ dglke_train --model_name TransE_l2
 
 
 from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
-from controller_process import ControllerServer, CachedSampler
+from controller_process import ControllerServer, GraphCachedSampler
 import test_utils
 import pickle
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
@@ -250,7 +250,7 @@ def main():
     train_samplers = CreateSamplers(
         args, kg_dataset=dataset, train_data=train_data)
 
-    train_samplers = CachedSampler.BatchCreateCachedSamplers(
+    train_samplers = GraphCachedSampler.BatchCreateCachedSamplers(
         args.L, train_samplers)
 
     # grad_clients = controller.CreateGradClients()

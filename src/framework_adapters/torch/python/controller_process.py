@@ -86,7 +86,7 @@ class CircleBuffer:
         return (self.end - self.start + self.L) % self.L
 
 
-class TestPerfSampler:
+class BasePerfSampler:
     def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
         self.rank = rank
         self.L = L
@@ -97,6 +97,9 @@ class TestPerfSampler:
         self.samples_queue = []
         self.backmode = backmode
 
+    def gen_next_sample(self):
+        raise NotImplementedError
+
     def Prefill(self):
         for _ in range(self.L):
             entity_id = self.gen_next_sample()
@@ -104,6 +107,22 @@ class TestPerfSampler:
                 (self.sampler_iter_num, entity_id))
             self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
             self.sampler_iter_num += 1
+
+    def __next__(self):
+        entity_id = self.gen_next_sample()
+
+        self.samples_queue.append(
+            (self.sampler_iter_num, entity_id))
+        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
+        self.sampler_iter_num += 1
+
+        _, entity_id = self.samples_queue.pop(0)
+        return entity_id
+
+
+class TestPerfSampler(BasePerfSampler):
+    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
+        super().__init__(rank, L, num_ids_per_step, full_emb_capacity, backmode)
 
     def gen_next_sample(self):
         from test_emb import XMH_DEBUG
@@ -124,35 +143,10 @@ class TestPerfSampler:
                 self.num_ids_per_step,)).long().cuda()
             return entity_id
 
-    def __next__(self):
-        entity_id = self.gen_next_sample()
 
-        self.samples_queue.append(
-            (self.sampler_iter_num, entity_id))
-        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
-        self.sampler_iter_num += 1
-
-        _, entity_id = self.samples_queue.pop(0)
-        return entity_id
-
-
-class PerfSampler:
+class PerfSampler(BasePerfSampler):
     def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
-        self.rank = rank
-        self.L = L
-        self.ids_circle_buffer = CircleBuffer(L, rank, backmode)
-        self.sampler_iter_num = 0
-        self.num_ids_per_step = num_ids_per_step
-        self.full_emb_capacity = full_emb_capacity
-        self.backmode = backmode
-        self.samples_queue = []
-
-        for _ in range(L):
-            entity_id = self.gen_next_sample()
-            self.samples_queue.append(
-                (self.sampler_iter_num, entity_id))
-            self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
-            self.sampler_iter_num += 1
+        super().__init__(rank, L, num_ids_per_step, full_emb_capacity, backmode)
 
     def gen_next_sample(self):
         entity_id = th.randint(self.full_emb_capacity, size=(
@@ -164,24 +158,13 @@ class PerfSampler:
             input_keys = th.tensor([0, 2,],).long().cuda()
         return input_keys
 
-    def __next__(self):
-        entity_id = self.gen_next_sample()
 
-        self.samples_queue.append(
-            (self.sampler_iter_num, entity_id))
-        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
-        self.sampler_iter_num += 1
-
-        _, entity_id = self.samples_queue.pop(0)
-        return entity_id
-
-
-class CachedSampler:
+class GraphCachedSampler:
     @staticmethod
     def BatchCreateCachedSamplers(L, samplers):
         ret = []
         for i in range(len(samplers)):
-            ret.append(CachedSampler(i, L, samplers[i],))
+            ret.append(GraphCachedSampler(i, L, samplers[i],))
         return ret
 
     def __init__(self, rank, L, dgl_sampler) -> None:
@@ -275,8 +258,8 @@ class KGCacheControllerWrapper:
         self.rank = dist.get_rank()
         self.args = args
         if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync"
-            ) and self.rank == 0:
+                    or self.args['BackwardMode'] == "CppAsync"
+                ) and self.rank == 0:
             cache_range = CacheEmbFactory.ReturnCachedRange(emb, args)
             self.controller = recstore.KGCacheController.Init(
                 json_str, cache_range)
@@ -295,9 +278,10 @@ class KGCacheControllerWrapper:
         dist.barrier()
 
     def init(self):
+        dist.barrier()
         if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync"
-            ) and self.rank == 0:
+                    or self.args['BackwardMode'] == "CppAsync"
+                ) and self.rank == 0:
             self.controller.RegTensorsPerProcess()
         self.step = 0
         dist.barrier()
@@ -324,8 +308,8 @@ class KGCacheControllerWrapper:
         self.timer_OnNextStep.start()
         self.step += 1
         if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync"
-            )  and self.rank == 0:
+                    or self.args['BackwardMode'] == "CppAsync"
+                )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
         self.timer_OnNextStep.stop()

@@ -40,8 +40,8 @@ torch.use_deterministic_algorithms(True)
 
 
 LR = 1
-DIFF_TEST = True
-# DIFF_TEST = False
+# DIFF_TEST = True
+DIFF_TEST = False
 
 
 @contextmanager
@@ -97,7 +97,7 @@ def get_run_config():
         argparser.add_argument('--kForwardItersPerStep', type=int,
                                default=1)
         argparser.add_argument('--nr_background_threads', type=int,
-                               default=4)
+                               default=16)
         return vars(argparser.parse_args())
 
     run_config = {}
@@ -230,7 +230,7 @@ def routine_local_cache_helper(worker_id, args):
                                     L=args['L'],
                                     num_ids_per_step=args['batch_size'],
                                     full_emb_capacity=emb.shape[0],
-                                    backmode=args['BackwardMode'] 
+                                    backmode=args['BackwardMode']
                                     )
 
     kg_cache_controller = KGCacheControllerWrapper(
@@ -238,8 +238,10 @@ def routine_local_cache_helper(worker_id, args):
     )
     kg_cache_controller.init()
 
+    test_perf_sampler.Prefill()
+
     timer_Forward = Timer("Forward")
-    timer_Backward= Timer("Backward")
+    timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
 
     for _ in for_range:
@@ -262,7 +264,6 @@ def routine_local_cache_helper(worker_id, args):
         XLOG.cdebug(
             f"{rank}:input_keys {input_keys}")
 
-        
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
@@ -295,6 +296,7 @@ def routine_local_cache_helper(worker_id, args):
         timer_Optimize.stop()
 
         kg_cache_controller.AfterBackward()
+        kg_cache_controller.OnNextStep()
 
         if (_ % args['log_interval']) == (args['log_interval']-1):
             end = time.time()

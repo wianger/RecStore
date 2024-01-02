@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
-from utils import XLOG
+from utils import XLOG, reduce_sparse_kv_tensor
 
 
 from abc import ABC
@@ -55,7 +55,6 @@ class AbsEmb(ABC):
 
     def reg_opt(self, opt):
         raise NotImplementedError
-    
 
 
 class TorchNativeStdEmbDDP(AbsEmb):
@@ -69,7 +68,7 @@ class TorchNativeStdEmbDDP(AbsEmb):
         else:
             weight = emb
 
-        self.weight =weight
+        self.weight = weight
 
         print("weight.shape", weight.shape)
 
@@ -103,6 +102,7 @@ class TorchNativeStdEmbDDP(AbsEmb):
     @property
     def full_emb(self):
         return self.weight
+
 
 class TorchNativeStdEmb(AbsEmb):
     def __init__(self, emb, device):
@@ -138,7 +138,7 @@ class TorchNativeStdEmb(AbsEmb):
 
     def reg_opt(self, opt):
         opt.add_param_group({"params": self.std_emb.parameters()})
-    
+
     @property
     def emb_cache(self):
         return None
@@ -146,6 +146,59 @@ class TorchNativeStdEmb(AbsEmb):
     @property
     def full_emb(self):
         return self.weight
+
+
+class KGExternelEmbeddingFn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, keys, embedding_weight, emb_cache, fake_tensor):
+        emb_dim = embedding_weight.shape[1]
+        # search keys in shared DRAM table
+        value = F.embedding(keys.cpu(
+        ), embedding_weight, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+        value = value.cuda()
+        ctx.save_for_backward(keys,)
+        ctx.embedding_weight = embedding_weight
+        ctx.emb_dim = emb_dim
+        return value
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        keys, = ctx.saved_tensors
+        embedding_weight = ctx.embedding_weight
+        emb_dim = ctx.emb_dim
+
+        assert keys.shape[0] == grad_output.shape[0]
+        assert emb_dim == grad_output.shape[1]
+
+        # gather keys to rank 0
+        grad = reduce_sparse_kv_tensor(
+            keys, grad_output, embedding_weight.shape, dst_rank=0)
+        if dist.get_rank() == 0:
+            embedding_weight.grad = grad / dist.get_world_size()
+        return None, None, None, torch.randn(1, 1)
+
+
+class KGExternelEmbedding(AbsEmb):
+    def __init__(self, emb, cache_ratio, ) -> None:
+        self.fake_tensor = torch.randn(1, 1, requires_grad=True)
+        self.emb = emb
+        self.emb_dim = emb.shape[1]
+        self.gpu_cache = NVGPUCache(
+            int(emb.shape[0]*cache_ratio), self.emb_dim)
+
+        raise NotImplementedError("TODO: update cache in backward ")
+
+    def forward(self, input_keys):
+        embed_value = KGExternelEmbeddingFn.apply(
+            input_keys, self.emb, self.gpu_cache, self.fake_tensor)
+        assert embed_value.requires_grad
+        return embed_value
+
+    def reg_opt(self, opt):
+        # TODO: Attenion!
+        return
+        if dist.get_rank() == 0:
+            opt.add_param_group({"params": self.emb})
 
 
 class NVGPUCache:

@@ -5,7 +5,7 @@
 
 #include "base/lock.h"
 
-#define XMH_DEBUG
+// #define XMH_DEBUG
 
 namespace base {
 template <typename T, typename Compare = std::less<T>>
@@ -19,18 +19,20 @@ class CustomPriorityQueue {
   }
 
   void push(const T& value) {
-    base::LockGurad _(lock_);
+    base::LockGuard _(lock_);
     push_inner(value);
   }
 
   T pop() {
-    base::LockGurad _(lock_);
+    base::LockGuard _(lock_);
     T ret;
     ret = data_.front();
     index_map_.erase(data_.front());
     if (data_.size() == 1) {
       data_.pop_back();
+#ifdef XMH_DEBUG
       CheckConsistency("pop1");
+#endif
       return ret;
     }
 
@@ -45,8 +47,38 @@ class CustomPriorityQueue {
     return ret;
   }
 
+  T pop_x(const T& value) {
+    base::LockGuard _(lock_);
+    T ret = value;
+    int64_t old_position = index_map_[value];
+    index_map_.erase(value);
+
+    if (data_.size() == 1) {
+      data_.pop_back();
+#ifdef XMH_DEBUG
+      CheckConsistency("pop_x_1");
+#endif
+      return ret;
+    }
+
+    if (old_position == data_.size() - 1) {
+      data_.pop_back();
+    } else {
+      std::swap(data_[old_position], data_.back());
+      data_.pop_back();
+      T newValue = data_[old_position];
+      index_map_[newValue] = old_position;
+      adjustPriority(newValue);
+    }
+
+#ifdef XMH_DEBUG
+    CheckConsistency("pop_x");
+#endif
+    return ret;
+  }
+
   void PushOrUpdate(const T& value) {
-    base::LockGurad _(lock_);
+    base::LockGuard _(lock_);
     if (index_map_.find(value) == index_map_.end()) {
       push_inner(value);
     } else {
@@ -55,22 +87,22 @@ class CustomPriorityQueue {
   }
 
   T top() const {
-    base::LockGurad _(lock_);
+    base::LockGuard _(lock_);
     return data_.front();
   }
 
   size_t size() const {
-    base::LockGurad _(lock_);
+    base::LockGuard _(lock_);
     return data_.size();
   }
 
   bool empty() const {
-    base::LockGurad _(lock_);
+    base::LockGuard _(lock_);
     return data_.empty();
   }
 
   std::string ToString() const {
-    // base::LockGurad _(lock_);
+    // base::LockGuard _(lock_);
     std::stringstream ss;
     ss << "CustomPriorityQueue:\n";
     if (data_.empty()) {
@@ -86,16 +118,17 @@ class CustomPriorityQueue {
   }
 
   void ForDebug(const std::string& head) {
-    for (auto each : data_) {
-      if (each->GetID() == 1718) {
-        LOG(INFO) << head << " find 1718 " << each->ToString() << ".\n top is "
-                  << top()->ToString();
-        CheckConsistency();
-        return;
-      }
-    }
-    LOG(INFO) << head << " not find"
-              << ", top is " << top()->ToString();
+    base::LockGuard _(lock_);
+
+    // for (auto each : data_) {
+    //   if (each->GetID() == 1718) {
+    //     LOG(INFO) << head << " find 1718 " << each->ToString() << ".\n top is
+    //     "
+    //               << top()->ToString();
+    //     CheckConsistency();
+    //     return;
+    //   }
+    // }
     CheckConsistency();
   }
 
