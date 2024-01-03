@@ -136,7 +136,7 @@ class TestPerfSampler(BasePerfSampler):
             # return input_keys
 
             entity_id = th.randint(self.full_emb_capacity, size=(
-                10,)).long().cuda()
+                100,)).long().cuda()
             return entity_id
         else:
             entity_id = th.randint(self.full_emb_capacity, size=(
@@ -261,12 +261,14 @@ class KGCacheControllerWrapper:
                     or self.args['BackwardMode'] == "CppAsync"
                 ) and self.rank == 0:
             cache_range = CacheEmbFactory.ReturnCachedRange(emb, args)
+            
+            nr_graph_nodes = emb.shape[0]
             self.controller = recstore.KGCacheController.Init(
-                json_str, cache_range)
+                json_str, cache_range, nr_graph_nodes)
         dist.barrier()
         KGCacheControllerWrapper.instance = self
 
-        self.timer_OnNextStep = Timer("OnNextStep")
+        self.timer_BlockToStepN = Timer("BlockToStepN")
         self.timer_AfterBackward = Timer("AfterBackward")
 
         self.init_rpc()
@@ -304,15 +306,15 @@ class KGCacheControllerWrapper:
                 "worker0", KGCacheControllerWrapper.StopThreads_cls, args=())
             XLOG.info("call rank0 to StopThreads done")
 
-    def OnNextStep(self,):
-        self.timer_OnNextStep.start()
+    def BlockToStepN(self,):
+        self.timer_BlockToStepN.start()
         self.step += 1
         if (self.args['BackwardMode'] == "CppSync"
                     or self.args['BackwardMode'] == "CppAsync"
                 )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
-        self.timer_OnNextStep.stop()
+        self.timer_BlockToStepN.stop()
 
         if self.step % 100 == 0:
             TimeFactory.Report()

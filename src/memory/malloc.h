@@ -8,7 +8,7 @@
 
 namespace base {
 class MallocApi {
- public:
+public:
   virtual char *New(int memory_size) = 0;
   virtual bool Free(void *memory_data) = 0;
   virtual void GetMallocsAppend(std::vector<char *> *mallocs_data) const = 0;
@@ -24,30 +24,30 @@ class MallocApi {
   virtual bool Healthy() const = 0;
   virtual void AddMallocs4Recovery(int64_t shm_offset) = 0;
 
- protected:
+protected:
   MallocApi() {}
 
- private:
+private:
   DISALLOW_COPY_AND_ASSIGN(MallocApi);
 };
 
 class ShmBaseRecycle {
- public:
+public:
   virtual void Recycle(void *ptr) = 0;
-  virtual ~ShmBaseRecycle(){}
+  virtual ~ShmBaseRecycle() {}
 };
 
 class DirectRecycle : public ShmBaseRecycle {
- public:
+public:
   explicit DirectRecycle(MallocApi *malloc) : malloc_(malloc) {}
   void Recycle(void *ptr) override { malloc_->Free(ptr); }
 
- private:
+private:
   MallocApi *malloc_;
 };
 
 class DelayedRecycle : public ShmBaseRecycle {
- public:
+public:
   explicit DelayedRecycle(MallocApi *malloc)
       : malloc_(malloc), delay_ts_(1000000) {}
   DelayedRecycle(MallocApi *malloc, int64 delay_ts)
@@ -75,14 +75,45 @@ class DelayedRecycle : public ShmBaseRecycle {
 
   void SetDelayTs(int delay_ts) { delay_ts_ = delay_ts; }
 
- private:
+private:
   std::queue<std::pair<int64, char *>> recycle_ptr_;
   MallocApi *malloc_;
   int64 delay_ts_;
 };
 
+class StdDelayedRecycle : public ShmBaseRecycle {
+public:
+  explicit StdDelayedRecycle() : delay_ts_(1000000) {}
+  StdDelayedRecycle(int64 delay_ts) : delay_ts_(delay_ts) {}
+  ~StdDelayedRecycle() { Clear(); }
+  void Recycle(void *ptr) override {
+    char *data = reinterpret_cast<char *>(ptr);
+    if (ptr) {
+      recycle_ptr_.push(std::make_pair(base::GetTimestamp(), data));
+    }
+    int64 recyle_ts = base::GetTimestamp() - delay_ts_;
+    while (recycle_ptr_.size() && recycle_ptr_.front().first < recyle_ts) {
+      delete recycle_ptr_.front().second;
+      recycle_ptr_.pop();
+    }
+  }
+  void Clear() {
+    while (recycle_ptr_.size()) {
+      delete recycle_ptr_.front().second;
+      recycle_ptr_.pop();
+    }
+  }
+  int64 GetPendingNum() const { return recycle_ptr_.size(); }
+
+  void SetDelayTs(int delay_ts) { delay_ts_ = delay_ts; }
+
+private:
+  std::queue<std::pair<int64, char *>> recycle_ptr_;
+  int64 delay_ts_;
+};
+
 class ShmEpochRecycle : public ShmBaseRecycle {
- public:
+public:
   explicit ShmEpochRecycle(MallocApi *malloc) : malloc_(malloc) {
     epoch_manager_ = epoch::EpochManager::GetInstance();
   }
@@ -95,7 +126,8 @@ class ShmEpochRecycle : public ShmBaseRecycle {
       recycle_ptr_.push(std::make_pair(removal_epoch, data));
     }
 
-    if (recycled_count % 1000 == 0) epoch_manager_->BumpCurrentEpoch();
+    if (recycled_count % 1000 == 0)
+      epoch_manager_->BumpCurrentEpoch();
     while (recycle_ptr_.size() &&
            epoch_manager_->IsSafeToReclaim(recycle_ptr_.front().first)) {
       CHECK(malloc_->Free(recycle_ptr_.front().second))
@@ -111,11 +143,11 @@ class ShmEpochRecycle : public ShmBaseRecycle {
   }
   int64 GetPendingNum() const { return recycle_ptr_.size(); }
 
- private:
+private:
   MallocApi *malloc_;
   epoch::EpochManager *epoch_manager_;
   std::queue<std::pair<epoch::Epoch, char *>> recycle_ptr_;
   int64_t recycled_count = 0;
 };
 
-}  // namespace base
+} // namespace base

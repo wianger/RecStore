@@ -195,7 +195,7 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
 // }
 
 void init_folly() {
-  std::vector<std::string> arguments = {"program_name", "arg1", "arg2", "arg3"};
+  std::vector<std::string> arguments = {"program_name", "--logtostderr"};
   int argc = static_cast<int>(arguments.size());
   char **argv = new char *[argc];
   for (int i = 0; i < argc; ++i) {

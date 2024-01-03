@@ -3,172 +3,220 @@
 #include <iostream>
 #include <unordered_map>
 
+#include "folly/AtomicHashMap.h"
+#include "folly/concurrency/ConcurrentHashMap.h"
+#include "src/memory/malloc.h"
+
 namespace recstore {
+
+template <typename T>
+class DoublyLinkedList;
 
 namespace {
 template <typename T>
 struct Node {
+ private:
   T data;
-  int queue_no;
-  Node* prev;
-  Node* next;
+  int queue_priority;
+  Node *prev;
+  Node *next;
 
-  Node(const T& value, int queue_no)
-      : data(value), queue_no(queue_no), prev(nullptr), next(nullptr) {}
+  friend class recstore::DoublyLinkedList<T>;
+
+ public:
+  Node(const T &value, int queue_priority)
+      : data(value),
+        queue_priority(queue_priority),
+        prev(nullptr),
+        next(nullptr) {}
+
+  T Data() const { return data; }
+
+  void ResetPointer() {
+    prev = nullptr;
+    next = nullptr;
+  }
+
+  int QueuePriority() const { return queue_priority; }
+
+  void SetQueuePriority(int queue_priority) {
+    this->queue_priority = queue_priority;
+  }
 };
 }  // namespace
 
 template <typename T>
 class DoublyLinkedList {
  private:
-  Node<T>* head;
-  Node<T>* tail;
+  Node<T> *head_;
+  Node<T> *tail_;
   std::atomic_long size_;
-  int queue_no;
+  const int queue_priority_;
+  mutable base::SpinLock lock_;
 
  public:
-  DoublyLinkedList(int queue_no)
-      : head(nullptr), tail(nullptr), size_(0), queue_no(queue_no) {}
+  DoublyLinkedList(int queue_priority)
+      : head_(nullptr),
+        tail_(nullptr),
+        size_(0),
+        queue_priority_(queue_priority) {}
 
-  void insert(Node<T>* newNode) {
-    if (!head) {
-      head = tail = newNode;
+  void insert(Node<T> *newNode) {
+    base::LockGuard _(lock_);
+    if (!head_) {
+      head_ = tail_ = newNode;
     } else {
-      tail->next = newNode;
-      newNode->prev = tail;
-      tail = newNode;
+      tail_->next = newNode;
+      newNode->prev = tail_;
+      tail_ = newNode;
     }
     size_++;
   }
 
-  void remove(Node<T>* nodeToRemove) {
+  void remove(Node<T> *nodeToRemove) {
+    base::LockGuard _(lock_);
+    CHECK_EQ(nodeToRemove->queue_priority, queue_priority_);
     if (nodeToRemove->prev) {
       nodeToRemove->prev->next = nodeToRemove->next;
     } else {
-      // if head node
-      head = nodeToRemove->next;
+      // if head_ node
+      head_ = nodeToRemove->next;
     }
     if (nodeToRemove->next) {
       nodeToRemove->next->prev = nodeToRemove->prev;
     } else {
-      // if tail node
-      tail = nodeToRemove->prev;
+      // if tail_ node
+      tail_ = nodeToRemove->prev;
     }
-    delete nodeToRemove;
     size_--;
   }
 
-  Node<T>* pop() {
-    Node<T>* nodeToRemove = head;
-    head = head->next;
-    head->prev = nullptr;
+  Node<T> *pop() {
+    base::LockGuard _(lock_);
+
+    Node<T> *nodeToRemove = head_;
+    head_ = head_->next;
+    head_->prev = nullptr;
     size_--;
     return nodeToRemove;
   }
 
-  Node<T>* top() { return head; }
+  Node<T> *top() { return head_; }
 
   size_t size() const { return size_; }
 
   bool empty() const { return size_ == 0; }
 
-  void print() {
-    Node<T>* current = head;
-    while (current) {
-      std::cout << current->data << " ";
-      current = current->next;
-    }
-    std::cout << std::endl;
-  }
+  std::unordered_set<int64_t> CheckConsistency() {
+    base::LockGuard _(lock_);
+    std::unordered_set<int64_t> id_set;
 
-  void CheckConsistency() {
-    Node<T>* current = head;
+    Node<T> *current = head_;
     while (current) {
       if (current->prev) CHECK_EQ(current->prev->next, current);
-      CHECK_EQ(current->data->Priority(), queue_no);
+      CHECK_EQ(current->data->Priority(), queue_priority_);
+      id_set.insert(current->data->GetID());
       current = current->next;
     }
+    return id_set;
+  }
+
+  std::string ToString() const {
+    base::LockGuard _(lock_);
+
+    std::stringstream ss;
+    Node<T> *current = head_;
+    int temp = 0;
+    while (current) {
+      ss << current->data->ToString() << " \n";
+      current = current->next;
+      temp++;
+      if (temp > size_) LOG(FATAL) << "linklist may not be linked properly";
+    }
+    return ss.str();
   }
 };
 
 template <typename T>
 class ParallelPq {
-  constexpr static int kMaxPriority = 1000;
   // priority ranges from 0~<kMaxPriority-1>
+  constexpr static int kMaxPriority = 1000;
+
+  static constexpr int kInf = std::numeric_limits<int>::max();
+
+  static inline int CastPriorityToQueueNo(int queue_priority) {
+    if (queue_priority == kInf) return kMaxPriority - 1;
+    CHECK_LT(queue_priority, kMaxPriority - 1)
+        << "Please increase kMaxPriority";
+    CHECK_GE(queue_priority, 0);
+    return queue_priority;
+  }
+
+  static inline int CastQueueNoToPriority(int queue_no) {
+    if (queue_no == kMaxPriority - 1) return kInf;
+    CHECK_LT(queue_no, kMaxPriority - 1) << "Please increase kMaxPriority";
+    CHECK_GE(queue_no, 0);
+    return queue_no;
+  }
 
  public:
-  ParallelPq() {
+  ParallelPq(int64_t reserve_count = 0) {
     for (int i = 0; i < kMaxPriority; i++) {
-      qs_[i] = new DoublyLinkedList<T>(i);
+      if (i == kMaxPriority - 1)
+        qs_[i] = new DoublyLinkedList<T>(kInf);
+      else
+        qs_[i] = new DoublyLinkedList<T>(i);
     }
+    hashTable_.reserve(reserve_count);
   }
 
-  void push(const T& value) {
-    base::LockGuard _(lock_);
-    push_inner(value);
-  }
-
-  void PushOrUpdate(const T& value) {
-    base::LockGuard _(lock_);
-    if (hashTable.find(value) == hashTable.end()) {
+  void PushOrUpdate(const T &value) {
+    // LOG(INFO) << "PushOrUpdate " << value->GetID();
+    if (hashTable_.find(value) == hashTable_.end()) {
       push_inner(value);
     } else {
       adjustPriority(value);
     }
   }
 
-  void adjustPriority(const T& value) {
-    Node<T>* node = hashTable[value];
-    int new_priority = value->Priority();
+  std::string ToString() const {
+    base::LockGuard guard(lock_);
+    std::stringstream ss;
+    ss << "CustomParallelPriorityQueue:\n";
+    if (empty()) {
+      ss << "\t\t"
+         << "empty\n";
+      return ss.str();
+    }
 
-    qs_[node->queue_no]->remove(node);
-    node->queue_no = new_priority;
-    qs_[new_priority]->insert(node);
-  }
-
-  void ForDebug(const std::string& head) {
-    base::LockGuard _(lock_);
-
-    // for (auto each : data_) {
-    //   if (each->GetID() == 1718) {
-    //     LOG(INFO) << head << " find 1718 " << each->ToString() << ".\n top is
-    //     "
-    //               << top()->ToString();
-    //     CheckConsistency();
-    //     return;
-    //   }
-    // }
-    CheckConsistency();
-  }
-
-  void CheckConsistency(const std::string& hint = "") {
     for (int i = 0; i < kMaxPriority; i++) {
-      qs_[i]->CheckConsistency();
-    }
-  }
-
-  T top() const {
-    for (int i = min_priority_now_; i < kMaxPriority; i++) {
-      if (qs_[i]->empty()) {
-        min_priority_now_ = i + 1;
-      } else {
-        return qs_[i]->top()->data;
-      }
-    }
-  }
-
-  size_t size() const {
-    size_t size = 0;
-    for (int i = min_priority_now_; i < kMaxPriority; i++) {
       if (!qs_[i]->empty()) {
-        size += qs_[i]->size();
+        ss << "\t\t"
+           << "Q" << i << " :" << qs_[i]->ToString() << "\n";
       }
     }
-    return size;
+    return ss.str();
   }
+
+  void ForDebug(const std::string &head) {}
+
+  void CheckConsistency(const std::string &hint = "") {
+    std::unordered_set<int64_t> id_set;
+    for (int i = 0; i < kMaxPriority; i++) {
+      auto id_set_per_q = qs_[i]->CheckConsistency();
+    }
+  }
+
+  // size_t size() const {
+  //   size_t size = 0;
+  //   for (int i = 0; i < kMaxPriority; i++) {
+  //     size += qs_[i]->size();
+  //   }
+  //   return size;
+  // }
 
   bool empty() const {
-    for (int i = min_priority_now_; i < kMaxPriority; i++) {
+    for (int i = 0; i < kMaxPriority; i++) {
       if (!qs_[i]->empty()) {
         return false;
       }
@@ -176,34 +224,96 @@ class ParallelPq {
     return true;
   }
 
-  T pop() {
-    for (int i = min_priority_now_; i < kMaxPriority; i++) {
-      if (qs_[i]->empty()) {
-        min_priority_now_ = i + 1;
-      } else {
-        Node<T>* head = qs_[i]->pop();
-        hashTable.erase(head->data);
-        delete head;
-        return head->data;
-      }
+  // T pop() {
+  //   for (int i = 0; i < kMaxPriority; i++) {
+  //     if (qs_[i]->empty()) {
+  //       ;
+  //     } else {
+  //       Node<T> *head = qs_[i]->pop();
+  //       hashTable_.erase(head->data);
+  //       T data = head->data;
+  //       // delete head;
+  //       recycle_.Recycle(head);
+  //       return data;
+  //     }
+  //   }
+  //   LOG(FATAL) << "empty queue";
+  //   return nullptr;
+  // }
+
+  T top() const {
+    base::LockGuard guard(lock_);
+    for (int i = 0; i < kMaxPriority; i++) {
+      auto *p = qs_[i]->top();
+      if (p) return p->Data();
     }
-    LOG(FATAL) << "empty queue";
     return nullptr;
   }
 
- private:
-  void push_inner(const T& value) {
-    int priority = value->Priority();
-    Node<T>* newNode = new Node<T>(value, priority);
-    qs_[priority]->insert(newNode);
-
-    // update hashtable
-    hashTable[value] = newNode;
+  int MinPriority() const {
+    for (int i = 0; i < kMaxPriority; i++) {
+      if (!qs_[i]->empty()) return CastQueueNoToPriority(i);
+    }
+    return kInf;
   }
 
-  std::array<DoublyLinkedList<T>*, kMaxPriority> qs_;
-  mutable int min_priority_now_ = 0;
-  std::unordered_map<T, Node<T>*> hashTable;
+  void pop_x(const T &value) {
+    LOG(FATAL) << "not USED now";
+    // base::LockGuard guard(lock_);
+    CHECK(hashTable_.find(value) != hashTable_.end());
+    Node<T> *node = hashTable_[value];
+    // LOG(ERROR) << "Node<T> * node" << node;
+    // LOG(ERROR) << "CastPriorityToQueueNo(node->queue_priority)="
+    //            << CastPriorityToQueueNo(node->queue_priority);
+
+    // LOG(ERROR) << "qs_[CastPriorityToQueueNo(node->queue_priority)] = "
+    //            << qs_[CastPriorityToQueueNo(node->queue_priority)];
+    qs_[CastPriorityToQueueNo(node->QueuePriority())]->remove(node);
+    hashTable_.erase(value);
+    // delete node;
+    recycle_.Recycle(node);
+  }
+
+ private:
+  void adjustPriority(const T &value) {
+    base::LockGuard guard(lock_);
+    Node<T> *node = hashTable_[value];
+    while (!node) {
+      node = hashTable_[value];
+      FB_LOG_EVERY_MS(ERROR, 1000) << "node is nullptr";
+    }
+    CHECK(node);
+    int new_priority = value->Priority();
+    int old_priority = node->QueuePriority();
+
+    // ↓ atomically
+    Node<T> *newnode = new Node<T>(value, new_priority);
+    qs_[CastPriorityToQueueNo(new_priority)]->insert(newnode);
+    qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
+    hashTable_.insert_or_assign(value, newnode);
+    recycle_.Recycle(node);
+  }
+
+  void push_inner(const T &value) {
+    base::LockGuard guard(lock_);
+    int priority = value->Priority();
+    Node<T> *newNode = new Node<T>(value, priority);
+    // atomically
+    auto [_, success] = hashTable_.insert(value, newNode);
+    if (success) {
+      // LOG(ERROR) << folly::sformat("hashTable_[{}] = {})", value->GetID(),
+      //                              newNode);
+      qs_[CastPriorityToQueueNo(priority)]->insert(newNode);
+    } else {
+      delete newNode;
+    }
+  }
+
+  std::array<DoublyLinkedList<T> *, kMaxPriority> qs_;
+  folly::ConcurrentHashMap<T, Node<T> *> hashTable_;
+
+  base::StdDelayedRecycle recycle_;
+  mutable std::atomic_int min_priority_now_ = 0;
   mutable base::SpinLock lock_;
 };
 }  // namespace recstore

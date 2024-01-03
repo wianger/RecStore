@@ -3,8 +3,8 @@
 
 namespace base {
 
-constexpr bool kDetectDeadLock = true;
-// constexpr bool kDetectDeadLock = false;
+// constexpr bool kDetectDeadLock = true;
+constexpr bool kDetectDeadLock = false;
 
 class SpinLock {
   std::atomic_flag locked = ATOMIC_FLAG_INIT;

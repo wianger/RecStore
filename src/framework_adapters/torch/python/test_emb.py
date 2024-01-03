@@ -226,12 +226,11 @@ class TestShardedCache:
             input_keys = next(test_perf_sampler)
 
             # torch.set_printoptions(profile="full")
-            XLOG.debug(f"{rank}:step{_}, input_keys {input_keys}")
+            XLOG.cdebug(f"{rank}:step{_}, input_keys {input_keys}")
             # torch.set_printoptions(profile="default")
 
             std_embed_value = std_emb.forward(input_keys).cuda()
 
-            XLOG.debug(f"std_embed_value {std_embed_value.device}")
             std_loss = std_embed_value.sum(-1).sum(-1)
             std_loss.backward()
 
@@ -282,7 +281,7 @@ class TestShardedCache:
             timer_Optimize.stop()
 
             kg_cache_controller.AfterBackward()
-            kg_cache_controller.OnNextStep()
+            kg_cache_controller.BlockToStepN()
 
             # if rank == 0:
             #     XLOG.info(f"rank{rank}: step{_} done")

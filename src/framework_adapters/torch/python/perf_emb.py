@@ -296,7 +296,7 @@ def routine_local_cache_helper(worker_id, args):
         timer_Optimize.stop()
 
         kg_cache_controller.AfterBackward()
-        kg_cache_controller.OnNextStep()
+        kg_cache_controller.BlockToStepN()
 
         if (_ % args['log_interval']) == (args['log_interval']-1):
             end = time.time()
