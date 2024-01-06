@@ -1,4 +1,7 @@
 #pragma once
+#include <string>
+#include <stdexcept>
+
 
 #define XMH_CUDA_CHECK(val) \
   { xmh_nv::cuda_check_((val), __FILE__, __LINE__); }

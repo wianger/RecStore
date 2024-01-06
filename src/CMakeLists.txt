@@ -9,3 +9,5 @@ add_subdirectory(storage)
 
 add_subdirectory(framework_adapters/torch)
 add_subdirectory(test)
+
+add_subdirectory(small_tests)

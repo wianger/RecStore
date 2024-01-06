@@ -7,10 +7,10 @@
 #include "base/timer.h"
 #include "folly/init/Init.h"
 #include "gpu_cache_nohash.h"
-#include "kg_controller.h"
 #include "storage/gpu_cache/nv_gpu_cache.hpp"
 
 namespace recstore {
+void RegisterKGCacheController(torch::Library &m);
 
 struct CacheQueryResult : public torch::CustomClassHolder {
   CacheQueryResult(torch::Tensor values, torch::Tensor missing_index,

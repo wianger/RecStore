@@ -3,7 +3,7 @@
 #include <iostream>
 #include <unordered_map>
 
-#include "folly/AtomicHashMap.h"
+#include "base/lock.h"
 #include "folly/concurrency/ConcurrentHashMap.h"
 #include "src/memory/malloc.h"
 
@@ -12,7 +12,6 @@ namespace recstore {
 template <typename T>
 class DoublyLinkedList;
 
-namespace {
 template <typename T>
 struct Node {
  private:
@@ -43,7 +42,6 @@ struct Node {
     this->queue_priority = queue_priority;
   }
 };
-}  // namespace
 
 template <typename T>
 class DoublyLinkedList {
@@ -207,14 +205,6 @@ class ParallelPq {
     }
   }
 
-  // size_t size() const {
-  //   size_t size = 0;
-  //   for (int i = 0; i < kMaxPriority; i++) {
-  //     size += qs_[i]->size();
-  //   }
-  //   return size;
-  // }
-
   bool empty() const {
     for (int i = 0; i < kMaxPriority; i++) {
       if (!qs_[i]->empty()) {
@@ -276,12 +266,18 @@ class ParallelPq {
 
  private:
   void adjustPriority(const T &value) {
-    base::LockGuard guard(lock_);
-    Node<T> *node = hashTable_[value];
-    while (!node) {
+    base::LockGuard guard(*value);
+    // base::LockGuard guard(lock_);
+
+    // static base::SpinLock adjust_lock;
+    // base::LockGuard guard(adjust_lock);
+
+    Node<T> *node;
+    do {
       node = hashTable_[value];
       FB_LOG_EVERY_MS(ERROR, 1000) << "node is nullptr";
-    }
+    } while (!node);
+
     CHECK(node);
     int new_priority = value->Priority();
     int old_priority = node->QueuePriority();
@@ -290,12 +286,21 @@ class ParallelPq {
     Node<T> *newnode = new Node<T>(value, new_priority);
     qs_[CastPriorityToQueueNo(new_priority)]->insert(newnode);
     qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
-    hashTable_.insert_or_assign(value, newnode);
+
+    // auto iter = hashTable_.assign_if_equal(value, node, newnode);
+    // if (iter.has_value()) recycle_.Recycle(node);
+
+    hashTable_.assign(value, newnode);
     recycle_.Recycle(node);
   }
 
   void push_inner(const T &value) {
-    base::LockGuard guard(lock_);
+    // base::LockGuard guard(*value);
+    // base::LockGuard guard(lock_);
+
+    // static base::SpinLock push_lock;
+    // base::LockGuard guard(push_lock);
+
     int priority = value->Priority();
     Node<T> *newNode = new Node<T>(value, priority);
     // atomically
@@ -316,4 +321,5 @@ class ParallelPq {
   mutable std::atomic_int min_priority_now_ = 0;
   mutable base::SpinLock lock_;
 };
+
 }  // namespace recstore

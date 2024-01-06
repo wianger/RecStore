@@ -1,0 +1,5 @@
+
+
+
+add_executable(test_multi_thread_cht test_multi_thread_cht.cc)
+target_link_libraries(test_multi_thread_cht base)
