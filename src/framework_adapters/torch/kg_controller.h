@@ -826,6 +826,7 @@ class KGCacheController : public torch::CustomClassHolder {
     } else {
       LOG(FATAL) << "invalid backward mode: " << backward_mode;
     }
+    LOG(INFO) << "Construct KGCacheController done";
   }
 
  public:

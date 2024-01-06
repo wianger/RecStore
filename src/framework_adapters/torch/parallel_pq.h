@@ -269,8 +269,8 @@ class ParallelPq {
     base::LockGuard guard(*value);
     // base::LockGuard guard(lock_);
 
-    // static base::SpinLock adjust_lock;
-    // base::LockGuard guard(adjust_lock);
+    static base::SpinLock adjust_lock;
+    base::LockGuard adjust_guard(adjust_lock);
 
     Node<T> *node;
     do {

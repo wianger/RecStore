@@ -154,13 +154,13 @@ class VirtualEnvironment {
   base::Barrier *barrier_;
 
  public:
-  VirtualEnvironment(const std::string &json_str) {
+  VirtualEnvironment(const std::string &json_str, int cached_capcacity) {
     auto json_config = json::parse(json_str);
     num_gpus_ = json_config.at("num_gpus");
     emb_dim_ = json_config.at("emb_dim");
-    cached_capacity_ = 10;
+    cached_capacity_ = cached_capcacity;
     full_emb_capacity_ = json_config.at("full_emb_capacity");
-    ;
+    num_ids_per_step_ = json_config.at("num_ids_per_step");
     L_ = json_config.at("L");
     backmode_ = json_config.at("BackwardMode");
 
@@ -220,15 +220,21 @@ class VirtualEnvironment {
     KGCacheController *controller = KGCacheController::GetInstance();
     cudaSetDevice(rank);
     int step_no = 0;
+    auto backgrad = torch::zeros({num_ids_per_step_, emb_dim_}).cuda();
     while (true) {
       // 1. Get the next step
       auto next_ids = test_perf_sampler_[rank].__next__();
-      LOG(INFO) << "Step " << step_no;
 
+      LOG(INFO) << folly::sformat("rank{}: {}", rank, toString(next_ids));
+
+      input_keys_[rank]->Copy_(next_ids, false);
+      backward_grads_[rank]->Copy_(backgrad, false);
+
+      LOG(INFO) << "Step " << step_no;
       // 2. Forward
 
       // 3. Backward
-
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
       // 4. Update
 
       barrier_->Wait();
@@ -255,14 +261,19 @@ int main(int argc, char **argv) {
             "clr": 2,
             "BackwardMode": "CppAsync",
             "nr_background_threads": 32,
-            "full_emb_capacity": 1000000,
-            "emb_dim" : 2
+            "full_emb_capacity": 20,
+            "emb_dim" : 2,
+            "num_ids_per_step": 1024
         })";
 
   IPCTensorFactory::ClearIPCMemory();
 
-  VirtualEnvironment env(json_str);
-  KGCacheController::Init(json_str, {{0, 10}, {10, 20}}, 1000000);
+  int cached_capcacity = 5;
+  VirtualEnvironment env(json_str, cached_capcacity);
+  auto hold_pointer = KGCacheController::Init(
+      json_str,
+      {{0, 0 + cached_capcacity}, {cached_capcacity, 2 * cached_capcacity}},
+      20);
   KGCacheController *controller = KGCacheController::GetInstance();
   controller->RegTensorsPerProcess();
   env.PrefillSampler();
