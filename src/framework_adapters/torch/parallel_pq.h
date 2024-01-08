@@ -46,7 +46,7 @@ struct Node {
 template <typename T>
 class DoublyLinkedList {
  private:
-  Node<T> *head_;
+  std::atomic<Node<T> *> head_;
   Node<T> *tail_;
   std::atomic_long size_;
   const int queue_priority_;
@@ -136,10 +136,31 @@ class DoublyLinkedList {
 };
 
 template <typename T>
+class ParallelPqIndex {
+ private:
+  // folly::ConcurrentHashMap<T, Node<T> *> index_;
+  std::vector<Node<T> *> index_;
+
+ public:
+  ParallelPqIndex(int64_t capacity) { index_.resize(capacity, nullptr); }
+
+  void assign(const T &key, Node<T> *value) { index_[key->GetID()] = value; }
+
+  void erase(const T &key) { index_[key->GetID()] = nullptr; }
+
+  bool find(const T &key) const { return index_[key->GetID()] != nullptr; }
+
+  Node<T> *operator[](const T &key) const { return index_[key->GetID()]; }
+
+  bool try_insert(const T &key, Node<T> *value) {
+    return base::Atomic::CAS((void **)&index_[key->GetID()], nullptr, value);
+  }
+};
+
+template <typename T>
 class ParallelPq {
   // priority ranges from 0~<kMaxPriority-1>
   constexpr static int kMaxPriority = 1000;
-
   static constexpr int kInf = std::numeric_limits<int>::max();
 
   static inline int CastPriorityToQueueNo(int queue_priority) {
@@ -158,19 +179,19 @@ class ParallelPq {
   }
 
  public:
-  ParallelPq(int64_t reserve_count = 0) {
+  ParallelPq(int64_t total_count) : index_(total_count) {
     for (int i = 0; i < kMaxPriority; i++) {
       if (i == kMaxPriority - 1)
         qs_[i] = new DoublyLinkedList<T>(kInf);
       else
         qs_[i] = new DoublyLinkedList<T>(i);
     }
-    hashTable_.reserve(reserve_count);
   }
 
   void PushOrUpdate(const T &value) {
+    base::LockGuard guard(*value);
     // LOG(INFO) << "PushOrUpdate " << value->GetID();
-    if (hashTable_.find(value) == hashTable_.end()) {
+    if (!index_.find(value)) {
       push_inner(value);
     } else {
       adjustPriority(value);
@@ -178,7 +199,6 @@ class ParallelPq {
   }
 
   std::string ToString() const {
-    base::LockGuard guard(lock_);
     std::stringstream ss;
     ss << "CustomParallelPriorityQueue:\n";
     if (empty()) {
@@ -220,7 +240,7 @@ class ParallelPq {
   //       ;
   //     } else {
   //       Node<T> *head = qs_[i]->pop();
-  //       hashTable_.erase(head->data);
+  //       index_.erase(head->data);
   //       T data = head->data;
   //       // delete head;
   //       recycle_.Recycle(head);
@@ -232,7 +252,6 @@ class ParallelPq {
   // }
 
   T top() const {
-    base::LockGuard guard(lock_);
     for (int i = 0; i < kMaxPriority; i++) {
       auto *p = qs_[i]->top();
       if (p) return p->Data();
@@ -250,8 +269,8 @@ class ParallelPq {
   void pop_x(const T &value) {
     LOG(FATAL) << "not USED now";
     // base::LockGuard guard(lock_);
-    CHECK(hashTable_.find(value) != hashTable_.end());
-    Node<T> *node = hashTable_[value];
+    CHECK(index_.find(value));
+    Node<T> *node = index_[value];
     // LOG(ERROR) << "Node<T> * node" << node;
     // LOG(ERROR) << "CastPriorityToQueueNo(node->queue_priority)="
     //            << CastPriorityToQueueNo(node->queue_priority);
@@ -259,22 +278,27 @@ class ParallelPq {
     // LOG(ERROR) << "qs_[CastPriorityToQueueNo(node->queue_priority)] = "
     //            << qs_[CastPriorityToQueueNo(node->queue_priority)];
     qs_[CastPriorityToQueueNo(node->QueuePriority())]->remove(node);
-    hashTable_.erase(value);
+    index_.erase(value);
     // delete node;
     recycle_.Recycle(node);
   }
 
  private:
-  void adjustPriority(const T &value) {
-    base::LockGuard guard(*value);
-    // base::LockGuard guard(lock_);
+  
 
-    static base::SpinLock adjust_lock;
-    base::LockGuard adjust_guard(adjust_lock);
+  void Upsert(const T& value){
+    
+
+  }
+
+
+  void adjustPriority(const T &value) {
+    // static base::SpinLock adjust_lock;
+    // base::LockGuard adjust_guard(adjust_lock);
 
     Node<T> *node;
     do {
-      node = hashTable_[value];
+      node = index_[value];
       FB_LOG_EVERY_MS(ERROR, 1000) << "node is nullptr";
     } while (!node);
 
@@ -287,26 +311,23 @@ class ParallelPq {
     qs_[CastPriorityToQueueNo(new_priority)]->insert(newnode);
     qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
 
-    // auto iter = hashTable_.assign_if_equal(value, node, newnode);
+    // auto iter = index_.assign_if_equal(value, node, newnode);
     // if (iter.has_value()) recycle_.Recycle(node);
 
-    hashTable_.assign(value, newnode);
+    index_.assign(value, newnode);
     recycle_.Recycle(node);
   }
 
   void push_inner(const T &value) {
-    // base::LockGuard guard(*value);
-    // base::LockGuard guard(lock_);
-
     // static base::SpinLock push_lock;
     // base::LockGuard guard(push_lock);
 
     int priority = value->Priority();
     Node<T> *newNode = new Node<T>(value, priority);
     // atomically
-    auto [_, success] = hashTable_.insert(value, newNode);
+    auto success = index_.try_insert(value, newNode);
     if (success) {
-      // LOG(ERROR) << folly::sformat("hashTable_[{}] = {})", value->GetID(),
+      // LOG(ERROR) << folly::sformat("index_[{}] = {})", value->GetID(),
       //                              newNode);
       qs_[CastPriorityToQueueNo(priority)]->insert(newNode);
     } else {
@@ -315,11 +336,13 @@ class ParallelPq {
   }
 
   std::array<DoublyLinkedList<T> *, kMaxPriority> qs_;
-  folly::ConcurrentHashMap<T, Node<T> *> hashTable_;
+  ParallelPqIndex<T> index_;
 
-  base::StdDelayedRecycle recycle_;
+  thread_local static base::StdDelayedRecycle recycle_;
   mutable std::atomic_int min_priority_now_ = 0;
-  mutable base::SpinLock lock_;
 };
+
+template <typename T>
+thread_local base::StdDelayedRecycle ParallelPq<T>::recycle_;
 
 }  // namespace recstore

@@ -834,7 +834,6 @@ class KGCacheController : public torch::CustomClassHolder {
 
   void ProcessOneStep(int64_t step_no) {
     grad_processing_->ProcessOneStep(step_no);
-    ((GradAsyncProcessing *)grad_processing_)->PrintPq();
   }
 
   void BlockToStepN(int64_t step_no) {

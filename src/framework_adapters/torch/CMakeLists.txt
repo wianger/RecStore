@@ -48,6 +48,5 @@ target_include_directories(recstore_pytorch_test PUBLIC ${TORCH_INCLUDE_DIRS})
 set_target_properties(recstore_pytorch_test PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(recstore_pytorch_test PROPERTIES CUDA_ARCHITECTURES OFF)
 
-
-# target_compile_options(recstore_pytorch PUBLIC "-fsanitize=thread")
-# target_link_options(recstore_pytorch PUBLIC "-fsanitize=thread")
+target_compile_options(recstore_pytorch_test PUBLIC "-fsanitize=thread")
+target_link_options(recstore_pytorch_test PUBLIC "-fsanitize=thread")

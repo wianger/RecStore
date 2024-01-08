@@ -9,6 +9,8 @@ class CircleBuffer {
   int L_;
   int start_ = 0;
   int end_ = 0;
+
+  int rank_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> sliced_id_tensor_;
   torch::Tensor circle_buffer_end_;
   torch::Tensor circle_buffer_old_end_;
@@ -18,7 +20,7 @@ class CircleBuffer {
 
  public:
   CircleBuffer(int L, int rank, std::string backmode)
-      : L_(L), backmode_(backmode) {
+      : L_(L), rank_(rank), backmode_(backmode) {
     for (int i = 0; i < L_; i++) {
       sliced_id_tensor_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
           folly::sformat("cached_sampler_r{}_{}", rank, i), {int(1e5)},
@@ -50,6 +52,8 @@ class CircleBuffer {
     step_tensor_[end_] = step;
 
     end_ = (end_ + 1) % L_;
+
+    asm volatile("mfence" ::: "memory");
     circle_buffer_end_[0] = end_;
 
     if (backmode_ == "CppAsync") {
@@ -62,6 +66,8 @@ class CircleBuffer {
     }
 
     if (end_ == start_) start_ = (start_ + 1) % L_;
+
+    // if (step == 10) std::this_thread::sleep_for(std::chrono::seconds(100));
   }
 
   c10::intrusive_ptr<SlicedTensor> Pop() {

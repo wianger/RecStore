@@ -133,9 +133,18 @@ class IPCTensorMemoryHandle {
     return memHandle_;
   }
 
-  void SetSlicedEnd(int end) { sliced_end_ = end; }
+  void SetSlicedEnd(int64_t end) {
+    // sliced_end_ = end;
+    std::atomic<int64_t> *p = (std::atomic<int64_t> *)&sliced_end_;
+    p->store(end);
+  }
 
-  auto GetSlicedEnd() const { return sliced_end_; }
+  int64_t GetSlicedEnd() const {
+    // return sliced_end_;
+
+    std::atomic<int64_t> *p = (std::atomic<int64_t> *)&sliced_end_;
+    return p->load();
+  }
 
  private:
   union {
@@ -147,7 +156,7 @@ class IPCTensorMemoryHandle {
       int64_t size_;
       at::ScalarType dtype_;
       int pid_;
-      int sliced_end_;
+      int64_t sliced_end_;
       const int magic_ = 0xdeadbeef;
     };
     char ____padding[4096];
@@ -473,7 +482,7 @@ class SlicedTensor : public torch::CustomClassHolder {
   }
 
   void Copy_(torch::Tensor right, bool non_blocking) {
-    int end = right.sizes()[0];
+    int64_t end = right.sizes()[0];
     auto tensor = IPCTensorFactory::GetIPCTensorFromHandle(handle_);
     CHECK(tensor.sizes()[0] >= end)
         << "Please increase the space of pre-allocated tensor";

@@ -13,6 +13,17 @@ namespace base {
 // constexpr bool kDetectDeadLock = true;
 constexpr bool kDetectDeadLock = false;
 
+class Atomic {
+ public:
+  static bool CAS(int* ptr, int old_val, int new_val) {
+    return __sync_bool_compare_and_swap(ptr, old_val, new_val);
+  }
+
+  static bool CAS(void** ptr, void* old_val, void* new_val) {
+    return __sync_bool_compare_and_swap(ptr, old_val, new_val);
+  }
+};
+
 class SpinLock {
   std::atomic_flag locked = ATOMIC_FLAG_INIT;
 

@@ -300,9 +300,9 @@ class TestShardedCache:
 
             # "backmode": ["PySync", "CppSync"],
 
-            # "backmode": ["PySync",],
+            "backmode": ["PySync",],
             # "backmode": ["CppSync",],
-            "backmode": ["CppAsync",],
+            # "backmode": ["CppAsync",],
 
             # "cache_ratio": [0.1, 0.3, 0.5],
             "cache_ratio": [0.1,]
