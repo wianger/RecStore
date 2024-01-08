@@ -4,6 +4,7 @@
 #include <folly/ProducerConsumerQueue.h>
 #include <folly/system/MemoryMapping.h>
 // #include <oneapi/tbb/concurrent_priority_queue.h>
+#include <gperftools/profiler.h>
 #include <torch/custom_class.h>
 #include <torch/extension.h>
 #include <torch/torch.h>
@@ -700,10 +701,15 @@ class GradAsyncProcessing : public GradProcessingBase {
   void ProcessBackwardAsync(const std::vector<torch::Tensor> &input_keys,
                             const std::vector<torch::Tensor> &input_grads,
                             int step_no) {
+    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
     auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
         ShuffleKeysAndGrads(input_keys, input_grads);
+    timer_ShuffleKeysAndGrads.end();
+
+    xmh::Timer timer_SyncUpdateCache("ProcessBack:UpdateCache");
     SyncUpdateCache(shuffled_keys_in_each_rank_cache,
                     shuffled_grads_in_each_rank_cache);
+    timer_SyncUpdateCache.end();
 
     // LOG(WARNING) << "shuffled_keys_in_each_rank_cache";
     // LOG(WARNING) << "Rank0:" <<
@@ -722,15 +728,14 @@ class GradAsyncProcessing : public GradProcessingBase {
     //              << toString(shuffled_grads_in_each_rank_cache[1][0]) << "|"
     //              << toString(shuffled_grads_in_each_rank_cache[1][1]);
 
-    base::LockGuard _(large_lock_);
 
+    base::LockGuard _(large_lock_);
     // record the update
     // 把 <ID>查一下堆，拿一下step号
     // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
     // 如果在堆，建立映射，把grad指针填进去
-    xmh::Timer timer_ProcessBackwardAsync("ProcessBackwardAsync");
-
-#pragma omp parallel for num_threads(num_gpus_)
+    xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
+// #pragma omp parallel for num_threads(num_gpus_)
     for (int rank = 0; rank < input_keys.size(); ++rank) {
       auto *data = input_keys[rank].data_ptr<int64_t>();
       CHECK(input_keys[rank].is_cpu());
@@ -753,7 +758,6 @@ class GradAsyncProcessing : public GradProcessingBase {
     }
     timer_ProcessBackwardAsync.end();
 
-    // LOG(WARNING) << "<ProcessBackwardAsync>" << pq_.ToString();
   }
 
   void PrintPq() {

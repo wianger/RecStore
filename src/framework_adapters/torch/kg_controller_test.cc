@@ -223,11 +223,16 @@ class VirtualEnvironment {
 
  private:
   void RunThread(int rank) {
+    
+
+
     KGCacheController *controller = KGCacheController::GetInstance();
     cudaSetDevice(rank);
     int step_no = 0;
     auto backgrad = torch::zeros({num_ids_per_step_, emb_dim_}).cuda();
     while (true) {
+      // if (rank == 0 && step_no == 10) ProfilerStart("/tmp/profile.prof");
+
       // 1. Get the next step
       auto next_ids = test_perf_sampler_[rank].__next__();
 
@@ -252,6 +257,9 @@ class VirtualEnvironment {
       step_no++;
       if (rank == 0) controller->BlockToStepN(step_no);
       barrier_->Wait();
+
+      // if (rank == 0 && step_no == 100) ProfilerStop();
+      if (step_no == 50) break;
     }
   }
 };
@@ -261,25 +269,29 @@ class VirtualEnvironment {
 int main(int argc, char **argv) {
   folly::init(&argc, &argv);
   std::string json_str = R"({
-            "num_gpus": 2,
+            "num_gpus": 4,
             "L": 10,
             "kForwardItersPerStep": 1,
             "clr": 2,
             "BackwardMode": "CppAsync",
             "nr_background_threads": 32,
-            "full_emb_capacity": 20,
-            "emb_dim" : 2,
+            "full_emb_capacity": 20000,
+            "emb_dim" : 3,
             "num_ids_per_step": 1024
         })";
 
+  auto json_config = json::parse(json_str);
+  int64_t full_emb_capacity = json_config.at("full_emb_capacity");
   IPCTensorFactory::ClearIPCMemory();
 
-  int cached_capcacity = 5;
+  xmh::Reporter::StartReportThread();
+
+  int cached_capcacity = full_emb_capacity * 0.1;
   VirtualEnvironment env(json_str, cached_capcacity);
   auto hold_pointer = KGCacheController::Init(
       json_str,
       {{0, 0 + cached_capcacity}, {cached_capcacity, 2 * cached_capcacity}},
-      20);
+      full_emb_capacity);
   KGCacheController *controller = KGCacheController::GetInstance();
   controller->RegTensorsPerProcess();
   env.PrefillSampler();

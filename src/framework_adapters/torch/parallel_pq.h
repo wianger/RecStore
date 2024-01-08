@@ -7,6 +7,9 @@
 #include "folly/concurrency/ConcurrentHashMap.h"
 #include "src/memory/malloc.h"
 
+#define PPQ_ALL_SCAN
+// #define PPQ_SELECTIVE_SCAN
+
 namespace recstore {
 
 template <typename T>
@@ -190,12 +193,14 @@ class ParallelPq {
 
   void PushOrUpdate(const T &value) {
     base::LockGuard guard(*value);
-    // LOG(INFO) << "PushOrUpdate " << value->GetID();
-    if (!index_.find(value)) {
-      push_inner(value);
-    } else {
-      adjustPriority(value);
-    }
+    Upsert(value);
+
+    // // LOG(INFO) << "PushOrUpdate " << value->GetID();
+    // if (!index_.find(value)) {
+    //   push_inner(value);
+    // } else {
+    //   adjustPriority(value);
+    // }
   }
 
   std::string ToString() const {
@@ -226,44 +231,82 @@ class ParallelPq {
   }
 
   bool empty() const {
+#if defined(PPQ_ALL_SCAN)
     for (int i = 0; i < kMaxPriority; i++) {
       if (!qs_[i]->empty()) {
         return false;
       }
     }
     return true;
+
+#elif defined(PPQ_SELECTIVE_SCAN)
+    for (int i = priority_possible_min_; i < priority_possible_max_; i++) {
+      if (!qs_[i]->empty()) {
+        return false;
+      }
+    }
+
+    int i = kMaxPriority;
+    if (!qs_[i]->empty()) {
+      return false;
+    }
+    return true;
+#else
+#error "defined a macro"
+#endif
   }
 
-  // T pop() {
-  //   for (int i = 0; i < kMaxPriority; i++) {
-  //     if (qs_[i]->empty()) {
-  //       ;
-  //     } else {
-  //       Node<T> *head = qs_[i]->pop();
-  //       index_.erase(head->data);
-  //       T data = head->data;
-  //       // delete head;
-  //       recycle_.Recycle(head);
-  //       return data;
-  //     }
-  //   }
-  //   LOG(FATAL) << "empty queue";
-  //   return nullptr;
-  // }
-
   T top() const {
+#if defined(PPQ_ALL_SCAN)
     for (int i = 0; i < kMaxPriority; i++) {
       auto *p = qs_[i]->top();
       if (p) return p->Data();
     }
     return nullptr;
+
+#elif defined(PPQ_SELECTIVE_SCAN)
+    for (int i = priority_possible_min_; i < priority_possible_max_; i++) {
+      auto *p = qs_[i]->top();
+      if (p) {
+        // update MIN
+        if (i != (kMaxPriority - 1))
+          priority_possible_min_ = std::max(i - 1, 0);
+        return p->Data();
+      }
+    }
+    int i = kMaxPriority;
+    auto *p = qs_[i]->top();
+    if (p) {
+      return p->Data();
+    }
+    return nullptr;
+#else
+#error "defined a macro"
+#endif
   }
 
   int MinPriority() const {
+#if defined(PPQ_ALL_SCAN)
     for (int i = 0; i < kMaxPriority; i++) {
       if (!qs_[i]->empty()) return CastQueueNoToPriority(i);
     }
     return kInf;
+
+#elif defined(PPQ_SELECTIVE_SCAN)
+    for (int i = priority_possible_min_; i < priority_possible_max_; i++) {
+      if (!qs_[i]->empty()) {
+        // update MIN
+        if (i != (kMaxPriority - 1))
+          priority_possible_min_ = std::max(i - 1, 0);
+        return CastQueueNoToPriority(i);
+      }
+    }
+    int i = kMaxPriority;
+    if (!qs_[i]->empty()) return CastQueueNoToPriority(i);
+    return kInf;
+#else
+#error "defined a macro"
+#endif
   }
 
   void pop_x(const T &value) {
@@ -284,62 +327,90 @@ class ParallelPq {
   }
 
  private:
-  
-
-  void Upsert(const T& value){
-    
-
-  }
-
-
-  void adjustPriority(const T &value) {
-    // static base::SpinLock adjust_lock;
-    // base::LockGuard adjust_guard(adjust_lock);
-
-    Node<T> *node;
-    do {
-      node = index_[value];
-      FB_LOG_EVERY_MS(ERROR, 1000) << "node is nullptr";
-    } while (!node);
-
-    CHECK(node);
+  void Upsert(const T &value) {
     int new_priority = value->Priority();
-    int old_priority = node->QueuePriority();
 
-    // ↓ atomically
-    Node<T> *newnode = new Node<T>(value, new_priority);
-    qs_[CastPriorityToQueueNo(new_priority)]->insert(newnode);
-    qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
+#if defined(PPQ_SELECTIVE_SCAN)
+    // update MAX
+    if (new_priority != kInf && (new_priority + 1) > priority_possible_max_) {
+      // priority_possible_max_ = std::min(new_priority + 1, kMaxPriority);
+      priority_possible_max_ = new_priority + 1;
+    }
+#endif
+    if (index_.find(value)) {
+      Node<T> *node = index_[value];
+      CHECK(node);
+      int old_priority = node->QueuePriority();
+      // ↓ atomically
+      Node<T> *newnode = new Node<T>(value, new_priority);
+      qs_[CastPriorityToQueueNo(new_priority)]->insert(newnode);
+      qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
+      index_.assign(value, newnode);
 
-    // auto iter = index_.assign_if_equal(value, node, newnode);
-    // if (iter.has_value()) recycle_.Recycle(node);
+      // recycle_.Recycle(node);
+      delete node;
 
-    index_.assign(value, newnode);
-    recycle_.Recycle(node);
-  }
-
-  void push_inner(const T &value) {
-    // static base::SpinLock push_lock;
-    // base::LockGuard guard(push_lock);
-
-    int priority = value->Priority();
-    Node<T> *newNode = new Node<T>(value, priority);
-    // atomically
-    auto success = index_.try_insert(value, newNode);
-    if (success) {
-      // LOG(ERROR) << folly::sformat("index_[{}] = {})", value->GetID(),
-      //                              newNode);
-      qs_[CastPriorityToQueueNo(priority)]->insert(newNode);
     } else {
-      delete newNode;
+      Node<T> *newNode = new Node<T>(value, new_priority);
+      // atomically
+      auto success = index_.try_insert(value, newNode);
+      if (success) {
+        qs_[CastPriorityToQueueNo(new_priority)]->insert(newNode);
+      } else {
+        delete newNode;
+      }
     }
   }
+
+  // void adjustPriority(const T &value) {
+  //   // static base::SpinLock adjust_lock;
+  //   // base::LockGuard adjust_guard(adjust_lock);
+  //   LOG(FATAL) << "not USED now";
+
+  //   Node<T> *node;
+  //   do {
+  //     node = index_[value];
+  //     FB_LOG_EVERY_MS(ERROR, 1000) << "node is nullptr";
+  //   } while (!node);
+
+  //   CHECK(node);
+  //   int new_priority = value->Priority();
+  //   int old_priority = node->QueuePriority();
+
+  //   // ↓ atomically
+  //   Node<T> *newnode = new Node<T>(value, new_priority);
+  //   qs_[CastPriorityToQueueNo(new_priority)]->insert(newnode);
+  //   qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
+
+  //   index_.assign(value, newnode);
+  //   recycle_.Recycle(node);
+  // }
+
+  // void push_inner(const T &value) {
+  //   // static base::SpinLock push_lock;
+  //   // base::LockGuard guard(push_lock);
+  //   LOG(FATAL) << "not USED now";
+
+  //   int priority = value->Priority();
+  //   Node<T> *newNode = new Node<T>(value, priority);
+  //   // atomically
+  //   auto success = index_.try_insert(value, newNode);
+  //   if (success) {
+  //     // LOG(ERROR) << folly::sformat("index_[{}] = {})", value->GetID(),
+  //     //                              newNode);
+  //     qs_[CastPriorityToQueueNo(priority)]->insert(newNode);
+  //   } else {
+  //     delete newNode;
+  //   }
+  // }
 
   std::array<DoublyLinkedList<T> *, kMaxPriority> qs_;
   ParallelPqIndex<T> index_;
 
+  mutable std::atomic_int priority_possible_min_{0};
+  mutable std::atomic_int priority_possible_max_{kMaxPriority};
+
   thread_local static base::StdDelayedRecycle recycle_;
-  mutable std::atomic_int min_priority_now_ = 0;
 };
 
 template <typename T>

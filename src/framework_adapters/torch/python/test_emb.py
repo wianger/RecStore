@@ -67,7 +67,7 @@ def worker_main(routine, worker_id, num_workers, emb_context, args):
 
 
 class TestShardedCache:
-    num_workers = 2
+    num_workers = 4
 
     if XMH_DEBUG:
         EMB_DIM = 3
@@ -300,9 +300,9 @@ class TestShardedCache:
 
             # "backmode": ["PySync", "CppSync"],
 
-            "backmode": ["PySync",],
+            # "backmode": ["PySync",],
             # "backmode": ["CppSync",],
-            # "backmode": ["CppAsync",],
+            "backmode": ["CppAsync",],
 
             # "cache_ratio": [0.1, 0.3, 0.5],
             "cache_ratio": [0.1,]

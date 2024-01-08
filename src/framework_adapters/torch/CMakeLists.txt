@@ -18,14 +18,15 @@ add_library(recstore_pytorch MODULE
     ${recstore_pytorch_srcs}
 )
 
-
-target_link_libraries(recstore_pytorch PUBLIC ${TORCH_LIBRARIES} )
 target_include_directories(recstore_pytorch PUBLIC ${TORCH_INCLUDE_DIRS})
 
+target_link_libraries(recstore_pytorch PUBLIC ${TORCH_LIBRARIES} )
 target_link_libraries(recstore_pytorch PUBLIC base gpu_cache TBB::tbb)
+target_link_libraries(recstore_pytorch PRIVATE Python3::Python)
+# target_link_libraries(recstore_pytorch PUBLIC profiler)
+
 set_target_properties(recstore_pytorch PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(recstore_pytorch PROPERTIES CUDA_ARCHITECTURES OFF)
-target_link_libraries(recstore_pytorch PRIVATE Python3::Python)
 
 
 add_library(torchcpp_test MODULE 
@@ -40,13 +41,15 @@ add_executable(recstore_pytorch_test
     kg_controller_test.cc
     ${recstore_pytorch_srcs}
 )
+target_include_directories(recstore_pytorch_test PUBLIC ${TORCH_INCLUDE_DIRS})
 
 target_link_libraries(recstore_pytorch_test PUBLIC 
 ${TORCH_LIBRARIES} base Python3::Python
 gpu_cache)
-target_include_directories(recstore_pytorch_test PUBLIC ${TORCH_INCLUDE_DIRS})
+# target_link_libraries(recstore_pytorch_test PUBLIC profiler)
+
 set_target_properties(recstore_pytorch_test PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(recstore_pytorch_test PROPERTIES CUDA_ARCHITECTURES OFF)
 
-target_compile_options(recstore_pytorch_test PUBLIC "-fsanitize=thread")
-target_link_options(recstore_pytorch_test PUBLIC "-fsanitize=thread")
+# target_compile_options(recstore_pytorch_test PUBLIC "-fsanitize=thread")
+# target_link_options(recstore_pytorch_test PUBLIC "-fsanitize=thread")
