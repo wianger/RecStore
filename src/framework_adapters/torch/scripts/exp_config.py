@@ -14,7 +14,7 @@ def ConvertHostNumaList2Host(host_numa_lists):
     return list(set([each[0] for each in host_numa_lists]))
 
 
-DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch"
+DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
 
 
 class PerfEmbRun(LocalOnlyRun):
@@ -138,13 +138,12 @@ class GNNExperiment(LocalOnlyExperiment):
                       run_config, execute_host)
 
     def _BeforeStartAllRun(self):
-        print("pnuke dgl-ke-main.py")
-        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "dgl-ke-main.py")
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
 
 
 COMMON_CLIENT_CONFIGS = {
     "no_save_emb": ['true'],
-    "batch_size": [1000],
     "log_interval": [1000],
     "neg_sample_size": [200],
     "regularization_coef": [1e-07],
@@ -166,15 +165,21 @@ class ExpOverallSingle(GNNExperiment):
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
                 },
-                # {
-                #     "dataset": ["Freebase"],
-                #     "hidden_dim": [100],
-                # }
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [100],
+                }
             ],
             "binding2": [
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding']
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": ["CppSync"],
                 },
                 {
                     "use_my_emb": ["false"],
@@ -186,10 +191,14 @@ class ExpOverallSingle(GNNExperiment):
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
 
-            # "nr_gpus": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
-            "nr_gpus": [2],
+            "nr_gpus": [2, 4],
 
-            "max_step": [10000],
+            "batch_size": [500, 1000, 2000,],
+
+            # "cache_ratio": [0.1],
+            "cache_ratio": [0.05, 0.1, 0.4],
+
+            "max_step": [500],
             **COMMON_CLIENT_CONFIGS,
         }
 
@@ -198,7 +207,12 @@ class ExpOverallSingle(GNNExperiment):
                          "127.0.0.1")
 
     def _SortRuns(self, runs):
+        for each in runs:
+            print(each.config)
         return list(sorted(runs, key=lambda run: run.config['dataset']))
 
     def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
         return

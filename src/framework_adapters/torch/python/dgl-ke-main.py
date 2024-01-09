@@ -136,7 +136,7 @@ class ArgParser(CommonArgParser):
             '--use_my_emb', type=ArgParser._str_to_bool, required=True, help='.')
         self.add_argument('--cache_ratio', type=float, required=True, help='.')
         self.add_argument('--shuffle', type=bool, default=False, help='.')
-        self.add_argument('--backwardMode', type=str,
+        self.add_argument('--backwardMode', type=str, required=True,
                           choices=['PySync', 'CppSync', 'CppAsync'], help='.')
         self.add_argument('--L', type=int, default=10, help='lookahead value')
 
@@ -159,7 +159,7 @@ def main():
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
         --neg_sample_size=200 --regularization_coef=1e-07\
         --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
-        --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400\
+        --mix_cpu_gpu=ntrue --dataset=FB15k --hidden_dim=400\
         --cache_ratio=0.1 \
         '
 

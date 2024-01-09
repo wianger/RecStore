@@ -78,6 +78,16 @@ def RemoteExecute(server, command, path, print_show=True):
     return stdout.channel.recv_exit_status()
 
 
+
+def LocalNuke(pattern):
+    ret = 0
+    while ret == 0:
+        command = f"ps aux |grep {pattern}| grep -v grep | awk '{{print $2}}' | xargs kill -9"
+        cp = subprocess.run(command, shell=True, )
+        ret = cp.returncode
+
+
+
 def Pnuke(servers, pattern):
     print(f"==={servers}=== Pnuke {pattern}")
     if type(servers) is not list:
@@ -131,7 +141,7 @@ def PreprocessConfig(config):
         bindings.append(permutations_binding_config_2)
 
     permutations_config = GenProduct(config)
-    if len(bindings) == 0:
+    if len(bindings) != 0:
         permutations_config = itertools.product(
             permutations_config, *bindings, )
 
