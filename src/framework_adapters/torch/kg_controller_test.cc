@@ -168,7 +168,7 @@ class VirtualEnvironment {
     full_emb_capacity_ = json_config.at("full_emb_capacity");
     num_ids_per_step_ = json_config.at("num_ids_per_step");
     L_ = json_config.at("L");
-    backmode_ = json_config.at("BackwardMode");
+    backmode_ = json_config.at("backwardMode");
 
     barrier_ = new base::Barrier(num_gpus_);
 
@@ -223,9 +223,6 @@ class VirtualEnvironment {
 
  private:
   void RunThread(int rank) {
-    
-
-
     KGCacheController *controller = KGCacheController::GetInstance();
     cudaSetDevice(rank);
     int step_no = 0;
@@ -273,7 +270,7 @@ int main(int argc, char **argv) {
             "L": 10,
             "kForwardItersPerStep": 1,
             "clr": 2,
-            "BackwardMode": "CppAsync",
+            "backwardMode": "CppAsync",
             "nr_background_threads": 32,
             "full_emb_capacity": 20000,
             "emb_dim" : 3,
@@ -282,20 +279,27 @@ int main(int argc, char **argv) {
 
   auto json_config = json::parse(json_str);
   int64_t full_emb_capacity = json_config.at("full_emb_capacity");
+
+  int num_gpus = json_config.at("num_gpus");
+
   IPCTensorFactory::ClearIPCMemory();
 
   xmh::Reporter::StartReportThread();
 
-  int cached_capcacity = full_emb_capacity * 0.1;
+  int cached_capcacity = full_emb_capacity * 0.1 / num_gpus;
   VirtualEnvironment env(json_str, cached_capcacity);
-  auto hold_pointer = KGCacheController::Init(
-      json_str,
-      {{0, 0 + cached_capcacity}, {cached_capcacity, 2 * cached_capcacity}},
-      full_emb_capacity);
+
+  std::vector<std::vector<int64_t>> cached_range;
+  for (int i = 0; i < num_gpus; i++)
+    cached_range.push_back({i * cached_capcacity, (i + 1) * cached_capcacity});
+
+  auto hold_pointer =
+      KGCacheController::Init(json_str, cached_range, full_emb_capacity);
   KGCacheController *controller = KGCacheController::GetInstance();
   controller->RegTensorsPerProcess();
   env.PrefillSampler();
   env.StartThreads();
   env.StopThreads();
+  controller->StopThreads();
   return 0;
 }

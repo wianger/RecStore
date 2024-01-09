@@ -1,7 +1,7 @@
 WARNING: Logging before InitGoogleLogging() is written to STDERR
 W20240105 14:15:23.842386 1086818 IPCTensor.h:350] NewIPCTensor: full_emb [20000, 3]0x100000002000
-xmh:  {'test_cache': 'KnownLocalCachedEmbedding', 'cache_ratio': 0.1, 'kForwardItersPerStep': 1, 'BackwardMode': 'CppAsync', 'L': 10, 'nr_background_threads': 32}
-========== Running Test with routine <bound method TestShardedCache.routine_cache_helper of <__main__.TestShardedCache object at 0x7f15b56b3550>> {'test_cache': 'KnownLocalCachedEmbedding', 'cache_ratio': 0.1, 'kForwardItersPerStep': 1, 'BackwardMode': 'CppAsync', 'L': 10, 'nr_background_threads': 32}==========
+xmh:  {'test_cache': 'KnownLocalCachedEmbedding', 'cache_ratio': 0.1, 'kForwardItersPerStep': 1, 'backwardMode': 'CppAsync', 'L': 10, 'nr_background_threads': 32}
+========== Running Test with routine <bound method TestShardedCache.routine_cache_helper of <__main__.TestShardedCache object at 0x7f15b56b3550>> {'test_cache': 'KnownLocalCachedEmbedding', 'cache_ratio': 0.1, 'kForwardItersPerStep': 1, 'backwardMode': 'CppAsync', 'L': 10, 'nr_background_threads': 32}==========
 INFO [1086818 test_emb.py:115] Worker 0 pid=1087183
 INFO [1086818 test_emb.py:115] Worker 1 pid=1087184
 INFO [1087184 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
@@ -15,7 +15,10 @@ E20240105 14:15:27.316165 1087184 IPCTensor.h:329] IPCTensor full_emb already ex
 INFO [1087183 test_emb.py:128] emb.data_ptr=0x100000002000
 INFO [1087184 test_emb.py:128] emb.data_ptr=0x100000002000
 rank 0 start initing emb
-  0%|          | 0/10000 [00:00<?, ?it/s] 86%|████████▋ | 8649/10000 [00:00<00:00, 86484.10it/s]100%|██████████| 10000/10000 [00:00<00:00, 86716.69it/s]
+
+  0%|          | 0/10000 [00:00<?, ?it/s]
+ 86%|████████▋ | 8649/10000 [00:00<00:00, 86484.10it/s]
+100%|██████████| 10000/10000 [00:00<00:00, 86716.69it/s]
 E20240105 14:15:28.696161 1087183 IPCTensor.h:367] Called NewIPCGPUTensor: embedding_cache_0 [1000, 3] 0
 W20240105 14:15:28.696203 1087183 IPCTensor.h:389] NewIPCGPUTensor: embedding_cache_0 [1000, 3] 0
 W20240105 14:15:28.696342 1087183 IPCTensor.h:350] NewIPCTensor: input_keys_0 [100000]0x10000003f050
@@ -51,7 +54,7 @@ W20240105 14:15:28.716279 1087184 IPCTensor.h:350] NewIPCTensor: circle_buffer_e
 ------------json------------
 {
             "num_gpus": 2,
-            "L": 10,
+            "backwardMode
             "kForwardItersPerStep": 1,
             "clr": 2,
             "BackwardMode": "CppAsync",
@@ -77,7 +80,7 @@ W20240105 14:15:28.722703 1087183 IPCTensor.h:350] NewIPCTensor: circle_buffer_e
 W20240105 14:15:28.722729 1087183 IPCTensor.h:350] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x1000012c61e0
 W20240105 14:15:28.723269 1087183 kg_controller.cc:62] KGCacheController, config={
             "num_gpus": 2,
-            "L": 10,
+            "backwardMode
             "kForwardItersPerStep": 1,
             "clr": 2,
             "BackwardMode": "CppAsync",
@@ -87,8 +90,10 @@ W20240105 14:15:28.723451 1087183 kg_controller.cc:159] Init GradProcessingBase 
 W20240105 14:15:28.728785 1087183 kg_controller.cc:820] after init GradAsyncProcessing
 W20240105 14:15:29.172487 1087884 kg_controller.cc:589] Detect new sample comes, old_end0, new_end1
 E20240105 14:15:29.176026 1087884 parallel_pq.h:288] node is nullptr
-  0%|          | 0/1000 [00:00<?, ?it/s]========== Step 0 ========== 
-  0%|          | 0/1000 [00:00<?, ?it/s]========== Step 0 ========== 
+
+  0%|          | 0/1000 [00:00<?, ?it/s]========== Step 0 ========== 
+
+  0%|          | 0/1000 [00:00<?, ?it/s]========== Step 0 ========== 
 E20240105 14:15:30.176044 1087884 parallel_pq.h:288] node is nullptr
 free(): unaligned chunk detected in tcache 2
 *** Aborted at 1704435330 (Unix time, try 'date -d @1704435330') ***
@@ -228,7 +233,8 @@ free(): unaligned chunk detected in tcache 2
     @ 0000000000029e3f __libc_start_main
     @ 00000000005b6c6e (unknown)
 [W tensorpipe_agent.cpp:725] RPC agent for worker1 encountered error when reading incoming request from worker0: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
-  0%|          | 0/1000 [00:02<?, ?it/s]
+
+  0%|          | 0/1000 [00:02<?, ?it/s]
 Process Process-2:
 Traceback (most recent call last):
   File "/home/xieminhui/miniconda3/lib/python3.11/multiprocessing/process.py", line 314, in _bootstrap

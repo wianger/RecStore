@@ -13,7 +13,7 @@ dglke_train --model_name TransE_l2
 
 
 from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
-from controller_process import ControllerServer, GraphCachedSampler
+from controller_process import GraphCachedSampler
 import test_utils
 import pickle
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
@@ -152,26 +152,40 @@ def prepare_save_path(args):
 
 
 def main():
-    #  BUG!!!!
-    
-    with open("/home/xieminhui/RecStore/src/framework_adapters/torch/config.json", "r") as f:
-        json_str = f.read()
-        import json
-        json_config = json.loads(json_str)
-    
-    import sys
+    # with open("/home/xieminhui/RecStore/src/framework_adapters/torch/config.json", "r") as f:
+    #     json_str = f.read()
+    #     import json
+    #     json_config = json.loads(json_str)
+
+    import json
+    json_str = '''{
+        "num_gpus": 4,
+        "L": 10,
+        "kForwardItersPerStep": 2,
+        "clr": 1,
+        "nr_background_threads": 1,
+        "backwardMode": "CppSync",
+        "cache_ratio": 0.1
+        }'''
+    json_config = json.loads(json_str)
     nr_gpus = json_config['num_gpus']
+    cache_ratio = json_config['cache_ratio']
+
     common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus={nr_gpus} \
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
         --neg_sample_size=200 --regularization_coef=1e-07\
         --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
-        --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400'
+        --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400\
+        --cache_ratio={cache_ratio} \
+        '
 
-    # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding --cache_ratio=0.1 {common_args}'
-    cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --cache_ratio=0.1 {common_args}'
-    # cli_args = f'--use_my_emb=false --cache_ratio=0.1 {common_args}'
+    # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding {common_args}'
+    cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding {common_args}'
+    # cli_args = f'--use_my_emb=false {common_args}'
 
     args = ArgParser().parse_args(cli_args.split())
+    args.kForwardItersPerStep = json_config['kForwardItersPerStep']
+    args.backwardMode = json_config['backwardMode']
 
     from PsKvstore import kvinit
     kvinit()
@@ -251,7 +265,7 @@ def main():
         args, kg_dataset=dataset, train_data=train_data)
 
     train_samplers = GraphCachedSampler.BatchCreateCachedSamplers(
-        args.L, train_samplers)
+        args.L, train_samplers, backmode=json_config['backwardMode'])
 
     # grad_clients = controller.CreateGradClients()
     grad_clients = [None for _ in range(args.num_proc)]
@@ -389,7 +403,6 @@ def main():
         time.time() - init_time_start), flush=True)
 
     # train
-    start = time.time()
     if args.num_proc > 1:
         procs = []
         barrier = mp.Barrier(args.num_proc)
@@ -400,7 +413,7 @@ def main():
             else:
                 valid_sampler = [valid_sampler_heads[i],
                                  valid_sampler_tails[i]] if args.valid else None
-            proc = mp.Process(target=train_mp, args=(args,
+            proc = mp.Process(target=train_mp, args=(json_str, args,
                                                      model,
                                                      train_samplers[i],
                                                      valid_sampler,
@@ -413,7 +426,7 @@ def main():
             proc.start()
             print(f"[Rank{i}] pid = {proc.pid}")
 
-        train_mp(args, model,
+        train_mp(json_str, args, model,
                  train_samplers[0],
                  None,
                  0,
@@ -431,10 +444,10 @@ def main():
         else:
             valid_samplers = [valid_sampler_head,
                               valid_sampler_tail] if args.valid else None
-        train(args, model, train_sampler, valid_samplers, rel_parts=rel_parts)
+        train(args, model, train_samplers[0],
+              valid_samplers, rel_parts=rel_parts)
 
-    print('Successfully xmh. training takes {} seconds'.format(
-        time.time() - start), flush=True)
+
 
     if not args.no_save_emb:
         save_model(args, model, emap_file, rmap_file)

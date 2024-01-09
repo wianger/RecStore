@@ -43,8 +43,10 @@ std::string toString(const torch::Tensor &tensor, bool simplified) {
     return toStringInner<float>(tensor, simplified);
   else if (tensor.scalar_type() == torch::kInt64)
     return toStringInner<int64_t>(tensor, simplified);
+  else if (tensor.scalar_type() == at::ScalarType::Bool)
+    return toStringInner<bool>(tensor, simplified);
   else
-    LOG(FATAL) << "to String, not supported type";
+    LOG(FATAL) << "to String, not supported type " << tensor.scalar_type();
 }
 
 std::string toString(c10::intrusive_ptr<recstore::SlicedTensor> tensor,

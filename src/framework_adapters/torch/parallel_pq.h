@@ -7,8 +7,8 @@
 #include "folly/concurrency/ConcurrentHashMap.h"
 #include "src/memory/malloc.h"
 
-#define PPQ_ALL_SCAN
-// #define PPQ_SELECTIVE_SCAN
+// #define PPQ_ALL_SCAN
+#define PPQ_SELECTIVE_SCAN
 
 namespace recstore {
 

@@ -88,7 +88,7 @@ def get_run_config():
                                default="KnownLocalCachedEmbedding"
                                #    default="KnownShardedCachedEmbedding"
                                )
-        argparser.add_argument('--BackwardMode', choices=["CppSync",
+        argparser.add_argument('--backwardMode', choices=["CppSync",
                                                           "CppAsync",
                                                           "PySync"],
                                #    default="PySync"
@@ -205,13 +205,13 @@ def routine_local_cache_helper(worker_id, args):
         "L": {L},
         "kForwardItersPerStep": {kForwardItersPerStep},
         "clr": {lr},
-        "BackwardMode": "{BackwardMode}",
+        "backwardMode": "{backwardMode}",
         "nr_background_threads": {nr_background_threads}
     }}'''.format(num_workers=args['num_workers'],
                  kForwardItersPerStep=args['kForwardItersPerStep'],
                  L=args['L'],
                  lr=LR,
-                 BackwardMode=args['BackwardMode'],
+                 backwardMode=args['backwardMode'],
                  nr_background_threads=args['nr_background_threads'],
                  )
 
@@ -230,11 +230,11 @@ def routine_local_cache_helper(worker_id, args):
                                     L=args['L'],
                                     num_ids_per_step=args['batch_size'],
                                     full_emb_capacity=emb.shape[0],
-                                    backmode=args['BackwardMode']
+                                    backmode=args['backwardMode']
                                     )
 
     kg_cache_controller = KGCacheControllerWrapper(
-        json_str, emb, args
+        json_str, emb.shape[0], 
     )
     kg_cache_controller.init()
 

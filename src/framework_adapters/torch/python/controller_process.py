@@ -3,6 +3,8 @@ from queue import Queue
 import queue
 from threading import Thread
 import sys
+sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+import json
 
 
 import torch as th
@@ -15,7 +17,6 @@ from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIte
 
 import recstore
 from cache_emb_factory import CacheEmbFactory
-sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
 from utils import XLOG, Timer, TimeFactory
 
 
@@ -161,13 +162,13 @@ class PerfSampler(BasePerfSampler):
 
 class GraphCachedSampler:
     @staticmethod
-    def BatchCreateCachedSamplers(L, samplers):
+    def BatchCreateCachedSamplers(L, samplers, backmode):
         ret = []
         for i in range(len(samplers)):
-            ret.append(GraphCachedSampler(i, L, samplers[i],))
+            ret.append(GraphCachedSampler(i, L, samplers[i], backmode))
         return ret
 
-    def __init__(self, rank, L, dgl_sampler) -> None:
+    def __init__(self, rank, L, dgl_sampler, backmode) -> None:
         self.rank = rank
         self.L = L
         self.sampler = dgl_sampler
@@ -175,10 +176,11 @@ class GraphCachedSampler:
 
         self.graph_samples_queue = []
 
-        self.ids_circle_buffer = CircleBuffer(L, rank)
+        self.ids_circle_buffer = CircleBuffer(L, rank, backmode)
 
+    def Prefill(self):
         # Prefill L samples
-        for _ in range(L):
+        for _ in range(self.L):
             pos_g, neg_g = next(self.sampler)
             self.graph_samples_queue.append(
                 (self.sampler_iter_num, pos_g, neg_g))
@@ -190,7 +192,7 @@ class GraphCachedSampler:
             else:
                 neg_nids = neg_g.ndata['id'][neg_g.tail_nid]
 
-            if rank == 0:
+            if self.rank == 0:
                 print(f"-------Step {_}-------")
                 print(pos_g.ndata['id'][:10], neg_nids[:10])
 
@@ -212,8 +214,6 @@ class GraphCachedSampler:
     #             pass
 
     def __next__(self):
-        # pos_g, neg_g = next(self.sampler)
-
         try:
             pos_g, neg_g = next(self.sampler)
             self.graph_samples_queue.append(
@@ -250,46 +250,75 @@ def GetKGCacheControllerWrapper():
     return KGCacheControllerWrapper.instance
 
 
-class KGCacheControllerWrapper:
+class KGCacheControllerWrapperBase:
+    def init(self):
+        raise NotImplementedError
+
+    def StopThreads(self):
+        raise NotImplementedError
+
+    def BlockToStepN(self,):
+        raise NotImplementedError
+
+    def AfterBackward(self,):
+        raise NotImplementedError
+
+
+class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
+    def init(self):
+        pass
+
+    def StopThreads(self):
+        pass
+
+    def BlockToStepN(self,):
+        pass
+
+    def AfterBackward(self,):
+        dist.barrier()
+
+
+class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     instance = None
 
-    def __init__(self, json_str, emb, args) -> None:
+    def __init__(self, json_str, full_emb_capacity, ) -> None:
         dist.barrier()
         self.rank = dist.get_rank()
-        self.args = args
-        if (self.args['BackwardMode'] == "CppSync"
-                    or self.args['BackwardMode'] == "CppAsync"
-                ) and self.rank == 0:
-            cache_range = CacheEmbFactory.ReturnCachedRange(emb, args)
-            
-            nr_graph_nodes = emb.shape[0]
+        self.json_config = json.loads(json_str)
+
+        backmode = self.json_config['backwardMode']
+        if (backmode == "CppSync"
+            or backmode == "CppAsync"
+            ) and self.rank == 0:
+            cache_range = CacheEmbFactory.ReturnCachedRange(
+                full_emb_capacity, self.json_config)
             self.controller = recstore.KGCacheController.Init(
-                json_str, cache_range, nr_graph_nodes)
+                json_str, cache_range, full_emb_capacity)
         dist.barrier()
         KGCacheControllerWrapper.instance = self
 
         self.timer_BlockToStepN = Timer("BlockToStepN")
         self.timer_AfterBackward = Timer("AfterBackward")
 
-        self.init_rpc()
-        self._RegisterFolly()
+        self.__init_rpc()
+        self.__RegisterFolly()
 
-    def init_rpc(self):
+    def __init_rpc(self):
         rpc.init_rpc(name=f"worker{self.rank}",
                      rank=self.rank, world_size=dist.get_world_size())
         dist.barrier()
 
+    def __RegisterFolly(self):
+        recstore.init_folly()
+
     def init(self):
         dist.barrier()
-        if (self.args['BackwardMode'] == "CppSync"
-                    or self.args['BackwardMode'] == "CppAsync"
-                ) and self.rank == 0:
+        if (self.json_config['backwardMode'] == "CppSync"
+            or self.json_config['backwardMode'] == "CppAsync"
+            ) and self.rank == 0:
             self.controller.RegTensorsPerProcess()
         self.step = 0
         dist.barrier()
-
-    def _RegisterFolly(self):
-        recstore.init_folly()
 
     @classmethod
     def StopThreads_cls(cls):
@@ -309,9 +338,9 @@ class KGCacheControllerWrapper:
     def BlockToStepN(self,):
         self.timer_BlockToStepN.start()
         self.step += 1
-        if (self.args['BackwardMode'] == "CppSync"
-                    or self.args['BackwardMode'] == "CppAsync"
-                )  and self.rank == 0:
+        if (self.json_config['backwardMode'] == "CppSync"
+            or self.json_config['backwardMode'] == "CppAsync"
+            )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
         self.timer_BlockToStepN.stop()
@@ -322,8 +351,8 @@ class KGCacheControllerWrapper:
     def AfterBackward(self,):
         self.timer_AfterBackward.start()
         dist.barrier()
-        if (self.args['BackwardMode'] == "CppSync"
-                or self.args['BackwardMode'] == "CppAsync") \
+        if (self.json_config['backwardMode'] == "CppSync"
+                or self.json_config['backwardMode'] == "CppAsync") \
                 and self.rank == 0:
             self.controller.ProcessOneStep(self.step)
         dist.barrier()

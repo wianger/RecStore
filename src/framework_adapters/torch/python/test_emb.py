@@ -174,13 +174,13 @@ class TestShardedCache:
             "L": {L},
             "kForwardItersPerStep": {kForwardItersPerStep},
             "clr": {lr},
-            "BackwardMode": "{BackwardMode}",
+            "backwardMode": "{backwardMode}",
             "nr_background_threads": {nr_background_threads}
         }}'''.format(num_workers=num_workers,
                      kForwardItersPerStep=args['kForwardItersPerStep'],
                      L=args['L'],
                      lr=dist_opt.lr,
-                     BackwardMode=args['BackwardMode'],
+                     backwardMode=args['backwardMode'],
                      nr_background_threads=args['nr_background_threads'],
                      )
 
@@ -203,10 +203,10 @@ class TestShardedCache:
                                             L=args['L'],
                                             num_ids_per_step=TestShardedCache.BATCH_SIZE,
                                             full_emb_capacity=emb.shape[0],
-                                            backmode=args['BackwardMode'],
+                                            backmode=args['backwardMode'],
                                             )
         kg_cache_controller = KGCacheControllerWrapper(
-            json_str, emb, args
+            json_str, emb.shape[0], 
         )
         kg_cache_controller.init()
 
@@ -298,11 +298,11 @@ class TestShardedCache:
             #                     'KnownShardedCachedEmbedding',
             #                     'NativeEmbedding'],
 
-            # "backmode": ["PySync", "CppSync"],
+            # "backwardMode": ["PySync", "CppSync"],
 
-            # "backmode": ["PySync",],
-            # "backmode": ["CppSync",],
-            "backmode": ["CppAsync",],
+            "backwardMode": ["PySync",],
+            # "backwardMode": ["CppSync",],
+            # "backwardMode": ["CppAsync",],
 
             # "cache_ratio": [0.1, 0.3, 0.5],
             "cache_ratio": [0.1,]
@@ -317,14 +317,14 @@ class TestShardedCache:
 
         for each in GenProduct(config):
             test_cache_mode = each['test_cache_mode']
-            backmode = each['backmode']
+            backmode = each['backwardMode']
             cache_ratio = each['cache_ratio']
 
             IPCTensorFactory.ClearIPCMemory()
             args = {"test_cache": test_cache_mode,
                     "cache_ratio": cache_ratio,
                     "kForwardItersPerStep": 1,
-                    "BackwardMode": backmode,
+                    "backwardMode": backmode,
                     "L": 10,
                     "nr_background_threads": 32,
                     }

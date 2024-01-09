@@ -6,9 +6,9 @@ from utils import print_rank0
 
 class CacheEmbFactory:
     @staticmethod
-    def ReturnCachedRange(emb, args):
+    def ReturnCachedRange(full_emb_capacity, json_config):
         cached_range = CacheShardingPolicy.generate_cached_range(
-            emb.shape[0], args['cache_ratio'])
+            full_emb_capacity, json_config['cache_ratio'])
         return cached_range
 
     @staticmethod
@@ -32,7 +32,7 @@ class CacheEmbFactory:
             abs_emb = KnownLocalCachedEmbedding(emb,
                                                 cached_range=cached_range,
                                                 kForwardItersPerStep=args['kForwardItersPerStep'],
-                                                backward_mode=args['BackwardMode'],
+                                                backward_mode=args['backwardMode'],
                                                 )
         elif cache_type == "NativeEmbedding":
             abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
