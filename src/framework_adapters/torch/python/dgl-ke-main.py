@@ -23,6 +23,7 @@ import dglke
 import os
 import gc
 import time
+import json
 import os
 
 # if os.path.exists("/usr/bin/docker"):
@@ -135,6 +136,8 @@ class ArgParser(CommonArgParser):
             '--use_my_emb', type=ArgParser._str_to_bool, required=True, help='.')
         self.add_argument('--cache_ratio', type=float, required=True, help='.')
         self.add_argument('--shuffle', type=bool, default=False, help='.')
+        self.add_argument('--backwardMode', type=str,
+                          choices=['PySync', 'CppSync', 'CppAsync'], help='.')
         self.add_argument('--L', type=int, default=10, help='lookahead value')
 
 
@@ -152,40 +155,34 @@ def prepare_save_path(args):
 
 
 def main():
-    # with open("/home/xieminhui/RecStore/src/framework_adapters/torch/config.json", "r") as f:
-    #     json_str = f.read()
-    #     import json
-    #     json_config = json.loads(json_str)
-
-    import json
-    json_str = '''{
-        "num_gpus": 4,
-        "L": 10,
-        "kForwardItersPerStep": 2,
-        "clr": 1,
-        "nr_background_threads": 1,
-        "backwardMode": "CppSync",
-        "cache_ratio": 0.1
-        }'''
-    json_config = json.loads(json_str)
-    nr_gpus = json_config['num_gpus']
-    cache_ratio = json_config['cache_ratio']
-
-    common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus={nr_gpus} \
+    common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 \
         --max_step=1000000 --no_save_emb=true --batch_size=1000\
         --neg_sample_size=200 --regularization_coef=1e-07\
         --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
         --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400\
-        --cache_ratio={cache_ratio} \
+        --cache_ratio=0.1 \
         '
 
     # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding {common_args}'
-    cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding {common_args}'
+    cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --backwardMode=CppSync {common_args}'
     # cli_args = f'--use_my_emb=false {common_args}'
 
-    args = ArgParser().parse_args(cli_args.split())
+    # args = ArgParser().parse_args(cli_args.split())
+    args = ArgParser().parse_args()
+
+    json_str = f'''{{
+        "num_gpus": {args.nr_gpus},
+        "L": 10,
+        "kForwardItersPerStep": 2,
+        "clr": 1,
+        "nr_background_threads": 1,
+        "backwardMode": "{args.backwardMode}",
+        "cache_ratio": {args.cache_ratio}
+        }}'''
+
+    json_config = json.loads(json_str)
+
     args.kForwardItersPerStep = json_config['kForwardItersPerStep']
-    args.backwardMode = json_config['backwardMode']
 
     from PsKvstore import kvinit
     kvinit()
@@ -446,8 +443,6 @@ def main():
                               valid_sampler_tail] if args.valid else None
         train(args, model, train_samplers[0],
               valid_samplers, rel_parts=rel_parts)
-
-
 
     if not args.no_save_emb:
         save_model(args, model, emap_file, rmap_file)

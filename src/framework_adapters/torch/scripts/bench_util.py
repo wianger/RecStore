@@ -116,20 +116,31 @@ def StringnizeConfig(config):
 
 def PreprocessConfig(config):
     # StringnizeConfig(config)
+    
+    bindings = []
     if 'binding' in config:
         config_binding = config['binding']
         del config['binding']
         permutations_binding_config = GenBinding(config_binding)
-        permutations_config = GenProduct(config)
+        bindings.append(permutations_binding_config)
+    
+    if 'binding2' in config:
+        config_binding = config['binding2']
+        del config['binding2']
+        permutations_binding_config_2 = GenBinding(config_binding)
+        bindings.append(permutations_binding_config_2)
+
+    permutations_config = GenProduct(config)
+    if len(bindings) == 0:
         permutations_config = itertools.product(
-            permutations_config, permutations_binding_config, )
+            permutations_config, *bindings, )
 
         # [(dictA, dictB), (dictA, dictB), (dictA, dictB),]
         permutations_config = [disjoint_dicts_to_one_dict(each)
-                               for each in permutations_config]
+                                for each in permutations_config]
         return permutations_config
     else:
-        return GenProduct(config)
+        return permutations_config
 
         
 def ParallelSSH(hosts, command):

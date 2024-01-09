@@ -33,12 +33,12 @@ if __name__ == "__main__":
     else:
         suffix = "3090"
     each.SetLogDir(f'{LOG_PREFIX}/exp0-bigmodel-{suffix}')
-    # exp_lists.append(each)
-
-
-    each = exp_config.ExpMacroPerfEmb()
-    each.SetLogDir(f'{LOG_PREFIX}/exp1-macro-perf-emb-{suffix}')
     exp_lists.append(each)
+
+
+    # each = exp_config.ExpMacroPerfEmb()
+    # each.SetLogDir(f'{LOG_PREFIX}/exp1-macro-perf-emb-{suffix}')
+    # exp_lists.append(each)
     
     
 

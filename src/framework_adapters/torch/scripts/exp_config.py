@@ -14,11 +14,14 @@ def ConvertHostNumaList2Host(host_numa_lists):
     return list(set([each[0] for each in host_numa_lists]))
 
 
+DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch"
+
+
 class PerfEmbRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_emb.py",  "/home/xieminhui/RecStore/src/framework_adapters/torch", execute_host)
+                         log_dir, config,  "python3 perf_emb.py",  DIR_PATH, execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -72,7 +75,6 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
     def _RunHook(self, previous_run, next_run):
         return
 
-        
     def _PostprocessConfig(self, each_config, ):
         # don't use self
         pass
@@ -81,13 +83,11 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
         return PerfEmbRun(self.exp_id, run_id, run_log_dir,
-                      run_config, execute_host)
+                          run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
         Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "perf_emb.py")
-
-
 
 
 ###########################
@@ -98,7 +98,7 @@ class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 dgl-ke-main.py", "/home/xieminhui/RecStore/src/framework_adapters/torch/python", execute_host)
+                         log_dir, config,  "python3 dgl-ke-main.py", DIR_PATH, execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -151,7 +151,7 @@ COMMON_CLIENT_CONFIGS = {
     "gamma": [16.0],
     "lr": [0.01],
     "batch_size_eval": [16],
-    # "test": ["true"],
+    "test": ["false"],
     "mix_cpu_gpu": ["true"],
 }
 
@@ -161,21 +161,33 @@ class ExpOverallSingle(GNNExperiment):
         NAME = "overall-single-machine"
         COMMON_CONFIGS = {
             "model_name": ["TransE_l1"],
-            "binding":[
-                # {
-                #     "dataset": ["FB15k",],
-                    #   "hidden_dim": [400],
-                # },
+            "binding": [
                 {
-                    "dataset": ["Freebase"],
-                    "hidden_dim": [100],
-                }
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [100],
+                # }
             ],
-            
-            
+            "binding2": [
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding']
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None']
+                },
+            ],
+
+
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
-            "nr_gpus": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
+
+            # "nr_gpus": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
+            "nr_gpus": [2],
 
             "max_step": [10000],
             **COMMON_CLIENT_CONFIGS,
