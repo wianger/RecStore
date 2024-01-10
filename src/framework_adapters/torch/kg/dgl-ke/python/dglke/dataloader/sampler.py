@@ -31,6 +31,12 @@ import torch as th
 from dgl.base import NID, EID
 
 
+
+import sys
+sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+from python.test_utils import diff_objs, diff_presampling
+
+
 def SoftRelationPartition(edges, n, has_importance=False, threshold=0.05):
     """This partitions a list of edges to n partitions according to their
     relation types. For any relation with number of edges larger than the
@@ -368,24 +374,9 @@ class TensorCounter():
 
     def most_common(self, k):
         return self.counter.most_common(k)
-    
+
     def __eq__(self, __value: object) -> bool:
         return self.counter == __value.counter
-
-
-def diff_objs(new_tensor, name):
-    return
-    file_name = f"/tmp/cached_tensor_{name}.pkl"
-    if os.path.exists(file_name):
-        old_tensor = th.load(file_name)
-        if type(old_tensor) is th.Tensor:
-            if not (old_tensor == new_tensor).all():
-                raise Exception(f"tensor diff, {name}")
-        else:
-            if not (old_tensor == new_tensor):
-                raise Exception(f"obj diff, {name}")
-    else:
-        th.save(new_tensor, file_name)
 
 
 class TrainDataset(object):
@@ -407,14 +398,14 @@ class TrainDataset(object):
         new_version_g.edata['tid'] = g.edata['tid']
 
         print("original graph: ", g)
-
         pickle_path = f"/tmp/metis_{args.dataset}_{ranks}"
         if os.path.exists(pickle_path):
-            print("self.part_dict", flush=True)
+            print("Loading cached metis", flush=True)
             with open(pickle_path, 'rb') as f:
                 self.part_dict = pickle.load(f)
                 print(self.part_dict)
         else:
+            print("Partitoning with metis", flush=True)
             self.part_dict = dgl.transforms.metis_partition(
                 new_version_g, ranks, 1)
             with open(pickle_path, 'wb') as f:
@@ -487,21 +478,19 @@ class TrainDataset(object):
 
                 nids = pos_g.ndata['id']
                 ids_counter_per_rank.Update(nids)
-                diff_objs(nids, f"xxxnids-{rank}-{step}")
 
                 if neg_g.neg_head:
                     neg_head_ids = neg_g.ndata['id'][neg_g.head_nid]
                     ids_counter_per_rank.Update(neg_head_ids)
-                    diff_objs(neg_head_ids, f"xxxxneg_head_ids-{rank}-{step}")
                 else:
                     neg_tail_ids = neg_g.ndata['id'][neg_g.tail_nid]
                     ids_counter_per_rank.Update(neg_tail_ids)
-                    diff_objs(neg_tail_ids, f"xxxxneg_tail_ids-{rank}-{step}")
 
+                # diff_presampling(pos_g, neg_g, rank, step)
             temp = ids_counter_per_rank.most_common(
                 3 * cache_size_per_rank)
 
-            # diff_objs(ids_counter_per_rank, f"ids_counter_per_rank{rank}")
+            diff_objs(ids_counter_per_rank, f"ids_counter_per_rank{rank}")
             two_times_popular_keys = [each[0] for each in temp]
             keys_ordered_all_rank.append(two_times_popular_keys)
 
@@ -532,7 +521,6 @@ class TrainDataset(object):
             print(f"Rank{rank}: cached key size {j}")
             cache_sizes_all_rank.append(j)
             all_rank_hotsets.append(cached_keys)
-
 
         # a map, <original ID> -> <new ID>
         # with hottest IDs first, then the rest IDs
@@ -1069,7 +1057,7 @@ class NewBidirectionalOneShotIterator:
     """
 
     def __init__(self, dataloader_head, dataloader_tail, neg_chunk_size, neg_sample_size,
-                 is_chunked, num_nodes, has_edge_importance=False, renumbering_dict=None, real_train =False):
+                 is_chunked, num_nodes, has_edge_importance=False, renumbering_dict=None, real_train=False):
         self.sampler_head = dataloader_head
         self.sampler_tail = dataloader_tail
         self.iterator_head = self.one_shot_iterator(dataloader_head, neg_chunk_size,
@@ -1122,4 +1110,3 @@ class NewBidirectionalOneShotIterator:
 
             if not real_train:
                 break
-                

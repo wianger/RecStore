@@ -168,10 +168,10 @@ class ExpOverallSingle(GNNExperiment):
         COMMON_CONFIGS = {
             "model_name": ["TransE_l1"],
             "binding": [
-                {
-                    "dataset": ["FB15k",],
-                    "hidden_dim": [400],
-                },
+                # {
+                #     "dataset": ["FB15k",],
+                #     "hidden_dim": [400],
+                # },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [100],

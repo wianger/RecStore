@@ -235,26 +235,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             break
 
         '''
-        def diff_tensor(new_tensor, name):
-            file_name = f"/tmp/cached_tensor_{name}_{rank}_{step}.pkl" 
-            if os.path.exists(file_name):
-                old_tensor  = th.load(file_name)
-                assert (old_tensor == new_tensor).all()
-            else:
-                th.save(new_tensor, file_name)
-        
-        nids = pos_g.ndata['id']
-        # model.log_tensor(nids)
-        # diff_tensor(nids, "nids")
-
-        if neg_g.neg_head:
-            neg_head_ids = neg_g.ndata['id'][neg_g.head_nid]
-            # model.log_tensor(neg_head_ids)
-            # diff_tensor(neg_head_ids, "neg_head_ids")
-        else:
-            neg_tail_ids = neg_g.ndata['id'][neg_g.tail_nid]
-            # model.log_tensor(neg_tail_ids)
-            # diff_tensor(neg_tail_ids, "neg_tail_ids")
+        diff_forward(pos_g, neg_g, rank, step)
         continue
         '''
 
