@@ -33,7 +33,7 @@ class Experiment:
     def _BeforeStartAllRun(self, ) -> None:
         raise NotImplementedError
 
-    def _SortRuns(self, runs):
+    def _SortConfigs(self, runs):
         raise NotImplementedError
 
     def _RunHook(self, previous_run, next_run):
@@ -50,15 +50,14 @@ class Experiment:
             raise Exception("invalid log dir")
         os.makedirs(self.log_dir, exist_ok=True)
         self._BeforeStartAllRun()
-        all_configs = self._AllRuns()
-        all_configs = self._SortRuns(all_configs)
-        print("len of all configs = ", len(all_configs))
+        all_runs = self._AllRuns()
+        print("len of all configs = ", len(all_runs))
         previous_run = None
-        for each_i, each_run in enumerate(all_configs):
+        for each_i, each_run in enumerate(all_runs):
             self._RunHook(previous_run, each_run)
             print(datetime.datetime.now(),
-                  f'EXP{self.exp_id}: {each_i} / {len(all_configs)}', flush=True)
-            
+                  f'EXP{self.exp_id}: {each_i} / {len(all_runs)}', flush=True)
+
             ret = os.path.isfile("/dev/shm/fyy_is_using")
             if ret:
                 print("wait fyy finish")
@@ -66,7 +65,7 @@ class Experiment:
                 ret = os.path.isfile("/dev/shm/fyy_is_using")
                 time.sleep(10)
             print("wait fyy finish escape")
-            
+
             each_run.run()
             previous_run = each_run
 
@@ -112,7 +111,7 @@ class CSRun(BaseRun):
 
         subprocess.run(
             f"bash {dir_path}/../third_party/Mayfly-main/script/restartMemc.sh", shell=True, check=True)
-        
+
         global_id = 0
         for ps_id, (each_host, numa_id) in enumerate(self.ps_servers):
             config = ' '.join(
@@ -201,13 +200,10 @@ class CSExperiment(Experiment):
             yield each
 
 
-
-
-
 class LocalOnlyRun(BaseRun):
-    def __init__(self, 
+    def __init__(self,
                  exp_id, run_id, log_dir,
-                 config, 
+                 config,
                  bin_path, pwd_path, execute_host
                  ) -> None:
         super().__init__(exp_id)
@@ -236,13 +232,12 @@ class LocalOnlyRun(BaseRun):
 
         dumped_config['command'] = server_command
         LocalExecute(server_command, self.pwd_path)
-        
+
         with open(f'{self.log_dir}/config', 'w') as f:
             import json
             json.dump(dumped_config, f, indent=2)
 
-  
-            
+
 class LocalOnlyExperiment(Experiment):
     def __init__(self, exp_id, common_config, execute_host) -> None:
         super().__init__(exp_id)
@@ -279,7 +274,8 @@ class LocalOnlyExperiment(Experiment):
         run_id = find_start_run_id()
         print(f"-------start run_id ={run_id} ====================")
         runs = []
-        for each_config in configs:
+        all_configs = self._SortConfigs(configs)
+        for each_config in all_configs:
             # add custom process
             self._PostprocessConfig(each_config, )
 

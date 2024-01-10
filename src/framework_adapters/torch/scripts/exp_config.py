@@ -69,7 +69,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         super().__init__(0, COMMON_CONFIGS,
                          "127.0.0.1")
 
-    def _SortRuns(self, runs):
+    def _SortConfigs(self, runs):
         return list(sorted(runs, key=lambda run: (run.config['num_embs'], run.config['batch_size'])))
 
     def _RunHook(self, previous_run, next_run):
@@ -120,7 +120,7 @@ class GNNRun(LocalOnlyRun):
                 break
 
         print("tail down")
-        Pnuke([self.execute_host], "dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
 
 
 class GNNExperiment(LocalOnlyExperiment):
@@ -154,6 +154,13 @@ COMMON_CLIENT_CONFIGS = {
     "mix_cpu_gpu": ["true"],
 }
 
+['Freebase', 'FB15k', 'FB15k-237', 'wn18',
+    'wn18rr', 'wikikg2', 'biokg', 'wikikg90M']
+
+['TransE', 'TransE_l1', 'TransE_l2', 'TransR',
+ 'RESCAL', 'DistMult', 'ComplEx', 'RotatE',
+ 'SimplE'],
+
 
 class ExpOverallSingle(GNNExperiment):
     def __init__(self, ) -> None:
@@ -183,7 +190,8 @@ class ExpOverallSingle(GNNExperiment):
                 },
                 {
                     "use_my_emb": ["false"],
-                    "cached_emb_type": ['None']
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
                 },
             ],
 
@@ -191,12 +199,13 @@ class ExpOverallSingle(GNNExperiment):
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
 
-            "nr_gpus": [2, 4],
-
+            "nr_gpus": [4],
             "batch_size": [500, 1000, 2000,],
+            "cache_ratio": [0.1],
 
-            # "cache_ratio": [0.1],
-            "cache_ratio": [0.05, 0.1, 0.4],
+            # "nr_gpus": [2, 4],
+            # "batch_size": [500, 1000, 2000,],
+            # "cache_ratio": [0.05, 0.1, 0.4],
 
             "max_step": [500],
             **COMMON_CLIENT_CONFIGS,
@@ -206,10 +215,10 @@ class ExpOverallSingle(GNNExperiment):
         super().__init__(1, COMMON_CONFIGS,
                          "127.0.0.1")
 
-    def _SortRuns(self, runs):
-        for each in runs:
-            print(each.config)
-        return list(sorted(runs, key=lambda run: run.config['dataset']))
+    def _SortConfigs(self, configs):
+        for each in configs:
+            print(each)
+        return list(sorted(configs, key=lambda each: each['dataset']))
 
     def _RunHook(self, previous_run, next_run):
         LocalExecute('rm -rf /tmp/cached_tensor_*', '')
