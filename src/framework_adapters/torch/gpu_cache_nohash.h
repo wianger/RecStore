@@ -19,7 +19,7 @@ class GPUCacheWithNoHash {
       : capacity_(capacity), emb_dim_(emb_dim), start_(start), end_(end) {
     TORCH_CHECK(end - start == capacity);
     if (nullptr == d_cache_db_) {
-      cudaMalloc(&d_cache_db_, capacity * emb_dim * sizeof(float));
+      cudaMalloc((void **)&d_cache_db_, capacity * emb_dim * sizeof(float));
     }
     CUDA_CHECK(cudaGetLastError());
   }

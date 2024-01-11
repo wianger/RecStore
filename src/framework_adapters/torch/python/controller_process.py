@@ -17,7 +17,7 @@ from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIte
 
 import recstore
 from cache_emb_factory import CacheEmbFactory
-from utils import XLOG, Timer, TimeFactory
+from utils import XLOG, Timer
 
 
 os.environ['MASTER_ADDR'] = 'localhost'
@@ -146,18 +146,34 @@ class TestPerfSampler(BasePerfSampler):
 
 
 class PerfSampler(BasePerfSampler):
-    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
+    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode,
+                 distribution,
+                 alpha,
+                 ) -> None:
         super().__init__(rank, L, num_ids_per_step, full_emb_capacity, backmode)
 
+        if distribution == 'uniform':
+            pass
+        elif distribution == 'zipf':
+            self.zipfianTorchFiller = recstore.ZipfianTorchFiller(
+                full_emb_capacity, alpha)
+        self.distribution = distribution
+
     def gen_next_sample(self):
-        entity_id = th.randint(self.full_emb_capacity, size=(
-            self.num_ids_per_step,)).long().cuda()
-        return entity_id
-        if self.rank == 0:
-            input_keys = th.tensor([1, 2,],).long().cuda()
+        if self.distribution == 'uniform':
+            return self.UniformGen()
         else:
-            input_keys = th.tensor([0, 2,],).long().cuda()
-        return input_keys
+            return self.ZipfianGen()
+
+    def UniformGen(self):
+        entity_id = th.randint(self.full_emb_capacity, size=(
+            self.num_ids_per_step,), dtype=th.int64).cuda()
+        return entity_id
+
+    def ZipfianGen(self):
+        entity_id = th.empty((self.num_ids_per_step,), dtype=th.int64)
+        self.zipfianTorchFiller.fillArrayTorch(entity_id)
+        return entity_id.cuda()
 
 
 class GraphCachedSampler:
@@ -266,7 +282,9 @@ class KGCacheControllerWrapperBase:
 
 class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
     def init(self):
-        pass
+        self.rank = dist.get_rank()
+        if self.rank == 0:
+            Timer.StartReportThread()
 
     def StopThreads(self):
         pass
@@ -286,9 +304,12 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.rank = dist.get_rank()
         self.json_config = json.loads(json_str)
 
+        if self.rank == 0:
+            Timer.StartReportThread()
+
         backmode = self.json_config['backwardMode']
         if (backmode == "CppSync"
-            or backmode == "CppAsync"
+                or backmode == "CppAsync"
             ) and self.rank == 0:
             cache_range = CacheEmbFactory.ReturnCachedRange(
                 full_emb_capacity, self.json_config)
@@ -314,7 +335,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     def init(self):
         dist.barrier()
         if (self.json_config['backwardMode'] == "CppSync"
-            or self.json_config['backwardMode'] == "CppAsync"
+                or self.json_config['backwardMode'] == "CppAsync"
             ) and self.rank == 0:
             self.controller.RegTensorsPerProcess()
         self.step = 0
@@ -339,14 +360,14 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.timer_BlockToStepN.start()
         self.step += 1
         if (self.json_config['backwardMode'] == "CppSync"
-            or self.json_config['backwardMode'] == "CppAsync"
+                or self.json_config['backwardMode'] == "CppAsync"
             )  and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
         self.timer_BlockToStepN.stop()
 
-        if self.step % 100 == 0:
-            TimeFactory.Report()
+        # if self.step % 100 == 0:
+        #     TimeFactory.Report()
 
     def AfterBackward(self,):
         self.timer_AfterBackward.start()

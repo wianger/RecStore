@@ -5,6 +5,7 @@ find_package(Python3 COMPONENTS Interpreter Development)
 
 set(recstore_pytorch_srcs
     recstore.cu 
+    recstore.cc
     merge.cu 
     gpu_cache_nohash.cu 
     shm.cc 

@@ -8,7 +8,7 @@ from utils import XLOG
 
 from DistEmb import DistEmbedding
 from PsKvstore import get_kvstore, ShmKVStore
-from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
+from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor, PerfCounter, Timer
 from cache_common import AbsEmb, NVGPUCache
 
 import recstore
@@ -142,14 +142,16 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
 
-        # print("-----------xmh-----------")
-        # print(full_emb.get_shm_tensor().shape)
-        # print(hex(full_emb.get_shm_tensor().data_ptr()))
-        # # print("keys", keys)
-        # assert (keys < full_emb.get_shm_tensor().shape[0]).all()
-        # full_emb.get_shm_tensor().zero_()
-        # print("-----------xmh done-----------")
-        # dist.barrier()
+        # 统计 keys 中有多少在本地缓存中
+        # PERF_STATISTIC = True
+        PERF_STATISTIC = False
+        if PERF_STATISTIC:
+            in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
+                keys, cached_range)
+            in_this_rank_cache_mask = in_each_rank_cache_mask[rank]
+            hit_count = in_this_rank_cache_mask.sum()
+            hit_ratio = hit_count / keys.shape[0]
+            PerfCounter.Record("hit_ratio", hit_ratio)
 
         uva_cache_query_op(ret_value,
                            keys,
@@ -334,6 +336,7 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.iter = 0
         XLOG.debug(f"{rank}: KnownLocalCachedEmbedding init done")
         print(f"{rank}: KnownLocalCachedEmbedding init done", flush=True)
+
 
     def GetCache(self):
         return self.emb_cache

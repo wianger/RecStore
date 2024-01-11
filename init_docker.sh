@@ -20,6 +20,7 @@ source /home/${USER}/.bashrc
 
 # git submodule add https://github.com/google/glog third_party/glog
 sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
+
 cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
 
 

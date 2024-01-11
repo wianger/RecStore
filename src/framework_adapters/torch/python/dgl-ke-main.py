@@ -154,18 +154,20 @@ def prepare_save_path(args):
         os.makedirs(args.save_path)
 
 
+
 def main():
+    # utils.Timer.StartReportThread()
     common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 \
-        --max_step=1000000 --no_save_emb=true --batch_size=1000\
+        --max_step=1000000 --no_save_emb=true --batch_size=5000\
         --neg_sample_size=200 --regularization_coef=1e-07\
         --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
-        --mix_cpu_gpu=ntrue --dataset=FB15k --hidden_dim=400\
+        --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400\
         --cache_ratio=0.1 \
         '
 
     # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding {common_args}'
-    cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --backwardMode=CppSync {common_args}'
-    # cli_args = f'--use_my_emb=false {common_args}'
+    # cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --backwardMode=CppSync {common_args}'
+    cli_args = f'--use_my_emb=false --backwardMode=PySync {common_args}'
 
     # args = ArgParser().parse_args(cli_args.split())
     args = ArgParser().parse_args()
@@ -212,8 +214,12 @@ def main():
     args.batch_size_eval = get_compatible_batch_size(
         args.batch_size_eval, args.neg_sample_size_eval)
     # We should turn on mix CPU-GPU training for multi-GPU training.
+
+    args.mix_cpu_gpu = True
+
+
+
     if len(args.gpu) > 1:
-        args.mix_cpu_gpu = True
         if args.num_proc < len(args.gpu):
             args.num_proc = len(args.gpu)
     # We need to ensure that the number of processes should match the number of GPUs.
@@ -250,7 +256,7 @@ def main():
                                                                     exclude_positive=False,
                                                                     has_edge_importance=False,
                                                                     )
-    test_utils.diff_tensor(renumbering_dict, "renumbering_dict")
+    # test_utils.diff_tensor(renumbering_dict, "renumbering_dict")
 
     CacheShardingPolicy.set_presampling(cache_sizes_all_rank)
     train_data.RenumberingGraph(renumbering_dict)

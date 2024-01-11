@@ -22,6 +22,7 @@ class CacheShardingPolicy:
         rank, world_size = dist.get_rank(), dist.get_world_size()
         cache_capacity = int(whole_capacity * cache_ratio)
         per_shard_cachesize = (cache_capacity + world_size-1) // world_size
+        # per_shard_cachesize = cache_capacity
         cached_range = []
         for i in range(world_size):
             start = i * per_shard_cachesize
@@ -150,7 +151,7 @@ class TorchNativeStdEmb(AbsEmb):
 
 class KGExternelEmbeddingFn(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, keys, embedding_weight, emb_cache, fake_tensor):
+    def forward(ctx, keys, embedding_weight, fake_tensor):
         emb_dim = embedding_weight.shape[1]
         # search keys in shared DRAM table
         value = F.embedding(keys.cpu(
@@ -171,26 +172,26 @@ class KGExternelEmbeddingFn(torch.autograd.Function):
         assert emb_dim == grad_output.shape[1]
 
         # gather keys to rank 0
-        grad = reduce_sparse_kv_tensor(
-            keys, grad_output, embedding_weight.shape, dst_rank=0)
-        if dist.get_rank() == 0:
-            embedding_weight.grad = grad / dist.get_world_size()
-        return None, None, None, torch.randn(1, 1)
+        # grad = reduce_sparse_kv_tensor(
+        #     keys, grad_output, embedding_weight.shape, dst_rank=0)
+        # if dist.get_rank() == 0:
+        #     embedding_weight.grad = grad / dist.get_world_size()
+
+        # embedding_weight.grad = grad_output / dist.get_world_size()
+
+        embedding_weight.index_add_(0, keys.cpu(), -2 * grad_output.cpu())
+        return None, None, torch.randn(1, 1)
 
 
 class KGExternelEmbedding(AbsEmb):
-    def __init__(self, emb, cache_ratio, ) -> None:
+    def __init__(self, emb, ) -> None:
         self.fake_tensor = torch.randn(1, 1, requires_grad=True)
         self.emb = emb
         self.emb_dim = emb.shape[1]
-        self.gpu_cache = NVGPUCache(
-            int(emb.shape[0]*cache_ratio), self.emb_dim)
-
-        raise NotImplementedError("TODO: update cache in backward ")
 
     def forward(self, input_keys):
         embed_value = KGExternelEmbeddingFn.apply(
-            input_keys, self.emb, self.gpu_cache, self.fake_tensor)
+            input_keys, self.emb, self.fake_tensor)
         assert embed_value.requires_grad
         return embed_value
 

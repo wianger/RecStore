@@ -22,61 +22,100 @@ logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d
 XLOG = logging
 
 
-class TimeFactory:
-    all_timers = {}
+# class TimeFactory:
+#     all_timers = {}
 
-    @classmethod
-    def beautifyNs(cls, s):
-        ns = s * 1e9
-        if (int(ns / 1000) == 0):
-            return f'{ns:.3f} ns'
-        ns /= 1000
-        if (int(ns / 1000) == 0):
-            return f'{ns:.3f} us'
-        ns /= 1000
-        if (int(ns / 1000) == 0):
-            return f'{ns:.3f} ms'
-        ns /= 1000
-        return f'{ns:.3f} s'
+#     @classmethod
+#     def beautifyNs(cls, s):
+#         ns = s * 1e9
+#         if (int(ns / 1000) == 0):
+#             return f'{ns:.3f} ns'
+#         ns /= 1000
+#         if (int(ns / 1000) == 0):
+#             return f'{ns:.3f} us'
+#         ns /= 1000
+#         if (int(ns / 1000) == 0):
+#             return f'{ns:.3f} ms'
+#         ns /= 1000
+#         return f'{ns:.3f} s'
 
-    @classmethod
-    def AddToTimer(cls, timer):
-        if timer.name not in cls.all_timers:
-            cls.all_timers[timer.name] = timer
+#     @classmethod
+#     def AddToTimer(cls, timer):
+#         if timer.name not in cls.all_timers:
+#             cls.all_timers[timer.name] = timer
 
-    @classmethod
-    def Report(cls):
-        print_str = f"Timer: Rank{dist.get_rank()}\n"
-        for name, timer in cls.all_timers.items():
-            print_str += f"{name}: {cls.beautifyNs(timer.average_time())}\n"
+#     @classmethod
+#     def AddToPerfCounter(cls, timer):
+#         if timer.name not in cls.all_timers:
+#             cls.all_timers[timer.name] = timer
 
-        XLOG.error(print_str)
+#     @classmethod
+#     def Report(cls):
+#         print_str = f"Timer: Rank{dist.get_rank()}\n"
+#         for name, timer in cls.all_timers.items():
+#             print_str += f"{name}: {cls.beautifyNs(timer.average_time())}\n"
+
+#         XLOG.error(print_str)
+
+
+# class PerfCounter:
+#     @classmethod
+#     def Record(cls, name, value):
+#         cls.all_counters[name] = value
+
+
+# class Timer:
+#     def __init__(self, name):
+#         self.start_time = 0
+#         self.end_time = 0
+#         self.elapsed_time = 0
+#         self.runs = 0
+#         self.total_time = 0
+#         self.name = name
+
+#         TimeFactory.AddToTimer(self)
+
+#     def start(self):
+#         self.start_time = time.time()
+
+#     def stop(self):
+#         self.end_time = time.time()
+#         self.elapsed_time = self.end_time - self.start_time
+#         self.total_time += self.elapsed_time
+#         self.runs += 1
+
+#     def average_time(self):
+#         if self.runs == 0:
+#             return 0
+#         return self.total_time / self.runs
+
+import sys
+sys.path.append("/home/xieminhui/RecStore/build/lib")  # nopep8
+import timer_module
 
 
 class Timer:
+    @classmethod
+    def StartReportThread(cls):
+        timer_module.Reporter.StartReportThread(5000)
+    
     def __init__(self, name):
-        self.start_time = 0
-        self.end_time = 0
-        self.elapsed_time = 0
-        self.runs = 0
-        self.total_time = 0
-        self.name = name
-
-        TimeFactory.AddToTimer(self)
-
+        self._c_timer = timer_module.Timer(name, 1)
+    
     def start(self):
-        self.start_time = time.time()
-
+        self._c_timer.Start()
+    
     def stop(self):
-        self.end_time = time.time()
-        self.elapsed_time = self.end_time - self.start_time
-        self.total_time += self.elapsed_time
-        self.runs += 1
+        self._c_timer.End()
 
-    def average_time(self):
-        if self.runs == 0:
-            return 0
-        return self.total_time / self.runs
+
+class PerfCounter:
+    @classmethod
+    def Record(cls, name, value):
+        timer_module.PerfCounter.Record(name, value)
+
+    
+
 
 
 def XLOG_debug(str):

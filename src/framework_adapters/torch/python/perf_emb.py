@@ -5,6 +5,7 @@ import unittest
 import datetime
 import argparse
 import debugpy
+import json
 import tqdm
 
 import torch
@@ -21,7 +22,7 @@ sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nope
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
-from controller_process import PerfSampler, TestPerfSampler
+from controller_process import KGCacheControllerWrapperDummy, PerfSampler, TestPerfSampler
 from cache_emb_factory import CacheEmbFactory
 from controller_process import KGCacheControllerWrapper
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
@@ -68,7 +69,7 @@ def get_run_config():
         argparser.add_argument('--num_workers', type=int,
                                default=4)
         argparser.add_argument('--num_embs', type=int,
-                               default=10*1e6)
+                               default=int(10*1e6))
         #    default=1*1e6)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
@@ -77,27 +78,31 @@ def get_run_config():
         argparser.add_argument('--with_perf', type=bool,
                                default=False)
         argparser.add_argument('--batch_size', type=int,
-                               default=10000)
+                               default=5000)
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
         argparser.add_argument('--log_interval', type=int,
                                default=100)
         argparser.add_argument('--run_steps', type=int,
                                default=500)
-        argparser.add_argument('--emb_choice', choices=["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding", "NativeEmbedding"],
+        argparser.add_argument('--emb_choice',
+                               choices=CacheEmbFactory.SupportedCacheType(),
                                default="KnownLocalCachedEmbedding"
-                               #    default="KnownShardedCachedEmbedding"
                                )
         argparser.add_argument('--backwardMode', choices=["CppSync",
                                                           "CppAsync",
                                                           "PySync"],
-                               #    default="PySync"
                                default="PySync"
                                )
         argparser.add_argument('--kForwardItersPerStep', type=int,
                                default=1)
         argparser.add_argument('--nr_background_threads', type=int,
                                default=16)
+
+        argparser.add_argument('--distribution', choices=['uniform', 'zipf'],
+                               default='zipf')
+        argparser.add_argument('--zipfian_alpha', default=0.99)
+
         return vars(argparser.parse_args())
 
     run_config = {}
@@ -200,19 +205,26 @@ def routine_local_cache_helper(worker_id, args):
         std_emb.reg_opt(sparse_opt)
         # Generate standard embedding done
 
+    # args['num_gpus'] = args['num_workers']
+    # args['clr'] = dist_opt.lr
+    # json_str = json.dumps(args)
+    # print("json_str:", json_str)
+
     json_str = r'''{{
         "num_gpus": {num_workers},
         "L": {L},
         "kForwardItersPerStep": {kForwardItersPerStep},
         "clr": {lr},
         "backwardMode": "{backwardMode}",
-        "nr_background_threads": {nr_background_threads}
+        "nr_background_threads": {nr_background_threads}, 
+        "cache_ratio": {cache_ratio}
     }}'''.format(num_workers=args['num_workers'],
                  kForwardItersPerStep=args['kForwardItersPerStep'],
                  L=args['L'],
                  lr=LR,
                  backwardMode=args['backwardMode'],
                  nr_background_threads=args['nr_background_threads'],
+                 cache_ratio=args['cache_ratio'],
                  )
 
     # forward
@@ -226,23 +238,32 @@ def routine_local_cache_helper(worker_id, args):
     else:
         for_range = range(args['run_steps'])
 
-    test_perf_sampler = PerfSampler(rank=rank,
+    perf_sampler = PerfSampler(rank=rank,
                                     L=args['L'],
                                     num_ids_per_step=args['batch_size'],
                                     full_emb_capacity=emb.shape[0],
-                                    backmode=args['backwardMode']
+                                    backmode=args['backwardMode'],
+                                    distribution=args['distribution'],
+                                    alpha=args['zipfian_alpha'],
                                     )
 
-    kg_cache_controller = KGCacheControllerWrapper(
-        json_str, emb.shape[0], 
-    )
+    if args["emb_choice"] == "KnownLocalCachedEmbedding":
+        kg_cache_controller = KGCacheControllerWrapper(
+            json_str, emb.shape[0],
+        )
+    else:
+        kg_cache_controller = KGCacheControllerWrapperDummy(
+        )
+
     kg_cache_controller.init()
 
-    test_perf_sampler.Prefill()
+    perf_sampler.Prefill()
 
     timer_Forward = Timer("Forward")
     timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
+    timer_start = Timer(f"E2E-{args['log_interval']}")
+    timer_start.start()
 
     for _ in for_range:
         sparse_opt.zero_grad()
@@ -260,7 +281,7 @@ def routine_local_cache_helper(worker_id, args):
             torch.cuda.cudart().cudaProfilerStop()
             break
 
-        input_keys = next(test_perf_sampler)
+        input_keys = next(perf_sampler)
         XLOG.cdebug(
             f"{rank}:input_keys {input_keys}")
 
@@ -304,6 +325,8 @@ def routine_local_cache_helper(worker_id, args):
                 f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.6f}", flush=True)
             start = time.time()
             start_step = _
+            timer_start.stop()
+            timer_start.start()
 
 
 if __name__ == "__main__":

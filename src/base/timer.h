@@ -343,7 +343,7 @@ class PerfCounter {
                      std::to_string(map[*key]->now())});
     }
     spin_lock.Unlock();
-    DrawTable::DrawTB(ss, {25, 25, 25, 25}, {"Name", "Mean", "P99", "now"},
+    DrawTable::DrawTB(ss, {25, 20, 20, 20}, {"Name", "Mean", "P99", "now"},
                       vec);
     return ss.str();
   }
@@ -411,7 +411,10 @@ class Timer {
     }
   }
 
-  void start() { start_ = std::chrono::steady_clock::now(); }
+  void start() {
+    start_ = std::chrono::steady_clock::now();
+    isEnd_ = false;
+  }
   double nsSinceStart() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(
                std::chrono::steady_clock::now() - start_)

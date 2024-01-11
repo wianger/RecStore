@@ -34,7 +34,7 @@ static constexpr bool kUseBackThread = false;
 void RegisterKGCacheController(torch::Library &m);
 
 class GraphEnv {
- public:
+public:
   static GraphEnv *instance_;
 
   static void Init(const std::string &json_str,
@@ -49,7 +49,7 @@ class GraphEnv {
     return instance_;
   }
 
- private:
+private:
   GraphEnv(const std::string &json_str,
            const std::vector<std::vector<int64_t>> &cached_range,
            int64_t nr_graph_node) {
@@ -66,7 +66,7 @@ class GraphEnv {
     LOG(WARNING) << folly::sformat("KGCacheController, config={}", json_str);
   }
 
- public:
+public:
   void RegTensorsPerProcess() {
     LOG(INFO) << "GraphEnv RegTensorsPerProcess";
     // IPCTensorFactory::ListIPCTensors();
@@ -110,7 +110,7 @@ class GraphEnv {
     }
   }
 
- public:
+public:
   //  config
   int num_gpus_;
   int L_;
@@ -136,7 +136,7 @@ class GraphEnv {
 };
 
 class GradProcessingBase {
- public:
+public:
   GradProcessingBase(const std::string &json_str,
                      const std::vector<std::vector<int64_t>> &cached_range)
       : full_emb_(GraphEnv::GetInstance()->full_emb_),
@@ -168,9 +168,9 @@ class GradProcessingBase {
     isInitialized_ = true;
   }
 
-  static std::vector<torch::Tensor> split_keys_to_shards(
-      const torch::Tensor keys,
-      std::vector<std::vector<int64_t>> cached_range) {
+  static std::vector<torch::Tensor>
+  split_keys_to_shards(const torch::Tensor keys,
+                       std::vector<std::vector<int64_t>> cached_range) {
     std::vector<torch::Tensor> in_each_rank_cache_mask;
     int num_gpus = cached_range.size();
     for (int shard_no = 0; shard_no < num_gpus; shard_no++) {
@@ -235,6 +235,7 @@ class GradProcessingBase {
                            &shuffled_keys_in_each_rank_cache,
                        const std::vector<std::vector<torch::Tensor>>
                            &shuffled_grads_in_each_rank_cache) {
+// #pragma omp parallel for num_threads(num_gpus_)
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
         // update per rank cache
@@ -251,7 +252,7 @@ class GradProcessingBase {
     }
   }
 
- protected:
+protected:
   // config
   int num_gpus_;
   int L_;
@@ -277,7 +278,7 @@ class GradProcessingBase {
 };
 
 class GradSyncProcessing : public GradProcessingBase {
- public:
+public:
   GradSyncProcessing(const std::string &json_str,
                      const std::vector<std::vector<int64_t>> &cached_range)
       : GradProcessingBase(json_str, cached_range) {}
@@ -318,8 +319,11 @@ class GradSyncProcessing : public GradProcessingBase {
 
   void ProcessBackwardSync(const std::vector<torch::Tensor> &input_keys,
                            const std::vector<torch::Tensor> &input_grads) {
+    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
     auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
         ShuffleKeysAndGrads(input_keys, input_grads);
+    timer_ShuffleKeysAndGrads.end();
+
     SGDGradUpdate(shuffled_keys_in_each_rank_cache,
                   shuffled_grads_in_each_rank_cache, input_keys, input_grads);
   }
@@ -332,8 +336,10 @@ class GradSyncProcessing : public GradProcessingBase {
                          &shuffled_grads_in_each_rank_cache,
                      const std::vector<torch::Tensor> &input_keys,
                      const std::vector<torch::Tensor> &input_grads) {
+    xmh::Timer timer_SyncUpdateCache("ProcessBack:UpdateCache");
     SyncUpdateCache(shuffled_keys_in_each_rank_cache,
                     shuffled_grads_in_each_rank_cache);
+    timer_SyncUpdateCache.end();
 #if 0
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
@@ -354,18 +360,20 @@ class GradSyncProcessing : public GradProcessingBase {
     }
 #endif
 
+    xmh::Timer timer_UpdateFull("ProcessBack:UpdateFull");
     // update full emb
     for (int rank = 0; rank < num_gpus_; rank++) {
       full_emb_.index_add_(0, input_keys[rank].cpu(),
                            (-clr_) * input_grads[rank].cpu());
     }
+    timer_UpdateFull.end();
   }
 };
 
 class AsyncGradElement {
   static constexpr int kInf = std::numeric_limits<int>::max();
 
- public:
+public:
   AsyncGradElement(int64_t id) : id_(id) { RecaculatePriority(); }
 
   void MarkReadInStepN(int stepN) {
@@ -454,7 +462,7 @@ class AsyncGradElement {
 
   void Unlock() { return lock_.Unlock(); }
 
- private:
+private:
   int64_t id_;
   std::vector<int> read_step_;
   std::vector<int> write_step_;
@@ -462,7 +470,7 @@ class AsyncGradElement {
   int64_t priority_;
   mutable base::SpinLock lock_;
 
- public:
+public:
   const int magic_ = 0xdeadbeef;
 };
 
@@ -476,12 +484,11 @@ class GradAsyncProcessing : public GradProcessingBase {
   typedef std::pair<int64_t, torch::Tensor> GradWorkTask;
   static constexpr int kInf = std::numeric_limits<int>::max();
 
- public:
+public:
   GradAsyncProcessing(const std::string &json_str,
                       const std::vector<std::vector<int64_t>> &cached_range)
       : GradProcessingBase(json_str, cached_range),
-        kEmbNumber_(full_emb_.size(0)),
-        kGradDim_(full_emb_.size(1)),
+        kEmbNumber_(full_emb_.size(0)), kGradDim_(full_emb_.size(1)),
         pq_(kEmbNumber_) {
     auto json_config = json::parse(json_str);
     nr_background_threads_ = json_config.at("nr_background_threads");
@@ -593,7 +600,8 @@ class GradAsyncProcessing : public GradProcessingBase {
             "Detect new sample comes, old_end{}, new_end{}", old_end, new_end);
 
         // add [circle_buffer_old_end, new_end)
-        if (new_end < old_end) new_end += L_;
+        if (new_end < old_end)
+          new_end += L_;
         for (int i = old_end; i < new_end; ++i) {
           int pointer = (i % L_);
           int step = step_tensor_per_rank_[rank][pointer].item<int64_t>();
@@ -618,7 +626,8 @@ class GradAsyncProcessing : public GradProcessingBase {
       auto *p = pq_.top();
 
       // re-read
-      if (!p) continue;
+      if (!p)
+        continue;
       CHECK_EQ(p->magic_, 0xdeadbeef);
       int64_t id = p->GetID();
 
@@ -662,7 +671,8 @@ class GradAsyncProcessing : public GradProcessingBase {
       std::pair<int64_t, torch::Tensor> p;
       while (!queue->read(p)) {
         // spin until we get a value
-        if (grad_thread_stop_flag_.load()) return;
+        if (grad_thread_stop_flag_.load())
+          return;
         continue;
       }
       int64_t id = p.first;
@@ -764,7 +774,7 @@ class GradAsyncProcessing : public GradProcessingBase {
     //   LOG(ERROR) << pq_.ToString();
   }
 
- private:
+private:
   int nr_background_threads_;
   std::vector<AsyncGradElement *> dict_;
 
@@ -791,11 +801,11 @@ class GradAsyncProcessing : public GradProcessingBase {
 class KGCacheController : public torch::CustomClassHolder {
   static KGCacheController *instance_;
 
- public:
-  static c10::intrusive_ptr<KGCacheController> Init(
-      const std::string &json_str,
-      const std::vector<std::vector<int64_t>> &cached_range,
-      const int64_t nr_graph_nodes) {
+public:
+  static c10::intrusive_ptr<KGCacheController>
+  Init(const std::string &json_str,
+       const std::vector<std::vector<int64_t>> &cached_range,
+       const int64_t nr_graph_nodes) {
     GraphEnv::Init(json_str, cached_range, nr_graph_nodes);
     return c10::make_intrusive<KGCacheController>(json_str, cached_range);
   }
@@ -836,15 +846,19 @@ class KGCacheController : public torch::CustomClassHolder {
     LOG(INFO) << "Construct KGCacheController done";
   }
 
- public:
+public:
   void RegTensorsPerProcess() { grad_processing_->RegTensorsPerProcess(); }
 
   void ProcessOneStep(int64_t step_no) {
+    xmh::Timer timer_processonestep("ProcessOneStep");
     grad_processing_->ProcessOneStep(step_no);
+    timer_processonestep.end();
   }
 
   void BlockToStepN(int64_t step_no) {
+    xmh::Timer timer_blocktostepn("BlockToStepN");
     grad_processing_->BlockToStepN(step_no);
+    timer_blocktostepn.end();
   }
 
   void StopThreads() { grad_processing_->StopThreads(); }
@@ -853,7 +867,7 @@ class KGCacheController : public torch::CustomClassHolder {
     // ((GradAsyncProcessing *)grad_processing_)->PrintPq();
   }
 
- private:
+private:
   GradProcessingBase *grad_processing_;
   // config
   int num_gpus_;
@@ -862,4 +876,4 @@ class KGCacheController : public torch::CustomClassHolder {
   int kForwardItersPerStep_;
   float clr_;
 };
-}  // namespace recstore
+} // namespace recstore

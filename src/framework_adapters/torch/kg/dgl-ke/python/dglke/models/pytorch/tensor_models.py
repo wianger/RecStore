@@ -300,6 +300,8 @@ class ExternalEmbedding:
                 cpu_emb = self.global_emb.emb[cpu_idx]
                 self.emb[cpu_idx] = cpu_emb.cuda(gpu_id)
         s = self.emb[idx]
+
+        # print("len = ", idx.shape[0])
         if gpu_id >= 0:
             s = s.cuda(gpu_id)
         # During the training, we need to trace the computation.

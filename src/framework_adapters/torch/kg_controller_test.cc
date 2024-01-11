@@ -2,10 +2,12 @@
 
 using namespace recstore;
 
+DEFINE_string(backMode, "CppSync", "CppSync or CppAsync");
+
 namespace recstore {
 
 class CircleBuffer {
- private:
+private:
   int L_;
   int start_ = 0;
   int end_ = 0;
@@ -18,7 +20,7 @@ class CircleBuffer {
 
   std::string backmode_;
 
- public:
+public:
   CircleBuffer(int L, int rank, std::string backmode)
       : L_(L), rank_(rank), backmode_(backmode) {
     for (int i = 0; i < L_; i++) {
@@ -65,7 +67,8 @@ class CircleBuffer {
       }
     }
 
-    if (end_ == start_) start_ = (start_ + 1) % L_;
+    if (end_ == start_)
+      start_ = (start_ + 1) % L_;
 
     // if (step == 10) std::this_thread::sleep_for(std::chrono::seconds(100));
   }
@@ -81,16 +84,12 @@ class CircleBuffer {
 };
 
 class BasePerfSampler {
- public:
+public:
   BasePerfSampler(int rank, int L, int num_ids_per_step,
                   int64_t full_emb_capacity, std::string backmode)
-      : rank_(rank),
-        L_(L),
-        ids_circle_buffer_(L, rank, backmode),
-        sampler_iter_num_(0),
-        num_ids_per_step_(num_ids_per_step),
-        full_emb_capacity_(full_emb_capacity),
-        backmode_(backmode) {}
+      : rank_(rank), L_(L), ids_circle_buffer_(L, rank, backmode),
+        sampler_iter_num_(0), num_ids_per_step_(num_ids_per_step),
+        full_emb_capacity_(full_emb_capacity), backmode_(backmode) {}
 
   void Prefill() {
     for (int i = 0; i < L_; ++i) {
@@ -110,7 +109,7 @@ class BasePerfSampler {
     return ret->GetSlicedTensor();
   }
 
- protected:
+protected:
   virtual torch::Tensor gen_next_sample() = 0;
 
   int rank_;
@@ -123,20 +122,29 @@ class BasePerfSampler {
 };
 
 class TestPerfSampler : public BasePerfSampler {
- public:
+public:
   TestPerfSampler(int rank, int L, int num_ids_per_step, int full_emb_capacity,
                   std::string backmode)
       : BasePerfSampler(rank, L, num_ids_per_step, full_emb_capacity,
                         backmode) {}
 
- protected:
+protected:
   torch::Tensor gen_next_sample() override {
+    // return torch::randint(0, full_emb_capacity_, {num_ids_per_step_}).cuda();
+    return UniformRandom();
+  }
+
+  torch::Tensor UniformRandom() {
+    return torch::randint(0, full_emb_capacity_, {num_ids_per_step_}).cuda();
+  }
+
+  torch::Tensor ZipfianRandom() {
     return torch::randint(0, full_emb_capacity_, {num_ids_per_step_}).cuda();
   }
 };
 
 class VirtualEnvironment {
- private:
+private:
   int num_gpus_;
   int emb_dim_;
   int64_t cached_capacity_;
@@ -159,7 +167,7 @@ class VirtualEnvironment {
 
   base::Barrier *barrier_;
 
- public:
+public:
   VirtualEnvironment(const std::string &json_str, int cached_capcacity) {
     auto json_config = json::parse(json_str);
     num_gpus_ = json_config.at("num_gpus");
@@ -221,7 +229,7 @@ class VirtualEnvironment {
     }
   }
 
- private:
+private:
   void RunThread(int rank) {
     KGCacheController *controller = KGCacheController::GetInstance();
     cudaSetDevice(rank);
@@ -246,36 +254,43 @@ class VirtualEnvironment {
       // 4. Update
 
       barrier_->Wait();
+
       if (rank == 0) {
         LOG(INFO) << "rank 0 ProcessOneStep";
         controller->ProcessOneStep(step_no);
       }
       barrier_->Wait();
+
       step_no++;
-      if (rank == 0) controller->BlockToStepN(step_no);
+      if (rank == 0)
+        controller->BlockToStepN(step_no);
       barrier_->Wait();
 
       // if (rank == 0 && step_no == 100) ProfilerStop();
-      if (step_no == 50) break;
+      if (step_no == 50)
+        break;
     }
   }
 };
 
-}  // namespace recstore
+} // namespace recstore
 
 int main(int argc, char **argv) {
   folly::init(&argc, &argv);
-  std::string json_str = R"({
+  std::string json_str = R"({{
             "num_gpus": 4,
             "L": 10,
             "kForwardItersPerStep": 1,
             "clr": 2,
-            "backwardMode": "CppAsync",
+            "backwardMode": "{}",
             "nr_background_threads": 32,
-            "full_emb_capacity": 20000,
-            "emb_dim" : 3,
-            "num_ids_per_step": 1024
-        })";
+            "full_emb_capacity": 10000000,
+            "emb_dim" : 32,
+            "num_ids_per_step": 5000
+        }})";
+
+  json_str = folly::sformat(json_str, FLAGS_backMode);
+  LOG(INFO) << json_str;
 
   auto json_config = json::parse(json_str);
   int64_t full_emb_capacity = json_config.at("full_emb_capacity");

@@ -1,4 +1,4 @@
-from cache_common import AbsEmb, ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy,TorchNativeStdEmbDDP
+from cache_common import AbsEmb, KGExternelEmbedding, ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import LocalCachedEmbedding, KnownLocalCachedEmbedding
 from utils import print_rank0
@@ -10,6 +10,13 @@ class CacheEmbFactory:
         cached_range = CacheShardingPolicy.generate_cached_range(
             full_emb_capacity, json_config['cache_ratio'])
         return cached_range
+
+    @staticmethod
+    def SupportedCacheType():
+        return ["KnownShardedCachedEmbedding", 
+                "KnownLocalCachedEmbedding", 
+                "NativeEmbedding",
+                "KGExternelEmbedding"]
 
     @staticmethod
     def New(cache_type, emb, args) -> AbsEmb:
@@ -35,9 +42,11 @@ class CacheEmbFactory:
                                                 backward_mode=args['backwardMode'],
                                                 )
         elif cache_type == "NativeEmbedding":
-            abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
             # abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
-            # abs_emb = TorchNativeStdEmb(emb.weight, device='cpu')
+            abs_emb = TorchNativeStdEmb(emb.weight, device='cpu')
+
+        elif cache_type == "KGExternelEmbedding":
+            abs_emb = KGExternelEmbedding(emb.weight)
         else:
             assert False
         return abs_emb

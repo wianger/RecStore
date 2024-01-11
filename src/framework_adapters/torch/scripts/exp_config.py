@@ -50,29 +50,53 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "PerfEmbRun"
         COMMON_CONFIGS = {
-            "num_workers": [1, 2, 4, 6, 8] if GetHostName() != "node182" else [0, 1, 2],
-            "num_embs": [int(100*1e6), int(10*1e6)],
-            # "num_embs": [int(10*1e6)],
-            "batch_size": [512, 1024, 2048, 4096,],
-            "run_steps": [500],
+            # "num_workers": [1, 2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
+            # "num_embs": [int(100*1e6), int(10*1e6)],
+            # "batch_size": [512, 1024, 2048, 4096,],
+            # "run_steps": [500],
+            # "log_interval": [100],
+
+            "num_workers": [4],
+            "batch_size": [2048,],
+            "num_embs": [int(100*1e6),],
+            "run_steps": [300],
             "log_interval": [100],
 
-            # "num_workers": [4],
-            # "num_embs": [int(1*1e6)],
-            # "run_steps": [100],
-            # "log_interval": [10],
+            'binding2': [
+                {
+                    "distribution": ['uniform'],
+                },
+                {
+                    "distribution": ['zipf'],
+                    "zipf_alpha": [0.9, 0.99],
+                },
+            ],
 
-            "emb_choice": ["TorchNativeStdEmb", "KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"],
+            "binding": [
+                {
+                    "emb_choice": ["NativeEmbedding", "KGExternelEmbedding"]
+                },
+                {
+
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        "PySync",
+                        "CppSync",
+                        #  "CppAsync",
+                    ],
+                },
+            ],
         }
 
         self.name = NAME
         super().__init__(0, COMMON_CONFIGS,
                          "127.0.0.1")
 
-    def _SortConfigs(self, runs):
-        return list(sorted(runs, key=lambda run: (run.config['num_embs'], run.config['batch_size'])))
+    def _SortConfigs(self, configs):
+        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
 
     def _RunHook(self, previous_run, next_run):
+        LocalNuke("perf_emb.py")
         return
 
     def _PostprocessConfig(self, each_config, ):
@@ -87,7 +111,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
-        Pnuke(ALL_SERVERS_INCLUDING_NOT_USED, "perf_emb.py")
+        LocalNuke("perf_emb.py")
 
 
 ###########################
@@ -144,7 +168,6 @@ class GNNExperiment(LocalOnlyExperiment):
 
 COMMON_CLIENT_CONFIGS = {
     "no_save_emb": ['true'],
-    "log_interval": [1000],
     "neg_sample_size": [200],
     "regularization_coef": [1e-07],
     "gamma": [16.0],
@@ -168,14 +191,14 @@ class ExpOverallSingle(GNNExperiment):
         COMMON_CONFIGS = {
             "model_name": ["TransE_l1"],
             "binding": [
-                # {
-                #     "dataset": ["FB15k",],
-                #     "hidden_dim": [400],
-                # },
                 {
-                    "dataset": ["Freebase"],
-                    "hidden_dim": [100],
-                }
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [100],
+                # }
             ],
             "binding2": [
                 {
@@ -200,7 +223,7 @@ class ExpOverallSingle(GNNExperiment):
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
 
             "nr_gpus": [4],
-            "batch_size": [500, 1000, 2000,],
+            "batch_size": [600, 1000, 2000, 4000, 8000],
             "cache_ratio": [0.1],
 
             # "nr_gpus": [2, 4],
@@ -208,6 +231,7 @@ class ExpOverallSingle(GNNExperiment):
             # "cache_ratio": [0.05, 0.1, 0.4],
 
             "max_step": [500],
+            "log_interval": [200],
             **COMMON_CLIENT_CONFIGS,
         }
 

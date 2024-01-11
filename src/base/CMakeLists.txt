@@ -11,3 +11,9 @@ target_link_libraries(base PUBLIC protobuf::libprotobuf protobuf::libprotobuf-li
 
 add_executable(pq_test test_pq.cc)
 target_link_libraries(pq_test PUBLIC base)
+
+
+
+find_package(pybind11 REQUIRED)
+pybind11_add_module(timer_module MODULE pybind_timer.cc)
+target_link_libraries(timer_module PRIVATE base)

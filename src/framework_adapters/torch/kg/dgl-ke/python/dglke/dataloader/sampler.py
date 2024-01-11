@@ -18,6 +18,7 @@
 #
 
 from collections import Counter
+import logging
 import math
 import numpy as np
 import scipy as sp
@@ -31,9 +32,9 @@ import torch as th
 from dgl.base import NID, EID
 
 
-
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+import recstore
 from python.test_utils import diff_objs, diff_presampling
 
 
@@ -450,12 +451,14 @@ class TrainDataset(object):
                     exclude_positive=False,
                     has_edge_importance=False
                     ):
+        logging.warn("Start PreSampling")
         dgl.random.xmh_seed(0)
 
         cache_sizes_all_rank = []
         keys_ordered_all_rank = []
         n_entities = self.g.number_of_nodes()
         cache_size_per_rank = int(cached_ratio * n_entities // self.nr_world)
+        # cache_size_per_rank = int(cached_ratio * n_entities)
 
         # PreSampling
         for rank in range(self.nr_world):
@@ -469,7 +472,8 @@ class TrainDataset(object):
             ids_counter_per_rank = TensorCounter()
 
             step = 0
-            while True:
+            # while True:
+            while step <= 1000:
                 try:
                     pos_g, neg_g = next(sampler)
                     step += 1
@@ -490,7 +494,7 @@ class TrainDataset(object):
             temp = ids_counter_per_rank.most_common(
                 3 * cache_size_per_rank)
 
-            diff_objs(ids_counter_per_rank, f"ids_counter_per_rank{rank}")
+            # diff_objs(ids_counter_per_rank, f"ids_counter_per_rank{rank}")
             two_times_popular_keys = [each[0] for each in temp]
             keys_ordered_all_rank.append(two_times_popular_keys)
 
@@ -507,7 +511,7 @@ class TrainDataset(object):
             ids_counter_per_rank = keys_ordered_all_rank[rank]
             ids_counter_other_rank = [all_rank_keys_sets[i]
                                       for i in range(self.nr_world) if i != rank]
-            cached_keys = th.zeros((cache_size_per_rank,), dtype=th.int32)
+            cached_keys = th.zeros((cache_size_per_rank,), dtype=th.int64)
             j = 0
             for each_key in ids_counter_per_rank:
                 if in_any_set(each_key, ids_counter_other_rank):
@@ -524,22 +528,31 @@ class TrainDataset(object):
 
         # a map, <original ID> -> <new ID>
         # with hottest IDs first, then the rest IDs
-        renumbering_dict = th.full((n_entities,), -1, dtype=int)
 
-        start_id = 0
-        for rank in range(self.nr_world):
-            for each in all_rank_hotsets[rank]:
-                assert -1 == renumbering_dict[each]
-                renumbering_dict[each] = start_id
-                start_id += 1
+        logging.warn("Before construct renumbering_dict")
+        renumbering_dict = th.full((n_entities,), -1, dtype=th.int64)
 
-        for id in range(n_entities):
-            if -1 == renumbering_dict[id]:
-                renumbering_dict[id] = start_id
-                start_id += 1
+        # start_id = 0
+        # for rank in range(self.nr_world):
+        #     for each in all_rank_hotsets[rank]:
+        #         assert -1 == renumbering_dict[each]
+        #         renumbering_dict[each] = start_id
+        #         start_id += 1
 
-        assert start_id == n_entities
+        # for id in range(n_entities):
+        #     if -1 == renumbering_dict[id]:
+        #         renumbering_dict[id] = start_id
+        #         start_id += 1
+        # logging.warn("Construct renumbering_dict done")
+        # assert start_id == n_entities
 
+        recstore.construct_renumbering_dict_op(
+            renumbering_dict,
+            self.nr_world,
+            all_rank_hotsets,
+        )
+
+        logging.warn("PreSampling done")
         return renumbering_dict, cache_sizes_all_rank
 
     def RenumberingGraph(self, renumbering_dict):

@@ -12,12 +12,12 @@ load_recstore_library()
 
 merge_op = torch.ops.librecstore_pytorch.merge_op
 uva_cache_query_op = torch.ops.librecstore_pytorch.uva_cache_query_op
-init_folly = torch.ops.librecstore_pytorch.init_folly 
-
+init_folly = torch.ops.librecstore_pytorch.init_folly
+construct_renumbering_dict_op = torch.ops.librecstore_pytorch.construct_renumbering_dict_op
 
 GpuCache = torch.classes.librecstore_pytorch.GpuCache
 IPCTensorFactory = torch.classes.librecstore_pytorch.IPCTensorFactory
 KGCacheController = torch.classes.librecstore_pytorch.KGCacheController
+ZipfianTorchFiller = torch.classes.librecstore_pytorch.ZipfianTorchFiller
 
 Mfence = torch.classes.librecstore_pytorch.Mfence
-

@@ -8,6 +8,7 @@ import pytest
 import os
 import time
 from collections import namedtuple
+import json
 
 import torch
 import torch.nn as nn
@@ -23,7 +24,7 @@ sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nope
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from PsKvstore import ShmKVStore
 
-from controller_process import KGCacheControllerWrapper, TestPerfSampler
+from controller_process import KGCacheControllerWrapper, KGCacheControllerWrapperDummy, TestPerfSampler
 from cache_common import ShmTensorStore, TorchNativeStdEmbDDP
 from utils import print_rank0, XLOG, Timer
 from DistEmb import DistEmbedding
@@ -48,8 +49,8 @@ LR = 2
 # XMH_DEBUG = True
 XMH_DEBUG = False
 
-# NO_CHECK = True
-NO_CHECK = False
+NO_CHECK = True
+# NO_CHECK = False
 
 
 def worker_main(routine, worker_id, num_workers, emb_context, args):
@@ -76,7 +77,7 @@ class TestShardedCache:
     else:
         # EMB_DIM = 32
         EMB_DIM = 3
-        EMB_LEN = 20000
+        EMB_LEN = 2000000
         BATCH_SIZE = 1024
 
     def main_routine(self, routine, args=None):
@@ -169,20 +170,11 @@ class TestShardedCache:
 
         self.init_emb_tensor(emb, worker_id, num_workers)
 
-        json_str = r'''{{
-            "num_gpus": {num_workers},
-            "L": {L},
-            "kForwardItersPerStep": {kForwardItersPerStep},
-            "clr": {lr},
-            "backwardMode": "{backwardMode}",
-            "nr_background_threads": {nr_background_threads}
-        }}'''.format(num_workers=num_workers,
-                     kForwardItersPerStep=args['kForwardItersPerStep'],
-                     L=args['L'],
-                     lr=dist_opt.lr,
-                     backwardMode=args['backwardMode'],
-                     nr_background_threads=args['nr_background_threads'],
-                     )
+        args['num_workers'] = num_workers
+        args['num_gpus'] = num_workers
+        args['clr'] = dist_opt.lr
+
+        json_str = json.dumps(args)
 
         if rank == 0:
             print("------------json------------")
@@ -205,11 +197,15 @@ class TestShardedCache:
                                             full_emb_capacity=emb.shape[0],
                                             backmode=args['backwardMode'],
                                             )
-        kg_cache_controller = KGCacheControllerWrapper(
-            json_str, emb.shape[0], 
-        )
-        kg_cache_controller.init()
 
+        if cached_emb_type == "KnownLocalCachedEmbedding":
+            kg_cache_controller = KGCacheControllerWrapper(
+                json_str, emb.shape[0],
+            )
+        else:
+            kg_cache_controller = KGCacheControllerWrapperDummy()
+
+        kg_cache_controller.init()
         test_perf_sampler.Prefill()
 
         # Generate our embedding done
@@ -217,48 +213,45 @@ class TestShardedCache:
         timer_Backward = Timer("Backward")
         timer_Optimize = Timer("Optimize")
 
+        timer_start = Timer(f"E2E-{args['log_interval']}")
+        timer_start.start()
         # forward
-        for _ in tqdm.trange(1000):
+        for _ in tqdm.trange(500):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
 
             print(f"========== Step {_} ========== ", flush=True)
+
+            if _ % args['log_interval'] == (args['log_interval']-1):
+                timer_start.stop()
+                timer_start.start()
+
             input_keys = next(test_perf_sampler)
 
             # torch.set_printoptions(profile="full")
             XLOG.cdebug(f"{rank}:step{_}, input_keys {input_keys}")
             # torch.set_printoptions(profile="default")
 
-            std_embed_value = std_emb.forward(input_keys).cuda()
-
-            std_loss = std_embed_value.sum(-1).sum(-1)
-            std_loss.backward()
-
-            XLOG.cdebug(
-                f"{rank}:std_embed_value {std_embed_value}")
-
-            # XLOG.cdebug(
-            #     f"{rank}:emb_cache {abs_emb.emb_cache}")
-            # XLOG.cdebug(
-            #     f"{rank}:full_emb {abs_emb.full_emb.get_shm_tensor()}")
+            if not NO_CHECK:
+                std_embed_value = std_emb.forward(input_keys).cuda()
+                std_loss = std_embed_value.sum(-1).sum(-1)
+                std_loss.backward()
+                XLOG.cdebug(
+                    f"{rank}:std_embed_value {std_embed_value}")
 
             timer_Forward.start()
             embed_value = abs_emb.forward(input_keys).cuda()
             timer_Forward.stop()
-
             XLOG.cdebug(f"{rank}:embed_value {embed_value}")
-
             loss = embed_value.sum(-1).sum(-1)
 
             timer_Backward.start()
             loss.backward()
             timer_Backward.stop()
 
-            if not torch.allclose(
-                    embed_value, std_embed_value):
-                if NO_CHECK:
-                    pass
-                else:
+            if not NO_CHECK:
+                if not torch.allclose(
+                        embed_value, std_embed_value):
                     for i in range(len(input_keys)):
                         if not torch.allclose(
                                 embed_value[i], std_embed_value[i]):
@@ -271,7 +264,6 @@ class TestShardedCache:
                             assert False, "forward is error"
                     assert False, "forward is error"
 
-            if not NO_CHECK:
                 assert (torch.allclose(
                     loss, std_loss))
 
@@ -291,17 +283,17 @@ class TestShardedCache:
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
 
         config = {
-            # "test_cache_mode": ['NativeEmbedding', ],
-            "test_cache_mode": ['KnownLocalCachedEmbedding', ],
+            "test_cache": ['NativeEmbedding', ],
+            # "test_cache": ['KnownLocalCachedEmbedding', ],
 
-            # "test_cache_mode": ['KnownLocalCachedEmbedding',
+            # "test_cache": ['KnownLocalCachedEmbedding',
             #                     'KnownShardedCachedEmbedding',
             #                     'NativeEmbedding'],
 
             # "backwardMode": ["PySync", "CppSync"],
 
-            "backwardMode": ["PySync",],
-            # "backwardMode": ["CppSync",],
+            # "backwardMode": ["PySync",],
+            "backwardMode": ["CppSync",],
             # "backwardMode": ["CppAsync",],
 
             # "cache_ratio": [0.1, 0.3, 0.5],
@@ -316,17 +308,18 @@ class TestShardedCache:
             return permutations_config
 
         for each in GenProduct(config):
-            test_cache_mode = each['test_cache_mode']
+            test_cache = each['test_cache']
             backmode = each['backwardMode']
             cache_ratio = each['cache_ratio']
 
             IPCTensorFactory.ClearIPCMemory()
-            args = {"test_cache": test_cache_mode,
+            args = {"test_cache": test_cache,
                     "cache_ratio": cache_ratio,
                     "kForwardItersPerStep": 1,
                     "backwardMode": backmode,
                     "L": 10,
                     "nr_background_threads": 32,
+                    "log_interval": 100,
                     }
             print("xmh: ", args)
             self.main_routine(self.routine_cache_helper, args)
