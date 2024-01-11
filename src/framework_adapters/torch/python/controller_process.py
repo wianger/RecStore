@@ -278,6 +278,9 @@ class KGCacheControllerWrapperBase:
 
     def AfterBackward(self,):
         raise NotImplementedError
+    
+    def _RegisterFolly(self):
+        recstore.init_folly()
 
 
 class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
@@ -285,6 +288,8 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
         self.rank = dist.get_rank()
         if self.rank == 0:
             Timer.StartReportThread()
+
+        super()._RegisterFolly()
 
     def StopThreads(self):
         pass
@@ -294,6 +299,7 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
 
     def AfterBackward(self,):
         dist.barrier()
+
 
 
 class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
@@ -322,15 +328,13 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.timer_AfterBackward = Timer("AfterBackward")
 
         self.__init_rpc()
-        self.__RegisterFolly()
+        super()._RegisterFolly()
 
     def __init_rpc(self):
         rpc.init_rpc(name=f"worker{self.rank}",
                      rank=self.rank, world_size=dist.get_world_size())
         dist.barrier()
 
-    def __RegisterFolly(self):
-        recstore.init_folly()
 
     def init(self):
         dist.barrier()

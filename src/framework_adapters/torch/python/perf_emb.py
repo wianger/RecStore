@@ -246,6 +246,7 @@ def routine_local_cache_helper(worker_id, args):
                                     distribution=args['distribution'],
                                     alpha=args['zipfian_alpha'],
                                     )
+    print("Construct PerfSampler done", flush=True)
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
         kg_cache_controller = KGCacheControllerWrapper(
@@ -254,6 +255,9 @@ def routine_local_cache_helper(worker_id, args):
     else:
         kg_cache_controller = KGCacheControllerWrapperDummy(
         )
+    
+    print("Construct KGCacheControllerWrapper done", flush=True)
+
 
     kg_cache_controller.init()
 
@@ -264,6 +268,8 @@ def routine_local_cache_helper(worker_id, args):
     timer_Optimize = Timer("Optimize")
     timer_start = Timer(f"E2E-{args['log_interval']}")
     timer_start.start()
+
+    print("Before Training", flush=True)
 
     for _ in for_range:
         sparse_opt.zero_grad()

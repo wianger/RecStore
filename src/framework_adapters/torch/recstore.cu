@@ -4,8 +4,6 @@
 #include <torch/torch.h>
 
 #include "IPCTensor.h"
-#include "base/timer.h"
-#include "storage/gpu_cache/nv_gpu_cache.hpp"
 
 namespace recstore {
 void RegisterKGCacheController(torch::Library &m);

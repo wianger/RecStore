@@ -15,6 +15,7 @@
 #include "base/lock.h"
 #include "base/log.h"
 #include "base/math.h"
+#include "base/pprint.h"
 #include "base/sleep.h"
 
 namespace recstore {
@@ -175,7 +176,7 @@ class IPCTensorMemoryHandle {
 
 class IPCMemory {
   static constexpr int kMaxRegTensorNum = 200;
-  static constexpr int64_t kShmSize = 4 * (1024 * 1024 * 1024LL);
+  static constexpr int64_t kShmSize = 30 * (1024 * 1024 * 1024LL);
 
   struct IPCShmRegion {
     IPCShmRegion() {}
@@ -212,7 +213,7 @@ class IPCMemory {
         IPCTensorType::kCPUIPCTensor, shape, dtype);
 
     // round up to 4KB
-    obj_size_in_shm = MathUtil::round_up_to(obj_size_in_shm, 4096);
+    obj_size_in_shm = MathUtil::round_up_to_int64(obj_size_in_shm, 4096);
     // FAA the atomic variable in the header
 
     // critical section start
@@ -220,8 +221,9 @@ class IPCMemory {
     base::LockGuard<base::SpinLock> lock_guard(header_->lock_);
 
     int64_t offset = header_->accumulated_offset_.fetch_add(obj_size_in_shm);
-    assert(offset + obj_size_in_shm < kShmSize);
-    CHECK_LT(offset + obj_size_in_shm, kShmSize);
+
+    CHECK_GE(offset, 0);
+    CHECK_LT(offset + obj_size_in_shm, kShmSize) << "increase kShmSize";
     auto *p = new ((char *)header_ + offset)
         IPCTensorMemoryHandle(name, shape, dtype);
     SetMallocedOffset(offset);
@@ -243,16 +245,20 @@ class IPCMemory {
     cudaMalloc(&d_ptr, size);
     cudaIpcMemHandle_t memHandle;
     cudaIpcGetMemHandle(&memHandle, d_ptr);
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     // printf("Put memhandle = %s\n", memHandle.reserved);
 
     int64_t obj_size_in_shm = IPCTensorMemoryHandle::WholeSizeInCPU(
         IPCTensorType::kGPUIPCTensor, shape, dtype);
+    obj_size_in_shm = MathUtil::round_up_to_int64(obj_size_in_shm, 4096);
 
     // critical section start
     base::LockGuard<base::SpinLock> lock_guard(header_->lock_);
     // FAA the atomic variable in the header
     int64_t offset = header_->accumulated_offset_.fetch_add(obj_size_in_shm);
+
+    CHECK_GE(offset, 0);
     assert(offset + obj_size_in_shm < kShmSize);
     CHECK_LT(offset + obj_size_in_shm, kShmSize);
 
@@ -303,7 +309,9 @@ class IPCMemory {
     }
     // header_->accumulated_offset_ = sizeof(IPCShmRegion);
     header_->accumulated_offset_ =
-        MathUtil::round_up_to(sizeof(IPCShmRegion), 4096);
+        MathUtil::round_up_to_int64(sizeof(IPCShmRegion), 4096);
+
+    CHECK_GE(header_->accumulated_offset_.load(), 0);
   }
 
  private:
@@ -373,8 +381,6 @@ class IPCTensorFactory : public torch::CustomClassHolder {
                                        const at::IntArrayRef shape,
                                        const at::ScalarType dtype,
                                        const int64_t dev_id) {
-    LOG(ERROR) << "Called NewIPCGPUTensor: " << name << " " << shape << " "
-               << dev_id;
     _mm_mfence();
     auto handle = IPCMemory::GetInstance()->GetHandle(name);
     if (handle != nullptr) {
@@ -395,10 +401,11 @@ class IPCTensorFactory : public torch::CustomClassHolder {
       return tensor;
     }
 
-    LOG(WARNING) << "NewIPCGPUTensor: " << name << " " << shape << " "
-                 << dev_id;
-
     int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
+
+    LOG(WARNING) << "NewIPCGPUTensor: " << name << " " << shape
+                 << "; dev=" << dev_id
+                 << "; size=" << base::PrettyPrintBytes(size_in_bytes);
     CHECK_NE(size_in_bytes, 0) << "malloc size = 0";
 
     handle =

@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -71,7 +72,7 @@ class TorchNativeStdEmbDDP(AbsEmb):
 
         self.weight = weight
 
-        print("weight.shape", weight.shape)
+        logging.info(f"weight.shape {weight.shape}")
 
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
@@ -108,17 +109,17 @@ class TorchNativeStdEmbDDP(AbsEmb):
 class TorchNativeStdEmb(AbsEmb):
     def __init__(self, emb, device):
         # this standard embedding will clone (deep copy) the embedding variable <emb>
-        worker_id = dist.get_rank()
+        self.rank = dist.get_rank()
         self.device = device
 
         if type(emb) is DistEmbedding:
-            weight = emb.weight.to_dense_tensor()
+            weight = emb.weight
         else:
             weight = emb
 
         self.weight = weight
 
-        print("weight.shape", weight.shape, flush=True)
+        logging.info(f"TorchNativeStdEmb: weight.shape {weight.shape}")
 
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
@@ -129,9 +130,16 @@ class TorchNativeStdEmb(AbsEmb):
         else:
             assert False
 
+        logging.info(f"TorchNativeStdEmb construct done")
+
+
     def forward(self, input_keys):
+        logging.error(f"xmh --- forward rank{self.rank}")
+        print(f"xmh --- forward rank{self.rank}", flush=True)
         if self.device == 'cpu':
-            return self.std_emb(input_keys.cpu()).cuda()
+            temp = self.std_emb(input_keys.cpu()).cuda()
+            logging.error(f"xmh --- forward rank{self.rank} done")
+            return temp
         elif self.device == 'cuda':
             return self.std_emb(input_keys.cuda()).cuda()
         else:

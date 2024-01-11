@@ -1,7 +1,7 @@
 set(CITYHASH_ROOT_DIR ${PROJECT_SOURCE_DIR}/third_party/cityhash-install)
 include(${PROJECT_SOURCE_DIR}/cmake/FindCityhash.cmake)
 
-add_library(base base.cc)
+add_library(base base.cc pprint.cc)
 # add_dependencies(base Cityhash)
 
 target_link_libraries(base PUBLIC Folly::folly ${CITYHASH_LIBRARIES} gflags glog)
