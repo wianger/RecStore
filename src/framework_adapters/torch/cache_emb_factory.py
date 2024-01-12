@@ -15,7 +15,7 @@ class CacheEmbFactory:
     def SupportedCacheType():
         return ["KnownShardedCachedEmbedding", 
                 "KnownLocalCachedEmbedding", 
-                "NativeEmbedding",
+                "TorchNativeStdEmb",
                 "KGExternelEmbedding"]
 
     @staticmethod
@@ -41,7 +41,7 @@ class CacheEmbFactory:
                                                 kForwardItersPerStep=args['kForwardItersPerStep'],
                                                 backward_mode=args['backwardMode'],
                                                 )
-        elif cache_type == "NativeEmbedding":
+        elif cache_type == "TorchNativeStdEmb":
             # abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
             abs_emb = TorchNativeStdEmb(emb.weight, device='cpu')
 

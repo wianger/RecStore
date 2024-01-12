@@ -194,7 +194,7 @@ class KGExternelEmbedding(AbsEmb):
         self.emb = emb
         self.emb_dim = emb.shape[1]
 
-    def forward(self, input_keys):
+    def forward(self, input_keys, trace=True):
         embed_value = KGExternelEmbeddingFn.apply(
             input_keys, self.emb, self.fake_tensor)
         assert embed_value.requires_grad

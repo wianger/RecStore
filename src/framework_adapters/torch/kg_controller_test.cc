@@ -294,11 +294,11 @@ int main(int argc, char **argv) {
 
   auto json_config = json::parse(json_str);
 
-  json_config['full_emb_capacity'] = 100LL * int(1e6);
+  int64_t full_emb_capacity = 100LL * int(1e6);
+  json_config["full_emb_capacity"] = full_emb_capacity;
 
   LOG(INFO) << json_config;
 
-  int64_t full_emb_capacity = json_config.at("full_emb_capacity");
 
   int num_gpus = json_config.at("num_gpus");
 

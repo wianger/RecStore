@@ -18,6 +18,7 @@ cmake -DUSE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda  ..
 make -j
 cd ..
 cd python
+pip install scipy==1.12.0rc1 
 python setup.py develop
 
 
@@ -28,3 +29,6 @@ python setup.py develop
 cd -
 
 pip install paramiko ogb pyinstrument gpustat
+
+
+conda install fmt

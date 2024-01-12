@@ -76,7 +76,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
             "binding": [
                 {
                     "emb_choice": [
-                        # "NativeEmbedding",
+                        # "TorchNativeStdEmb",
                         "KGExternelEmbedding"
                     ]
                 },
@@ -205,20 +205,25 @@ class ExpOverallSingle(GNNExperiment):
                 # }
             ],
             "binding2": [
+                # {
+                #     "use_my_emb": ["true"],
+                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                #     "backwardMode": ["PySync"],
+                # },
+                # {
+                #     "use_my_emb": ["true"],
+                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                #     "backwardMode": ["CppSync"],
+                # },
+                # {
+                #     "use_my_emb": ["false"],
+                #     "cached_emb_type": ['None'],
+                #     "backwardMode": ["CppSync"],
+                # },       
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "cached_emb_type": ['KGExternelEmbedding'],
                     "backwardMode": ["PySync"],
-                },
-                {
-                    "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["CppSync"],
-                },
-                {
-                    "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
-                    "backwardMode": ["CppSync"],
                 },
             ],
 

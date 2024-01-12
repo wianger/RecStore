@@ -189,8 +189,8 @@ class IPCMemory {
   IPCMemory() {
     folly::MemoryMapping::Options options =
         folly::MemoryMapping::writable().setPrefault(true).setShared(true);
-
     options.address = (void *)(0x100000000000);
+    system("touch /dev/shm/recstore_ipc_memory");
     mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_memory", 0,
                                         kShmSize, options);
     header_ =

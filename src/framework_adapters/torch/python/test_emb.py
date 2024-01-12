@@ -283,12 +283,12 @@ class TestShardedCache:
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
 
         config = {
-            "test_cache": ['NativeEmbedding', ],
+            "test_cache": ['TorchNativeStdEmb', ],
             # "test_cache": ['KnownLocalCachedEmbedding', ],
 
             # "test_cache": ['KnownLocalCachedEmbedding',
             #                     'KnownShardedCachedEmbedding',
-            #                     'NativeEmbedding'],
+            #                     'TorchNativeStdEmb'],
 
             # "backwardMode": ["PySync", "CppSync"],
 
