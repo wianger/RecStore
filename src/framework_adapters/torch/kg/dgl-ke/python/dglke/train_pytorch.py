@@ -200,7 +200,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     import tqdm
     if rank == 0:
         all_start = time.time()
-    for step in tqdm.trange(0, args.max_step):
+    for step in range(0, args.max_step):
         # if rank == 0:
         #     print(f"+++++++++++++++++Step{step}+++++++++++++++++")
 

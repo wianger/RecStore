@@ -134,11 +134,8 @@ class TorchNativeStdEmb(AbsEmb):
 
 
     def forward(self, input_keys):
-        logging.error(f"xmh --- forward rank{self.rank}")
-        print(f"xmh --- forward rank{self.rank}", flush=True)
         if self.device == 'cpu':
             temp = self.std_emb(input_keys.cpu()).cuda()
-            logging.error(f"xmh --- forward rank{self.rank} done")
             return temp
         elif self.device == 'cuda':
             return self.std_emb(input_keys.cuda()).cuda()

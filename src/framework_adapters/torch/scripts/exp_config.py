@@ -51,16 +51,17 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         NAME = "PerfEmbRun"
         COMMON_CONFIGS = {
             # "num_workers": [1, 2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
-            # "num_embs": [int(100*1e6), int(10*1e6)],
-            # "batch_size": [512, 1024, 2048, 4096,],
-            # "run_steps": [500],
-            # "log_interval": [100],
-
             "num_workers": [4],
-            "batch_size": [2048,],
+
             "num_embs": [int(100*1e6),],
+            "batch_size": [512, 1024, 2048, 4096,],
             "run_steps": [300],
             "log_interval": [100],
+
+            # "batch_size": [2048,],
+            # "num_embs": [int(100*1e6),],
+            # "run_steps": [300],
+            # "log_interval": [100],
 
             'binding2': [
                 {
@@ -74,7 +75,10 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
             "binding": [
                 {
-                    "emb_choice": ["NativeEmbedding", "KGExternelEmbedding"]
+                    "emb_choice": [
+                        # "NativeEmbedding",
+                        "KGExternelEmbedding"
+                    ]
                 },
                 {
 

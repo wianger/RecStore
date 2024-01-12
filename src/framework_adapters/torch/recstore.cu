@@ -3,8 +3,6 @@
 #include <torch/extension.h>
 #include <torch/torch.h>
 
-#include "IPCTensor.h"
-
 namespace recstore {
 void RegisterKGCacheController(torch::Library &m);
 

@@ -101,7 +101,7 @@ def get_run_config():
 
         argparser.add_argument('--distribution', choices=['uniform', 'zipf'],
                                default='zipf')
-        argparser.add_argument('--zipfian_alpha', default=0.99)
+        argparser.add_argument('--zipf_alpha', type=float, default=0.99)
 
         return vars(argparser.parse_args())
 
@@ -239,13 +239,13 @@ def routine_local_cache_helper(worker_id, args):
         for_range = range(args['run_steps'])
 
     perf_sampler = PerfSampler(rank=rank,
-                                    L=args['L'],
-                                    num_ids_per_step=args['batch_size'],
-                                    full_emb_capacity=emb.shape[0],
-                                    backmode=args['backwardMode'],
-                                    distribution=args['distribution'],
-                                    alpha=args['zipfian_alpha'],
-                                    )
+                               L=args['L'],
+                               num_ids_per_step=args['batch_size'],
+                               full_emb_capacity=emb.shape[0],
+                               backmode=args['backwardMode'],
+                               distribution=args['distribution'],
+                               alpha=args['zipf_alpha'],
+                               )
     print("Construct PerfSampler done", flush=True)
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
@@ -255,9 +255,8 @@ def routine_local_cache_helper(worker_id, args):
     else:
         kg_cache_controller = KGCacheControllerWrapperDummy(
         )
-    
-    print("Construct KGCacheControllerWrapper done", flush=True)
 
+    print("Construct KGCacheControllerWrapper done", flush=True)
 
     kg_cache_controller.init()
 
