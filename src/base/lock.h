@@ -22,6 +22,16 @@ class Atomic {
   static bool CAS(void** ptr, void* old_val, void* new_val) {
     return __sync_bool_compare_and_swap(ptr, old_val, new_val);
   }
+
+  template <typename T>
+  static T load(const volatile T* obj) {
+    return __atomic_load_n(obj, __ATOMIC_SEQ_CST);
+  }
+
+  template <typename T>
+  static void store(volatile T* obj, T desired) {
+    return __atomic_store_n(obj, desired, __ATOMIC_SEQ_CST);
+  }
 };
 
 class SpinLock {
@@ -91,5 +101,80 @@ class Barrier {
   std::atomic_int bar_;
   std::atomic_int passed_ = 0;
 };
+
+// class ReaderFriendlyLock {
+//   std::vector<uint64_t[8]> lock_vec_;
+
+//  public:
+//   DELETE_COPY_CONSTRUCTOR_AND_ASSIGNMENT(ReaderFriendlyLock);
+
+//   ReaderFriendlyLock(ReaderFriendlyLock&& rhs) noexcept {
+//     *this = std::move(rhs);
+//   }
+//   ReaderFriendlyLock& operator=(ReaderFriendlyLock&& rhs) {
+//     std::swap(this->lock_vec_, rhs.lock_vec_);
+//     return *this;
+//   }
+
+//   ReaderFriendlyLock() : lock_vec_(util::Schedule::max_nr_threads()) {
+//     for (int i = 0; i < util::Schedule::max_nr_threads(); ++i) {
+//       lock_vec_[i][0] = 0;
+//       lock_vec_[i][1] = 0;
+//     }
+//   }
+
+//   bool lock() {
+//     for (int i = 0; i < util::Schedule::max_nr_threads(); ++i) {
+//       while (!CAS(&lock_vec_[i][0], 0, 1)) {
+//       }
+//     }
+//     return true;
+//   }
+
+//   bool try_lock() {
+//     for (int i = 0; i < util::Schedule::max_nr_threads(); ++i) {
+//       if (!CAS(&lock_vec_[i][0], 0, 1)) {
+//         for (i--; i >= 0; i--) {
+//           compiler_barrier();
+//           lock_vec_[i][0] = 0;
+//         }
+//         return false;
+//       }
+//     }
+//     return true;
+//   }
+
+//   bool try_lock_shared() {
+//     if (lock_vec_[util::Schedule::thread_id()][1]) {
+//       pr_once(info, "recursive lock!");
+//       return true;
+//     }
+//     return CAS(&lock_vec_[util::Schedule::thread_id()][0], 0, 1);
+//   }
+
+//   bool lock_shared() {
+//     if (lock_vec_[util::Schedule::thread_id()][1]) {
+//       pr_once(info, "recursive lock!");
+//       return true;
+//     }
+//     while (!CAS(&lock_vec_[util::Schedule::thread_id()][0], 0, 1)) {
+//     }
+//     lock_vec_[util::Schedule::thread_id()][1] = 1;
+//     return true;
+//   }
+
+//   void unlock() {
+//     compiler_barrier();
+//     for (int i = 0; i < util::Schedule::max_nr_threads(); ++i) {
+//       lock_vec_[i][0] = 0;
+//     }
+//   }
+
+//   void unlock_shared() {
+//     compiler_barrier();
+//     lock_vec_[util::Schedule::thread_id()][0] = 0;
+//     lock_vec_[util::Schedule::thread_id()][1] = 0;
+//   }
+// };
 
 }  // namespace base

@@ -417,3 +417,6 @@ template <typename T>
 thread_local base::StdDelayedRecycle ParallelPq<T>::recycle_;
 
 }  // namespace recstore
+
+#undef PPQ_ALL_SCAN
+#undef PPQ_SELECTIVE_SCAN

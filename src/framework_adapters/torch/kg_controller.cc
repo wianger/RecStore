@@ -6,7 +6,6 @@ namespace recstore {
 GraphEnv *GraphEnv::instance_;
 KGCacheController *KGCacheController::instance_;
 
-
 void RegisterKGCacheController(torch::Library &m) {
   m.class_<KGCacheController>("KGCacheController")
       .def_static("Init", &KGCacheController::Init)
@@ -18,4 +17,4 @@ void RegisterKGCacheController(torch::Library &m) {
 }
 
 }  // namespace recstore
-// 
+   //

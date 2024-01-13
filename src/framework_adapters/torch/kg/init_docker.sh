@@ -28,7 +28,7 @@ cd python
 python setup.py develop
 cd -
 
-pip install paramiko ogb pyinstrument gpustat
+pip install paramiko ogb pyinstrument gpustat debugpy
 
 
 conda install fmt

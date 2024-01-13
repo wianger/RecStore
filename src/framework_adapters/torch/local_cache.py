@@ -274,7 +274,8 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         if KnownLocalCachedEmbeddingFn.backward_mode == "PySync":
             return KnownLocalCachedEmbeddingFn.backward_py_sync(ctx, grad_output)
         elif KnownLocalCachedEmbeddingFn.backward_mode == "CppSync" \
-                or KnownLocalCachedEmbeddingFn.backward_mode == "CppAsync":
+                or KnownLocalCachedEmbeddingFn.backward_mode == "CppAsync" \
+                or KnownLocalCachedEmbeddingFn.backward_mode == "CppAsyncV2":
             rank = dist.get_rank()
             keys, = ctx.saved_tensors
             backward_grads = ctx.backward_grads
@@ -336,7 +337,6 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.iter = 0
         XLOG.debug(f"{rank}: KnownLocalCachedEmbedding init done")
         print(f"{rank}: KnownLocalCachedEmbedding init done", flush=True)
-
 
     def GetCache(self):
         return self.emb_cache

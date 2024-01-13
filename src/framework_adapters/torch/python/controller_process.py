@@ -129,11 +129,11 @@ class TestPerfSampler(BasePerfSampler):
         from test_emb import XMH_DEBUG
         if XMH_DEBUG:
             # if self.rank == 0:
-            #     # input_keys = th.tensor([0, 1,],).long().cuda()
-            #     input_keys = th.tensor([0, 1, 2],).long().cuda()
+            #     input_keys = th.tensor([0, 1,],).long().cuda()
+            #     # input_keys = th.tensor([0, 1, 2],).long().cuda()
             # else:
-            #     # input_keys = th.tensor([1, 2,],).long().cuda()
-            #     input_keys = th.tensor([3, 4, 5],).long().cuda()
+            #     input_keys = th.tensor([1, 2,],).long().cuda()
+            #     # input_keys = th.tensor([3, 4, 5],).long().cuda()
             # return input_keys
 
             entity_id = th.randint(self.full_emb_capacity, size=(
@@ -278,7 +278,7 @@ class KGCacheControllerWrapperBase:
 
     def AfterBackward(self,):
         raise NotImplementedError
-    
+
     def _RegisterFolly(self):
         recstore.init_folly()
 
@@ -301,7 +301,6 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
         dist.barrier()
 
 
-
 class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     instance = None
 
@@ -314,9 +313,13 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
             Timer.StartReportThread()
 
         backmode = self.json_config['backwardMode']
-        if (backmode == "CppSync"
-                or backmode == "CppAsync"
-            ) and self.rank == 0:
+
+        self.use_cpp_controller = (backmode == "CppSync"
+                                   or backmode == "CppAsync"
+                                   or backmode == "CppAsyncV2"
+                                   )
+
+        if self.use_cpp_controller and self.rank == 0:
             cache_range = CacheEmbFactory.ReturnCachedRange(
                 full_emb_capacity, self.json_config)
             self.controller = recstore.KGCacheController.Init(
@@ -335,12 +338,9 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
                      rank=self.rank, world_size=dist.get_world_size())
         dist.barrier()
 
-
     def init(self):
         dist.barrier()
-        if (self.json_config['backwardMode'] == "CppSync"
-                or self.json_config['backwardMode'] == "CppAsync"
-            ) and self.rank == 0:
+        if self.use_cpp_controller and self.rank == 0:
             self.controller.RegTensorsPerProcess()
         self.step = 0
         dist.barrier()
@@ -363,9 +363,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     def BlockToStepN(self,):
         self.timer_BlockToStepN.start()
         self.step += 1
-        if (self.json_config['backwardMode'] == "CppSync"
-                or self.json_config['backwardMode'] == "CppAsync"
-            )  and self.rank == 0:
+        if self.use_cpp_controller and self.rank == 0:
             self.controller.BlockToStepN(self.step)
         dist.barrier()
         self.timer_BlockToStepN.stop()
@@ -376,9 +374,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     def AfterBackward(self,):
         self.timer_AfterBackward.start()
         dist.barrier()
-        if (self.json_config['backwardMode'] == "CppSync"
-                or self.json_config['backwardMode'] == "CppAsync") \
-                and self.rank == 0:
+        if self.use_cpp_controller and self.rank == 0:
             self.controller.ProcessOneStep(self.step)
         dist.barrier()
         self.timer_AfterBackward.stop()

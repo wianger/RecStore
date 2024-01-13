@@ -21,13 +21,12 @@ class CacheShardingPolicy:
     @staticmethod
     def generate_cached_range(whole_capacity, cache_ratio):
         rank, world_size = dist.get_rank(), dist.get_world_size()
-        cache_capacity = int(whole_capacity * cache_ratio)
-        per_shard_cachesize = (cache_capacity + world_size-1) // world_size
-        # per_shard_cachesize = cache_capacity
+        total_cache_capacity = int(whole_capacity * cache_ratio) * world_size
+        per_shard_cachesize = int(whole_capacity * cache_ratio)
         cached_range = []
         for i in range(world_size):
             start = i * per_shard_cachesize
-            end = min((i+1) * per_shard_cachesize, cache_capacity)
+            end = min((i+1) * per_shard_cachesize, total_cache_capacity)
             cached_range.append((start, end))
         return cached_range
 
@@ -131,7 +130,6 @@ class TorchNativeStdEmb(AbsEmb):
             assert False
 
         logging.info(f"TorchNativeStdEmb construct done")
-
 
     def forward(self, input_keys):
         if self.device == 'cpu':

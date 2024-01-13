@@ -171,7 +171,7 @@ class VirtualEnvironment {
   base::Barrier *barrier_;
 
  public:
-  VirtualEnvironment(const std::string &json_str, int cached_capcacity) {
+  VirtualEnvironment(const std::string &json_str, int64_t cached_capcacity) {
     auto json_config = json::parse(json_str);
     num_gpus_ = json_config.at("num_gpus");
     emb_dim_ = json_config.at("emb_dim");
@@ -299,19 +299,22 @@ int main(int argc, char **argv) {
 
   LOG(INFO) << json_config;
 
-
   int num_gpus = json_config.at("num_gpus");
 
   IPCTensorFactory::ClearIPCMemory();
 
   xmh::Reporter::StartReportThread();
 
-  int cached_capcacity = full_emb_capacity * 0.1 / num_gpus;
-  VirtualEnvironment env(json_str, cached_capcacity);
+  int64_t total_cached_capcacity = full_emb_capacity * 0.1 * num_gpus;
+  int64_t per_shard_cached_capcacity = full_emb_capacity * 0.1;
+
+  VirtualEnvironment env(json_str, per_shard_cached_capcacity);
 
   std::vector<std::vector<int64_t>> cached_range;
   for (int i = 0; i < num_gpus; i++)
-    cached_range.push_back({i * cached_capcacity, (i + 1) * cached_capcacity});
+    cached_range.push_back({i * per_shard_cached_capcacity,
+                            std::min((i + 1) * per_shard_cached_capcacity,
+                                     total_cached_capcacity)});
 
   auto hold_pointer =
       KGCacheController::Init(json_str, cached_range, full_emb_capacity);

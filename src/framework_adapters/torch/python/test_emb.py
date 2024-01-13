@@ -46,11 +46,11 @@ USE_SGD = True
 # USE_SGD = False
 LR = 2
 
-# XMH_DEBUG = True
-XMH_DEBUG = False
+XMH_DEBUG = True
+# XMH_DEBUG = False
 
-NO_CHECK = True
-# NO_CHECK = False
+# NO_CHECK = True
+NO_CHECK = False
 
 
 def worker_main(routine, worker_id, num_workers, emb_context, args):
@@ -68,13 +68,14 @@ def worker_main(routine, worker_id, num_workers, emb_context, args):
 
 
 class TestShardedCache:
-    num_workers = 4
 
     if XMH_DEBUG:
+        num_workers = 2
         EMB_DIM = 3
         EMB_LEN = 20
         BATCH_SIZE = 1024
     else:
+        num_workers = 4
         # EMB_DIM = 32
         EMB_DIM = 3
         EMB_LEN = 2000000
@@ -283,8 +284,8 @@ class TestShardedCache:
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:
 
         config = {
-            "test_cache": ['TorchNativeStdEmb', ],
-            # "test_cache": ['KnownLocalCachedEmbedding', ],
+            # "test_cache": ['TorchNativeStdEmb', ],
+            "test_cache": ['KnownLocalCachedEmbedding', ],
 
             # "test_cache": ['KnownLocalCachedEmbedding',
             #                     'KnownShardedCachedEmbedding',
@@ -293,8 +294,9 @@ class TestShardedCache:
             # "backwardMode": ["PySync", "CppSync"],
 
             # "backwardMode": ["PySync",],
-            "backwardMode": ["CppSync",],
+            # "backwardMode": ["CppSync",],
             # "backwardMode": ["CppAsync",],
+            "backwardMode": ["CppAsyncV2",],
 
             # "cache_ratio": [0.1, 0.3, 0.5],
             "cache_ratio": [0.1,]
