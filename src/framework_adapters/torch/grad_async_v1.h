@@ -17,6 +17,8 @@
 #include "parallel_pq.h"
 #include "torch_utils.h"
 
+#define GRAD_ASYNC_V1_DEBUG
+
 namespace recstore {
 class AsyncGradElement {
   static constexpr int kInf = std::numeric_limits<int>::max();
@@ -25,12 +27,19 @@ class AsyncGradElement {
   AsyncGradElement(int64_t id) : id_(id) { RecaculatePriority(); }
 
   void MarkReadInStepN(int stepN) {
-    base::LockGuard _(lock_);
-    read_step_.push_back(stepN);
+    // read_step_.push_back(stepN);
+
+#ifdef GRAD_ASYNC_V1_DEBUG
+    lock_.AssertLockHold();
+#endif
+    int old_size = read_step_.size();
+    auto it = std::lower_bound(read_step_.begin(), read_step_.end(), stepN);
+    read_step_.insert(it, stepN);
+    int new_size = read_step_.size();
+    CHECK_EQ(old_size + 1, new_size);
   }
 
   void MarkWriteInStepN(int stepN, torch::Tensor grad) {
-    base::LockGuard _(lock_);
     write_step_.push_back(stepN);
     write_grad_.push_back(grad);
   }
@@ -41,7 +50,6 @@ class AsyncGradElement {
   }
 
   void RecaculatePriority() {
-    base::LockGuard _(lock_);
     int old_priority = priority_;
     if (read_step_.size() == 0) {
       priority_ = kInf;
@@ -59,8 +67,12 @@ class AsyncGradElement {
   }
 
   int MinReadStep() const {
+#ifdef GRAD_ASYNC_V1_DEBUG
     int min_step = *std::min_element(read_step_.begin(), read_step_.end());
-    // CHECK_EQ(min_step, read_step_[0]);
+    CHECK_EQ(min_step, read_step_[0]);
+#else
+    int min_step = *read_step_.begin();
+#endif
     return min_step;
   }
 
@@ -90,7 +102,6 @@ class AsyncGradElement {
   // NOTE: dont use get grad to pass vector<grad> to the controller
   // std::vector<torch::Tensor> GetGrad() const { return write_grad_; }
   std::pair<std::vector<int>, std::vector<torch::Tensor>> DrainWrites() {
-    base::LockGuard _(lock_);
     auto ret_write_step = std::move(write_step_);
     auto ret_write_grad = std::move(write_grad_);
     write_step_.clear();
@@ -99,11 +110,17 @@ class AsyncGradElement {
   }
 
   void RemoveReadStep(int step_no) {
-    base::LockGuard _(lock_);
-    auto newEnd =
-        std::remove_if(read_step_.begin(), read_step_.end(),
-                       [step_no](int value) { return value == step_no; });
-    read_step_.erase(newEnd, read_step_.end());
+    // auto newEnd =
+    //     std::remove_if(read_step_.begin(), read_step_.end(),
+    //                    [step_no](int value) { return value == step_no; });
+    // read_step_.erase(newEnd, read_step_.end());
+
+#ifdef GRAD_ASYNC_V1_DEBUG
+    lock_.AssertLockHold();
+    CHECK_NE(read_step_.size(), 0);
+    CHECK_EQ(*read_step_.begin(), step_no) << "id is " << id_;
+#endif
+    read_step_.erase(read_step_.begin());
   }
 
   void Lock() { return lock_.Lock(); }
@@ -233,6 +250,7 @@ class GradAsyncProcessing : public GradProcessingBase {
     for (int i = 0; i < input_keys->GetSlicedTensor().size(0); ++i) {
       int64_t id = data[i];
       auto *p = dict_[id];
+      base::LockGuard element_lock_guard(*p);
       p->MarkReadInStepN(step_no);
       p->RecaculatePriority();
       pq_.PushOrUpdate(p);
@@ -280,6 +298,7 @@ class GradAsyncProcessing : public GradProcessingBase {
       int64_t id = p->GetID();
 
       // NOTE: 改了优先级
+      base::LockGuard element_lock_guard(*p);
       auto [not_used, grads] = p->DrainWrites();
       static int round_robin = 0;
       for (int i = 0; i < grads.size(); i++) {
@@ -334,9 +353,10 @@ class GradAsyncProcessing : public GradProcessingBase {
     // 等待堆头的元素大于step_no号
     while (true) {
       base::LockGuard _(large_lock_);
-
       if (pq_.empty()) {
+#ifdef XMH_DEBUG_KG
         LOG(WARNING) << "pq is empty";
+#endif
         break;
       }
 
@@ -344,8 +364,7 @@ class GradAsyncProcessing : public GradProcessingBase {
       if (priority > step_no) {
 #ifdef XMH_DEBUG_KG
         LOG(INFO) << folly::sformat("top(pq)'s priority={} > step_no{}.",
-                                    priority, step_no)
-                  << pq_.ToString();
+                                    priority, step_no);
 #endif
         break;
       }
@@ -353,43 +372,12 @@ class GradAsyncProcessing : public GradProcessingBase {
           << "Sleep in <BlockToStepN>, step_no=" << step_no
           << ", pq.top=" << priority;
     }
+
+    pq_.UpdatePossibleMIN(step_no);
   }
 
-  void ProcessBackwardAsync(const std::vector<torch::Tensor> &input_keys,
-                            const std::vector<torch::Tensor> &input_grads,
-                            int step_no) {
-    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
-    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
-        ShuffleKeysAndGrads(input_keys, input_grads);
-    timer_ShuffleKeysAndGrads.end();
-
-    xmh::Timer timer_SyncUpdateCache("ProcessBack:UpdateCache");
-    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
-                    shuffled_grads_in_each_rank_cache);
-    timer_SyncUpdateCache.end();
-
-    // LOG(WARNING) << "shuffled_keys_in_each_rank_cache";
-    // LOG(WARNING) << "Rank0:" <<
-    // toString(shuffled_keys_in_each_rank_cache[0][0])
-    //              << "|" << toString(shuffled_keys_in_each_rank_cache[0][1]);
-    // LOG(WARNING) << "Rank1:" <<
-    // toString(shuffled_keys_in_each_rank_cache[1][0])
-    //              << "|" << toString(shuffled_keys_in_each_rank_cache[1][1]);
-
-    // LOG(WARNING) << "shuffled_grads_in_each_rank_cache";
-
-    // LOG(WARNING) << "Rank0:"
-    //              << toString(shuffled_grads_in_each_rank_cache[0][0]) << "|"
-    //              << toString(shuffled_grads_in_each_rank_cache[0][1]);
-    // LOG(WARNING) << "Rank1:"
-    //              << toString(shuffled_grads_in_each_rank_cache[1][0]) << "|"
-    //              << toString(shuffled_grads_in_each_rank_cache[1][1]);
-
-    base::LockGuard _(large_lock_);
-    // record the update
-    // 把 <ID>查一下堆，拿一下step号
-    // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
-    // 如果在堆，建立映射，把grad指针填进去
+  void UpsertPq(const std::vector<torch::Tensor> &input_keys,
+                const std::vector<torch::Tensor> &input_grads, int step_no) {
     xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
     // #pragma omp parallel for num_threads(num_gpus_)
     for (int rank = 0; rank < input_keys.size(); ++rank) {
@@ -402,6 +390,7 @@ class GradAsyncProcessing : public GradProcessingBase {
         torch::Tensor grad_tensor = input_grads[rank][i];
         auto *p = dict_[id];
         // NOTE: 改了优先级
+        base::LockGuard element_lock_guard(*p);
         p->RemoveReadStep(step_no);
         p->MarkWriteInStepN(step_no, grad_tensor);
         p->RecaculatePriority();
@@ -413,6 +402,26 @@ class GradAsyncProcessing : public GradProcessingBase {
       }
     }
     timer_ProcessBackwardAsync.end();
+  }
+
+  void ProcessBackwardAsync(const std::vector<torch::Tensor> &input_keys,
+                            const std::vector<torch::Tensor> &input_grads,
+                            int step_no) {
+    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
+        ShuffleKeysAndGrads(input_keys, input_grads);
+
+    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
+                    shuffled_grads_in_each_rank_cache);
+
+    base::LockGuard _(large_lock_);
+    // record the update
+    // 把 <ID>查一下堆，拿一下step号
+    // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
+    // 如果在堆，建立映射，把grad指针填进去
+
+    UpsertPq(input_keys, input_grads, step_no);
+
+    // LOG(ERROR) << dict_[33779]->ToString();
   }
 
   void PrintPq() {

@@ -15,10 +15,10 @@ namespace epoch {
 typedef uint64_t Epoch;
 
 class MinEpochTable {
-  struct Entry {
+  struct EpochListEntry {
     static constexpr int kEpochListLength = 16;
 
-    Entry() { epoch_list_.reset(new std::deque<Epoch>); }
+    EpochListEntry() { epoch_list_.reset(new std::deque<Epoch>); }
 
     bool EnqueProtect(Epoch current_epoch) {
       epoch_list_->push_back(current_epoch);
@@ -42,6 +42,28 @@ class MinEpochTable {
     std::unique_ptr<std::deque<Epoch>> epoch_list_;
     char un_used[48];
   };
+
+  struct EpochEntry {
+    EpochEntry() { epoch_ = 0; }
+
+    bool EnqueProtect(Epoch current_epoch) {
+      epoch_ = current_epoch;
+      return true;
+    }
+
+    bool DequeUnProtect() {
+      epoch_ = 0;
+      return true;
+    }
+
+    Epoch MinEpoch() const { return epoch_; }
+
+    std::atomic<uint64_t> thread_id_{0};
+    std::atomic<Epoch> epoch_;
+    char un_used[48];
+  };
+
+  using Entry = EpochEntry;
   static_assert(sizeof(Entry) == 64, "Unexpected table entry size");
 
  public:
@@ -79,14 +101,14 @@ class MinEpochTable {
     return oldest_call - 1;
   }
 
-  int MaxPendingEpochNumPerThread() const {
-    int ret = 0;
-    for (uint64_t i = 0; i < max_thread_num_; ++i) {
-      Entry& entry = table_[i];
-      ret = std::max(ret, entry.PendingEpochNum());
-    }
-    return ret;
-  }
+  // int MaxPendingEpochNumPerThread() const {
+  //   int ret = 0;
+  //   for (uint64_t i = 0; i < max_thread_num_; ++i) {
+  //     Entry& entry = table_[i];
+  //     ret = std::max(ret, entry.PendingEpochNum());
+  //   }
+  //   return ret;
+  // }
 
  private:
   Entry* GetEntryForThread() {
@@ -166,15 +188,19 @@ class EpochManager {
     return epoch <= safe_to_reclaim_epoch_.load(std::memory_order_relaxed);
   }
 
+  Epoch GetSafeEpoch4Debug() {
+    return safe_to_reclaim_epoch_.load(std::memory_order_relaxed);
+  }
+
   void ComputeNewSafeToReclaimEpoch(Epoch currentEpoch) {
     safe_to_reclaim_epoch_.store(
         epoch_table_->ComputeNewSafeToReclaimEpoch(currentEpoch),
         std::memory_order_release);
   }
 
-  int MaxPendingEpochNumPerThread() const {
-    return epoch_table_->MaxPendingEpochNumPerThread();
-  }
+  // int MaxPendingEpochNumPerThread() const {
+  //   return epoch_table_->MaxPendingEpochNumPerThread();
+  // }
 
  private:
   std::atomic<Epoch> current_epoch_;

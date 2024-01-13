@@ -14,9 +14,14 @@ _send_cpu, _recv_cpu = {}, {}
 
 # data: [rank0_data, rank1_data, ...]
 
-logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
-                    datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
-                    # datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
+RECSTORE_UTIL_DEBUG = False
+
+if RECSTORE_UTIL_DEBUG :
+    logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
+                        datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+else:
+    logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
+                        datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 XLOG = logging
@@ -89,9 +94,9 @@ XLOG = logging
 #             return 0
 #         return self.total_time / self.runs
 
-import sys
+import sys #nopep8
 sys.path.append("/home/xieminhui/RecStore/build/lib")  # nopep8
-import timer_module
+import timer_module #nopep8
 
 
 class Timer:

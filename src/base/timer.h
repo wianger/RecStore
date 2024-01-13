@@ -237,6 +237,7 @@ class Counters {
     double mean = 0;
     int count = 0;
     for (int tid = 0; tid < kShards; tid++) {
+      perThreadCounter_[tid].mutex_.Lock();
       int isOverflow = perThreadCounter_[tid].isOverflow_;
       int index = perThreadCounter_[tid].index_;
       int last = isOverflow ? PerThreadCounter::kCounterLen_ - 1 : index;
@@ -245,6 +246,7 @@ class Counters {
         mean = (mean * count + durations[i]) / (count + 1);
         count++;
       }
+      perThreadCounter_[tid].mutex_.Unlock();
     }
     return mean;
   }

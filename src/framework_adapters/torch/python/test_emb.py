@@ -9,6 +9,7 @@ import os
 import time
 from collections import namedtuple
 import json
+import logging
 
 import torch
 import torch.nn as nn
@@ -19,11 +20,12 @@ import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 
-import sys
+import sys  # nopep8
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+
+
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from PsKvstore import ShmKVStore
-
 from controller_process import KGCacheControllerWrapper, KGCacheControllerWrapperDummy, TestPerfSampler
 from cache_common import ShmTensorStore, TorchNativeStdEmbDDP
 from utils import print_rank0, XLOG, Timer
@@ -51,6 +53,14 @@ XMH_DEBUG = True
 
 # NO_CHECK = True
 NO_CHECK = False
+
+
+if XMH_DEBUG:
+    logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
+                        datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
+else:
+    logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
+                        datefmt='%m-%d:%H:%M:%S', level=logging.INFO)
 
 
 def worker_main(routine, worker_id, num_workers, emb_context, args):
@@ -279,6 +289,9 @@ class TestShardedCache:
             # if rank == 0:
             #     XLOG.info(f"rank{rank}: step{_} done")
             #     kg_cache_controller.controller.PrintPq()
+
+        if rank == 0:
+            kg_cache_controller.StopThreads()
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:

@@ -3,7 +3,7 @@
 #include "grad_base.h"
 #include "parallel_pq_v2.h"
 
-#define XMH_DEBUG_KG
+// #define XMH_DEBUG_KG
 
 namespace recstore {
 
@@ -113,6 +113,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     for (int i = 0; i < input_keys->GetSlicedTensor().size(0); ++i) {
       int64_t id = data[i];
       auto *p = dict_[id];
+      base::LockGuard element_lock_guard(*p);
       p->MarkReadInStepN(step_no);
       p->RecaculatePriority();
       pq_.PushOrUpdate(p);
@@ -146,9 +147,10 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
   void ChunkCleanHelper(AsyncGradElement *p) {
     CHECK_EQ(p->magic_, 0xdeadbeef);
     int64_t id = p->GetID();
+
+    base::LockGuard element_lock_guard(*p);
     auto [not_used, grads] = p->DrainWrites();
     static int round_robin = 0;
-    LOG(INFO) << "Processing Grad of " << id;
     for (int i = 0; i < grads.size(); i++) {
       if (kUseBackThread) {
         while (!backthread_work_queues_[round_robin]->write(
@@ -228,6 +230,34 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     }
   }
 
+  void UpsertPq(const std::vector<torch::Tensor> &input_keys,
+                const std::vector<torch::Tensor> &input_grads, int step_no) {
+    xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
+    // #pragma omp parallel for num_threads(num_gpus_)
+    for (int rank = 0; rank < input_keys.size(); ++rank) {
+      auto *data = input_keys[rank].data_ptr<int64_t>();
+      CHECK(input_keys[rank].is_cpu());
+      CHECK_EQ(input_grads[rank].dim(), 2);
+
+      for (int i = 0; i < input_keys[rank].size(0); ++i) {
+        int64_t id = data[i];
+        torch::Tensor grad_tensor = input_grads[rank][i];
+        auto *p = dict_[id];
+        // NOTE: 改了优先级
+        base::LockGuard element_lock_guard(*p);
+        p->RemoveReadStep(step_no);
+        p->MarkWriteInStepN(step_no, grad_tensor);
+        p->RecaculatePriority();
+#ifdef XMH_DEBUG_KG
+        LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}", id,
+                                    step_no, toString(grad_tensor, false));
+#endif
+        pq_.PushOrUpdate(p);
+      }
+    }
+    timer_ProcessBackwardAsync.end();
+  }
+
   void ProcessBackwardAsync(const std::vector<torch::Tensor> &input_keys,
                             const std::vector<torch::Tensor> &input_grads,
                             int step_no) {
@@ -242,29 +272,8 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     // 把 <ID>查一下堆，拿一下step号
     // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
     // 如果在堆，建立映射，把grad指针填进去
-    xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
-    // #pragma omp parallel for num_threads(num_gpus_)
-    for (int rank = 0; rank < input_keys.size(); ++rank) {
-      auto *data = input_keys[rank].data_ptr<int64_t>();
-      CHECK(input_keys[rank].is_cpu());
-      CHECK_EQ(input_grads[rank].dim(), 2);
 
-      for (int i = 0; i < input_keys[rank].size(0); ++i) {
-        int64_t id = data[i];
-        torch::Tensor grad_tensor = input_grads[rank][i];
-        auto *p = dict_[id];
-        // NOTE: 改了优先级
-        p->RemoveReadStep(step_no);
-        p->MarkWriteInStepN(step_no, grad_tensor);
-        p->RecaculatePriority();
-#ifdef XMH_DEBUG_KG
-        LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}", id,
-                                    step_no, toString(grad_tensor, false));
-#endif
-        pq_.PushOrUpdate(p);
-      }
-    }
-    timer_ProcessBackwardAsync.end();
+    UpsertPq(input_keys, input_grads, step_no);
   }
 
   void PrintPq() {
@@ -288,8 +297,8 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
 
   std::vector<torch::Tensor> circle_buffer_end_cppseen_;
 
-  base::SpinLock large_lock_;
-  // base::PlaceboLock large_lock_;
+  // base::SpinLock large_lock_;
+  base::PlaceboLock large_lock_;
 
   std::atomic_bool dispatch_thread_stop_flag_{false};
   std::atomic_bool grad_thread_stop_flag_{false};

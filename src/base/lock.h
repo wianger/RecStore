@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cassert>
 #include <condition_variable>
+#include <cpptrace/cpptrace.hpp>
 #include <iostream>
 #include <mutex>
 #include <thread>
@@ -10,8 +11,8 @@
 
 namespace base {
 
-// constexpr bool kDetectDeadLock = true;
-constexpr bool kDetectDeadLock = false;
+constexpr bool kDetectDeadLock = true;
+// constexpr bool kDetectDeadLock = false;
 
 class Atomic {
  public:
@@ -49,11 +50,51 @@ class SpinLock {
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(
                             end_time - start_time)
                             .count();
-        if (duration > 1) LOG(FATAL) << "may be dead lock";
+        // if (int(duration) % 5 == 1) {
+        //   cpptrace::generate_trace().print();
+        // }
+        if (duration > 2) LOG(FATAL) << "may be deadlocked";
       }
     }
   }
   void Unlock() { locked.clear(std::memory_order_release); }
+
+  void AssertLockHold() {
+    assert(locked.test_and_set(std::memory_order_acquire));
+    CHECK(locked.test_and_set(std::memory_order_acquire));
+  }
+};
+
+class NamedSpinLock {
+  std::atomic_flag locked = ATOMIC_FLAG_INIT;
+
+  std::string locked_success_info_;
+
+ public:
+  void Lock(std::string locked_success_info) {
+    std::chrono::time_point<std::chrono::steady_clock> start_time;
+    if (kDetectDeadLock) start_time = std::chrono::steady_clock::now();
+
+    while (locked.test_and_set(std::memory_order_acquire)) {
+      ;
+      if (kDetectDeadLock) {
+        auto end_time = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+                            end_time - start_time)
+                            .count();
+        // if (int(duration) % 5 == 1) {
+        //   cpptrace::generate_trace().print();
+        // }
+        if (duration > 5)
+          LOG(FATAL) << "may be deadlocked, " << locked_success_info_;
+      }
+    }
+    locked_success_info_ = locked_success_info;
+  }
+  void Unlock() {
+    locked.clear(std::memory_order_release);
+    locked_success_info_ = "";
+  }
 
   void AssertLockHold() {
     assert(locked.test_and_set(std::memory_order_acquire));
@@ -73,6 +114,17 @@ class LockGuard {
  public:
   LockGuard(T& lock) : lock_(lock) { lock_.Lock(); }
   ~LockGuard() { lock_.Unlock(); }
+};
+
+template <class T>
+class NamedLockGuard {
+  T& lock_;
+
+ public:
+  NamedLockGuard(T& lock, const std::string& info) : lock_(lock) {
+    lock_.Lock(info);
+  }
+  ~NamedLockGuard() { lock_.Unlock(); }
 };
 
 class Barrier {

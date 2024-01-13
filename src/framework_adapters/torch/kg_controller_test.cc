@@ -20,9 +20,15 @@ class CircleBuffer {
 
   std::string backmode_;
 
+  const bool is_async_process_;
+
  public:
   CircleBuffer(int L, int rank, std::string backmode)
-      : L_(L), rank_(rank), backmode_(backmode) {
+      : L_(L),
+        rank_(rank),
+        backmode_(backmode),
+        is_async_process_(backmode_ == "CppAsync" ||
+                          backmode_ == "CppAsyncV2") {
     for (int i = 0; i < L_; i++) {
       sliced_id_tensor_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
           folly::sformat("cached_sampler_r{}_{}", rank, i), {int(1e5)},
@@ -58,7 +64,7 @@ class CircleBuffer {
     asm volatile("mfence" ::: "memory");
     circle_buffer_end_[0] = end_;
 
-    if (backmode_ == "CppAsync") {
+    if (is_async_process_) {
       while (circle_buffer_end_[0].item<int64_t>() !=
              circle_buffer_old_end_[0].item<int64_t>()) {
         FB_LOG_EVERY_MS(INFO, 1000) << folly::sformat(
@@ -72,13 +78,17 @@ class CircleBuffer {
     // if (step == 10) std::this_thread::sleep_for(std::chrono::seconds(100));
   }
 
-  c10::intrusive_ptr<SlicedTensor> Pop() {
+  std::pair<int, c10::intrusive_ptr<SlicedTensor>> Pop() {
     if (start_ == end_) {
-      return nullptr;
+      LOG(FATAL) << "empty sample buffer";
     }
+
     auto item = sliced_id_tensor_[start_];
+
+    int step = step_tensor_[start_].item<int64_t>();
+
     start_ = (start_ + 1) % L_;
-    return item;
+    return std::make_pair(step, item);
   }
 };
 
@@ -95,21 +105,20 @@ class BasePerfSampler {
         backmode_(backmode) {}
 
   void Prefill() {
-    for (int i = 0; i < L_; ++i) {
+    // NOTE: must be L_ - 1
+    for (int i = 0; i < L_ - 1; ++i) {
       torch::Tensor entity_id = gen_next_sample();
       ids_circle_buffer_.Push(sampler_iter_num_, entity_id);
       ++sampler_iter_num_;
     }
   }
 
-  torch::Tensor __next__() {
+  std::pair<int, torch::Tensor> __next__() {
     auto entity_id = gen_next_sample();
+    auto [step, sample] = ids_circle_buffer_.Pop();
     ids_circle_buffer_.Push(sampler_iter_num_, entity_id);
     ++sampler_iter_num_;
-
-    auto ret = ids_circle_buffer_.Pop();
-
-    return ret->GetSlicedTensor();
+    return std::make_pair(step, sample->GetSlicedTensor());
   }
 
  protected:
@@ -242,7 +251,8 @@ class VirtualEnvironment {
       // if (rank == 0 && step_no == 10) ProfilerStart("/tmp/profile.prof");
 
       // 1. Get the next step
-      auto next_ids = test_perf_sampler_[rank].__next__();
+      auto [sample_step, next_ids] = test_perf_sampler_[rank].__next__();
+      CHECK_EQ(sample_step, step_no);
 
       LOG(INFO) << folly::sformat("rank{}: {}", rank, toString(next_ids));
 
@@ -286,13 +296,15 @@ int main(int argc, char **argv) {
             "backwardMode": "{}",
             "nr_background_threads": 32,
             "full_emb_capacity": 10000000,
-            "emb_dim" : 32,
+            "emb_dim" : 400,
             "num_ids_per_step": 5000
         }})";
 
   json_str = folly::sformat(json_str, FLAGS_backMode);
 
   auto json_config = json::parse(json_str);
+
+  json_str = json_config.dump();
 
   int64_t full_emb_capacity = 100LL * int(1e6);
   json_config["full_emb_capacity"] = full_emb_capacity;
@@ -305,8 +317,9 @@ int main(int argc, char **argv) {
 
   xmh::Reporter::StartReportThread();
 
-  int64_t total_cached_capcacity = full_emb_capacity * 0.1 * num_gpus;
-  int64_t per_shard_cached_capcacity = full_emb_capacity * 0.1;
+  float cache_ratio = 0.02;
+  int64_t total_cached_capcacity = full_emb_capacity * cache_ratio * num_gpus;
+  int64_t per_shard_cached_capcacity = full_emb_capacity * cache_ratio;
 
   VirtualEnvironment env(json_str, per_shard_cached_capcacity);
 

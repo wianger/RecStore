@@ -53,6 +53,8 @@ class CircleBuffer:
 
         self.backmode = backmode
 
+        self.async_process = self.backmode == "CppAsync" or self.backmode == "CppAsyncV2"
+
     def push(self, step, item):
         assert item.ndim == 1
         # self.buffer[self.end].Copy_(item, non_blocking=True)
@@ -62,7 +64,7 @@ class CircleBuffer:
         self.end = (self.end + 1) % self.L
         self.circle_buffer_end[0] = self.end
 
-        if self.backmode == "CppAsync":
+        if self.async_process:
             # DetectNewSamplesCome
             debug_count = 0
             while (self.circle_buffer_end[0] != self.circle_buffer_old_end[0]):
@@ -129,10 +131,10 @@ class TestPerfSampler(BasePerfSampler):
         from test_emb import XMH_DEBUG
         if XMH_DEBUG:
             # if self.rank == 0:
-            #     input_keys = th.tensor([0, 1,],).long().cuda()
-            #     # input_keys = th.tensor([0, 1, 2],).long().cuda()
+            #     # input_keys = th.tensor([0, 1,],).long().cuda()
+            #     input_keys = th.tensor([0, 1, 2],).long().cuda()
             # else:
-            #     input_keys = th.tensor([1, 2,],).long().cuda()
+            #     input_keys = th.tensor([1, 2, 3, 4, 5],).long().cuda()
             #     # input_keys = th.tensor([3, 4, 5],).long().cuda()
             # return input_keys
 

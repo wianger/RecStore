@@ -192,7 +192,6 @@ class ParallelPq {
   }
 
   void PushOrUpdate(const T &value) {
-    base::LockGuard guard(*value);
     Upsert(value);
 
     // // LOG(INFO) << "PushOrUpdate " << value->GetID();
@@ -269,8 +268,8 @@ class ParallelPq {
       auto *p = qs_[i]->top();
       if (p) {
         // update MIN
-        if (i != (kMaxPriority - 1))
-          priority_possible_min_ = std::max(i - 1, 0);
+        // if (i != (kMaxPriority - 1))
+        //   priority_possible_min_ = std::max(i - 1, 0);
         return p->Data();
       }
     }
@@ -296,8 +295,8 @@ class ParallelPq {
     for (int i = priority_possible_min_; i < priority_possible_max_; i++) {
       if (!qs_[i]->empty()) {
         // update MIN
-        if (i != (kMaxPriority - 1))
-          priority_possible_min_ = std::max(i - 1, 0);
+        // if (i != (kMaxPriority - 1))
+        //   priority_possible_min_ = std::max(i - 1, 0);
         return CastQueueNoToPriority(i);
       }
     }
@@ -308,6 +307,8 @@ class ParallelPq {
 #error "defined a macro"
 #endif
   }
+
+  void UpdatePossibleMIN(int min) const { priority_possible_min_ = min; }
 
   void pop_x(const T &value) {
     LOG(FATAL) << "not USED now";
@@ -347,8 +348,8 @@ class ParallelPq {
       qs_[CastPriorityToQueueNo(old_priority)]->remove(node);
       index_.assign(value, newnode);
 
-      // recycle_.Recycle(node);
-      delete node;
+      // delete node;
+      recycle_.Recycle(node);
 
     } else {
       Node<T> *newNode = new Node<T>(value, new_priority);

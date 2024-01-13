@@ -5,7 +5,8 @@
 
 #include "base/lock.h"
 #include "folly/concurrency/ConcurrentHashMap.h"
-#include "src/memory/malloc.h"
+#include "memory/epoch_manager.h"
+#include "memory/malloc.h"
 
 #define PPQ_ALL_SCAN
 // #define PPQ_SELECTIVE_SCAN
@@ -50,7 +51,10 @@ class PriorityHashTable {
   std::atomic_bool isCleaning_{false};
 
   const int queue_priority_;
-  mutable base::SpinLock lock_;
+  mutable base::NamedSpinLock lock_;
+
+  base::epoch::EpochManager *epoch_manager_ =
+      base::epoch::EpochManager::GetInstance();
 
  public:
   PriorityHashTable(int queue_priority, index_type *init_index)
@@ -58,37 +62,65 @@ class PriorityHashTable {
     index_ = init_index;
   }
 
+  static constexpr int kBumpInterval = 1;
+
+  // maybe BUG
   void insert(T *newNode) {
-    // maybe BUG
+    // base::NamedLockGuard _(lock_, "insert");
+    epoch_manager_->Protect();
+    auto readed_index = base::Atomic::load(&index_);
     bool success = false;
     while (!success) {
-      auto old_index = base::Atomic::load(&index_);
-      success = old_index->insert_or_assign(newNode->GetID(), newNode).second;
+      success =
+          readed_index->insert_or_assign(newNode->GetID(), newNode).second;
       FB_LOG_EVERY_MS(ERROR, 1000)
           << "insert failed, size(hashtable)=" << index_->size();
     }
-    CHECK(success);
+    epoch_manager_->UnProtect();
+    epoch_manager_->BumpCurrentEpoch();
+  }
+
+  void remove(T *node) {
+    // base::NamedLockGuard _(lock_, "remove");
+    epoch_manager_->Protect();
+    auto readed_index = base::Atomic::load(&index_);
+    readed_index->erase(node->GetID());
+    epoch_manager_->UnProtect();
+    epoch_manager_->BumpCurrentEpoch();
   }
 
   index_type *Clean(index_type *new_index, std::function<void(T *)> drain_fn) {
-    base::LockGuard _(lock_);
+    // base::NamedLockGuard _(lock_, "clean");
     isCleaning_ = true;
     auto old_index = base::Atomic::load(&index_);
     bool success = base::Atomic::CAS((void **)&index_, old_index, new_index);
+    auto epoch = epoch_manager_->GetCurrentEpoch();
+
+    while (!epoch_manager_->IsSafeToReclaim(epoch)) {
+      epoch_manager_->BumpCurrentEpoch();
+      //   FB_LOG_EVERY_MS(ERROR, 1000)
+      //       << "stall in IsSafeToReclaim. "
+      //       << "epoch=" << epoch_manager_->GetCurrentEpoch()
+      //       << ". safe_epoch=" << epoch_manager_->GetSafeEpoch4Debug();
+    }
+    CHECK(success);
+
     if (!success) return nullptr;
 
-    LOG(INFO) << "cleaning priorityhashtable, priority=" << queue_priority_
-              << ", size=" << old_index->size();
+    // LOG(INFO) << "cleaning priorityhashtable, priority=" << queue_priority_
+    //           << ", size=" << old_index->size();
+    int count = 0;
     for (auto [key, value] : *old_index) {
+      //   FB_LOG_EVERY_MS(INFO, 1000) << "Clean, count = " << count
+      //             << ", index.size=" << old_index->size();
       drain_fn(value);
+      count++;
     }
 
     old_index->clear();
     isCleaning_ = false;
     return old_index;
   }
-
-  void remove(T *node) { index_->erase(node->GetID()); }
 
   bool empty() const { return (!isCleaning_) && index_->size() == 0; }
 
@@ -154,10 +186,7 @@ class ParallelPqV2 {
     }
   }
 
-  void PushOrUpdate(T *value) {
-    base::LockGuard guard(*value);
-    Upsert(value);
-  }
+  void PushOrUpdate(T *value) { Upsert(value); }
 
   std::string ToString() const {
     std::stringstream ss;
