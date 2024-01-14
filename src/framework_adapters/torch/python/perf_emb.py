@@ -91,8 +91,15 @@ def get_run_config():
                                )
         argparser.add_argument('--backwardMode', choices=["CppSync",
                                                           "CppAsync",
+                                                          "CppAsyncV2",
                                                           "PySync"],
                                default="PySync"
+                               )
+        argparser.add_argument('--backgrad_init', choices=["cpu",
+                                                           "gpu",
+                                                           "both",
+                                                           ],
+                               default="cpu"
                                )
         argparser.add_argument('--kForwardItersPerStep', type=int,
                                default=1)

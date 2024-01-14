@@ -121,6 +121,7 @@ class TorchNativeStdEmb(AbsEmb):
         logging.info(f"TorchNativeStdEmb: weight.shape {weight.shape}")
 
         if device == 'cuda':
+            assert False, "NO CUDA"
             std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
             self.std_emb = std_emb
         elif device == 'cpu':
@@ -182,7 +183,13 @@ class KGExternelEmbeddingFn(torch.autograd.Function):
 
         # embedding_weight.grad = grad_output / dist.get_world_size()
 
-        embedding_weight.index_add_(0, keys.cpu(), -2 * grad_output.cpu())
+        grad_output_cpu = grad_output.cpu()
+        i = 0
+        for each in list(keys.cpu()):
+            embedding_weight.index_add_(0, each, -2 * grad_output_cpu[i].unsqueeze(0))
+            i += 1
+
+        # embedding_weight.index_add_(0, keys.cpu(), -2 * grad_output.cpu())
         return None, None, torch.randn(1, 1)
 
 

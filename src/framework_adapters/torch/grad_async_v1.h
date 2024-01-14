@@ -14,10 +14,9 @@
 #include "base/pq.h"
 #include "base/timer.h"
 #include "grad_base.h"
+#include "grad_memory_manager.h"
 #include "parallel_pq.h"
 #include "torch_utils.h"
-
-#define GRAD_ASYNC_V1_DEBUG
 
 namespace recstore {
 class AsyncGradElement {
@@ -39,10 +38,18 @@ class AsyncGradElement {
     CHECK_EQ(old_size + 1, new_size);
   }
 
+#ifdef USE_SUB_GRAD_TENSOR
+  void MarkWriteInStepN(int stepN, const SubGradTensor &grad) {
+    write_step_.push_back(stepN);
+    write_grad_.push_back(grad);
+  }
+#else
   void MarkWriteInStepN(int stepN, torch::Tensor grad) {
     write_step_.push_back(stepN);
     write_grad_.push_back(grad);
   }
+
+#endif
 
   int64_t Priority() const {
     CHECK_EQ(magic_, 0xdeadbeef);
@@ -99,8 +106,17 @@ class AsyncGradElement {
 
   int64_t GetID() const { return id_; }
 
-  // NOTE: dont use get grad to pass vector<grad> to the controller
-  // std::vector<torch::Tensor> GetGrad() const { return write_grad_; }
+// NOTE: dont use get grad to pass vector<grad> to the controller
+#ifdef USE_SUB_GRAD_TENSOR
+  std::pair<std::vector<int>, std::vector<SubGradTensor>> DrainWrites() {
+    auto ret_write_step = std::move(write_step_);
+    auto ret_write_grad = std::move(write_grad_);
+    write_step_.clear();
+    write_grad_.clear();
+    return std::make_pair(ret_write_step, ret_write_grad);
+  }
+
+#else
   std::pair<std::vector<int>, std::vector<torch::Tensor>> DrainWrites() {
     auto ret_write_step = std::move(write_step_);
     auto ret_write_grad = std::move(write_grad_);
@@ -108,6 +124,8 @@ class AsyncGradElement {
     write_grad_.clear();
     return std::make_pair(ret_write_step, ret_write_grad);
   }
+
+#endif
 
   void RemoveReadStep(int step_no) {
     // auto newEnd =
@@ -131,7 +149,12 @@ class AsyncGradElement {
   int64_t id_;
   std::vector<int> read_step_;
   std::vector<int> write_step_;
+#ifdef USE_SUB_GRAD_TENSOR
+  std::vector<SubGradTensor> write_grad_;
+#else
   std::vector<torch::Tensor> write_grad_;
+#endif
+
   int64_t priority_;
   mutable base::SpinLock lock_;
 
@@ -217,32 +240,6 @@ class GradAsyncProcessing : public GradProcessingBase {
     StartThreads();
   }
 
-  void ProcessOneStep(int64_t step_no) override {
-    torch::AutoGradMode guard_false(false);
-    // show tensors of the first rank
-
-    // std::cout << "input_keys_per_rank" << std::endl;
-    // std::cout << toString(input_keys_per_rank_[0]) << std::endl;
-    // std::cout << "input_keys_neg_per_rank_" << std::endl;
-    // std::cout << toString(input_keys_neg_per_rank_[0]) << std::endl;
-
-    auto input_keys_per_rank_tensors =
-        SlicedTensor::BatchConvertToTensors(input_keys_per_rank_);
-    auto backward_grads_per_rank_tensors =
-        SlicedTensor::BatchConvertToTensors(backward_grads_per_rank_);
-
-    ProcessBackwardAsync(input_keys_per_rank_tensors,
-                         backward_grads_per_rank_tensors, step_no);
-    if (kForwardItersPerStep_ > 1) {
-      auto input_keys_neg_per_rank_tensors =
-          SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
-      auto backward_grads_neg_per_rank_tensors =
-          SlicedTensor::BatchConvertToTensors(backward_grads_neg_per_rank_);
-      ProcessBackwardAsync(input_keys_neg_per_rank_tensors,
-                           backward_grads_neg_per_rank_tensors, step_no);
-    }
-  }
-
   void WhenNewSampleComes(c10::intrusive_ptr<SlicedTensor> input_keys, int rank,
                           int step_no) {
     // 来了一个新样本step号：把<里面的ID, step号>插堆
@@ -299,7 +296,17 @@ class GradAsyncProcessing : public GradProcessingBase {
 
       // NOTE: 改了优先级
       base::LockGuard element_lock_guard(*p);
-      auto [not_used, grads] = p->DrainWrites();
+      auto [not_used, vec_grads] = p->DrainWrites();
+
+#ifdef USE_SUB_GRAD_TENSOR
+      std::vector<torch::Tensor> grads;
+      for (auto &each : vec_grads) {
+        grads.push_back(each.to_tensor());
+      }
+#else
+      auto &grads = vec_grads;
+#endif
+
       static int round_robin = 0;
       for (int i = 0; i < grads.size(); i++) {
         // constexpr bool kUseBackThread = true;
@@ -387,7 +394,13 @@ class GradAsyncProcessing : public GradProcessingBase {
 
       for (int i = 0; i < input_keys[rank].size(0); ++i) {
         int64_t id = data[i];
+
+#ifdef USE_SUB_GRAD_TENSOR
+        recstore::SubGradTensor grad_tensor(input_grads[rank], i);
+#else
         torch::Tensor grad_tensor = input_grads[rank][i];
+#endif
+
         auto *p = dict_[id];
         // NOTE: 改了优先级
         base::LockGuard element_lock_guard(*p);
@@ -404,15 +417,9 @@ class GradAsyncProcessing : public GradProcessingBase {
     timer_ProcessBackwardAsync.end();
   }
 
-  void ProcessBackwardAsync(const std::vector<torch::Tensor> &input_keys,
-                            const std::vector<torch::Tensor> &input_grads,
-                            int step_no) {
-    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
-        ShuffleKeysAndGrads(input_keys, input_grads);
-
-    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
-                    shuffled_grads_in_each_rank_cache);
-
+  void ProcessBackward(const std::vector<torch::Tensor> &input_keys,
+                       const std::vector<torch::Tensor> &input_grads,
+                       int step_no) override {
     base::LockGuard _(large_lock_);
     // record the update
     // 把 <ID>查一下堆，拿一下step号

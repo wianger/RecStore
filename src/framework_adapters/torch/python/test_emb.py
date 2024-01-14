@@ -48,8 +48,8 @@ USE_SGD = True
 # USE_SGD = False
 LR = 2
 
-XMH_DEBUG = True
-# XMH_DEBUG = False
+# XMH_DEBUG = True
+XMH_DEBUG = False
 
 # NO_CHECK = True
 NO_CHECK = False
@@ -311,6 +311,9 @@ class TestShardedCache:
             # "backwardMode": ["CppAsync",],
             "backwardMode": ["CppAsyncV2",],
 
+            # "backgrad_init":['cpu', 'gpu', 'both'],
+            "backgrad_init": ['both'],
+
             # "cache_ratio": [0.1, 0.3, 0.5],
             "cache_ratio": [0.1,]
         }
@@ -326,16 +329,16 @@ class TestShardedCache:
             test_cache = each['test_cache']
             backmode = each['backwardMode']
             cache_ratio = each['cache_ratio']
+            backgrad_init = each['backgrad_init']
 
             IPCTensorFactory.ClearIPCMemory()
-            args = {"test_cache": test_cache,
-                    "cache_ratio": cache_ratio,
-                    "kForwardItersPerStep": 1,
-                    "backwardMode": backmode,
-                    "L": 10,
-                    "nr_background_threads": 32,
-                    "log_interval": 100,
-                    }
+            args = {
+                "kForwardItersPerStep": 1,
+                "L": 10,
+                "nr_background_threads": 32,
+                "log_interval": 100,
+                **each,
+            }
             print("xmh: ", args)
             self.main_routine(self.routine_cache_helper, args)
 

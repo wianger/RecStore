@@ -40,6 +40,7 @@ class CacheEmbFactory:
                                                 cached_range=cached_range,
                                                 kForwardItersPerStep=args['kForwardItersPerStep'],
                                                 backward_mode=args['backwardMode'],
+                                                backgrad_init=args['backgrad_init'],
                                                 )
         elif cache_type == "TorchNativeStdEmb":
             # abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')

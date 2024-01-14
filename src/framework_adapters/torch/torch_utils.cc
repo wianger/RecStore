@@ -54,4 +54,8 @@ std::string toString(c10::intrusive_ptr<recstore::SlicedTensor> tensor,
   return toString(tensor->GetSlicedTensor(), simplified);
 }
 
+std::string toString(const SubGradTensor &tensor, bool simplified) {
+  return toString(tensor.to_tensor(), simplified);
+}
+
 }  // namespace recstore

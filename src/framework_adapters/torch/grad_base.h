@@ -15,6 +15,9 @@
 #include "parallel_pq.h"
 #include "torch_utils.h"
 
+#define GRAD_ASYNC_V1_DEBUG
+#define USE_SUB_GRAD_TENSOR
+// #define XMH_DEBUG_KG
 
 namespace recstore {
 
@@ -44,7 +47,7 @@ class GraphEnv {
     L_ = json_config.at("L");
     kForwardItersPerStep_ = json_config.at("kForwardItersPerStep");
     clr_ = json_config.at("clr");
-
+    backgrad_init_ = json_config.at("backgrad_init");
     full_emb_ = IPCTensorFactory::FindIPCTensorFromName("full_emb");
 
     nr_graph_node_ = nr_graph_node;
@@ -84,10 +87,17 @@ class GraphEnv {
       backward_grads_per_rank_.push_back(
           IPCTensorFactory::GetSlicedIPCTensorFromName(
               folly::sformat("backward_grads_{}", rank)));
-
       backward_grads_neg_per_rank_.push_back(
           IPCTensorFactory::GetSlicedIPCTensorFromName(
               folly::sformat("backward_grads_neg_{}", rank)));
+      if (backgrad_init_ == "both") {
+        backward_grads_gpu_.push_back(
+            IPCTensorFactory::GetSlicedIPCTensorFromName(
+                folly::sformat("backward_grads_{}_gpu", rank)));
+        backward_grads_neg_gpu_.push_back(
+            IPCTensorFactory::GetSlicedIPCTensorFromName(
+                folly::sformat("backward_grads_neg_{}_gpu", rank)));
+      }
 
       circle_buffer_end_per_rank_.push_back(
           IPCTensorFactory::FindIPCTensorFromName(
@@ -115,6 +125,12 @@ class GraphEnv {
   std::vector<c10::intrusive_ptr<SlicedTensor>> input_keys_neg_per_rank_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_per_rank_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_per_rank_;
+
+  std::string backgrad_init_;
+  // for backgrad_init_ = both
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_gpu_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_gpu_;
+
   // different rank's L buffer
   std::vector<std::vector<c10::intrusive_ptr<SlicedTensor>>>
       cached_id_circle_buffer_;
@@ -136,6 +152,12 @@ class GradProcessingBase {
             GraphEnv::GetInstance()->backward_grads_per_rank_),
         backward_grads_neg_per_rank_(
             GraphEnv::GetInstance()->backward_grads_neg_per_rank_),
+        backgrad_init_(GraphEnv::GetInstance()->backgrad_init_),
+        // for both
+        backward_grads_gpu_(GraphEnv::GetInstance()->backward_grads_gpu_),
+        backward_grads_neg_gpu_(
+            GraphEnv::GetInstance()->backward_grads_neg_gpu_),
+        //
         cached_id_circle_buffer_(
             GraphEnv::GetInstance()->cached_id_circle_buffer_) {
     cached_range_ = cached_range;
@@ -145,6 +167,16 @@ class GradProcessingBase {
     kForwardItersPerStep_ = json_config.at("kForwardItersPerStep");
     clr_ = json_config.at("clr");
     LOG(WARNING) << "Init GradProcessingBase done";
+
+    if (backgrad_init_ == "cpu") {
+      backgrad_init_enum_ = BackGradInitEnum::CPU;
+    } else if (backgrad_init_ == "gpu") {
+      backgrad_init_enum_ = BackGradInitEnum::GPU;
+    } else if (backgrad_init_ == "both") {
+      backgrad_init_enum_ = BackGradInitEnum::BOTH;
+    } else {
+      LOG(FATAL) << "invalide backgrad_init";
+    }
   }
 
   virtual void RegTensorsPerProcess() {
@@ -173,7 +205,62 @@ class GradProcessingBase {
 
   };
 
-  virtual void ProcessOneStep(int64_t step_no) = 0;
+  virtual void UpdateCache(
+      const std::vector<torch::Tensor> &input_keys_per_rank_tensors,
+      const std::vector<torch::Tensor> &backward_grads_per_rank_tensors) {
+    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
+        ShuffleKeysAndGrads(input_keys_per_rank_tensors,
+                            backward_grads_per_rank_tensors);
+
+    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
+                    shuffled_grads_in_each_rank_cache);
+  }
+
+  virtual void ProcessOneStep(int64_t step_no) {
+    torch::AutoGradMode guard_false(false);
+    auto input_keys_per_rank_tensors =
+        SlicedTensor::BatchConvertToTensors(input_keys_per_rank_);
+    auto backward_grads_per_rank_tensors =
+        SlicedTensor::BatchConvertToTensors(backward_grads_per_rank_);
+    auto backward_grads_per_rank_tensors_gpu =
+        SlicedTensor::BatchConvertToTensors(backward_grads_gpu_);
+
+    if (backgrad_init_enum_ == BackGradInitEnum::BOTH) {
+      CHECK_EQ(backward_grads_per_rank_tensors.size(),
+               backward_grads_per_rank_tensors_gpu.size());
+
+      UpdateCache(input_keys_per_rank_tensors,
+                  backward_grads_per_rank_tensors_gpu);
+    } else {
+      UpdateCache(input_keys_per_rank_tensors, backward_grads_per_rank_tensors);
+    }
+
+    ProcessBackward(input_keys_per_rank_tensors,
+                    backward_grads_per_rank_tensors, step_no);
+    if (kForwardItersPerStep_ > 1) {
+      auto input_keys_neg_per_rank_tensors =
+          SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
+      auto backward_grads_neg_per_rank_tensors =
+          SlicedTensor::BatchConvertToTensors(backward_grads_neg_per_rank_);
+      auto backward_grads_neg_per_rank_tensors_gpu =
+          SlicedTensor::BatchConvertToTensors(backward_grads_neg_gpu_);
+
+      if (backgrad_init_enum_ == BackGradInitEnum::BOTH) {
+        UpdateCache(input_keys_neg_per_rank_tensors,
+                    backward_grads_neg_per_rank_tensors_gpu);
+      } else {
+        UpdateCache(input_keys_neg_per_rank_tensors,
+                    backward_grads_neg_per_rank_tensors);
+      }
+
+      ProcessBackward(input_keys_neg_per_rank_tensors,
+                      backward_grads_neg_per_rank_tensors, step_no);
+    }
+  }
+
+  virtual void ProcessBackward(const std::vector<torch::Tensor> &input_keys,
+                               const std::vector<torch::Tensor> &input_grads,
+                               int step_no) = 0;
 
   virtual void BlockToStepN(int step_no) = 0;
 
@@ -254,13 +341,23 @@ class GradProcessingBase {
   std::vector<torch::Tensor> &cache_per_rank_;
   bool isInitialized_ = false;
 
+  enum BackGradInitEnum { CPU, GPU, BOTH };
+  BackGradInitEnum backgrad_init_enum_;
+
   // runtime tensor
   std::vector<torch::Tensor> &step_tensor_per_rank_;
   std::vector<torch::Tensor> &circle_buffer_end_per_rank_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> &input_keys_per_rank_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> &input_keys_neg_per_rank_;
+
   std::vector<c10::intrusive_ptr<SlicedTensor>> &backward_grads_per_rank_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> &backward_grads_neg_per_rank_;
+
+  std::string backgrad_init_;
+  // for backgrad_init_ = both
+  std::vector<c10::intrusive_ptr<SlicedTensor>> &backward_grads_gpu_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> &backward_grads_neg_gpu_;
+
   // different rank's L buffer
   std::vector<std::vector<c10::intrusive_ptr<SlicedTensor>>>
       &cached_id_circle_buffer_;
@@ -272,42 +369,9 @@ class GradSyncProcessing : public GradProcessingBase {
                      const std::vector<std::vector<int64_t>> &cached_range)
       : GradProcessingBase(json_str, cached_range) {}
 
-  void ProcessOneStep(int64_t step_no) override {
-    torch::AutoGradMode guard_false(false);
-    // show tensors of the first rank
-
-    // std::cout << "input_keys_per_rank" << std::endl;
-    // std::cout << toString(input_keys_per_rank_[0]) << std::endl;
-    // std::cout << "input_keys_neg_per_rank_" << std::endl;
-    // std::cout << toString(input_keys_neg_per_rank_[0]) << std::endl;
-    // static int cnt = 0;
-    // std::cout << "cached_id_circle_buffer" << std::endl;
-    // std::cout << "Step " << step_tensor_per_rank_[0][cnt].item<int64_t>()
-    //           << " ";
-    // std::cout <<
-    // toString(cached_id_circle_buffer_[0][cnt]->GetSlicedTensor())
-    //           << std::endl;
-    // cnt = (cnt + 1) % cached_id_circle_buffer_[0].size();
-
-    auto input_keys_per_rank_tensors =
-        SlicedTensor::BatchConvertToTensors(input_keys_per_rank_);
-    auto backward_grads_per_rank_tensors =
-        SlicedTensor::BatchConvertToTensors(backward_grads_per_rank_);
-
-    ProcessBackwardSync(input_keys_per_rank_tensors,
-                        backward_grads_per_rank_tensors);
-    if (kForwardItersPerStep_ > 1) {
-      auto input_keys_neg_per_rank_tensors =
-          SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
-      auto backward_grads_neg_per_rank_tensors =
-          SlicedTensor::BatchConvertToTensors(backward_grads_neg_per_rank_);
-      ProcessBackwardSync(input_keys_neg_per_rank_tensors,
-                          backward_grads_neg_per_rank_tensors);
-    }
-  }
-
-  void ProcessBackwardSync(const std::vector<torch::Tensor> &input_keys,
-                           const std::vector<torch::Tensor> &input_grads) {
+  void ProcessBackward(const std::vector<torch::Tensor> &input_keys,
+                       const std::vector<torch::Tensor> &input_grads,
+                       int step_no) override {
     auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
         ShuffleKeysAndGrads(input_keys, input_grads);
 

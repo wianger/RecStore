@@ -132,7 +132,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, keys, full_emb, emb_cache,
                 fake_tensor, cached_range, ret_value,
-                backward_grads
+                backward_grads, backward_grads_2
                 ):
         rank, world_size = dist.get_rank(), dist.get_world_size()
 
@@ -200,6 +200,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         ctx.cached_range = cached_range
 
         ctx.backward_grads = backward_grads
+        ctx.backward_grads_2 = backward_grads_2
         return ret_value
 
     @staticmethod
@@ -266,7 +267,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             dram_grads = kv_to_sparse_tensor(keys, grad_output, full_emb.shape)
             full_emb.grad = dram_grads / dist.get_world_size()
         '''
-        return None, None, None, torch.randn(1, 1), None, None, None
+        return None, None, None, torch.randn(1, 1), None, None, None, None
 
     @staticmethod
     @torch.no_grad()
@@ -279,18 +280,28 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             rank = dist.get_rank()
             keys, = ctx.saved_tensors
             backward_grads = ctx.backward_grads
-            backward_grads.Copy_(
-                grad_output / dist.get_world_size(), non_blocking=False)
-            return None, None, None, torch.randn(1, 1), None, None, None
+            backward_grads_2 = ctx.backward_grads_2
+
+            if KnownLocalCachedEmbeddingFn.backgrad_init != "both":
+                backward_grads.Copy_(
+                    grad_output / dist.get_world_size(), non_blocking=False)
+            else:
+                backward_grads.Copy_(
+                    grad_output / dist.get_world_size(), non_blocking=True)
+                backward_grads_2.Copy_(
+                    grad_output / dist.get_world_size(), non_blocking=True)
+                torch.cuda.synchronize()
+            return None, None, None, torch.randn(1, 1), None, None, None, None
         else:
             assert False
 
 
 class KnownLocalCachedEmbedding(AbsEmb):
-    def __init__(self, full_emb, cached_range, kForwardItersPerStep, backward_mode) -> None:
+    def __init__(self, full_emb, cached_range, kForwardItersPerStep, backward_mode, backgrad_init) -> None:
         self.kForwardItersPerStep = kForwardItersPerStep
 
         KnownLocalCachedEmbeddingFn.backward_mode = backward_mode
+        KnownLocalCachedEmbeddingFn.backgrad_init = backgrad_init
 
         self.fake_tensor = torch.randn(1, 1, requires_grad=True)
         self.emb_dim = full_emb.shape[1]
@@ -304,20 +315,35 @@ class KnownLocalCachedEmbedding(AbsEmb):
         self.emb_cache = recstore.IPCTensorFactory.NewIPCGPUTensor(
             f"embedding_cache_{rank}", [cached_capacity, self.emb_dim], torch.float32, rank)
 
-        # self.input_keys_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-        #     f"input_keys_{rank}", [int(1e5),], torch.int64, rank)
-        # self.input_keys_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-        #     f"input_keys_neg_{rank}", [int(1e5),], torch.int64, rank)
-
         self.input_keys_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
             f"input_keys_{rank}", [int(1e5),], torch.int64, )
         self.input_keys_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
             f"input_keys_neg_{rank}", [int(1e5),], torch.int64, )
 
-        self.backward_grads_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-            f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
-        self.backward_grads_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-            f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
+        self.backgrad_init = backgrad_init
+
+        if backgrad_init == 'cpu':
+            self.backward_grads_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
+                f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, )
+            self.backward_grads_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
+                f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, )
+        elif backgrad_init == 'gpu':
+            self.backward_grads_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
+                f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
+            self.backward_grads_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
+                f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
+        elif backgrad_init == 'both':
+            self.backward_grads_shm_cpu = recstore.IPCTensorFactory.NewSlicedIPCTensor(
+                f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, )
+            self.backward_grads_neg_shm_cpu = recstore.IPCTensorFactory.NewSlicedIPCTensor(
+                f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, )
+
+            self.backward_grads_shm_gpu = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
+                f"backward_grads_{rank}_gpu", [int(1e5), self.emb_dim], torch.float, rank)
+            self.backward_grads_neg_shm_gpu = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
+                f"backward_grads_neg_{rank}_gpu", [int(1e5), self.emb_dim], torch.float, rank)
+        else:
+            assert False
 
         self.cached_range = cached_range
         self.full_emb = full_emb
@@ -354,14 +380,24 @@ class KnownLocalCachedEmbedding(AbsEmb):
             assert self.input_keys_neg_shm.GetSlicedTensor(
             ).shape[0] == input_keys.shape[0]
 
-        if self.iter % self.kForwardItersPerStep == 0:
-            embed_value = KnownLocalCachedEmbeddingFn.apply(
-                input_keys, self.full_emb, self.emb_cache, self.fake_tensor,
-                self.cached_range, ret_value, self.backward_grads_shm)
+        if self.backgrad_init == 'cpu' or self.backgrad_init == 'gpu':
+            if self.iter % self.kForwardItersPerStep == 0:
+                embed_value = KnownLocalCachedEmbeddingFn.apply(
+                    input_keys, self.full_emb, self.emb_cache, self.fake_tensor,
+                    self.cached_range, ret_value, self.backward_grads_shm, None)
+            else:
+                embed_value = KnownLocalCachedEmbeddingFn.apply(
+                    input_keys, self.full_emb, self.emb_cache, self.fake_tensor,
+                    self.cached_range, ret_value, self.backward_grads_neg_shm, None)
         else:
-            embed_value = KnownLocalCachedEmbeddingFn.apply(
-                input_keys, self.full_emb, self.emb_cache, self.fake_tensor,
-                self.cached_range, ret_value, self.backward_grads_neg_shm)
+            if self.iter % self.kForwardItersPerStep == 0:
+                embed_value = KnownLocalCachedEmbeddingFn.apply(
+                    input_keys, self.full_emb, self.emb_cache, self.fake_tensor,
+                    self.cached_range, ret_value, self.backward_grads_shm_cpu, self.backward_grads_shm_gpu)
+            else:
+                embed_value = KnownLocalCachedEmbeddingFn.apply(
+                    input_keys, self.full_emb, self.emb_cache, self.fake_tensor,
+                    self.cached_range, ret_value, self.backward_grads_neg_shm_cpu, self.backward_grads_neg_shm_gpu)
 
         if trace:
             assert embed_value.requires_grad

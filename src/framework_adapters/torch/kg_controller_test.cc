@@ -173,11 +173,18 @@ class VirtualEnvironment {
   std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_;
   std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_;
 
+  // for both
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_cpu_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_cpu_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_gpu_;
+  std::vector<c10::intrusive_ptr<SlicedTensor>> backward_grads_neg_gpu_;
+
   std::vector<TestPerfSampler> test_perf_sampler_;
 
   std::vector<std::thread> threads_;
 
   base::Barrier *barrier_;
+  std::string backgrad_init_;
 
  public:
   VirtualEnvironment(const std::string &json_str, int64_t cached_capcacity) {
@@ -189,6 +196,7 @@ class VirtualEnvironment {
     num_ids_per_step_ = json_config.at("num_ids_per_step");
     L_ = json_config.at("L");
     backmode_ = json_config.at("backwardMode");
+    backgrad_init_ = json_config.at("backgrad_init");
 
     barrier_ = new base::Barrier(num_gpus_);
 
@@ -211,12 +219,39 @@ class VirtualEnvironment {
           folly::sformat("input_keys_neg_{}", rank), {int(1e5)},
           torch::kInt64));
 
-      backward_grads_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
-          folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
-          torch::kFloat32, rank));
-      backward_grads_neg_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
-          folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
-          torch::kFloat32, rank));
+      if (backgrad_init_ == "cpu") {
+        backward_grads_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
+            folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
+            torch::kFloat32));
+        backward_grads_neg_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
+            folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
+            torch::kFloat32));
+      } else if (backgrad_init_ == "gpu") {
+        backward_grads_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
+            folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
+            torch::kFloat32, rank));
+        backward_grads_neg_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
+            folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
+            torch::kFloat32, rank));
+      } else if (backgrad_init_ == "both") {
+        backward_grads_gpu_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
+            folly::sformat("backward_grads_{}_gpu", rank), {int(1e5), emb_dim_},
+            torch::kFloat32, rank));
+        backward_grads_neg_gpu_.push_back(
+            IPCTensorFactory::NewSlicedIPCGPUTensor(
+                folly::sformat("backward_grads_neg_{}_gpu", rank),
+                {int(1e5), emb_dim_}, torch::kFloat32, rank));
+
+        backward_grads_cpu_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
+            folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
+            torch::kFloat32));
+        backward_grads_neg_cpu_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
+            folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
+            torch::kFloat32));
+
+      } else {
+        LOG(FATAL) << "error";
+      }
 
       test_perf_sampler_.emplace_back(rank, L_, num_ids_per_step_,
                                       full_emb_capacity_, backmode_);
@@ -246,7 +281,7 @@ class VirtualEnvironment {
     KGCacheController *controller = KGCacheController::GetInstance();
     cudaSetDevice(rank);
     int step_no = 0;
-    auto backgrad = torch::zeros({num_ids_per_step_, emb_dim_}).cuda();
+    auto backgrad = torch::randn({num_ids_per_step_, emb_dim_}).cuda();
     while (true) {
       // if (rank == 0 && step_no == 10) ProfilerStart("/tmp/profile.prof");
 
@@ -257,7 +292,17 @@ class VirtualEnvironment {
       LOG(INFO) << folly::sformat("rank{}: {}", rank, toString(next_ids));
 
       input_keys_[rank]->Copy_(next_ids, false);
-      backward_grads_[rank]->Copy_(backgrad, false);
+
+      if (backgrad_init_ == "both") {
+        backward_grads_cpu_[rank]->Copy_(backgrad, false);
+        backward_grads_gpu_[rank]->Copy_(backgrad, false);
+      } else if (backgrad_init_ == "cpu") {
+        backward_grads_[rank]->Copy_(backgrad, false);
+      } else if (backgrad_init_ == "gpu") {
+        backward_grads_[rank]->Copy_(backgrad, false);
+      } else {
+        LOG(FATAL) << "error";
+      }
 
       LOG(INFO) << "Step " << step_no;
       // 2. Forward
@@ -279,7 +324,7 @@ class VirtualEnvironment {
       barrier_->Wait();
 
       // if (rank == 0 && step_no == 100) ProfilerStop();
-      if (step_no == 50) break;
+      // if (step_no == 50) break;
     }
   }
 };
@@ -297,7 +342,8 @@ int main(int argc, char **argv) {
             "nr_background_threads": 32,
             "full_emb_capacity": 10000000,
             "emb_dim" : 400,
-            "num_ids_per_step": 5000
+            "num_ids_per_step": 5000,
+            "backgrad_init": "both"
         }})";
 
   json_str = folly::sformat(json_str, FLAGS_backMode);

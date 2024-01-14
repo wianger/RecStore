@@ -515,10 +515,11 @@ class Timer {
     for (auto key = orderedKeyList.begin(); key != orderedKeyList.end();
          ++key) {
       vec.push_back(
-          {*key, beautifyNs(map[*key]->mean()), beautifyNs(map[*key]->p(99))});
+          // {*key, beautifyNs(map[*key]->mean()), beautifyNs(map[*key]->p(99))});
+          {*key, beautifyNs(map[*key]->p(50)), beautifyNs(map[*key]->p(99))});
     }
     spin_lock.Unlock();
-    DrawTable::DrawTB(ss, {25, 25, 25}, {"Name", "Mean", "P99"}, vec);
+    DrawTable::DrawTB(ss, {25, 25, 25}, {"Name", "P50", "P99"}, vec);
     return ss.str();
   }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "grad_async_v1.h"
 #include "grad_base.h"
+#include "grad_memory_manager.h"
 #include "parallel_pq_v2.h"
 
 // #define XMH_DEBUG_KG
@@ -80,32 +81,6 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     StartThreads();
   }
 
-  void ProcessOneStep(int64_t step_no) override {
-    torch::AutoGradMode guard_false(false);
-    // show tensors of the first rank
-
-    // std::cout << "input_keys_per_rank" << std::endl;
-    // std::cout << toString(input_keys_per_rank_[0]) << std::endl;
-    // std::cout << "input_keys_neg_per_rank_" << std::endl;
-    // std::cout << toString(input_keys_neg_per_rank_[0]) << std::endl;
-
-    auto input_keys_per_rank_tensors =
-        SlicedTensor::BatchConvertToTensors(input_keys_per_rank_);
-    auto backward_grads_per_rank_tensors =
-        SlicedTensor::BatchConvertToTensors(backward_grads_per_rank_);
-
-    ProcessBackwardAsync(input_keys_per_rank_tensors,
-                         backward_grads_per_rank_tensors, step_no);
-    if (kForwardItersPerStep_ > 1) {
-      auto input_keys_neg_per_rank_tensors =
-          SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
-      auto backward_grads_neg_per_rank_tensors =
-          SlicedTensor::BatchConvertToTensors(backward_grads_neg_per_rank_);
-      ProcessBackwardAsync(input_keys_neg_per_rank_tensors,
-                           backward_grads_neg_per_rank_tensors, step_no);
-    }
-  }
-
   void WhenNewSampleComes(c10::intrusive_ptr<SlicedTensor> input_keys, int rank,
                           int step_no) {
     // 来了一个新样本step号：把<里面的ID, step号>插堆
@@ -149,7 +124,17 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     int64_t id = p->GetID();
 
     base::LockGuard element_lock_guard(*p);
-    auto [not_used, grads] = p->DrainWrites();
+    auto [not_used, vec_grads] = p->DrainWrites();
+
+#ifdef USE_SUB_GRAD_TENSOR
+    std::vector<torch::Tensor> grads;
+    for (auto &each : vec_grads) {
+      grads.push_back(each.to_tensor());
+    }
+#else
+    auto &grads = vec_grads;
+#endif
+
     static int round_robin = 0;
     for (int i = 0; i < grads.size(); i++) {
       if (kUseBackThread) {
@@ -241,7 +226,13 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
 
       for (int i = 0; i < input_keys[rank].size(0); ++i) {
         int64_t id = data[i];
+
+#ifdef USE_SUB_GRAD_TENSOR
+        recstore::SubGradTensor grad_tensor(input_grads[rank], i);
+#else
         torch::Tensor grad_tensor = input_grads[rank][i];
+#endif
+
         auto *p = dict_[id];
         // NOTE: 改了优先级
         base::LockGuard element_lock_guard(*p);
@@ -258,15 +249,9 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     timer_ProcessBackwardAsync.end();
   }
 
-  void ProcessBackwardAsync(const std::vector<torch::Tensor> &input_keys,
-                            const std::vector<torch::Tensor> &input_grads,
-                            int step_no) {
-    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
-        ShuffleKeysAndGrads(input_keys, input_grads);
-
-    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
-                    shuffled_grads_in_each_rank_cache);
-
+  void ProcessBackward(const std::vector<torch::Tensor> &input_keys,
+                       const std::vector<torch::Tensor> &input_grads,
+                       int step_no) override {
     base::LockGuard _(large_lock_);
     // record the update
     // 把 <ID>查一下堆，拿一下step号

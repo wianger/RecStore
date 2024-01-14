@@ -373,6 +373,11 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         # if self.step % 100 == 0:
         #     TimeFactory.Report()
 
+    
+    # def UpdateCache(self, grad_output):
+    #     if self.use_cpp_controller and self.rank == 0:
+    #         self.controller
+    
     def AfterBackward(self,):
         self.timer_AfterBackward.start()
         dist.barrier()

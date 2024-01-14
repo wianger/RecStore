@@ -11,8 +11,8 @@
 
 namespace base {
 
-constexpr bool kDetectDeadLock = true;
-// constexpr bool kDetectDeadLock = false;
+// constexpr bool kDetectDeadLock = true;
+constexpr bool kDetectDeadLock = false;
 
 class Atomic {
  public:

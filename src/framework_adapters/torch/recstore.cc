@@ -74,6 +74,7 @@ class ZipfianTorchFiller : public torch::CustomClassHolder {
   void fillArray(int64_t *buffer, int64_t count) {
     for (int64_t i = 0; i < count; i++) {
       buffer[i] = mehcached_zipf_next(&state) + 1;
+      // buffer[i] = base::GetHash(mehcached_zipf_next(&state) + 1) % capacity;
     }
   }
 
