@@ -370,6 +370,9 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
             XLOG.info("call rank0 to StopThreads done")
 
     def AfterBackward(self,):
+        import time
+        print(f"rank{self.rank}: reached AfterBackward, {time.time()}")
+        
         self.timer_BarrierTimeBeforeRank0.start()
         self.barrier.Wait()
         self.timer_BarrierTimeBeforeRank0.stop()

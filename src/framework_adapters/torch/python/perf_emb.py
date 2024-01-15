@@ -3,6 +3,7 @@ from pyinstrument import Profiler
 import numpy as np
 import unittest
 import datetime
+import time
 import argparse
 import debugpy
 import json
@@ -16,9 +17,11 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.profiler import profile, record_function, ProfilerActivity
 
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+import recstore
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
@@ -228,19 +231,33 @@ def routine_local_cache_helper(worker_id, args):
                  backwardMode=args['backwardMode'],
                  nr_background_threads=args['nr_background_threads'],
                  cache_ratio=args['cache_ratio'],
-                 backgrad_init = args['backgrad_init'],
+                 backgrad_init=args['backgrad_init'],
                  )
 
     # forward
     start = time.time()
     start_step = 0
     warmup_iters = 50
+    # warmup_iters = 0
 
-    profiler = Profiler()
     if args['with_perf']:
         for_range = tqdm.trange(args['run_steps'])
+        with_perf = True
     else:
         for_range = range(args['run_steps'])
+        with_perf = False
+
+    with_pyinstrucment = False
+    with_cudaPerf = False
+    with_torchPerf = False
+
+    if with_perf and with_pyinstrucment:
+        pyinstruct_profiler = Profiler()
+
+    if with_perf and with_torchPerf:
+        torch_profiler = profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True)
+        torch_profiler.start()
 
     perf_sampler = PerfSampler(rank=rank,
                                L=args['L'],
@@ -274,31 +291,48 @@ def routine_local_cache_helper(worker_id, args):
 
     print("Before Training", flush=True)
 
+    start_barrier = recstore.MultiProcessBarrierFactory.Create(
+        "start_barrier", dist.get_world_size())
+    start_barrier.Wait()
+
     for _ in for_range:
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
 
         print(f"========== Step {_} ========== ", flush=True)
-        if _ == warmup_iters and rank == 0 and args['with_perf']:
-            profiler.start()
-            print("cudaProfilerStart")
-            torch.cuda.cudart().cudaProfilerStart()
-        if _ == warmup_iters + 10 and rank == 0 and args['with_perf']:
-            profiler.stop()
-            profiler.print()
-            print("cudaProfilerStop")
-            torch.cuda.cudart().cudaProfilerStop()
+
+        if with_perf and _ == warmup_iters:
+            if rank == 0:
+                if with_pyinstrucment:
+                    pyinstruct_profiler.start()
+
+                if with_cudaPerf:
+                    print("cudaProfilerStart")
+                    th.cuda.cudart().cudaProfilerStart()
+
+        if with_perf and _ == warmup_iters + 3:
+            if rank == 0:
+                if with_pyinstrucment:
+                    pyinstruct_profiler.stop()
+                    pyinstruct_profiler.print()
+                if with_cudaPerf:
+                    print("cudaProfilerStop")
+                    th.cuda.cudart().cudaProfilerStop()
+                if with_torchPerf:
+                    torch_profiler.stop()
+                    torch_profiler.export_chrome_trace("trace.json")
             break
 
         input_keys = next(perf_sampler)
-        XLOG.cdebug(
-            f"{rank}:input_keys {input_keys}")
+        start_barrier.Wait()
 
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
         loss = embed_value.sum(-1).sum(-1)
         timer_Forward.stop()
+
+        print(f"rank{rank}: after forward, {time.time()}")
 
         timer_Backward.start()
         loss.backward()
@@ -343,7 +377,6 @@ if __name__ == "__main__":
     # print("wait debugpy connect", flush=True)
     # debugpy.wait_for_client()
 
-    
     KGCacheControllerWrapperBase.BeforeDDPInit()
 
     args = get_run_config()
