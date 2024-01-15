@@ -4,36 +4,35 @@
 #include <chrono>
 #include <iostream>
 
-#define SIZE (4 * 1024 * 1024 * 1024LL)
-
 int main() {
-  // 分配主机内存
+  int64_t start = 128 * 1024;
+  int64_t end = 128 * 1024 * 1024;
+
   float* hostData;
-
-  cudaMallocHost((void**)&hostData, SIZE * sizeof(float), cudaHostAllocDefault);
-
+  cudaMallocHost((void**)&hostData, end, cudaHostAllocDefault);
+  float* deviceData;
+  cudaMalloc((void**)&deviceData, end);
   if (hostData == NULL) {
     printf("无法分配主机内存\n");
     return 1;
   }
 
-  // 分配设备内存
-  float* deviceData;
-  cudaMalloc((void**)&deviceData, SIZE * sizeof(float));
+  for (int64_t each = start; each < end; each *= 2) {
+    std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+    for (int _ = 0; _ < 50; _++) {
+      cudaMemcpy(deviceData, hostData, each, cudaMemcpyHostToDevice);
+      cudaDeviceSynchronize();
+    }
+    std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
-  std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = t2 - t1;
 
-  // 执行 cudaMemcpy 操作
-  for (int i = 0; i < 2; i++)
-    cudaMemcpy(deviceData, hostData, SIZE * sizeof(float),
-               cudaMemcpyHostToDevice);
-  cudaDeviceSynchronize();
-  std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    double s_avg = (double)diff.count() / 50.0;
 
-  std::cout
-      << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+    std::cout << each << "\t" << ((double)each) / s_avg / (1024 * 1024 * 1024LL)
+              << " GB/s\n";
+  }
 
-  // 释放内存
-
+  cudaFreeHost(hostData);
   return 0;
 }
