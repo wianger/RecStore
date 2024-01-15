@@ -20,4 +20,6 @@ IPCTensorFactory = torch.classes.librecstore_pytorch.IPCTensorFactory
 KGCacheController = torch.classes.librecstore_pytorch.KGCacheController
 ZipfianTorchFiller = torch.classes.librecstore_pytorch.ZipfianTorchFiller
 
+MultiProcessBarrierFactory = torch.classes.librecstore_pytorch.MultiProcessBarrierFactory
+
 Mfence = torch.classes.librecstore_pytorch.Mfence

@@ -55,7 +55,9 @@ class CustomExternalEmbedding:
         args = {
             "cache_ratio": self.args.cache_ratio,
             "kForwardItersPerStep": self.args.kForwardItersPerStep,
-            "backwardMode": self.args.backwardMode
+            "backwardMode": self.args.backwardMode,
+            "backgrad_init": self.args.backgrad_init,
+
         }
         self.cached_emb = CacheEmbFactory.New(
             self.args.cached_emb_type, self.emb, args)

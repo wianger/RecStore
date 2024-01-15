@@ -154,7 +154,6 @@ def prepare_save_path(args):
         os.makedirs(args.save_path)
 
 
-
 def main():
     # utils.Timer.StartReportThread()
     common_args = f'--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 \
@@ -175,6 +174,7 @@ def main():
     json_str = f'''{{
         "num_gpus": {args.nr_gpus},
         "L": 10,
+        "backgrad_init": "both", 
         "kForwardItersPerStep": 2,
         "clr": 1,
         "nr_background_threads": 1,
@@ -185,6 +185,7 @@ def main():
     json_config = json.loads(json_str)
 
     args.kForwardItersPerStep = json_config['kForwardItersPerStep']
+    args.backgrad_init = json_config['backgrad_init']
 
     from PsKvstore import kvinit
     kvinit()
@@ -216,8 +217,6 @@ def main():
     # We should turn on mix CPU-GPU training for multi-GPU training.
 
     args.mix_cpu_gpu = True
-
-
 
     if len(args.gpu) > 1:
         if args.num_proc < len(args.gpu):

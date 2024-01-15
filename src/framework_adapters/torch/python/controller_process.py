@@ -269,6 +269,11 @@ def GetKGCacheControllerWrapper():
 
 
 class KGCacheControllerWrapperBase:
+    @classmethod
+    def BeforeDDPInit(cls):
+        recstore.IPCTensorFactory.ClearIPCMemory()
+        recstore.MultiProcessBarrierFactory.ClearIPCMemory()
+
     def init(self):
         raise NotImplementedError
 
@@ -296,9 +301,6 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
     def StopThreads(self):
         pass
 
-    def BlockToStepN(self,):
-        pass
-
     def AfterBackward(self,):
         dist.barrier()
 
@@ -307,12 +309,16 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     instance = None
 
     def __init__(self, json_str, full_emb_capacity, ) -> None:
+        self.barrier = recstore.MultiProcessBarrierFactory.Create(
+            "kgcachecontroller", dist.get_world_size())
         dist.barrier()
+
         self.rank = dist.get_rank()
         self.json_config = json.loads(json_str)
 
         if self.rank == 0:
             Timer.StartReportThread()
+            pass
 
         backmode = self.json_config['backwardMode']
 
@@ -331,6 +337,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
         self.timer_BlockToStepN = Timer("BlockToStepN")
         self.timer_AfterBackward = Timer("AfterBackward")
+        self.timer_BarrierTimeBeforeRank0 = Timer("BarrierTimeBeforeRank0")
 
         self.__init_rpc()
         super()._RegisterFolly()
@@ -362,26 +369,23 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
                 "worker0", KGCacheControllerWrapper.StopThreads_cls, args=())
             XLOG.info("call rank0 to StopThreads done")
 
-    def BlockToStepN(self,):
-        self.timer_BlockToStepN.start()
+    def AfterBackward(self,):
+        self.timer_BarrierTimeBeforeRank0.start()
+        self.barrier.Wait()
+        self.timer_BarrierTimeBeforeRank0.stop()
+
+        if self.use_cpp_controller and self.rank == 0:
+            self.timer_AfterBackward.start()
+            self.controller.ProcessOneStep(self.step)
+            self.timer_AfterBackward.stop()
+
+        # self.barrier.Wait()
+
         self.step += 1
+        
+        self.timer_BlockToStepN.start()
         if self.use_cpp_controller and self.rank == 0:
             self.controller.BlockToStepN(self.step)
-        dist.barrier()
+
+        self.barrier.Wait()
         self.timer_BlockToStepN.stop()
-
-        # if self.step % 100 == 0:
-        #     TimeFactory.Report()
-
-    
-    # def UpdateCache(self, grad_output):
-    #     if self.use_cpp_controller and self.rank == 0:
-    #         self.controller
-    
-    def AfterBackward(self,):
-        self.timer_AfterBackward.start()
-        dist.barrier()
-        if self.use_cpp_controller and self.rank == 0:
-            self.controller.ProcessOneStep(self.step)
-        dist.barrier()
-        self.timer_AfterBackward.stop()

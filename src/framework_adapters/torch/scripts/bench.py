@@ -8,7 +8,7 @@ import os
 import subprocess
 import datetime
 
-from bench_util import RemoteExecute,ParallelSSH,Pnuke,GetHostName
+from bench_util import RemoteExecute, ParallelSSH, Pnuke, GetHostName
 import exp_config
 from exp_config import ALL_SERVERS_INCLUDING_NOT_USED, LOG_PREFIX, PROJECT_PATH
 
@@ -32,15 +32,12 @@ if __name__ == "__main__":
         suffix = "A30"
     else:
         suffix = "3090"
-    each.SetLogDir(f'{LOG_PREFIX}/exp0-bigmodel-{suffix}')
-    exp_lists.append(each)
-
-
-    # each = exp_config.ExpMacroPerfEmb()
-    # each.SetLogDir(f'{LOG_PREFIX}/exp1-macro-perf-emb-{suffix}')
+    each.SetLogDir(f'{LOG_PREFIX}/0115-exp0-bigmodel-{suffix}')
     # exp_lists.append(each)
-    
-    
+
+    each = exp_config.ExpMacroPerfEmb()
+    each.SetLogDir(f'{LOG_PREFIX}/0115-exp1-macro-perf-emb-{suffix}')
+    exp_lists.append(each)
 
     for i, each in enumerate(exp_lists):
         # mount NFS
@@ -52,4 +49,3 @@ if __name__ == "__main__":
         print("=================-====================")
         print(f"Experiment {i}/{len(exp_lists)}: ", each.name)
         each.RunExperiment()
-

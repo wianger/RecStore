@@ -22,7 +22,7 @@ sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nope
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
-from controller_process import KGCacheControllerWrapperDummy, PerfSampler, TestPerfSampler
+from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, PerfSampler, TestPerfSampler
 from cache_emb_factory import CacheEmbFactory
 from controller_process import KGCacheControllerWrapper
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
@@ -99,7 +99,7 @@ def get_run_config():
                                                            "gpu",
                                                            "both",
                                                            ],
-                               default="cpu"
+                               default="both"
                                )
         argparser.add_argument('--kForwardItersPerStep', type=int,
                                default=1)
@@ -212,11 +212,6 @@ def routine_local_cache_helper(worker_id, args):
         std_emb.reg_opt(sparse_opt)
         # Generate standard embedding done
 
-    # args['num_gpus'] = args['num_workers']
-    # args['clr'] = dist_opt.lr
-    # json_str = json.dumps(args)
-    # print("json_str:", json_str)
-
     json_str = r'''{{
         "num_gpus": {num_workers},
         "L": {L},
@@ -224,7 +219,8 @@ def routine_local_cache_helper(worker_id, args):
         "clr": {lr},
         "backwardMode": "{backwardMode}",
         "nr_background_threads": {nr_background_threads}, 
-        "cache_ratio": {cache_ratio}
+        "cache_ratio": {cache_ratio},
+        "backgrad_init": "{backgrad_init}"
     }}'''.format(num_workers=args['num_workers'],
                  kForwardItersPerStep=args['kForwardItersPerStep'],
                  L=args['L'],
@@ -232,6 +228,7 @@ def routine_local_cache_helper(worker_id, args):
                  backwardMode=args['backwardMode'],
                  nr_background_threads=args['nr_background_threads'],
                  cache_ratio=args['cache_ratio'],
+                 backgrad_init = args['backgrad_init'],
                  )
 
     # forward
@@ -329,7 +326,6 @@ def routine_local_cache_helper(worker_id, args):
         timer_Optimize.stop()
 
         kg_cache_controller.AfterBackward()
-        kg_cache_controller.BlockToStepN()
 
         if (_ % args['log_interval']) == (args['log_interval']-1):
             end = time.time()
@@ -347,7 +343,8 @@ if __name__ == "__main__":
     # print("wait debugpy connect", flush=True)
     # debugpy.wait_for_client()
 
-    IPCTensorFactory.ClearIPCMemory()
+    
+    KGCacheControllerWrapperBase.BeforeDDPInit()
 
     args = get_run_config()
     main_routine(args, routine_local_cache_helper)

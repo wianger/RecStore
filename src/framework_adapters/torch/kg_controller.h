@@ -28,7 +28,6 @@
 #include "parallel_pq.h"
 #include "torch_utils.h"
 
-// #define XMH_DEBUG_KG
 
 namespace recstore {
 

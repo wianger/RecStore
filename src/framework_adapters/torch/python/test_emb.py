@@ -23,6 +23,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import sys  # nopep8
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
 
+from controller_process import KGCacheControllerWrapperBase
 
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from PsKvstore import ShmKVStore
@@ -284,8 +285,6 @@ class TestShardedCache:
             timer_Optimize.stop()
 
             kg_cache_controller.AfterBackward()
-            kg_cache_controller.BlockToStepN()
-
             # if rank == 0:
             #     XLOG.info(f"rank{rank}: step{_} done")
             #     kg_cache_controller.controller.PrintPq()
@@ -331,7 +330,7 @@ class TestShardedCache:
             cache_ratio = each['cache_ratio']
             backgrad_init = each['backgrad_init']
 
-            IPCTensorFactory.ClearIPCMemory()
+            KGCacheControllerWrapperBase.BeforeDDPInit()
             args = {
                 "kForwardItersPerStep": 1,
                 "L": 10,

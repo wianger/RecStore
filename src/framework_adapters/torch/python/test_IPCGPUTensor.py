@@ -3,6 +3,7 @@ import torch as th
 
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+from controller_process import KGCacheControllerWrapperBase
 
 import recstore
 
@@ -38,7 +39,6 @@ def worker_main(worker_id, barrier, d):
 
         barrier.wait()
 
-        
         cpu_tensor = recstore.IPCTensorFactory.FindIPCTensorFromName(
             "cpu0_tensor")
         print(f"in worker{worker_id} process", cpu_tensor[:10])
@@ -53,8 +53,8 @@ nr_workers = 2
 
 barrier = mp.Barrier(nr_workers)
 
+KGCacheControllerWrapperBase.BeforeDDPInit()
 
-recstore.IPCTensorFactory.ClearIPCMemory()
 with mp.Manager() as manager:
     d = manager.dict()
 

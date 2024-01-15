@@ -270,7 +270,6 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             logs.append(log)
 
         kg_cache_controller.AfterBackward()
-        kg_cache_controller.BlockToStepN()
 
         # force synchronize embedding across processes every X steps
         if args.force_sync_interval > 0 and \

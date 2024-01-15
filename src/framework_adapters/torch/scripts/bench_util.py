@@ -18,10 +18,10 @@ def GenBinding(config_list):
     return r
 
 
-
 def GetHostName():
     import socket
     return socket.gethostname()
+
 
 def LocalExecute(command, path, print_show=True):
     import re
@@ -78,7 +78,6 @@ def RemoteExecute(server, command, path, print_show=True):
     return stdout.channel.recv_exit_status()
 
 
-
 def LocalNuke(pattern):
     ret = 0
     while ret == 0:
@@ -86,6 +85,13 @@ def LocalNuke(pattern):
         cp = subprocess.run(command, shell=True, )
         ret = cp.returncode
 
+
+def LocalNukeAllPython():
+    ret = 0
+    while ret == 0:
+        command = f"ps ux |grep python |grep -v vscode |grep -v bench |grep -v ipy |grep -v gpustat | grep -v grep | awk '{{print $2}}'| xargs kill -9"
+        cp = subprocess.run(command, shell=True, )
+        ret = cp.returncode
 
 
 def Pnuke(servers, pattern):
@@ -126,14 +132,14 @@ def StringnizeConfig(config):
 
 def PreprocessConfig(config):
     # StringnizeConfig(config)
-    
+
     bindings = []
     if 'binding' in config:
         config_binding = config['binding']
         del config['binding']
         permutations_binding_config = GenBinding(config_binding)
         bindings.append(permutations_binding_config)
-    
+
     if 'binding2' in config:
         config_binding = config['binding2']
         del config['binding2']
@@ -147,12 +153,12 @@ def PreprocessConfig(config):
 
         # [(dictA, dictB), (dictA, dictB), (dictA, dictB),]
         permutations_config = [disjoint_dicts_to_one_dict(each)
-                                for each in permutations_config]
+                               for each in permutations_config]
         return permutations_config
     else:
         return permutations_config
 
-        
+
 def ParallelSSH(hosts, command):
     print(hosts, command)
     SSH = "ssh -o StrictHostKeyChecking=no"

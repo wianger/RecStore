@@ -69,7 +69,10 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
                 },
                 {
                     "distribution": ['zipf'],
-                    "zipf_alpha": [0.9, 0.99],
+                    "zipf_alpha": [
+                        0.9,
+                        # 0.99
+                    ],
                 },
             ],
 
@@ -84,10 +87,14 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
-                        "PySync",
-                        "CppSync",
-                        #  "CppAsync",
+                        # "PySync",
+                        # "CppSync",
+                        "CppAsyncV2",
+                        # "CppAsync",
                     ],
+                    # "backgrad_init": [
+                    #     "cpu", "both"
+                    # ]
                 },
             ],
         }
@@ -100,7 +107,8 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
 
     def _RunHook(self, previous_run, next_run):
-        LocalNuke("perf_emb.py")
+        # LocalNuke("perf_emb.py")
+        LocalNukeAllPython()
         return
 
     def _PostprocessConfig(self, each_config, ):
@@ -115,7 +123,8 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
-        LocalNuke("perf_emb.py")
+        # LocalNuke("perf_emb.py")
+        LocalNukeAllPython()
 
 
 ###########################
@@ -205,21 +214,21 @@ class ExpOverallSingle(GNNExperiment):
                 # }
             ],
             "binding2": [
-                # {
-                #     "use_my_emb": ["true"],
-                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                #     "backwardMode": ["PySync"],
-                # },
-                # {
-                #     "use_my_emb": ["true"],
-                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                #     "backwardMode": ["CppSync"],
-                # },
-                # {
-                #     "use_my_emb": ["false"],
-                #     "cached_emb_type": ['None'],
-                #     "backwardMode": ["CppSync"],
-                # },       
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": ["CppSync"],
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
+                },
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KGExternelEmbedding'],
@@ -232,8 +241,8 @@ class ExpOverallSingle(GNNExperiment):
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
 
             "nr_gpus": [4],
-            "batch_size": [600, 1000, 2000, 4000, 8000],
-            "cache_ratio": [0.1],
+            "batch_size": [600, 1200, 1800, 3000, 4800, 6600, 8400],
+            "cache_ratio": [0.1, 0.2],
 
             # "nr_gpus": [2, 4],
             # "batch_size": [500, 1000, 2000,],
@@ -257,4 +266,5 @@ class ExpOverallSingle(GNNExperiment):
         LocalExecute('rm -rf /tmp/cached_tensor_*', '')
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
         return

@@ -1,3 +1,5 @@
+#include "IPC_barrier.h"
+
 #include "kg_controller.h"
 
 using namespace recstore;
@@ -360,6 +362,7 @@ int main(int argc, char **argv) {
   int num_gpus = json_config.at("num_gpus");
 
   IPCTensorFactory::ClearIPCMemory();
+  MultiProcessBarrierFactory::ClearIPCMemoryStatic();
 
   xmh::Reporter::StartReportThread();
 

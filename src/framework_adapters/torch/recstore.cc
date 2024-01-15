@@ -93,6 +93,8 @@ class ZipfianTorchFiller : public torch::CustomClassHolder {
   struct zipf_gen_state state;
 };
 
+void RegisterIPCBarrier(torch::Library &m);
+
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.class_<CacheQueryResult>("CacheQueryResult")
       .def("__str__", &CacheQueryResult::__repr__)
@@ -119,6 +121,7 @@ TORCH_LIBRARY(librecstore_pytorch, m) {
       .def(torch::init<int64_t, int64_t, int64_t, int64_t>());
   RegisterIPCTensorFactory(m);
   RegisterKGCacheController(m);
+  RegisterIPCBarrier(m);
 }
 
 }  // namespace recstore

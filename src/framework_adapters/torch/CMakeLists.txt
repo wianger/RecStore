@@ -11,6 +11,7 @@ set(recstore_pytorch_srcs
     shm.cc 
     kg_controller.cc
     IPCTensor.cc
+    IPC_barrier.cc
     torch_utils.cc
     parallel_pq.cc
 )
