@@ -53,7 +53,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
             "num_workers": [4, 8] if GetHostName() != "node182" else [4],
 
             "num_embs": [int(100*1e6),],
-            "batch_size": [512, 1024, 2048, 4096,],
+            "batch_size": [512, 1024, 2048, 3072, 4096,],
             "run_steps": [300],
             "log_interval": [100],
 
@@ -78,7 +78,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
             "binding": [
                 {
                     "emb_choice": [
-                        # "TorchNativeStdEmb",
+                        "TorchNativeStdEmb",
                         "KGExternelEmbedding",
                         "KnownShardedCachedEmbedding",
                     ]
@@ -87,7 +87,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
-                        # "PySync",
+                        "PySync",
                         # "CppSync",
                         "CppAsyncV2",
                         # "CppAsync",
@@ -279,11 +279,13 @@ class ExpOverallSingle(GNNExperiment):
                 {
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
+                    "cache_ratio": [0.1, 0.2],
                 },
-                # {
-                #     "dataset": ["Freebase"],
-                #     "hidden_dim": [100],
-                # }
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05, 0.1],
+                }
             ],
             "binding2": [
                 {
@@ -291,11 +293,11 @@ class ExpOverallSingle(GNNExperiment):
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
-                {
-                    "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["CppSync"],
-                },
+                # {
+                #     "use_my_emb": ["true"],
+                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                #     "backwardMode": ["CppSync"],
+                # },
                 {
                     "use_my_emb": ["false"],
                     "cached_emb_type": ['None'],
@@ -303,7 +305,9 @@ class ExpOverallSingle(GNNExperiment):
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding', 'KnownShardedCachedEmbedding'],
+                    "cached_emb_type": ['KGExternelEmbedding',
+                                        "TorchNativeStdEmb",
+                                        'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -314,11 +318,6 @@ class ExpOverallSingle(GNNExperiment):
 
             "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
             "batch_size": [600, 1200, 1800, 3000, 4800, 6600, 8400],
-            "cache_ratio": [0.1, 0.2],
-
-            # "nr_gpus": [2, 4],
-            # "batch_size": [500, 1000, 2000,],
-            # "cache_ratio": [0.05, 0.1, 0.4],
 
             "max_step": [500],
             "log_interval": [200],

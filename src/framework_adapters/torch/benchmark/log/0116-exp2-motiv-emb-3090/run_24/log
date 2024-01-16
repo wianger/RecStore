@@ -1,171 +1,143 @@
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I20240116 11:21:05.129076 47757 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
-W20240116 11:21:05.135711 47757 IPCTensor.h:367] NewIPCTensor: full_emb [100000000, 32]0x100000002000
+I20240116 21:16:40.713639 53434 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+W20240116 21:16:40.721325 53434 IPCTensor.h:367] NewIPCTensor: full_emb [100000000, 32]0x100000002000
 /home/xieminhui/RecStore/src/framework_adapters/torch/python/perf_emb.py:165: DeprecationWarning: The 'warn' function is deprecated, use 'warning' instead
   XLOG.warn("After init DistEmbedding")
-WARNING [47757 perf_emb.py:165] After init DistEmbedding
-========== Running Perf with routine <function routine_local_cache_helper at 0x7fe07feb98a0>==========
-Worker 1 pid=47938
-Worker 2 pid=47939
-INFO [47757 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
-INFO [47938 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
-INFO [47939 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
-INFO [47940 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
-INFO [47939 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-INFO [47940 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-E20240116 11:21:06.835904 47939 IPCTensor.h:346] IPCTensor full_emb already exists
-E20240116 11:21:06.835902 47940 IPCTensor.h:346] IPCTensor full_emb already exists
-INFO [47757 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-E20240116 11:21:06.837317 47757 IPCTensor.h:346] IPCTensor full_emb already exists
-INFO [47938 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-E20240116 11:21:06.838246 47938 IPCTensor.h:346] IPCTensor full_emb already exists
-W20240116 11:21:06.866911 47757 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_0 [10000000, 32]; dev=0; size=1.192 GB
-W20240116 11:21:06.866997 47939 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_2 [10000000, 32]; dev=2; size=1.192 GB
-W20240116 11:21:06.867127 47940 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_3 [10000000, 32]; dev=3; size=1.192 GB
-W20240116 11:21:06.867130 47938 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_1 [10000000, 32]; dev=1; size=1.192 GB
-W20240116 11:21:07.398708 47939 IPCTensor.h:367] NewIPCTensor: input_keys_2 [100000]0x1002faf0e000
-W20240116 11:21:07.398953 47939 IPCTensor.h:367] NewIPCTensor: input_keys_neg_2 [100000]0x1002fafd3000
-W20240116 11:21:07.399037 47939 IPCTensor.h:367] NewIPCTensor: backward_grads_2 [100000, 32]0x1002fb098000
-W20240116 11:21:07.399113 47939 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_2 [100000, 32]0x1002fbccf000
-W20240116 11:21:07.399178 47939 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_2_gpu [100000, 32]; dev=2; size=12.21 MB
-W20240116 11:21:07.400342 47939 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_2_gpu [100000, 32]; dev=2; size=12.21 MB
-W20240116 11:21:07.407775 47938 IPCTensor.h:367] NewIPCTensor: input_keys_1 [100000]0x1002fc90c000
-W20240116 11:21:07.407893 47938 IPCTensor.h:367] NewIPCTensor: input_keys_neg_1 [100000]0x1002fc9d1000
-W20240116 11:21:07.407939 47938 IPCTensor.h:367] NewIPCTensor: backward_grads_1 [100000, 32]0x1002fca96000
-W20240116 11:21:07.407976 47938 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_1 [100000, 32]0x1002fd6cd000
-W20240116 11:21:07.408020 47938 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_1_gpu [100000, 32]; dev=1; size=12.21 MB
-W20240116 11:21:07.409736 47938 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_1_gpu [100000, 32]; dev=1; size=12.21 MB
-W20240116 11:21:07.470830 47940 IPCTensor.h:367] NewIPCTensor: input_keys_3 [100000]0x1002fe30a000
-W20240116 11:21:07.470952 47940 IPCTensor.h:367] NewIPCTensor: input_keys_neg_3 [100000]0x1002fe3cf000
-W20240116 11:21:07.470999 47940 IPCTensor.h:367] NewIPCTensor: backward_grads_3 [100000, 32]0x1002fe494000
-W20240116 11:21:07.471041 47940 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_3 [100000, 32]0x1002ff0cb000
-W20240116 11:21:07.471087 47940 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_3_gpu [100000, 32]; dev=3; size=12.21 MB
-W20240116 11:21:07.473412 47940 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_3_gpu [100000, 32]; dev=3; size=12.21 MB
-W20240116 11:21:07.488090 47757 IPCTensor.h:367] NewIPCTensor: input_keys_0 [100000]0x1002ffd08000
-W20240116 11:21:07.488206 47757 IPCTensor.h:367] NewIPCTensor: input_keys_neg_0 [100000]0x1002ffdcd000
-W20240116 11:21:07.488270 47757 IPCTensor.h:367] NewIPCTensor: backward_grads_0 [100000, 32]0x1002ffe92000
-W20240116 11:21:07.488332 47757 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_0 [100000, 32]0x100300ac9000
-W20240116 11:21:07.488374 47757 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_0_gpu [100000, 32]; dev=0; size=12.21 MB
-W20240116 11:21:07.489574 47757 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_0_gpu [100000, 32]; dev=0; size=12.21 MB
-cudaHostRegister 0x100000002000
-2: KnownLocalCachedEmbedding init done
-Worker 3 pid=47940
+WARNING [53434 perf_emb.py:165] After init DistEmbedding
+========== Running Perf with routine <function routine_local_cache_helper at 0x7f1c55651a80>==========
+Worker 1 pid=53616
+Worker 2 pid=53617
+INFO [53434 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [53616 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [53618 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [53617 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [53434 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+INFO [53616 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+INFO [53617 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+INFO [53618 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+E20240116 21:16:41.318121 53434 IPCTensor.h:346] IPCTensor full_emb already exists
+E20240116 21:16:41.318279 53616 IPCTensor.h:346] IPCTensor full_emb already exists
+E20240116 21:16:41.318295 53618 IPCTensor.h:346] IPCTensor full_emb already exists
+E20240116 21:16:41.318297 53617 IPCTensor.h:346] IPCTensor full_emb already exists
+W20240116 21:16:41.327857 53434 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_0 [20000000, 32]; dev=0; size=2.384 GB
+W20240116 21:16:41.327898 53618 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_3 [20000000, 32]; dev=3; size=2.384 GB
+W20240116 21:16:41.327900 53616 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_1 [20000000, 32]; dev=1; size=2.384 GB
+W20240116 21:16:41.327903 53617 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_2 [20000000, 32]; dev=2; size=2.384 GB
+W20240116 21:16:41.859961 53434 IPCTensor.h:367] NewIPCTensor: input_keys_0 [100000]0x1002faf0e000
+W20240116 21:16:41.860093 53434 IPCTensor.h:367] NewIPCTensor: input_keys_neg_0 [100000]0x1002fafd3000
+W20240116 21:16:41.860127 53434 IPCTensor.h:367] NewIPCTensor: backward_grads_0 [100000, 32]0x1002fb098000
+W20240116 21:16:41.860152 53434 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_0 [100000, 32]0x1002fbccf000
+W20240116 21:16:41.860178 53434 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_0_gpu [100000, 32]; dev=0; size=12.21 MB
+W20240116 21:16:41.861202 53617 IPCTensor.h:367] NewIPCTensor: input_keys_2 [100000]0x1002fc908000
+W20240116 21:16:41.861297 53617 IPCTensor.h:367] NewIPCTensor: input_keys_neg_2 [100000]0x1002fc9cd000
+W20240116 21:16:41.861333 53617 IPCTensor.h:367] NewIPCTensor: backward_grads_2 [100000, 32]0x1002fca92000
+W20240116 21:16:41.861373 53617 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_2 [100000, 32]0x1002fd6c9000
+W20240116 21:16:41.861403 53617 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_2_gpu [100000, 32]; dev=2; size=12.21 MB
+W20240116 21:16:41.871078 53434 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_0_gpu [100000, 32]; dev=0; size=12.21 MB
+W20240116 21:16:41.872510 53617 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_2_gpu [100000, 32]; dev=2; size=12.21 MB
+W20240116 21:16:41.892827 53616 IPCTensor.h:367] NewIPCTensor: input_keys_1 [100000]0x1002fe30c000
+W20240116 21:16:41.892956 53616 IPCTensor.h:367] NewIPCTensor: input_keys_neg_1 [100000]0x1002fe3d1000
+W20240116 21:16:41.893000 53616 IPCTensor.h:367] NewIPCTensor: backward_grads_1 [100000, 32]0x1002fe496000
+W20240116 21:16:41.893040 53616 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_1 [100000, 32]0x1002ff0cd000
+W20240116 21:16:41.893083 53616 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_1_gpu [100000, 32]; dev=1; size=12.21 MB
+W20240116 21:16:41.893191 53618 IPCTensor.h:367] NewIPCTensor: input_keys_3 [100000]0x1002ffd04000
+W20240116 21:16:41.893379 53618 IPCTensor.h:367] NewIPCTensor: input_keys_neg_3 [100000]0x1002ffdc9000
+W20240116 21:16:41.893486 53618 IPCTensor.h:367] NewIPCTensor: backward_grads_3 [100000, 32]0x1002ffe8e000
+W20240116 21:16:41.893571 53618 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_3 [100000, 32]0x100300ac5000
+W20240116 21:16:41.893651 53618 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_3_gpu [100000, 32]; dev=3; size=12.21 MB
+W20240116 21:16:41.895401 53616 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_1_gpu [100000, 32]; dev=1; size=12.21 MB
+W20240116 21:16:41.896541 53618 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_3_gpu [100000, 32]; dev=3; size=12.21 MB
+Worker 3 pid=53618
 New CachedEmbedding, name=full_emb, shape=(100000000, 32), cache_type=KnownLocalCachedEmbedding
-fixed cache_range is [(0, 10000000), (10000000, 20000000), (20000000, 30000000), (30000000, 40000000)]
+fixed cache_range is [(0, 20000000), (20000000, 40000000), (40000000, 60000000), (60000000, 80000000)]
 cudaHostRegister 0x100000002000
 0: KnownLocalCachedEmbedding init done
 cudaHostRegister 0x100000002000
+1: KnownLocalCachedEmbedding init done
+cudaHostRegister 0x100000002000
 3: KnownLocalCachedEmbedding init done
 cudaHostRegister 0x100000002000
-1: KnownLocalCachedEmbedding init done
-W20240116 11:21:10.263012 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_0 [100000]0x100301704000
-W20240116 11:21:10.263157 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_0 [100000]0x1003017c9000
-W20240116 11:21:10.263252 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_1 [100000]0x10030188e000
-W20240116 11:21:10.263304 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_1 [100000]0x100301953000
-W20240116 11:21:10.263316 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_2 [100000]0x100301a18000
-W20240116 11:21:10.263370 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_3 [100000]0x100301add000
-W20240116 11:21:10.263381 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_2 [100000]0x100301ba2000
-W20240116 11:21:10.263432 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_4 [100000]0x100301c67000
-W20240116 11:21:10.263461 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_3 [100000]0x100301d2c000
-W20240116 11:21:10.263722 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_5 [100000]0x100301df1000
-W20240116 11:21:10.263811 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_6 [100000]0x100301f7b000
-W20240116 11:21:10.263765 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_0 [100000]0x100301eb6000
-W20240116 11:21:10.263875 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_7 [100000]0x100302040000
-W20240116 11:21:10.263922 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_8 [100000]0x100302105000
-W20240116 11:21:10.263965 47939 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_9 [100000]0x1003021ca000
-W20240116 11:21:10.264012 47939 IPCTensor.h:367] NewIPCTensor: step_r2 [10]0x10030228f000
-W20240116 11:21:10.264067 47939 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r2 [1]0x100302291000
-W20240116 11:21:10.264101 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_1 [100000]0x100302293000
-W20240116 11:21:10.264134 47939 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x100302358000
-W20240116 11:21:10.264173 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_2 [100000]0x10030235a000
-W20240116 11:21:10.264227 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_3 [100000]0x10030241f000
-W20240116 11:21:10.264284 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_4 [100000]0x1003024e4000
+2: KnownLocalCachedEmbedding init done
+W20240116 21:16:45.162084 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_0 [100000]0x100301704000
+W20240116 21:16:45.162160 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_0 [100000]0x10030188e000
+W20240116 21:16:45.162153 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_0 [100000]0x1003017c9000
+W20240116 21:16:45.162221 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_1 [100000]0x100301a18000
+W20240116 21:16:45.162216 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_0 [100000]0x100301953000
+W20240116 21:16:45.162237 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_1 [100000]0x100301add000
+W20240116 21:16:45.162266 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_1 [100000]0x100301ba2000
+W20240116 21:16:45.162287 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_2 [100000]0x100301c67000
+W20240116 21:16:45.162299 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_2 [100000]0x100301d2c000
+W20240116 21:16:45.162313 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_2 [100000]0x100301df1000
+W20240116 21:16:45.162318 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_1 [100000]0x100301eb6000
+W20240116 21:16:45.162330 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_3 [100000]0x100301f7b000
+W20240116 21:16:45.162353 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_3 [100000]0x100302040000
+W20240116 21:16:45.162370 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_3 [100000]0x100302105000
+W20240116 21:16:45.162371 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_4 [100000]0x1003021ca000
+W20240116 21:16:45.162375 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_2 [100000]0x10030228f000
+W20240116 21:16:45.162389 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_4 [100000]0x100302354000
+W20240116 21:16:45.162408 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_5 [100000]0x100302419000
+W20240116 21:16:45.162418 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_3 [100000]0x1003024de000
+W20240116 21:16:45.162426 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_4 [100000]0x1003025a3000
+W20240116 21:16:45.162433 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_5 [100000]0x100302668000
+W20240116 21:16:45.162448 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_4 [100000]0x10030272d000
+W20240116 21:16:45.162456 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_6 [100000]0x1003027f2000
+W20240116 21:16:45.162465 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_6 [100000]0x1003028b7000
+W20240116 21:16:45.162487 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_5 [100000]0x10030297c000
+W20240116 21:16:45.162497 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_5 [100000]0x100302a41000
+W20240116 21:16:45.162506 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_7 [100000]0x100302b06000
+W20240116 21:16:45.162519 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_7 [100000]0x100302bcb000
+W20240116 21:16:45.162523 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_6 [100000]0x100302c90000
+W20240116 21:16:45.162554 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_8 [100000]0x100302d55000
+W20240116 21:16:45.162555 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_8 [100000]0x100302e1a000
+W20240116 21:16:45.162575 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_6 [100000]0x100302edf000
+W20240116 21:16:45.162590 53616 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_9 [100000]0x100302fa4000
+W20240116 21:16:45.162598 53434 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_9 [100000]0x100303069000
+W20240116 21:16:45.162608 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_7 [100000]0x10030312e000
+W20240116 21:16:45.162629 53616 IPCTensor.h:367] NewIPCTensor: step_r1 [10]0x1003031f3000
+W20240116 21:16:45.162642 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_8 [100000]0x1003031f5000
+W20240116 21:16:45.162644 53434 IPCTensor.h:367] NewIPCTensor: step_r0 [10]0x1003032ba000
+W20240116 21:16:45.162652 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_7 [100000]0x1003032bc000
+W20240116 21:16:45.162662 53616 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r1 [1]0x100303381000
+W20240116 21:16:45.162688 53434 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r0 [1]0x100303383000
+W20240116 21:16:45.162689 53616 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x100303385000
+W20240116 21:16:45.162691 53617 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_9 [100000]0x100303387000
+W20240116 21:16:45.162714 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_8 [100000]0x10030344c000
+W20240116 21:16:45.162720 53434 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100303511000
+W20240116 21:16:45.162740 53617 IPCTensor.h:367] NewIPCTensor: step_r2 [10]0x100303513000
+W20240116 21:16:45.162756 53618 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_9 [100000]0x100303515000
+W20240116 21:16:45.162761 53617 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r2 [1]0x1003035da000
+W20240116 21:16:45.162791 53617 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x1003035dc000
+W20240116 21:16:45.162806 53618 IPCTensor.h:367] NewIPCTensor: step_r3 [10]0x1003035de000
+W20240116 21:16:45.162827 53618 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r3 [1]0x1003035e0000
+W20240116 21:16:45.162858 53618 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x1003035e2000
 Construct PerfSampler done
-W20240116 11:21:10.264334 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_5 [100000]0x1003025a9000
-W20240116 11:21:10.264385 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_6 [100000]0x10030266e000
-I20240116 11:21:10.264391 47939 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 4
-W20240116 11:21:10.264463 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_7 [100000]0x100302733000
-W20240116 11:21:10.264542 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_8 [100000]0x1003027f8000
-W20240116 11:21:10.264557 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_4 [100000]0x1003028bd000
-W20240116 11:21:10.264595 47757 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_9 [100000]0x100302982000
-W20240116 11:21:10.264657 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_0 [100000]0x100302a47000
-W20240116 11:21:10.264667 47757 IPCTensor.h:367] NewIPCTensor: step_r0 [10]0x100302b0c000
-W20240116 11:21:10.264708 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_5 [100000]0x100302b0e000
-W20240116 11:21:10.264720 47757 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r0 [1]0x100302bd3000
-W20240116 11:21:10.264761 47757 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100302bd5000
-W20240116 11:21:10.264791 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_6 [100000]0x100302bd7000
-W20240116 11:21:10.264817 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_1 [100000]0x100302c9c000
-W20240116 11:21:10.264894 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_2 [100000]0x100302d61000
-W20240116 11:21:10.264909 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_7 [100000]0x100302e26000
-W20240116 11:21:10.264955 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_8 [100000]0x100302eeb000
-W20240116 11:21:10.264959 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_3 [100000]0x100302fb0000
 Construct PerfSampler done
-W20240116 11:21:10.264998 47938 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_9 [100000]0x100303075000
-W20240116 11:21:10.265033 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_4 [100000]0x10030313a000
-W20240116 11:21:10.265069 47938 IPCTensor.h:367] NewIPCTensor: step_r1 [10]0x1003031ff000
-W20240116 11:21:10.265092 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_5 [100000]0x100303201000
-I20240116 11:21:10.265110 47757 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
-W20240116 11:21:10.265129 47938 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r1 [1]0x1003032c6000
-W20240116 11:21:10.265172 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_6 [100000]0x1003032c8000
-W20240116 11:21:10.265183 47938 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x10030338d000
-W20240116 11:21:10.265233 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_7 [100000]0x10030338f000
-W20240116 11:21:10.265280 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_8 [100000]0x100303454000
-W20240116 11:21:10.265324 47940 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_9 [100000]0x100303519000
-W20240116 11:21:10.265369 47940 IPCTensor.h:367] NewIPCTensor: step_r3 [10]0x1003035de000
-W20240116 11:21:10.265422 47940 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r3 [1]0x1003035e0000
 Construct PerfSampler done
-W20240116 11:21:10.265482 47940 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x1003035e2000
-I20240116 11:21:10.265539 47938 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
+I20240116 21:16:45.162977 53616 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 4
 Construct PerfSampler done
-I20240116 11:21:10.265707 47940 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
-W20240116 11:21:10.267664 47757 grad_base.h:54] KGCacheController, config={
-        "num_gpus": 4,
-        "L": 10,
-        "kForwardItersPerStep": 1,
-        "clr": 1,
-        "backwardMode": "CppAsyncV2",
-        "nr_background_threads": 16, 
-        "cache_ratio": 0.1,
-        "backgrad_init": "both"
-    }
-W20240116 11:21:10.267855 47757 grad_base.h:169] Init GradProcessingBase done
-I20240116 11:21:27.479867 47757 grad_async_v2.h:32] Use background thread to update emb.
-W20240116 11:21:27.480285 47757 kg_controller.h:78] after init GradAsyncProcessingV2
-I20240116 11:21:27.480295 47757 kg_controller.h:84] Construct KGCacheController done
+I20240116 21:16:45.163010 53434 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
+I20240116 21:16:45.163038 53617 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
+I20240116 21:16:45.163069 53618 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
 Construct KGCacheControllerWrapper done
 Construct KGCacheControllerWrapper done
 Construct KGCacheControllerWrapper done
 Construct KGCacheControllerWrapper done
-I20240116 11:21:27.963590 47757 grad_base.h:59] GraphEnv RegTensorsPerProcess
-W20240116 11:21:28.719983 48843 grad_async_v2.h:109] Detect new sample comes, old_end0, new_end1
-E20240116 11:21:28.720474 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
 Before Training
-I20240116 11:21:29.456017 47757 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 4
+I20240116 21:16:45.611522 53434 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 4
 Before Training
-I20240116 11:21:29.470438 47938 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
 Before Training
-I20240116 11:21:29.490134 47939 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
+I20240116 21:16:45.612454 53618 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
+I20240116 21:16:45.612520 53616 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
 Before Training
-I20240116 11:21:29.504231 47940 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
+I20240116 21:16:45.612687 53617 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
 ========== Step 0 ========== 
 ========== Step 0 ========== 
 ========== Step 0 ========== 
 ========== Step 0 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 38.944 ms                 | 38.944 ms                 |
-| Backward                  | 32.758 ms                 | 32.758 ms                 |
-| Optimize                  | 507.971 us                | 507.971 us                |
-| BarrierTimeBeforeRank0    | 67.421 us                 | 67.421 us                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 11:21:30.523468 47757 parallel_pq_v2.h:76] insert failed, size(hashtable)=0
 ========== Step 1 ========== 
 ========== Step 1 ========== 
 ========== Step 1 ========== 
 ========== Step 1 ========== 
-W20240116 11:21:30.533746 48843 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-W20240116 11:21:30.620143 47757 grad_async_v2.h:209] pq is empty
 ========== Step 2 ========== 
 ========== Step 2 ========== 
 ========== Step 2 ========== 
@@ -174,7 +146,6 @@ W20240116 11:21:30.620143 47757 grad_async_v2.h:209] pq is empty
 ========== Step 3 ========== 
 ========== Step 3 ========== 
 ========== Step 3 ========== 
-W20240116 11:21:30.788806 47757 grad_async_v2.h:209] pq is empty
 ========== Step 4 ========== 
 ========== Step 4 ========== 
 ========== Step 4 ========== 
@@ -191,7 +162,6 @@ W20240116 11:21:30.788806 47757 grad_async_v2.h:209] pq is empty
 ========== Step 7 ========== 
 ========== Step 7 ========== 
 ========== Step 7 ========== 
-W20240116 11:21:31.124814 47757 grad_async_v2.h:209] pq is empty
 ========== Step 8 ========== 
 ========== Step 8 ========== 
 ========== Step 8 ========== 
@@ -200,34 +170,26 @@ W20240116 11:21:31.124814 47757 grad_async_v2.h:209] pq is empty
 ========== Step 9 ========== 
 ========== Step 9 ========== 
 ========== Step 9 ========== 
-W20240116 11:21:31.291555 47757 grad_async_v2.h:209] pq is empty
 ========== Step 10 ========== 
 ========== Step 10 ========== 
 ========== Step 10 ========== 
 ========== Step 10 ========== 
-W20240116 11:21:31.376336 47757 grad_async_v2.h:209] pq is empty
 ========== Step 11 ========== 
 ========== Step 11 ========== 
 ========== Step 11 ========== 
 ========== Step 11 ========== 
-W20240116 11:21:31.459430 47757 grad_async_v2.h:209] pq is empty
 ========== Step 12 ========== 
 ========== Step 12 ========== 
 ========== Step 12 ========== 
 ========== Step 12 ========== 
-E20240116 11:21:31.523010 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=3918
-W20240116 11:21:31.545895 47757 grad_async_v2.h:209] pq is empty
 ========== Step 13 ========== 
 ========== Step 13 ========== 
 ========== Step 13 ========== 
 ========== Step 13 ========== 
-W20240116 11:21:31.546264 48843 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-W20240116 11:21:31.624678 47757 grad_async_v2.h:209] pq is empty
 ========== Step 14 ========== 
 ========== Step 14 ========== 
 ========== Step 14 ========== 
 ========== Step 14 ========== 
-W20240116 11:21:31.700616 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=15, pq.top=15
 ========== Step 15 ========== 
 ========== Step 15 ========== 
 ========== Step 15 ========== 
@@ -236,12 +198,10 @@ W20240116 11:21:31.700616 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 16 ========== 
 ========== Step 16 ========== 
 ========== Step 16 ========== 
-W20240116 11:21:31.860663 47757 grad_async_v2.h:209] pq is empty
 ========== Step 17 ========== 
 ========== Step 17 ========== 
 ========== Step 17 ========== 
 ========== Step 17 ========== 
-W20240116 11:21:31.936259 47757 grad_async_v2.h:209] pq is empty
 ========== Step 18 ========== 
 ========== Step 18 ========== 
 ========== Step 18 ========== 
@@ -250,7 +210,6 @@ W20240116 11:21:31.936259 47757 grad_async_v2.h:209] pq is empty
 ========== Step 19 ========== 
 ========== Step 19 ========== 
 ========== Step 19 ========== 
-W20240116 11:21:32.090509 47757 grad_async_v2.h:209] pq is empty
 ========== Step 20 ========== 
 ========== Step 20 ========== 
 ========== Step 20 ========== 
@@ -259,33 +218,26 @@ W20240116 11:21:32.090509 47757 grad_async_v2.h:209] pq is empty
 ========== Step 21 ========== 
 ========== Step 21 ========== 
 ========== Step 21 ========== 
-W20240116 11:21:32.252200 47757 grad_async_v2.h:209] pq is empty
 ========== Step 22 ========== 
 ========== Step 22 ========== 
 ========== Step 22 ========== 
 ========== Step 22 ========== 
-W20240116 11:21:32.333197 47757 grad_async_v2.h:209] pq is empty
 ========== Step 23 ========== 
 ========== Step 23 ========== 
 ========== Step 23 ========== 
 ========== Step 23 ========== 
-W20240116 11:21:32.415131 47757 grad_async_v2.h:209] pq is empty
 ========== Step 24 ========== 
 ========== Step 24 ========== 
 ========== Step 24 ========== 
 ========== Step 24 ========== 
-W20240116 11:21:32.496819 47757 grad_async_v2.h:209] pq is empty
 ========== Step 25 ========== 
 ========== Step 25 ========== 
 ========== Step 25 ========== 
 ========== Step 25 ========== 
-E20240116 11:21:32.523013 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=1651
-W20240116 11:21:32.577718 47757 grad_async_v2.h:209] pq is empty
 ========== Step 26 ========== 
 ========== Step 26 ========== 
 ========== Step 26 ========== 
 ========== Step 26 ========== 
-W20240116 11:21:32.578068 48843 grad_async_v2.h:109] Detect new sample comes, old_end6, new_end7
 ========== Step 27 ========== 
 ========== Step 27 ========== 
 ========== Step 27 ========== 
@@ -298,7 +250,6 @@ W20240116 11:21:32.578068 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 29 ========== 
 ========== Step 29 ========== 
 ========== Step 29 ========== 
-W20240116 11:21:32.886328 47757 grad_async_v2.h:209] pq is empty
 ========== Step 30 ========== 
 ========== Step 30 ========== 
 ========== Step 30 ========== 
@@ -307,21 +258,10 @@ W20240116 11:21:32.886328 47757 grad_async_v2.h:209] pq is empty
 ========== Step 31 ========== 
 ========== Step 31 ========== 
 ========== Step 31 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 2.118 ms                  | 161.890 ms                |
-| ProcessBack:UpdateCache   | 4.967 ms                  | 701.320 ms                |
-| ProcessBack:UpsertPq      | 8.019 ms                  | 8.960 ms                  |
-| ProcessOneStep            | 15.236 ms                 | 875.202 ms                |
-| BlockToStepN              | 156.517 us                | 3.290 ms                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 11:21:33.035332 47757 grad_async_v2.h:209] pq is empty
 ========== Step 32 ========== 
 ========== Step 32 ========== 
 ========== Step 32 ========== 
 ========== Step 32 ========== 
-W20240116 11:21:33.110486 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=33, pq.top=33
 ========== Step 33 ========== 
 ========== Step 33 ========== 
 ========== Step 33 ========== 
@@ -342,28 +282,22 @@ W20240116 11:21:33.110486 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 37 ========== 
 ========== Step 37 ========== 
 ========== Step 37 ========== 
-W20240116 11:21:33.515735 47757 grad_async_v2.h:209] pq is empty
 ========== Step 38 ========== 
 ========== Step 38 ========== 
 ========== Step 38 ========== 
 ========== Step 38 ========== 
-E20240116 11:21:33.523006 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=467
 ========== Step 39 ========== 
 ========== Step 39 ========== 
 ========== Step 39 ========== 
 ========== Step 39 ========== 
-W20240116 11:21:33.595041 48843 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-W20240116 11:21:33.674878 47757 grad_async_v2.h:209] pq is empty
 ========== Step 40 ========== 
 ========== Step 40 ========== 
 ========== Step 40 ========== 
 ========== Step 40 ========== 
-W20240116 11:21:33.752672 47757 grad_async_v2.h:209] pq is empty
 ========== Step 41 ========== 
 ========== Step 41 ========== 
 ========== Step 41 ========== 
 ========== Step 41 ========== 
-W20240116 11:21:33.832029 47757 grad_async_v2.h:209] pq is empty
 ========== Step 42 ========== 
 ========== Step 42 ========== 
 ========== Step 42 ========== 
@@ -384,7 +318,6 @@ W20240116 11:21:33.832029 47757 grad_async_v2.h:209] pq is empty
 ========== Step 46 ========== 
 ========== Step 46 ========== 
 ========== Step 46 ========== 
-W20240116 11:21:34.249792 47757 grad_async_v2.h:209] pq is empty
 ========== Step 47 ========== 
 ========== Step 47 ========== 
 ========== Step 47 ========== 
@@ -393,23 +326,18 @@ W20240116 11:21:34.249792 47757 grad_async_v2.h:209] pq is empty
 ========== Step 48 ========== 
 ========== Step 48 ========== 
 ========== Step 48 ========== 
-W20240116 11:21:34.407824 47757 grad_async_v2.h:209] pq is empty
 ========== Step 49 ========== 
 ========== Step 49 ========== 
 ========== Step 49 ========== 
 ========== Step 49 ========== 
-W20240116 11:21:34.486428 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=50, pq.top=50
 ========== Step 50 ========== 
 ========== Step 50 ========== 
 ========== Step 50 ========== 
 ========== Step 50 ========== 
-E20240116 11:21:34.523015 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=1546
-W20240116 11:21:34.575259 47757 grad_async_v2.h:209] pq is empty
 ========== Step 51 ========== 
 ========== Step 51 ========== 
 ========== Step 51 ========== 
 ========== Step 51 ========== 
-W20240116 11:21:34.604105 48843 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 52 ========== 
 ========== Step 52 ========== 
 ========== Step 52 ========== 
@@ -418,7 +346,6 @@ W20240116 11:21:34.604105 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 53 ========== 
 ========== Step 53 ========== 
 ========== Step 53 ========== 
-W20240116 11:21:34.820202 47757 grad_async_v2.h:209] pq is empty
 ========== Step 54 ========== 
 ========== Step 54 ========== 
 ========== Step 54 ========== 
@@ -435,7 +362,6 @@ W20240116 11:21:34.820202 47757 grad_async_v2.h:209] pq is empty
 ========== Step 57 ========== 
 ========== Step 57 ========== 
 ========== Step 57 ========== 
-W20240116 11:21:35.152474 47757 grad_async_v2.h:209] pq is empty
 ========== Step 58 ========== 
 ========== Step 58 ========== 
 ========== Step 58 ========== 
@@ -444,41 +370,38 @@ W20240116 11:21:35.152474 47757 grad_async_v2.h:209] pq is empty
 ========== Step 59 ========== 
 ========== Step 59 ========== 
 ========== Step 59 ========== 
+========== Step 60 ========== 
+========== Step 60 ========== 
+========== Step 60 ========== 
+========== Step 60 ========== 
+========== Step 61 ========== 
+========== Step 61 ========== 
+========== Step 61 ========== 
+========== Step 61 ========== 
+========== Step 62 ========== 
+========== Step 62 ========== 
+========== Step 62 ========== 
+========== Step 62 ========== 
+========== Step 63 ========== 
+========== Step 63 ========== 
+========== Step 63 ========== 
+========== Step 63 ========== 
+========== Step 64 ========== 
+========== Step 64 ========== 
+========== Step 64 ========== 
+========== Step 64 ========== 
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| Forward                   | 326.410 us                | 1.332 ms                  |
-| Backward                  | 1.113 ms                  | 2.005 ms                  |
-| Optimize                  | 87.681 us                 | 200.506 us                |
-| BarrierTimeBeforeRank0    | 134.624 us                | 5.166 ms                  |
-| AfterBackward             | 14.987 ms                 | 18.561 ms                 |
-| BlockToStepN              | 354.312 us                | 8.797 ms                  |
+| GenInput:CircleBuffer     | 101.046 us                | 300.641 us                |
+| GenInput                  | 224.806 us                | 2.696 ms                  |
+| Forward                   | 289.213 us                | 975.206 us                |
+| Backward                  | 21.638 ms                 | 48.315 ms                 |
+| Optimize                  | 19.231 ms                 | 33.914 ms                 |
+| BarrierTimeBeforeRank0    | 28.114 us                 | 113.920 us                |
+| BlockToStepN              | 14.975 us                 | 847.397 us                |
+| OneStep                   | 42.867 ms                 | 84.676 ms                 |
 +---------------------------+---------------------------+---------------------------+
-========== Step 60 ========== 
-========== Step 60 ========== 
-========== Step 60 ========== 
-========== Step 60 ========== 
-========== Step 61 ========== 
-========== Step 61 ========== 
-========== Step 61 ========== 
-========== Step 61 ========== 
-W20240116 11:21:35.484006 47757 grad_async_v2.h:209] pq is empty
-========== Step 62 ========== 
-========== Step 62 ========== 
-========== Step 62 ========== 
-========== Step 62 ========== 
-E20240116 11:21:35.523010 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=2593
-W20240116 11:21:35.562023 47757 grad_async_v2.h:209] pq is empty
-========== Step 63 ========== 
-========== Step 63 ========== 
-========== Step 63 ========== 
-========== Step 63 ========== 
-W20240116 11:21:35.608247 48843 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-========== Step 64 ========== 
-========== Step 64 ========== 
-========== Step 64 ========== 
-========== Step 64 ========== 
-W20240116 11:21:35.716400 47757 grad_async_v2.h:209] pq is empty
 ========== Step 65 ========== 
 ========== Step 65 ========== 
 ========== Step 65 ========== 
@@ -491,7 +414,6 @@ W20240116 11:21:35.716400 47757 grad_async_v2.h:209] pq is empty
 ========== Step 67 ========== 
 ========== Step 67 ========== 
 ========== Step 67 ========== 
-W20240116 11:21:35.968951 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=68, pq.top=67
 ========== Step 68 ========== 
 ========== Step 68 ========== 
 ========== Step 68 ========== 
@@ -500,17 +422,14 @@ W20240116 11:21:35.968951 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 69 ========== 
 ========== Step 69 ========== 
 ========== Step 69 ========== 
-W20240116 11:21:36.142897 47757 grad_async_v2.h:209] pq is empty
 ========== Step 70 ========== 
 ========== Step 70 ========== 
 ========== Step 70 ========== 
 ========== Step 70 ========== 
-W20240116 11:21:36.225067 47757 grad_async_v2.h:209] pq is empty
 ========== Step 71 ========== 
 ========== Step 71 ========== 
 ========== Step 71 ========== 
 ========== Step 71 ========== 
-W20240116 11:21:36.308610 47757 grad_async_v2.h:209] pq is empty
 ========== Step 72 ========== 
 ========== Step 72 ========== 
 ========== Step 72 ========== 
@@ -519,24 +438,18 @@ W20240116 11:21:36.308610 47757 grad_async_v2.h:209] pq is empty
 ========== Step 73 ========== 
 ========== Step 73 ========== 
 ========== Step 73 ========== 
-W20240116 11:21:36.481637 47757 grad_async_v2.h:209] pq is empty
 ========== Step 74 ========== 
 ========== Step 74 ========== 
 ========== Step 74 ========== 
 ========== Step 74 ========== 
-E20240116 11:21:36.525229 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=2500
-W20240116 11:21:36.575515 47757 grad_async_v2.h:209] pq is empty
 ========== Step 75 ========== 
 ========== Step 75 ========== 
 ========== Step 75 ========== 
 ========== Step 75 ========== 
-W20240116 11:21:36.609764 48843 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-W20240116 11:21:36.666843 47757 grad_async_v2.h:209] pq is empty
 ========== Step 76 ========== 
 ========== Step 76 ========== 
 ========== Step 76 ========== 
 ========== Step 76 ========== 
-W20240116 11:21:36.762351 47757 grad_async_v2.h:209] pq is empty
 ========== Step 77 ========== 
 ========== Step 77 ========== 
 ========== Step 77 ========== 
@@ -545,22 +458,18 @@ W20240116 11:21:36.762351 47757 grad_async_v2.h:209] pq is empty
 ========== Step 78 ========== 
 ========== Step 78 ========== 
 ========== Step 78 ========== 
-W20240116 11:21:36.944720 47757 grad_async_v2.h:209] pq is empty
 ========== Step 79 ========== 
 ========== Step 79 ========== 
 ========== Step 79 ========== 
 ========== Step 79 ========== 
-W20240116 11:21:37.030997 47757 grad_async_v2.h:209] pq is empty
 ========== Step 80 ========== 
 ========== Step 80 ========== 
 ========== Step 80 ========== 
 ========== Step 80 ========== 
-W20240116 11:21:37.120504 47757 grad_async_v2.h:209] pq is empty
 ========== Step 81 ========== 
 ========== Step 81 ========== 
 ========== Step 81 ========== 
 ========== Step 81 ========== 
-W20240116 11:21:37.211303 47757 grad_async_v2.h:209] pq is empty
 ========== Step 82 ========== 
 ========== Step 82 ========== 
 ========== Step 82 ========== 
@@ -573,28 +482,22 @@ W20240116 11:21:37.211303 47757 grad_async_v2.h:209] pq is empty
 ========== Step 84 ========== 
 ========== Step 84 ========== 
 ========== Step 84 ========== 
-W20240116 11:21:37.472723 47757 grad_async_v2.h:209] pq is empty
 ========== Step 85 ========== 
 ========== Step 85 ========== 
 ========== Step 85 ========== 
 ========== Step 85 ========== 
-E20240116 11:21:37.525015 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=3440
-W20240116 11:21:37.557736 47757 grad_async_v2.h:209] pq is empty
 ========== Step 86 ========== 
 ========== Step 86 ========== 
 ========== Step 86 ========== 
 ========== Step 86 ========== 
-W20240116 11:21:37.640427 47757 grad_async_v2.h:209] pq is empty
 ========== Step 87 ========== 
 ========== Step 87 ========== 
 ========== Step 87 ========== 
 ========== Step 87 ========== 
-W20240116 11:21:37.641026 48843 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 88 ========== 
 ========== Step 88 ========== 
 ========== Step 88 ========== 
 ========== Step 88 ========== 
-W20240116 11:21:37.806893 47757 grad_async_v2.h:209] pq is empty
 ========== Step 89 ========== 
 ========== Step 89 ========== 
 ========== Step 89 ========== 
@@ -603,15 +506,6 @@ W20240116 11:21:37.806893 47757 grad_async_v2.h:209] pq is empty
 ========== Step 90 ========== 
 ========== Step 90 ========== 
 ========== Step 90 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 2.144 ms                  | 2.343 ms                  |
-| ProcessBack:UpdateCache   | 5.165 ms                  | 5.493 ms                  |
-| ProcessBack:UpsertPq      | 7.806 ms                  | 15.153 ms                 |
-| ProcessOneStep            | 15.216 ms                 | 23.020 ms                 |
-| BlockToStepN              | 381.487 us                | 8.732 ms                  |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 91 ========== 
 ========== Step 91 ========== 
 ========== Step 91 ========== 
@@ -620,12 +514,10 @@ W20240116 11:21:37.806893 47757 grad_async_v2.h:209] pq is empty
 ========== Step 92 ========== 
 ========== Step 92 ========== 
 ========== Step 92 ========== 
-W20240116 11:21:38.134378 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=93, pq.top=93
 ========== Step 93 ========== 
 ========== Step 93 ========== 
 ========== Step 93 ========== 
 ========== Step 93 ========== 
-W20240116 11:21:38.219027 47757 grad_async_v2.h:209] pq is empty
 ========== Step 94 ========== 
 ========== Step 94 ========== 
 ========== Step 94 ========== 
@@ -638,27 +530,22 @@ W20240116 11:21:38.219027 47757 grad_async_v2.h:209] pq is empty
 ========== Step 96 ========== 
 ========== Step 96 ========== 
 ========== Step 96 ========== 
-W20240116 11:21:38.465149 47757 grad_async_v2.h:209] pq is empty
 ========== Step 97 ========== 
 ========== Step 97 ========== 
 ========== Step 97 ========== 
 ========== Step 97 ========== 
-E20240116 11:21:38.525015 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=4027
-W20240116 11:21:38.543210 47757 grad_async_v2.h:209] pq is empty
 ========== Step 98 ========== 
 ========== Step 98 ========== 
 ========== Step 98 ========== 
 ========== Step 98 ========== 
-W20240116 11:21:38.623210 47757 grad_async_v2.h:209] pq is empty
 ========== Step 99 ========== 
 ========== Step 99 ========== 
 ========== Step 99 ========== 
 ========== Step 99 ========== 
-W20240116 11:21:38.642061 48843 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-Step99:rank3, time: 28.450, per_step: 0.284496
-Step99:rank1, time: 28.450, per_step: 0.284497
-Step99:rank2, time: 28.450, per_step: 0.284499
-Step99:rank0, time: 28.450, per_step: 0.284496
+Step99:rank3, time: 6.520, per_step: 0.065199
+Step99:rank0, time: 6.520, per_step: 0.065199
+Step99:rank1, time: 6.520, per_step: 0.065199
+Step99:rank2, time: 6.520, per_step: 0.065199
 ========== Step 100 ========== 
 ========== Step 100 ========== 
 ========== Step 100 ========== 
@@ -675,7 +562,6 @@ Step99:rank0, time: 28.450, per_step: 0.284496
 ========== Step 103 ========== 
 ========== Step 103 ========== 
 ========== Step 103 ========== 
-W20240116 11:21:39.047441 47757 grad_async_v2.h:209] pq is empty
 ========== Step 104 ========== 
 ========== Step 104 ========== 
 ========== Step 104 ========== 
@@ -684,7 +570,6 @@ W20240116 11:21:39.047441 47757 grad_async_v2.h:209] pq is empty
 ========== Step 105 ========== 
 ========== Step 105 ========== 
 ========== Step 105 ========== 
-W20240116 11:21:39.208401 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=106, pq.top=105
 ========== Step 106 ========== 
 ========== Step 106 ========== 
 ========== Step 106 ========== 
@@ -693,7 +578,6 @@ W20240116 11:21:39.208401 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 107 ========== 
 ========== Step 107 ========== 
 ========== Step 107 ========== 
-W20240116 11:21:39.377663 47757 grad_async_v2.h:209] pq is empty
 ========== Step 108 ========== 
 ========== Step 108 ========== 
 ========== Step 108 ========== 
@@ -702,7 +586,6 @@ W20240116 11:21:39.377663 47757 grad_async_v2.h:209] pq is empty
 ========== Step 109 ========== 
 ========== Step 109 ========== 
 ========== Step 109 ========== 
-E20240116 11:21:39.525022 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=3707
 ========== Step 110 ========== 
 ========== Step 110 ========== 
 ========== Step 110 ========== 
@@ -711,7 +594,6 @@ E20240116 11:21:39.525022 48843 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 111 ========== 
 ========== Step 111 ========== 
 ========== Step 111 ========== 
-W20240116 11:21:39.652339 48843 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 112 ========== 
 ========== Step 112 ========== 
 ========== Step 112 ========== 
@@ -720,17 +602,14 @@ W20240116 11:21:39.652339 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 113 ========== 
 ========== Step 113 ========== 
 ========== Step 113 ========== 
-W20240116 11:21:39.892060 47757 grad_async_v2.h:209] pq is empty
 ========== Step 114 ========== 
 ========== Step 114 ========== 
 ========== Step 114 ========== 
 ========== Step 114 ========== 
-W20240116 11:21:39.972210 47757 grad_async_v2.h:209] pq is empty
 ========== Step 115 ========== 
 ========== Step 115 ========== 
 ========== Step 115 ========== 
 ========== Step 115 ========== 
-W20240116 11:21:40.052234 47757 grad_async_v2.h:209] pq is empty
 ========== Step 116 ========== 
 ========== Step 116 ========== 
 ========== Step 116 ========== 
@@ -743,18 +622,6 @@ W20240116 11:21:40.052234 47757 grad_async_v2.h:209] pq is empty
 ========== Step 118 ========== 
 ========== Step 118 ========== 
 ========== Step 118 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 323.697 us                | 1.332 ms                  |
-| Backward                  | 1.110 ms                  | 2.005 ms                  |
-| Optimize                  | 83.021 us                 | 327.864 us                |
-| BarrierTimeBeforeRank0    | 80.549 us                 | 5.166 ms                  |
-| AfterBackward             | 15.242 ms                 | 23.054 ms                 |
-| BlockToStepN              | 528.862 us                | 8.797 ms                  |
-| E2E-100                   | 9.257 s                   | 9.257 s                   |
-+---------------------------+---------------------------+---------------------------+
-W20240116 11:21:40.299901 47757 grad_async_v2.h:209] pq is empty
 ========== Step 119 ========== 
 ========== Step 119 ========== 
 ========== Step 119 ========== 
@@ -767,22 +634,18 @@ W20240116 11:21:40.299901 47757 grad_async_v2.h:209] pq is empty
 ========== Step 121 ========== 
 ========== Step 121 ========== 
 ========== Step 121 ========== 
-E20240116 11:21:40.525010 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=3776
 ========== Step 122 ========== 
 ========== Step 122 ========== 
 ========== Step 122 ========== 
 ========== Step 122 ========== 
-W20240116 11:21:40.628296 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=123, pq.top=123
 ========== Step 123 ========== 
 ========== Step 123 ========== 
 ========== Step 123 ========== 
 ========== Step 123 ========== 
-W20240116 11:21:40.652082 48843 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 124 ========== 
 ========== Step 124 ========== 
 ========== Step 124 ========== 
 ========== Step 124 ========== 
-W20240116 11:21:40.806449 47757 grad_async_v2.h:209] pq is empty
 ========== Step 125 ========== 
 ========== Step 125 ========== 
 ========== Step 125 ========== 
@@ -791,7 +654,6 @@ W20240116 11:21:40.806449 47757 grad_async_v2.h:209] pq is empty
 ========== Step 126 ========== 
 ========== Step 126 ========== 
 ========== Step 126 ========== 
-W20240116 11:21:40.963325 47757 grad_async_v2.h:209] pq is empty
 ========== Step 127 ========== 
 ========== Step 127 ========== 
 ========== Step 127 ========== 
@@ -820,7 +682,6 @@ W20240116 11:21:40.963325 47757 grad_async_v2.h:209] pq is empty
 ========== Step 133 ========== 
 ========== Step 133 ========== 
 ========== Step 133 ========== 
-E20240116 11:21:41.525089 47757 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
 ========== Step 134 ========== 
 ========== Step 134 ========== 
 ========== Step 134 ========== 
@@ -829,12 +690,10 @@ E20240116 11:21:41.525089 47757 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 135 ========== 
 ========== Step 135 ========== 
 ========== Step 135 ========== 
-W20240116 11:21:41.661990 48843 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 136 ========== 
 ========== Step 136 ========== 
 ========== Step 136 ========== 
 ========== Step 136 ========== 
-W20240116 11:21:41.777351 47757 grad_async_v2.h:209] pq is empty
 ========== Step 137 ========== 
 ========== Step 137 ========== 
 ========== Step 137 ========== 
@@ -847,7 +706,6 @@ W20240116 11:21:41.777351 47757 grad_async_v2.h:209] pq is empty
 ========== Step 139 ========== 
 ========== Step 139 ========== 
 ========== Step 139 ========== 
-W20240116 11:21:42.022956 47757 grad_async_v2.h:209] pq is empty
 ========== Step 140 ========== 
 ========== Step 140 ========== 
 ========== Step 140 ========== 
@@ -864,12 +722,10 @@ W20240116 11:21:42.022956 47757 grad_async_v2.h:209] pq is empty
 ========== Step 143 ========== 
 ========== Step 143 ========== 
 ========== Step 143 ========== 
-W20240116 11:21:42.351933 47757 grad_async_v2.h:209] pq is empty
 ========== Step 144 ========== 
 ========== Step 144 ========== 
 ========== Step 144 ========== 
 ========== Step 144 ========== 
-W20240116 11:21:42.431221 47757 grad_async_v2.h:209] pq is empty
 ========== Step 145 ========== 
 ========== Step 145 ========== 
 ========== Step 145 ========== 
@@ -878,17 +734,14 @@ W20240116 11:21:42.431221 47757 grad_async_v2.h:209] pq is empty
 ========== Step 146 ========== 
 ========== Step 146 ========== 
 ========== Step 146 ========== 
-E20240116 11:21:42.525014 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=785
 ========== Step 147 ========== 
 ========== Step 147 ========== 
 ========== Step 147 ========== 
 ========== Step 147 ========== 
-W20240116 11:21:42.670300 47757 grad_async_v2.h:209] pq is empty
 ========== Step 148 ========== 
 ========== Step 148 ========== 
 ========== Step 148 ========== 
 ========== Step 148 ========== 
-W20240116 11:21:42.671173 48843 grad_async_v2.h:109] Detect new sample comes, old_end8, new_end9
 ========== Step 149 ========== 
 ========== Step 149 ========== 
 ========== Step 149 ========== 
@@ -901,16 +754,6 @@ W20240116 11:21:42.671173 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 151 ========== 
 ========== Step 151 ========== 
 ========== Step 151 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 2.141 ms                  | 2.276 ms                  |
-| ProcessBack:UpdateCache   | 5.162 ms                  | 5.493 ms                  |
-| ProcessBack:UpsertPq      | 7.786 ms                  | 14.914 ms                 |
-| ProcessOneStep            | 15.234 ms                 | 22.660 ms                 |
-| BlockToStepN              | 626.348 us                | 8.732 ms                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 11:21:42.995496 47757 grad_async_v2.h:209] pq is empty
 ========== Step 152 ========== 
 ========== Step 152 ========== 
 ========== Step 152 ========== 
@@ -919,12 +762,10 @@ W20240116 11:21:42.995496 47757 grad_async_v2.h:209] pq is empty
 ========== Step 153 ========== 
 ========== Step 153 ========== 
 ========== Step 153 ========== 
-W20240116 11:21:43.165324 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=154, pq.top=154
 ========== Step 154 ========== 
 ========== Step 154 ========== 
 ========== Step 154 ========== 
 ========== Step 154 ========== 
-W20240116 11:21:43.247756 47757 grad_async_v2.h:209] pq is empty
 ========== Step 155 ========== 
 ========== Step 155 ========== 
 ========== Step 155 ========== 
@@ -941,8 +782,6 @@ W20240116 11:21:43.247756 47757 grad_async_v2.h:209] pq is empty
 ========== Step 158 ========== 
 ========== Step 158 ========== 
 ========== Step 158 ========== 
-E20240116 11:21:43.525018 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=1357
-W20240116 11:21:43.582343 47757 grad_async_v2.h:209] pq is empty
 ========== Step 159 ========== 
 ========== Step 159 ========== 
 ========== Step 159 ========== 
@@ -951,7 +790,6 @@ W20240116 11:21:43.582343 47757 grad_async_v2.h:209] pq is empty
 ========== Step 160 ========== 
 ========== Step 160 ========== 
 ========== Step 160 ========== 
-W20240116 11:21:43.674489 48843 grad_async_v2.h:109] Detect new sample comes, old_end0, new_end1
 ========== Step 161 ========== 
 ========== Step 161 ========== 
 ========== Step 161 ========== 
@@ -984,7 +822,6 @@ W20240116 11:21:43.674489 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 168 ========== 
 ========== Step 168 ========== 
 ========== Step 168 ========== 
-W20240116 11:21:44.368842 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=169, pq.top=169
 ========== Step 169 ========== 
 ========== Step 169 ========== 
 ========== Step 169 ========== 
@@ -993,7 +830,6 @@ W20240116 11:21:44.368842 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 170 ========== 
 ========== Step 170 ========== 
 ========== Step 170 ========== 
-E20240116 11:21:44.526475 47757 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
 ========== Step 171 ========== 
 ========== Step 171 ========== 
 ========== Step 171 ========== 
@@ -1002,13 +838,10 @@ E20240116 11:21:44.526475 47757 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 172 ========== 
 ========== Step 172 ========== 
 ========== Step 172 ========== 
-W20240116 11:21:44.685336 47757 grad_async_v2.h:209] pq is empty
 ========== Step 173 ========== 
 ========== Step 173 ========== 
 ========== Step 173 ========== 
 ========== Step 173 ========== 
-W20240116 11:21:44.685868 48843 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-W20240116 11:21:44.759475 47757 grad_async_v2.h:209] pq is empty
 ========== Step 174 ========== 
 ========== Step 174 ========== 
 ========== Step 174 ========== 
@@ -1029,53 +862,47 @@ W20240116 11:21:44.759475 47757 grad_async_v2.h:209] pq is empty
 ========== Step 178 ========== 
 ========== Step 178 ========== 
 ========== Step 178 ========== 
-W20240116 11:21:45.174607 47757 grad_async_v2.h:209] pq is empty
-========== Step 179 ========== 
-========== Step 179 ========== 
-========== Step 179 ========== 
-========== Step 179 ========== 
-========== Step 180 ========== 
-========== Step 180 ========== 
-========== Step 180 ========== 
-========== Step 180 ========== 
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| Forward                   | 318.623 us                | 1.073 ms                  |
-| Backward                  | 1.110 ms                  | 1.745 ms                  |
-| Optimize                  | 84.497 us                 | 200.506 us                |
-| BarrierTimeBeforeRank0    | 102.362 us                | 3.134 ms                  |
-| AfterBackward             | 15.266 ms                 | 22.696 ms                 |
-| BlockToStepN              | 840.954 us                | 10.527 ms                 |
-| E2E-100                   | 9.257 s                   | 9.257 s                   |
+| GenInput:CircleBuffer     | 86.442 us                 | 289.322 us                |
+| GenInput                  | 204.094 us                | 2.596 ms                  |
+| Forward                   | 254.949 us                | 881.380 us                |
+| Backward                  | 21.733 ms                 | 44.341 ms                 |
+| Optimize                  | 18.920 ms                 | 33.914 ms                 |
+| BarrierTimeBeforeRank0    | 24.680 us                 | 113.920 us                |
+| BlockToStepN              | 13.492 us                 | 689.930 us                |
+| OneStep                   | 42.252 ms                 | 72.186 ms                 |
+| E2E-100                   | 6.070 s                   | 6.070 s                   |
 +---------------------------+---------------------------+---------------------------+
+========== Step 179 ========== 
+========== Step 179 ========== 
+========== Step 179 ========== 
+========== Step 179 ========== 
+========== Step 180 ========== 
+========== Step 180 ========== 
+========== Step 180 ========== 
+========== Step 180 ========== 
 ========== Step 181 ========== 
 ========== Step 181 ========== 
 ========== Step 181 ========== 
 ========== Step 181 ========== 
-W20240116 11:21:45.450807 47757 grad_async_v2.h:209] pq is empty
 ========== Step 182 ========== 
 ========== Step 182 ========== 
 ========== Step 182 ========== 
 ========== Step 182 ========== 
-E20240116 11:21:45.531522 47757 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
-W20240116 11:21:45.540728 47757 grad_async_v2.h:209] pq is empty
 ========== Step 183 ========== 
 ========== Step 183 ========== 
 ========== Step 183 ========== 
 ========== Step 183 ========== 
-W20240116 11:21:45.629215 47757 grad_async_v2.h:209] pq is empty
 ========== Step 184 ========== 
 ========== Step 184 ========== 
 ========== Step 184 ========== 
 ========== Step 184 ========== 
-W20240116 11:21:45.718863 47757 grad_async_v2.h:209] pq is empty
 ========== Step 185 ========== 
 ========== Step 185 ========== 
 ========== Step 185 ========== 
 ========== Step 185 ========== 
-W20240116 11:21:45.719636 48843 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-W20240116 11:21:45.809804 47757 grad_async_v2.h:209] pq is empty
 ========== Step 186 ========== 
 ========== Step 186 ========== 
 ========== Step 186 ========== 
@@ -1084,7 +911,6 @@ W20240116 11:21:45.809804 47757 grad_async_v2.h:209] pq is empty
 ========== Step 187 ========== 
 ========== Step 187 ========== 
 ========== Step 187 ========== 
-W20240116 11:21:45.996407 47757 grad_async_v2.h:209] pq is empty
 ========== Step 188 ========== 
 ========== Step 188 ========== 
 ========== Step 188 ========== 
@@ -1105,17 +931,14 @@ W20240116 11:21:45.996407 47757 grad_async_v2.h:209] pq is empty
 ========== Step 192 ========== 
 ========== Step 192 ========== 
 ========== Step 192 ========== 
-W20240116 11:21:46.447935 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=193, pq.top=193
 ========== Step 193 ========== 
 ========== Step 193 ========== 
 ========== Step 193 ========== 
 ========== Step 193 ========== 
-W20240116 11:21:46.541189 47757 grad_async_v2.h:209] pq is empty
 ========== Step 194 ========== 
 ========== Step 194 ========== 
 ========== Step 194 ========== 
 ========== Step 194 ========== 
-E20240116 11:21:46.541929 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
 ========== Step 195 ========== 
 ========== Step 195 ========== 
 ========== Step 195 ========== 
@@ -1124,34 +947,30 @@ E20240116 11:21:46.541929 48843 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 196 ========== 
 ========== Step 196 ========== 
 ========== Step 196 ========== 
-W20240116 11:21:46.722808 48843 grad_async_v2.h:109] Detect new sample comes, old_end6, new_end7
 ========== Step 197 ========== 
 ========== Step 197 ========== 
 ========== Step 197 ========== 
 ========== Step 197 ========== 
-W20240116 11:21:46.895460 47757 grad_async_v2.h:209] pq is empty
 ========== Step 198 ========== 
 ========== Step 198 ========== 
 ========== Step 198 ========== 
 ========== Step 198 ========== 
-W20240116 11:21:46.978402 47757 grad_async_v2.h:209] pq is empty
 ========== Step 199 ========== 
 ========== Step 199 ========== 
 ========== Step 199 ========== 
 ========== Step 199 ========== 
-Step199:rank1, time: 8.349, per_step: 0.082666
-Step199:rank3, time: 8.349, per_step: 0.082667
+Step199:rank0, time: 4.384, per_step: 0.043410
+Step199:rank2, time: 4.384, per_step: 0.043410
+Step199:rank3, time: 4.384, per_step: 0.043410
 ========== Step 200 ========== 
 ========== Step 200 ========== 
-Step199:rank2, time: 8.349, per_step: 0.082666
-Step199:rank0, time: 8.349, per_step: 0.082665
 ========== Step 200 ========== 
+Step199:rank1, time: 4.384, per_step: 0.043410
 ========== Step 200 ========== 
 ========== Step 201 ========== 
 ========== Step 201 ========== 
 ========== Step 201 ========== 
 ========== Step 201 ========== 
-W20240116 11:21:47.242240 47757 grad_async_v2.h:209] pq is empty
 ========== Step 202 ========== 
 ========== Step 202 ========== 
 ========== Step 202 ========== 
@@ -1168,7 +987,6 @@ W20240116 11:21:47.242240 47757 grad_async_v2.h:209] pq is empty
 ========== Step 205 ========== 
 ========== Step 205 ========== 
 ========== Step 205 ========== 
-E20240116 11:21:47.541013 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=6764
 ========== Step 206 ========== 
 ========== Step 206 ========== 
 ========== Step 206 ========== 
@@ -1177,7 +995,6 @@ E20240116 11:21:47.541013 48843 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 207 ========== 
 ========== Step 207 ========== 
 ========== Step 207 ========== 
-W20240116 11:21:47.722075 48843 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 208 ========== 
 ========== Step 208 ========== 
 ========== Step 208 ========== 
@@ -1190,20 +1007,10 @@ W20240116 11:21:47.722075 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 210 ========== 
 ========== Step 210 ========== 
 ========== Step 210 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 2.138 ms                  | 2.345 ms                  |
-| ProcessBack:UpdateCache   | 5.165 ms                  | 5.563 ms                  |
-| ProcessBack:UpsertPq      | 7.782 ms                  | 15.153 ms                 |
-| ProcessOneStep            | 15.278 ms                 | 22.814 ms                 |
-| BlockToStepN              | 922.277 us                | 10.450 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 211 ========== 
 ========== Step 211 ========== 
 ========== Step 211 ========== 
 ========== Step 211 ========== 
-W20240116 11:21:48.105026 47757 grad_async_v2.h:209] pq is empty
 ========== Step 212 ========== 
 ========== Step 212 ========== 
 ========== Step 212 ========== 
@@ -1228,7 +1035,6 @@ W20240116 11:21:48.105026 47757 grad_async_v2.h:209] pq is empty
 ========== Step 217 ========== 
 ========== Step 217 ========== 
 ========== Step 217 ========== 
-E20240116 11:21:48.541010 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=1565
 ========== Step 218 ========== 
 ========== Step 218 ========== 
 ========== Step 218 ========== 
@@ -1237,7 +1043,6 @@ E20240116 11:21:48.541010 48843 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 219 ========== 
 ========== Step 219 ========== 
 ========== Step 219 ========== 
-W20240116 11:21:48.733889 48843 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 220 ========== 
 ========== Step 220 ========== 
 ========== Step 220 ========== 
@@ -1266,7 +1071,6 @@ W20240116 11:21:48.733889 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 226 ========== 
 ========== Step 226 ========== 
 ========== Step 226 ========== 
-W20240116 11:21:49.367573 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=227, pq.top=227
 ========== Step 227 ========== 
 ========== Step 227 ========== 
 ========== Step 227 ========== 
@@ -1275,13 +1079,10 @@ W20240116 11:21:49.367573 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 228 ========== 
 ========== Step 228 ========== 
 ========== Step 228 ========== 
-W20240116 11:21:49.531852 47757 grad_async_v2.h:209] pq is empty
 ========== Step 229 ========== 
 ========== Step 229 ========== 
 ========== Step 229 ========== 
 ========== Step 229 ========== 
-E20240116 11:21:49.541007 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=531
-W20240116 11:21:49.611660 47757 grad_async_v2.h:209] pq is empty
 ========== Step 230 ========== 
 ========== Step 230 ========== 
 ========== Step 230 ========== 
@@ -1290,7 +1091,6 @@ W20240116 11:21:49.611660 47757 grad_async_v2.h:209] pq is empty
 ========== Step 231 ========== 
 ========== Step 231 ========== 
 ========== Step 231 ========== 
-W20240116 11:21:49.746671 48843 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 232 ========== 
 ========== Step 232 ========== 
 ========== Step 232 ========== 
@@ -1315,249 +1115,223 @@ W20240116 11:21:49.746671 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 237 ========== 
 ========== Step 237 ========== 
 ========== Step 237 ========== 
+========== Step 238 ========== 
+========== Step 238 ========== 
+========== Step 238 ========== 
+========== Step 238 ========== 
+========== Step 239 ========== 
+========== Step 239 ========== 
+========== Step 239 ========== 
+========== Step 239 ========== 
+========== Step 240 ========== 
+========== Step 240 ========== 
+========== Step 240 ========== 
+========== Step 240 ========== 
+========== Step 241 ========== 
+========== Step 241 ========== 
+========== Step 241 ========== 
+========== Step 241 ========== 
+========== Step 242 ========== 
+========== Step 242 ========== 
+========== Step 242 ========== 
+========== Step 242 ========== 
+========== Step 243 ========== 
+========== Step 243 ========== 
+========== Step 243 ========== 
+========== Step 243 ========== 
+========== Step 244 ========== 
+========== Step 244 ========== 
+========== Step 244 ========== 
+========== Step 244 ========== 
+========== Step 245 ========== 
+========== Step 245 ========== 
+========== Step 245 ========== 
+========== Step 245 ========== 
+========== Step 246 ========== 
+========== Step 246 ========== 
+========== Step 246 ========== 
+========== Step 246 ========== 
+========== Step 247 ========== 
+========== Step 247 ========== 
+========== Step 247 ========== 
+========== Step 247 ========== 
+========== Step 248 ========== 
+========== Step 248 ========== 
+========== Step 248 ========== 
+========== Step 248 ========== 
+========== Step 249 ========== 
+========== Step 249 ========== 
+========== Step 249 ========== 
+========== Step 249 ========== 
+========== Step 250 ========== 
+========== Step 250 ========== 
+========== Step 250 ========== 
+========== Step 250 ========== 
+========== Step 251 ========== 
+========== Step 251 ========== 
+========== Step 251 ========== 
+========== Step 251 ========== 
+========== Step 252 ========== 
+========== Step 252 ========== 
+========== Step 252 ========== 
+========== Step 252 ========== 
+========== Step 253 ========== 
+========== Step 253 ========== 
+========== Step 253 ========== 
+========== Step 253 ========== 
+========== Step 254 ========== 
+========== Step 254 ========== 
+========== Step 254 ========== 
+========== Step 254 ========== 
+========== Step 255 ========== 
+========== Step 255 ========== 
+========== Step 255 ========== 
+========== Step 255 ========== 
+========== Step 256 ========== 
+========== Step 256 ========== 
+========== Step 256 ========== 
+========== Step 256 ========== 
+========== Step 257 ========== 
+========== Step 257 ========== 
+========== Step 257 ========== 
+========== Step 257 ========== 
+========== Step 258 ========== 
+========== Step 258 ========== 
+========== Step 258 ========== 
+========== Step 258 ========== 
+========== Step 259 ========== 
+========== Step 259 ========== 
+========== Step 259 ========== 
+========== Step 259 ========== 
+========== Step 260 ========== 
+========== Step 260 ========== 
+========== Step 260 ========== 
+========== Step 260 ========== 
+========== Step 261 ========== 
+========== Step 261 ========== 
+========== Step 261 ========== 
+========== Step 261 ========== 
+========== Step 262 ========== 
+========== Step 262 ========== 
+========== Step 262 ========== 
+========== Step 262 ========== 
+========== Step 263 ========== 
+========== Step 263 ========== 
+========== Step 263 ========== 
+========== Step 263 ========== 
+========== Step 264 ========== 
+========== Step 264 ========== 
+========== Step 264 ========== 
+========== Step 264 ========== 
+========== Step 265 ========== 
+========== Step 265 ========== 
+========== Step 265 ========== 
+========== Step 265 ========== 
+========== Step 266 ========== 
+========== Step 266 ========== 
+========== Step 266 ========== 
+========== Step 266 ========== 
+========== Step 267 ========== 
+========== Step 267 ========== 
+========== Step 267 ========== 
+========== Step 267 ========== 
+========== Step 268 ========== 
+========== Step 268 ========== 
+========== Step 268 ========== 
+========== Step 268 ========== 
+========== Step 269 ========== 
+========== Step 269 ========== 
+========== Step 269 ========== 
+========== Step 269 ========== 
+========== Step 270 ========== 
+========== Step 270 ========== 
+========== Step 270 ========== 
+========== Step 270 ========== 
+========== Step 271 ========== 
+========== Step 271 ========== 
+========== Step 271 ========== 
+========== Step 271 ========== 
+========== Step 272 ========== 
+========== Step 272 ========== 
+========== Step 272 ========== 
+========== Step 272 ========== 
+========== Step 273 ========== 
+========== Step 273 ========== 
+========== Step 273 ========== 
+========== Step 273 ========== 
+========== Step 274 ========== 
+========== Step 274 ========== 
+========== Step 274 ========== 
+========== Step 274 ========== 
+========== Step 275 ========== 
+========== Step 275 ========== 
+========== Step 275 ========== 
+========== Step 275 ========== 
+========== Step 276 ========== 
+========== Step 276 ========== 
+========== Step 276 ========== 
+========== Step 276 ========== 
+========== Step 277 ========== 
+========== Step 277 ========== 
+========== Step 277 ========== 
+========== Step 277 ========== 
+========== Step 278 ========== 
+========== Step 278 ========== 
+========== Step 278 ========== 
+========== Step 278 ========== 
+========== Step 279 ========== 
+========== Step 279 ========== 
+========== Step 279 ========== 
+========== Step 279 ========== 
+========== Step 280 ========== 
+========== Step 280 ========== 
+========== Step 280 ========== 
+========== Step 280 ========== 
+========== Step 281 ========== 
+========== Step 281 ========== 
+========== Step 281 ========== 
+========== Step 281 ========== 
+========== Step 282 ========== 
+========== Step 282 ========== 
+========== Step 282 ========== 
+========== Step 282 ========== 
+========== Step 283 ========== 
+========== Step 283 ========== 
+========== Step 283 ========== 
+========== Step 283 ========== 
+========== Step 284 ========== 
+========== Step 284 ========== 
+========== Step 284 ========== 
+========== Step 284 ========== 
+========== Step 285 ========== 
+========== Step 285 ========== 
+========== Step 285 ========== 
+========== Step 285 ========== 
+========== Step 286 ========== 
+========== Step 286 ========== 
+========== Step 286 ========== 
+========== Step 286 ========== 
+========== Step 287 ========== 
+========== Step 287 ========== 
+========== Step 287 ========== 
+========== Step 287 ========== 
+========== Step 288 ========== 
+========== Step 288 ========== 
+========== Step 288 ========== 
+========== Step 288 ========== 
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| Forward                   | 320.552 us                | 1.073 ms                  |
-| Backward                  | 1.093 ms                  | 1.745 ms                  |
-| Optimize                  | 83.599 us                 | 200.506 us                |
-| BarrierTimeBeforeRank0    | 180.503 us                | 3.134 ms                  |
-| AfterBackward             | 15.265 ms                 | 22.849 ms                 |
-| BlockToStepN              | 1.123 ms                  | 13.592 ms                 |
-| E2E-100                   | 8.349 s                   | 9.257 s                   |
+| GenInput:CircleBuffer     | 86.516 us                 | 245.487 us                |
+| GenInput                  | 200.328 us                | 2.596 ms                  |
+| Forward                   | 253.541 us                | 881.380 us                |
+| Backward                  | 21.659 ms                 | 44.295 ms                 |
+| Optimize                  | 18.985 ms                 | 33.945 ms                 |
+| BarrierTimeBeforeRank0    | 24.735 us                 | 95.699 us                 |
+| BlockToStepN              | 13.263 us                 | 689.930 us                |
+| OneStep                   | 42.026 ms                 | 84.676 ms                 |
+| E2E-100                   | 4.385 s                   | 6.070 s                   |
 +---------------------------+---------------------------+---------------------------+
-========== Step 238 ========== 
-========== Step 238 ========== 
-========== Step 238 ========== 
-========== Step 238 ========== 
-========== Step 239 ========== 
-========== Step 239 ========== 
-========== Step 239 ========== 
-========== Step 239 ========== 
-W20240116 11:21:50.453790 47757 grad_async_v2.h:209] pq is empty
-========== Step 240 ========== 
-========== Step 240 ========== 
-========== Step 240 ========== 
-========== Step 240 ========== 
-========== Step 241 ========== 
-========== Step 241 ========== 
-========== Step 241 ========== 
-========== Step 241 ========== 
-E20240116 11:21:50.542225 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=3
-========== Step 242 ========== 
-========== Step 242 ========== 
-========== Step 242 ========== 
-========== Step 242 ========== 
-========== Step 243 ========== 
-========== Step 243 ========== 
-========== Step 243 ========== 
-========== Step 243 ========== 
-W20240116 11:21:50.754875 48843 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-========== Step 244 ========== 
-========== Step 244 ========== 
-========== Step 244 ========== 
-========== Step 244 ========== 
-========== Step 245 ========== 
-========== Step 245 ========== 
-========== Step 245 ========== 
-========== Step 245 ========== 
-W20240116 11:21:50.959065 47757 grad_async_v2.h:209] pq is empty
-========== Step 246 ========== 
-========== Step 246 ========== 
-========== Step 246 ========== 
-========== Step 246 ========== 
-========== Step 247 ========== 
-========== Step 247 ========== 
-========== Step 247 ========== 
-========== Step 247 ========== 
-========== Step 248 ========== 
-========== Step 248 ========== 
-========== Step 248 ========== 
-========== Step 248 ========== 
-W20240116 11:21:51.205096 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=249, pq.top=249
-========== Step 249 ========== 
-========== Step 249 ========== 
-========== Step 249 ========== 
-========== Step 249 ========== 
-========== Step 250 ========== 
-========== Step 250 ========== 
-========== Step 250 ========== 
-========== Step 250 ========== 
-========== Step 251 ========== 
-========== Step 251 ========== 
-========== Step 251 ========== 
-========== Step 251 ========== 
-W20240116 11:21:51.461146 47757 grad_async_v2.h:209] pq is empty
-========== Step 252 ========== 
-========== Step 252 ========== 
-========== Step 252 ========== 
-========== Step 252 ========== 
-========== Step 253 ========== 
-========== Step 253 ========== 
-========== Step 253 ========== 
-========== Step 253 ========== 
-E20240116 11:21:51.545958 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=2
-========== Step 254 ========== 
-========== Step 254 ========== 
-========== Step 254 ========== 
-========== Step 254 ========== 
-========== Step 255 ========== 
-========== Step 255 ========== 
-========== Step 255 ========== 
-========== Step 255 ========== 
-W20240116 11:21:51.765936 48843 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-========== Step 256 ========== 
-========== Step 256 ========== 
-========== Step 256 ========== 
-========== Step 256 ========== 
-========== Step 257 ========== 
-========== Step 257 ========== 
-========== Step 257 ========== 
-========== Step 257 ========== 
-========== Step 258 ========== 
-========== Step 258 ========== 
-========== Step 258 ========== 
-========== Step 258 ========== 
-========== Step 259 ========== 
-========== Step 259 ========== 
-========== Step 259 ========== 
-========== Step 259 ========== 
-W20240116 11:21:52.166383 47757 grad_async_v2.h:209] pq is empty
-========== Step 260 ========== 
-========== Step 260 ========== 
-========== Step 260 ========== 
-========== Step 260 ========== 
-========== Step 261 ========== 
-========== Step 261 ========== 
-========== Step 261 ========== 
-========== Step 261 ========== 
-========== Step 262 ========== 
-========== Step 262 ========== 
-========== Step 262 ========== 
-========== Step 262 ========== 
-========== Step 263 ========== 
-========== Step 263 ========== 
-========== Step 263 ========== 
-========== Step 263 ========== 
-========== Step 264 ========== 
-========== Step 264 ========== 
-========== Step 264 ========== 
-========== Step 264 ========== 
-E20240116 11:21:52.545017 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=3477
-========== Step 265 ========== 
-========== Step 265 ========== 
-========== Step 265 ========== 
-========== Step 265 ========== 
-========== Step 266 ========== 
-========== Step 266 ========== 
-========== Step 266 ========== 
-========== Step 266 ========== 
-W20240116 11:21:52.740361 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=267, pq.top=267
-========== Step 267 ========== 
-========== Step 267 ========== 
-========== Step 267 ========== 
-========== Step 267 ========== 
-W20240116 11:21:52.778281 48843 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-========== Step 268 ========== 
-========== Step 268 ========== 
-========== Step 268 ========== 
-========== Step 268 ========== 
-========== Step 269 ========== 
-========== Step 269 ========== 
-========== Step 269 ========== 
-========== Step 269 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 2.138 ms                  | 2.343 ms                  |
-| ProcessBack:UpdateCache   | 5.170 ms                  | 5.641 ms                  |
-| ProcessBack:UpsertPq      | 7.756 ms                  | 15.132 ms                 |
-| ProcessOneStep            | 15.265 ms                 | 22.684 ms                 |
-| BlockToStepN              | 1.245 ms                  | 14.166 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 11:21:53.004423 47757 grad_async_v2.h:209] pq is empty
-========== Step 270 ========== 
-========== Step 270 ========== 
-========== Step 270 ========== 
-========== Step 270 ========== 
-========== Step 271 ========== 
-========== Step 271 ========== 
-========== Step 271 ========== 
-========== Step 271 ========== 
-========== Step 272 ========== 
-========== Step 272 ========== 
-========== Step 272 ========== 
-========== Step 272 ========== 
-========== Step 273 ========== 
-========== Step 273 ========== 
-========== Step 273 ========== 
-========== Step 273 ========== 
-========== Step 274 ========== 
-========== Step 274 ========== 
-========== Step 274 ========== 
-========== Step 274 ========== 
-========== Step 275 ========== 
-========== Step 275 ========== 
-========== Step 275 ========== 
-========== Step 275 ========== 
-========== Step 276 ========== 
-========== Step 276 ========== 
-========== Step 276 ========== 
-========== Step 276 ========== 
-E20240116 11:21:53.545019 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=2812
-========== Step 277 ========== 
-========== Step 277 ========== 
-========== Step 277 ========== 
-========== Step 277 ========== 
-========== Step 278 ========== 
-========== Step 278 ========== 
-========== Step 278 ========== 
-========== Step 278 ========== 
-========== Step 279 ========== 
-========== Step 279 ========== 
-========== Step 279 ========== 
-========== Step 279 ========== 
-W20240116 11:21:53.786569 48843 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-========== Step 280 ========== 
-========== Step 280 ========== 
-========== Step 280 ========== 
-========== Step 280 ========== 
-W20240116 11:21:53.912979 47757 grad_async_v2.h:209] pq is empty
-========== Step 281 ========== 
-========== Step 281 ========== 
-========== Step 281 ========== 
-========== Step 281 ========== 
-========== Step 282 ========== 
-========== Step 282 ========== 
-========== Step 282 ========== 
-========== Step 282 ========== 
-W20240116 11:21:54.075820 47757 grad_async_v2.h:209] pq is empty
-========== Step 283 ========== 
-========== Step 283 ========== 
-========== Step 283 ========== 
-========== Step 283 ========== 
-========== Step 284 ========== 
-========== Step 284 ========== 
-========== Step 284 ========== 
-========== Step 284 ========== 
-========== Step 285 ========== 
-========== Step 285 ========== 
-========== Step 285 ========== 
-========== Step 285 ========== 
-========== Step 286 ========== 
-========== Step 286 ========== 
-========== Step 286 ========== 
-========== Step 286 ========== 
-========== Step 287 ========== 
-========== Step 287 ========== 
-========== Step 287 ========== 
-========== Step 287 ========== 
-W20240116 11:21:54.501173 47757 grad_async_v2.h:209] pq is empty
-========== Step 288 ========== 
-========== Step 288 ========== 
-========== Step 288 ========== 
-========== Step 288 ========== 
-E20240116 11:21:54.545008 48843 parallel_pq_v2.h:76] insert failed, size(hashtable)=2794
 ========== Step 289 ========== 
 ========== Step 289 ========== 
 ========== Step 289 ========== 
@@ -1570,7 +1344,6 @@ E20240116 11:21:54.545008 48843 parallel_pq_v2.h:76] insert failed, size(hashtab
 ========== Step 291 ========== 
 ========== Step 291 ========== 
 ========== Step 291 ========== 
-W20240116 11:21:54.786872 48843 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 292 ========== 
 ========== Step 292 ========== 
 ========== Step 292 ========== 
@@ -1591,18 +1364,6 @@ W20240116 11:21:54.786872 48843 grad_async_v2.h:109] Detect new sample comes, ol
 ========== Step 296 ========== 
 ========== Step 296 ========== 
 ========== Step 296 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 323.426 us                | 990.329 us                |
-| Backward                  | 1.088 ms                  | 1.689 ms                  |
-| Optimize                  | 83.498 us                 | 199.064 us                |
-| BarrierTimeBeforeRank0    | 174.047 us                | 2.764 ms                  |
-| AfterBackward             | 15.346 ms                 | 22.718 ms                 |
-| BlockToStepN              | 1.447 ms                  | 14.232 ms                 |
-| E2E-100                   | 8.349 s                   | 9.257 s                   |
-+---------------------------+---------------------------+---------------------------+
-W20240116 11:21:55.284616 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=297, pq.top=297
 ========== Step 297 ========== 
 ========== Step 297 ========== 
 ========== Step 297 ========== 
@@ -1611,21 +1372,21 @@ W20240116 11:21:55.284616 47757 grad_async_v2.h:222] Sleep in <BlockToStepN>, st
 ========== Step 298 ========== 
 ========== Step 298 ========== 
 ========== Step 298 ========== 
-W20240116 11:21:55.447595 47757 grad_async_v2.h:209] pq is empty
 ========== Step 299 ========== 
 ========== Step 299 ========== 
 ========== Step 299 ========== 
 ========== Step 299 ========== 
-Step299:rank3, time: 8.466, per_step: 0.083817
-Step299:rank1, time: 8.466, per_step: 0.083817
-timer name is E2E-100
-Step299:rank2, time: 8.465, per_step: 0.083816
-Step299:rank0, time: 8.465, per_step: 0.083816
+Step299:rank0, time: 4.585, per_step: 0.045393
+Step299:rank2, time: 4.585, per_step: 0.045393
+Step299:rank1, time: 4.584, per_step: 0.045388
 timer name is E2E-100
 timer name is E2E-100
 timer name is E2E-100
-[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
-[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+Step299:rank3, time: 4.585, per_step: 0.045392
+timer name is E2E-100
 [W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
-ERROR [47757 PsKvstore.py:89] Delete tensor failed, not found
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+ERROR [53434 PsKvstore.py:89] Delete tensor failed, not found
 Successfully xmh
+timer name is AfterBackward

@@ -104,6 +104,10 @@ class Timer:
     def StartReportThread(cls):
         timer_module.Reporter.StartReportThread(5000)
 
+    @classmethod
+    def StopReportThread(cls):
+        timer_module.Reporter.StopReportThread()
+
     def __init__(self, name):
         self._c_timer = timer_module.Timer(name, 1)
 

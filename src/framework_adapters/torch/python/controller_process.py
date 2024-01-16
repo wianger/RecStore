@@ -317,6 +317,10 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
 class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     instance = None
 
+
+    def __del__(self):
+        Timer.StopReportThread()
+
     def __init__(self, json_str, full_emb_capacity, ) -> None:
         self.barrier = recstore.MultiProcessBarrierFactory.Create(
             "kgcachecontroller", dist.get_world_size())

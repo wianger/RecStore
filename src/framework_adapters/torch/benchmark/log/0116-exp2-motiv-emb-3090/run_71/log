@@ -1,728 +1,419 @@
 WARNING: Logging before InitGoogleLogging() is written to STDERR
-I20240116 12:15:20.044767 24622 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
-W20240116 12:15:20.051544 24622 IPCTensor.h:367] NewIPCTensor: full_emb [100000000, 32]0x100000002000
+I20240116 21:41:12.514739 58464 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+W20240116 21:41:12.520288 58464 IPCTensor.h:367] NewIPCTensor: full_emb [100000000, 32]0x100000002000
 /home/xieminhui/RecStore/src/framework_adapters/torch/python/perf_emb.py:165: DeprecationWarning: The 'warn' function is deprecated, use 'warning' instead
   XLOG.warn("After init DistEmbedding")
-WARNING [24622 perf_emb.py:165] After init DistEmbedding
-========== Running Perf with routine <function routine_local_cache_helper at 0x7fe2975a58a0>==========
-Worker 1 pid=24919
-Worker 2 pid=24920
-INFO [24622 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
-INFO [24919 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
-INFO [24921 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
-INFO [24920 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
-INFO [24622 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-INFO [24919 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-INFO [24921 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-INFO [24920 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
-E20240116 12:15:21.735978 24622 IPCTensor.h:346] IPCTensor full_emb already exists
-E20240116 12:15:21.736160 24919 IPCTensor.h:346] IPCTensor full_emb already exists
-E20240116 12:15:21.736231 24921 IPCTensor.h:346] IPCTensor full_emb already exists
-E20240116 12:15:21.736308 24920 IPCTensor.h:346] IPCTensor full_emb already exists
-W20240116 12:15:21.766633 24920 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_2 [20000000, 32]; dev=2; size=2.384 GB
-W20240116 12:15:21.766641 24919 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_1 [20000000, 32]; dev=1; size=2.384 GB
-W20240116 12:15:21.768054 24622 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_0 [20000000, 32]; dev=0; size=2.384 GB
-W20240116 12:15:21.768118 24921 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_3 [20000000, 32]; dev=3; size=2.384 GB
-W20240116 12:15:22.338850 24920 IPCTensor.h:367] NewIPCTensor: input_keys_2 [100000]0x1002faf0e000
-W20240116 12:15:22.339072 24919 IPCTensor.h:367] NewIPCTensor: input_keys_1 [100000]0x1002fafd5000
-W20240116 12:15:22.339128 24920 IPCTensor.h:367] NewIPCTensor: input_keys_neg_2 [100000]0x1002fb09a000
-W20240116 12:15:22.339196 24919 IPCTensor.h:367] NewIPCTensor: input_keys_neg_1 [100000]0x1002fb15f000
-W20240116 12:15:22.339247 24920 IPCTensor.h:367] NewIPCTensor: backward_grads_2 [100000, 32]0x1002fb224000
-W20240116 12:15:22.339257 24919 IPCTensor.h:367] NewIPCTensor: backward_grads_1 [100000, 32]0x1002fbe5b000
-W20240116 12:15:22.339296 24919 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_1 [100000, 32]0x1002fca92000
-W20240116 12:15:22.339344 24920 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_2 [100000, 32]0x1002fd6c9000
-W20240116 12:15:22.339339 24919 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_1_gpu [100000, 32]; dev=1; size=12.21 MB
-W20240116 12:15:22.339424 24920 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_2_gpu [100000, 32]; dev=2; size=12.21 MB
-W20240116 12:15:22.343314 24921 IPCTensor.h:367] NewIPCTensor: input_keys_3 [100000]0x1002fe302000
-W20240116 12:15:22.343426 24921 IPCTensor.h:367] NewIPCTensor: input_keys_neg_3 [100000]0x1002fe3c7000
-W20240116 12:15:22.343483 24921 IPCTensor.h:367] NewIPCTensor: backward_grads_3 [100000, 32]0x1002fe48c000
-W20240116 12:15:22.343520 24921 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_3 [100000, 32]0x1002ff0c3000
-W20240116 12:15:22.343559 24921 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_3_gpu [100000, 32]; dev=3; size=12.21 MB
-W20240116 12:15:22.343649 24919 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_1_gpu [100000, 32]; dev=1; size=12.21 MB
-W20240116 12:15:22.343793 24920 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_2_gpu [100000, 32]; dev=2; size=12.21 MB
-W20240116 12:15:22.346184 24921 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_3_gpu [100000, 32]; dev=3; size=12.21 MB
-W20240116 12:15:22.354082 24622 IPCTensor.h:367] NewIPCTensor: input_keys_0 [100000]0x1002ffd08000
-W20240116 12:15:22.354228 24622 IPCTensor.h:367] NewIPCTensor: input_keys_neg_0 [100000]0x1002ffdcd000
-W20240116 12:15:22.354300 24622 IPCTensor.h:367] NewIPCTensor: backward_grads_0 [100000, 32]0x1002ffe92000
-W20240116 12:15:22.354350 24622 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_0 [100000, 32]0x100300ac9000
-W20240116 12:15:22.354396 24622 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_0_gpu [100000, 32]; dev=0; size=12.21 MB
-W20240116 12:15:22.355654 24622 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_0_gpu [100000, 32]; dev=0; size=12.21 MB
-cudaHostRegister 0x100000002000
-1: KnownLocalCachedEmbedding init done
-Worker 3 pid=24921
+WARNING [58464 perf_emb.py:165] After init DistEmbedding
+========== Running Perf with routine <function routine_local_cache_helper at 0x7fc750acda80>==========
+Worker 1 pid=58644
+Worker 2 pid=58645
+INFO [58464 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [58644 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [58645 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [58646 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [58645 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+INFO [58464 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+INFO [58646 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+E20240116 21:41:14.173028 58464 IPCTensor.h:346] IPCTensor full_emb already exists
+E20240116 21:41:14.173063 58646 IPCTensor.h:346] IPCTensor full_emb already exists
+E20240116 21:41:14.172773 58645 IPCTensor.h:346] IPCTensor full_emb already exists
+INFO [58644 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 4 nodes.
+E20240116 21:41:14.173645 58644 IPCTensor.h:346] IPCTensor full_emb already exists
+W20240116 21:41:14.206621 58464 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_0 [10000000, 32]; dev=0; size=1.192 GB
+W20240116 21:41:14.206658 58646 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_3 [10000000, 32]; dev=3; size=1.192 GB
+W20240116 21:41:14.206663 58645 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_2 [10000000, 32]; dev=2; size=1.192 GB
+W20240116 21:41:14.206663 58644 IPCTensor.h:406] NewIPCGPUTensor: embedding_cache_1 [10000000, 32]; dev=1; size=1.192 GB
+W20240116 21:41:14.739565 58464 IPCTensor.h:367] NewIPCTensor: input_keys_0 [100000]0x1002faf0e000
+W20240116 21:41:14.739732 58464 IPCTensor.h:367] NewIPCTensor: input_keys_neg_0 [100000]0x1002fafd3000
+W20240116 21:41:14.739773 58464 IPCTensor.h:367] NewIPCTensor: backward_grads_0 [100000, 32]0x1002fb098000
+W20240116 21:41:14.739807 58464 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_0 [100000, 32]0x1002fbccf000
+W20240116 21:41:14.739833 58464 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_0_gpu [100000, 32]; dev=0; size=12.21 MB
+W20240116 21:41:14.740250 58644 IPCTensor.h:367] NewIPCTensor: input_keys_1 [100000]0x1002fc908000
+W20240116 21:41:14.740347 58644 IPCTensor.h:367] NewIPCTensor: input_keys_neg_1 [100000]0x1002fc9cd000
+W20240116 21:41:14.740383 58644 IPCTensor.h:367] NewIPCTensor: backward_grads_1 [100000, 32]0x1002fca92000
+W20240116 21:41:14.740408 58644 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_1 [100000, 32]0x1002fd6c9000
+W20240116 21:41:14.740425 58644 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_1_gpu [100000, 32]; dev=1; size=12.21 MB
+W20240116 21:41:14.741465 58464 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_0_gpu [100000, 32]; dev=0; size=12.21 MB
+W20240116 21:41:14.741798 58644 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_1_gpu [100000, 32]; dev=1; size=12.21 MB
+W20240116 21:41:14.746790 58646 IPCTensor.h:367] NewIPCTensor: input_keys_3 [100000]0x1002fe30a000
+W20240116 21:41:14.746894 58646 IPCTensor.h:367] NewIPCTensor: input_keys_neg_3 [100000]0x1002fe3cf000
+W20240116 21:41:14.746925 58646 IPCTensor.h:367] NewIPCTensor: backward_grads_3 [100000, 32]0x1002fe494000
+W20240116 21:41:14.746955 58646 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_3 [100000, 32]0x1002ff0cb000
+W20240116 21:41:14.746985 58646 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_3_gpu [100000, 32]; dev=3; size=12.21 MB
+W20240116 21:41:14.748538 58646 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_3_gpu [100000, 32]; dev=3; size=12.21 MB
+W20240116 21:41:14.755681 58645 IPCTensor.h:367] NewIPCTensor: input_keys_2 [100000]0x1002ffd08000
+W20240116 21:41:14.755769 58645 IPCTensor.h:367] NewIPCTensor: input_keys_neg_2 [100000]0x1002ffdcd000
+W20240116 21:41:14.755800 58645 IPCTensor.h:367] NewIPCTensor: backward_grads_2 [100000, 32]0x1002ffe92000
+W20240116 21:41:14.755826 58645 IPCTensor.h:367] NewIPCTensor: backward_grads_neg_2 [100000, 32]0x100300ac9000
+W20240116 21:41:14.755843 58645 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_2_gpu [100000, 32]; dev=2; size=12.21 MB
+W20240116 21:41:14.757620 58645 IPCTensor.h:406] NewIPCGPUTensor: backward_grads_neg_2_gpu [100000, 32]; dev=2; size=12.21 MB
+Worker 3 pid=58646
 New CachedEmbedding, name=full_emb, shape=(100000000, 32), cache_type=KnownLocalCachedEmbedding
-fixed cache_range is [(0, 20000000), (20000000, 40000000), (40000000, 60000000), (60000000, 80000000)]
+fixed cache_range is [(0, 10000000), (10000000, 20000000), (20000000, 30000000), (30000000, 40000000)]
 cudaHostRegister 0x100000002000
 0: KnownLocalCachedEmbedding init done
 cudaHostRegister 0x100000002000
-3: KnownLocalCachedEmbedding init done
-cudaHostRegister 0x100000002000
 2: KnownLocalCachedEmbedding init done
-W20240116 12:15:25.646512 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_0 [100000]0x100301704000
-W20240116 12:15:25.646720 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_1 [100000]0x1003017c9000
-W20240116 12:15:25.646831 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_0 [100000]0x10030188e000
-W20240116 12:15:25.646965 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_2 [100000]0x100301953000
-W20240116 12:15:25.647027 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_3 [100000]0x100301a18000
-W20240116 12:15:25.647074 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_4 [100000]0x100301add000
-W20240116 12:15:25.647087 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_1 [100000]0x100301ba2000
-W20240116 12:15:25.647143 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_5 [100000]0x100301c67000
-W20240116 12:15:25.647150 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_2 [100000]0x100301d2c000
-W20240116 12:15:25.647194 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_6 [100000]0x100301df1000
-W20240116 12:15:25.647207 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_3 [100000]0x100301eb6000
-W20240116 12:15:25.647267 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_4 [100000]0x100301f7b000
-W20240116 12:15:25.647300 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_7 [100000]0x100302040000
-W20240116 12:15:25.647317 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_5 [100000]0x100302105000
-W20240116 12:15:25.647364 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_8 [100000]0x10030228f000
-W20240116 12:15:25.647429 24921 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_9 [100000]0x100302419000
-W20240116 12:15:25.647501 24921 IPCTensor.h:367] NewIPCTensor: step_r3 [10]0x1003024de000
-W20240116 12:15:25.647564 24921 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r3 [1]0x1003024e0000
-W20240116 12:15:25.647617 24921 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x1003024e2000
-W20240116 12:15:25.647367 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_0 [100000]0x1003021ca000
-W20240116 12:15:25.647397 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_6 [100000]0x100302354000
-W20240116 12:15:25.647737 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_7 [100000]0x1003024e4000
-W20240116 12:15:25.648042 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_8 [100000]0x1003025a9000
+cudaHostRegister 0x100000002000
+1: KnownLocalCachedEmbedding init done
+cudaHostRegister 0x100000002000
+3: KnownLocalCachedEmbedding init done
+W20240116 21:41:17.643222 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_0 [100000]0x100301704000
+W20240116 21:41:17.643265 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_0 [100000]0x1003017c9000
+W20240116 21:41:17.643366 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_0 [100000]0x10030188e000
+W20240116 21:41:17.643391 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_1 [100000]0x100301953000
+W20240116 21:41:17.643396 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_1 [100000]0x100301a18000
+W20240116 21:41:17.643420 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_0 [100000]0x100301add000
+W20240116 21:41:17.643442 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_2 [100000]0x100301ba2000
+W20240116 21:41:17.643463 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_2 [100000]0x100301c67000
+W20240116 21:41:17.643472 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_3 [100000]0x100301d2c000
+W20240116 21:41:17.643500 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_4 [100000]0x100301df1000
+W20240116 21:41:17.643510 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_3 [100000]0x100301eb6000
+W20240116 21:41:17.643515 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_1 [100000]0x100301f7b000
+W20240116 21:41:17.643543 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_5 [100000]0x100302040000
+W20240116 21:41:17.643554 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_4 [100000]0x100302105000
+W20240116 21:41:17.643576 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_6 [100000]0x1003021ca000
+W20240116 21:41:17.643596 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_2 [100000]0x10030228f000
+W20240116 21:41:17.643600 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_5 [100000]0x100302354000
+W20240116 21:41:17.643615 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_7 [100000]0x100302419000
+W20240116 21:41:17.643628 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_1 [100000]0x1003024de000
+W20240116 21:41:17.643646 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_6 [100000]0x1003025a3000
+W20240116 21:41:17.643651 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_8 [100000]0x100302668000
+W20240116 21:41:17.643656 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_3 [100000]0x10030272d000
+W20240116 21:41:17.643685 58464 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_9 [100000]0x1003027f2000
+W20240116 21:41:17.643697 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_4 [100000]0x1003028b7000
+W20240116 21:41:17.643702 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_7 [100000]0x10030297c000
+W20240116 21:41:17.643718 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_2 [100000]0x100302a41000
+W20240116 21:41:17.643733 58464 IPCTensor.h:367] NewIPCTensor: step_r0 [10]0x100302b06000
+W20240116 21:41:17.643738 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_5 [100000]0x100302b08000
+W20240116 21:41:17.643754 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_8 [100000]0x100302bcd000
+W20240116 21:41:17.643762 58464 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r0 [1]0x100302c92000
+W20240116 21:41:17.643783 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_3 [100000]0x100302c94000
+W20240116 21:41:17.643784 58464 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100302d59000
+W20240116 21:41:17.643793 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_6 [100000]0x100302d5b000
+W20240116 21:41:17.643812 58645 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_9 [100000]0x100302e20000
+W20240116 21:41:17.643821 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_4 [100000]0x100302ee5000
+W20240116 21:41:17.643851 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_5 [100000]0x100302faa000
+W20240116 21:41:17.643857 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_7 [100000]0x10030306f000
+W20240116 21:41:17.643867 58645 IPCTensor.h:367] NewIPCTensor: step_r2 [10]0x100303134000
+W20240116 21:41:17.643886 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_6 [100000]0x100303136000
+W20240116 21:41:17.643910 58645 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r2 [1]0x1003031fb000
+W20240116 21:41:17.643919 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_8 [100000]0x1003031fd000
+W20240116 21:41:17.643927 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_7 [100000]0x1003032c2000
+W20240116 21:41:17.643941 58645 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x100303387000
+W20240116 21:41:17.643970 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_8 [100000]0x100303389000
+W20240116 21:41:17.643980 58644 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_9 [100000]0x10030344e000
+W20240116 21:41:17.644033 58646 IPCTensor.h:367] NewIPCTensor: cached_sampler_r3_9 [100000]0x100303513000
+W20240116 21:41:17.644042 58644 IPCTensor.h:367] NewIPCTensor: step_r1 [10]0x1003035d8000
+W20240116 21:41:17.644078 58644 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r1 [1]0x1003035da000
+W20240116 21:41:17.644083 58646 IPCTensor.h:367] NewIPCTensor: step_r3 [10]0x1003035dc000
 Construct PerfSampler done
-W20240116 12:15:25.648094 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_1 [100000]0x10030266e000
-W20240116 12:15:25.648310 24920 IPCTensor.h:367] NewIPCTensor: cached_sampler_r2_9 [100000]0x1003027f8000
-I20240116 12:15:25.648317 24921 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 4
-W20240116 12:15:25.648321 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_2 [100000]0x1003028bd000
-W20240116 12:15:25.648391 24920 IPCTensor.h:367] NewIPCTensor: step_r2 [10]0x100302982000
-W20240116 12:15:25.648409 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_3 [100000]0x100302984000
-W20240116 12:15:25.648448 24920 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r2 [1]0x100302a49000
-W20240116 12:15:25.648459 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_4 [100000]0x100302a4b000
-W20240116 12:15:25.648505 24920 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x100302b10000
-W20240116 12:15:25.648510 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_5 [100000]0x100302b12000
-W20240116 12:15:25.648572 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_6 [100000]0x100302bd7000
-W20240116 12:15:25.648648 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_7 [100000]0x100302c9c000
-W20240116 12:15:25.648699 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_8 [100000]0x100302d61000
-W20240116 12:15:25.648758 24622 IPCTensor.h:367] NewIPCTensor: cached_sampler_r0_9 [100000]0x100302e26000
-W20240116 12:15:25.648211 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_0 [100000]0x100302733000
-W20240116 12:15:25.648818 24622 IPCTensor.h:367] NewIPCTensor: step_r0 [10]0x100302eeb000
-W20240116 12:15:25.648880 24622 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r0 [1]0x100302eed000
+W20240116 21:41:17.644121 58644 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1003035de000
+W20240116 21:41:17.644137 58646 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r3 [1]0x1003035e0000
+W20240116 21:41:17.644160 58646 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x1003035e2000
+I20240116 21:41:17.644205 58464 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 4
 Construct PerfSampler done
-W20240116 12:15:25.648927 24622 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100302eef000
-W20240116 12:15:25.648977 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_1 [100000]0x100302ef1000
-I20240116 12:15:25.649013 24920 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
-W20240116 12:15:25.649039 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_2 [100000]0x100302fb6000
-W20240116 12:15:25.649089 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_3 [100000]0x10030307b000
-W20240116 12:15:25.649145 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_4 [100000]0x100303140000
-W20240116 12:15:25.649201 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_5 [100000]0x100303205000
-W20240116 12:15:25.649266 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_6 [100000]0x1003032ca000
-W20240116 12:15:25.649334 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_7 [100000]0x10030338f000
-W20240116 12:15:25.649392 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_8 [100000]0x100303454000
+I20240116 21:41:17.644376 58645 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
 Construct PerfSampler done
-W20240116 12:15:25.649446 24919 IPCTensor.h:367] NewIPCTensor: cached_sampler_r1_9 [100000]0x100303519000
-W20240116 12:15:25.649500 24919 IPCTensor.h:367] NewIPCTensor: step_r1 [10]0x1003035de000
-I20240116 12:15:25.649539 24622 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
-W20240116 12:15:25.649564 24919 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_r1 [1]0x1003035e0000
-W20240116 12:15:25.649605 24919 IPCTensor.h:367] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1003035e2000
+I20240116 21:41:17.644544 58644 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
 Construct PerfSampler done
-I20240116 12:15:25.649953 24919 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
-W20240116 12:15:25.650955 24622 grad_base.h:54] KGCacheController, config={
-        "num_gpus": 4,
-        "L": 10,
-        "kForwardItersPerStep": 1,
-        "clr": 1,
-        "backwardMode": "CppAsyncV2",
-        "nr_background_threads": 16, 
-        "cache_ratio": 0.2,
-        "backgrad_init": "both"
-    }
-W20240116 12:15:25.651208 24622 grad_base.h:169] Init GradProcessingBase done
-I20240116 12:15:42.636214 24622 grad_async_v2.h:32] Use background thread to update emb.
-W20240116 12:15:42.636566 24622 kg_controller.h:78] after init GradAsyncProcessingV2
-I20240116 12:15:42.636575 24622 kg_controller.h:84] Construct KGCacheController done
+I20240116 21:41:17.644687 58646 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 4
 Construct KGCacheControllerWrapper done
 Construct KGCacheControllerWrapper done
 Construct KGCacheControllerWrapper done
 Construct KGCacheControllerWrapper done
-I20240116 12:15:43.092432 24622 grad_base.h:59] GraphEnv RegTensorsPerProcess
-W20240116 12:15:46.587385 25826 grad_async_v2.h:109] Detect new sample comes, old_end0, new_end1
-E20240116 12:15:46.587886 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
-E20240116 12:15:47.587025 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=7240
-W20240116 12:15:47.653687 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:15:48.587018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1604
-W20240116 12:15:48.676299 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 Before Training
-I20240116 12:15:48.999656 24919 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 4
+I20240116 21:41:18.404824 58646 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 4
 Before Training
-I20240116 12:15:49.163727 24921 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
+I20240116 21:41:18.416908 58464 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
 Before Training
-I20240116 12:15:49.335940 24920 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
+I20240116 21:41:18.420023 58644 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
 Before Training
-I20240116 12:15:49.438899 24622 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
+I20240116 21:41:18.424026 58645 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 4
 ========== Step 0 ========== 
 ========== Step 0 ========== 
 ========== Step 0 ========== 
 ========== Step 0 ========== 
-E20240116 12:15:49.587049 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=3319
-W20240116 12:15:49.695595 25826 grad_async_v2.h:109] Detect new sample comes, old_end0, new_end1
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 98.013 ms                 | 98.013 ms                 |
-| Backward                  | 25.639 ms                 | 25.639 ms                 |
-| Optimize                  | 988.305 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 9.606 ms                  | 9.606 ms                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:15:50.818384 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=1
-W20240116 12:15:51.069744 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=1, pq.top=1
 ========== Step 1 ========== 
 ========== Step 1 ========== 
 ========== Step 1 ========== 
 ========== Step 1 ========== 
-W20240116 12:15:51.119524 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:15:51.818012 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=51
 ========== Step 2 ========== 
 ========== Step 2 ========== 
 ========== Step 2 ========== 
 ========== Step 2 ========== 
-W20240116 12:15:52.477556 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=3, pq.top=2
 ========== Step 3 ========== 
 ========== Step 3 ========== 
 ========== Step 3 ========== 
 ========== Step 3 ========== 
-W20240116 12:15:52.517504 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:15:52.818017 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=8650
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 37.269 ms                 | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.107 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 236.074 ms                | 251.195 ms                |
-| ProcessOneStep            | 363.388 ms                | 1.155 s                   |
-| BlockToStepN              | 33.867 ms                 | 37.194 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 4 ========== 
 ========== Step 4 ========== 
 ========== Step 4 ========== 
 ========== Step 4 ========== 
-W20240116 12:15:53.752478 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=5, pq.top=5
 ========== Step 5 ========== 
 ========== Step 5 ========== 
 ========== Step 5 ========== 
 ========== Step 5 ========== 
-W20240116 12:15:53.786475 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:15:53.818011 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=20785
 ========== Step 6 ========== 
 ========== Step 6 ========== 
 ========== Step 6 ========== 
 ========== Step 6 ========== 
-E20240116 12:15:54.818027 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=39284
-W20240116 12:15:55.048887 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=7, pq.top=7
 ========== Step 7 ========== 
 ========== Step 7 ========== 
 ========== Step 7 ========== 
 ========== Step 7 ========== 
-W20240116 12:15:55.087235 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 612.874 us                | 98.013 ms                 |
-| Backward                  | 921.583 us                | 25.639 ms                 |
-| Optimize                  | 161.365 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 776.904 us                | 9.606 ms                  |
-| AfterBackward             | 267.953 ms                | 1.155 s                   |
-| BlockToStepN              | 32.283 ms                 | 37.449 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 8 ========== 
 ========== Step 8 ========== 
 ========== Step 8 ========== 
 ========== Step 8 ========== 
-E20240116 12:15:55.818006 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=50298
-W20240116 12:15:56.255244 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=9, pq.top=9
 ========== Step 9 ========== 
 ========== Step 9 ========== 
 ========== Step 9 ========== 
 ========== Step 9 ========== 
-W20240116 12:15:56.296181 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:15:56.818076 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=582
 ========== Step 10 ========== 
 ========== Step 10 ========== 
 ========== Step 10 ========== 
 ========== Step 10 ========== 
-W20240116 12:15:57.527508 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=11, pq.top=10
 ========== Step 11 ========== 
 ========== Step 11 ========== 
 ========== Step 11 ========== 
 ========== Step 11 ========== 
-W20240116 12:15:57.574118 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:15:57.818015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=75326
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.457 ms                  | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.127 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 240.044 ms                | 251.195 ms                |
-| ProcessOneStep            | 260.657 ms                | 1.155 s                   |
-| BlockToStepN              | 32.220 ms                 | 37.194 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 12 ========== 
 ========== Step 12 ========== 
 ========== Step 12 ========== 
 ========== Step 12 ========== 
-E20240116 12:15:58.818034 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=85510
-W20240116 12:15:58.845155 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=13, pq.top=13
 ========== Step 13 ========== 
 ========== Step 13 ========== 
 ========== Step 13 ========== 
 ========== Step 13 ========== 
-W20240116 12:15:58.886922 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 14 ========== 
 ========== Step 14 ========== 
 ========== Step 14 ========== 
 ========== Step 14 ========== 
-E20240116 12:15:59.818012 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=101055
-W20240116 12:16:00.143344 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=15, pq.top=15
 ========== Step 15 ========== 
 ========== Step 15 ========== 
 ========== Step 15 ========== 
 ========== Step 15 ========== 
-W20240116 12:16:00.187614 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 599.699 us                | 98.013 ms                 |
-| Backward                  | 915.844 us                | 25.639 ms                 |
-| Optimize                  | 141.135 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 697.288 us                | 10.933 ms                 |
-| AfterBackward             | 265.105 ms                | 1.155 s                   |
-| BlockToStepN              | 33.277 ms                 | 37.859 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 16 ========== 
 ========== Step 16 ========== 
 ========== Step 16 ========== 
 ========== Step 16 ========== 
-E20240116 12:16:00.818014 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=109379
-W20240116 12:16:01.414178 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=17, pq.top=17
 ========== Step 17 ========== 
 ========== Step 17 ========== 
 ========== Step 17 ========== 
 ========== Step 17 ========== 
-W20240116 12:16:01.458328 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:16:01.818009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=124834
 ========== Step 18 ========== 
 ========== Step 18 ========== 
 ========== Step 18 ========== 
 ========== Step 18 ========== 
-W20240116 12:16:02.682925 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=19, pq.top=19
 ========== Step 19 ========== 
 ========== Step 19 ========== 
 ========== Step 19 ========== 
 ========== Step 19 ========== 
-W20240116 12:16:02.726472 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:16:02.818033 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=242
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.126 ms                  | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.127 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 246.022 ms                | 259.047 ms                |
-| ProcessOneStep            | 260.657 ms                | 1.155 s                   |
-| BlockToStepN              | 33.199 ms                 | 37.789 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 20 ========== 
 ========== Step 20 ========== 
 ========== Step 20 ========== 
 ========== Step 20 ========== 
-E20240116 12:16:03.818014 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=17
-W20240116 12:16:04.009601 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=21, pq.top=21
 ========== Step 21 ========== 
 ========== Step 21 ========== 
 ========== Step 21 ========== 
 ========== Step 21 ========== 
-W20240116 12:16:04.053200 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 22 ========== 
 ========== Step 22 ========== 
 ========== Step 22 ========== 
 ========== Step 22 ========== 
-E20240116 12:16:04.818006 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=155042
-W20240116 12:16:05.237214 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=23, pq.top=23
 ========== Step 23 ========== 
 ========== Step 23 ========== 
 ========== Step 23 ========== 
 ========== Step 23 ========== 
-W20240116 12:16:05.275326 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| Forward                   | 577.879 us                | 98.013 ms                 |
-| Backward                  | 914.188 us                | 25.639 ms                 |
-| Optimize                  | 129.354 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 751.701 us                | 10.933 ms                 |
-| AfterBackward             | 260.707 ms                | 1.155 s                   |
-| BlockToStepN              | 33.277 ms                 | 37.880 ms                 |
+| GenInput:CircleBuffer     | 97.432 us                 | 307.708 us                |
+| GenInput                  | 291.334 us                | 1.792 ms                  |
+| Forward                   | 291.455 us                | 44.197 ms                 |
+| Backward                  | 88.454 ms                 | 1.492 s                   |
+| Optimize                  | 18.838 ms                 | 243.369 ms                |
+| BarrierTimeBeforeRank0    | 32.122 us                 | 2.751 ms                  |
+| BlockToStepN              | 20.618 us                 | 608.000 us                |
+| OneStep                   | 108.259 ms                | 1.785 s                   |
 +---------------------------+---------------------------+---------------------------+
-E20240116 12:16:05.818038 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=165129
 ========== Step 24 ========== 
 ========== Step 24 ========== 
 ========== Step 24 ========== 
 ========== Step 24 ========== 
-W20240116 12:16:06.446893 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=25, pq.top=25
 ========== Step 25 ========== 
 ========== Step 25 ========== 
 ========== Step 25 ========== 
 ========== Step 25 ========== 
-W20240116 12:16:06.488565 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:16:06.818018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=180100
 ========== Step 26 ========== 
 ========== Step 26 ========== 
 ========== Step 26 ========== 
 ========== Step 26 ========== 
-W20240116 12:16:07.708271 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=27, pq.top=27
 ========== Step 27 ========== 
 ========== Step 27 ========== 
 ========== Step 27 ========== 
 ========== Step 27 ========== 
-W20240116 12:16:07.747520 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:16:07.818017 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=189091
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.073 ms                  | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.103 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 245.699 ms                | 259.047 ms                |
-| ProcessOneStep            | 258.273 ms                | 1.155 s                   |
-| BlockToStepN              | 33.200 ms                 | 37.789 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 28 ========== 
 ========== Step 28 ========== 
 ========== Step 28 ========== 
 ========== Step 28 ========== 
-E20240116 12:16:08.818025 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=205881
-W20240116 12:16:09.063717 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=29, pq.top=29
 ========== Step 29 ========== 
 ========== Step 29 ========== 
 ========== Step 29 ========== 
 ========== Step 29 ========== 
-W20240116 12:16:09.107403 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 30 ========== 
 ========== Step 30 ========== 
 ========== Step 30 ========== 
 ========== Step 30 ========== 
-E20240116 12:16:09.818130 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=214890
-W20240116 12:16:10.324636 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=31, pq.top=31
 ========== Step 31 ========== 
 ========== Step 31 ========== 
 ========== Step 31 ========== 
 ========== Step 31 ========== 
-W20240116 12:16:10.365698 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 577.879 us                | 98.013 ms                 |
-| Backward                  | 910.169 us                | 25.639 ms                 |
-| Optimize                  | 129.354 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 874.566 us                | 10.933 ms                 |
-| AfterBackward             | 258.331 ms                | 1.155 s                   |
-| BlockToStepN              | 33.933 ms                 | 38.777 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:10.818050 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=226390
 ========== Step 32 ========== 
 ========== Step 32 ========== 
 ========== Step 32 ========== 
 ========== Step 32 ========== 
-W20240116 12:16:11.520614 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=33, pq.top=33
 ========== Step 33 ========== 
 ========== Step 33 ========== 
 ========== Step 33 ========== 
 ========== Step 33 ========== 
-W20240116 12:16:11.559489 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:16:11.818006 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=238594
 ========== Step 34 ========== 
 ========== Step 34 ========== 
 ========== Step 34 ========== 
 ========== Step 34 ========== 
-W20240116 12:16:12.703498 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=35, pq.top=35
 ========== Step 35 ========== 
 ========== Step 35 ========== 
 ========== Step 35 ========== 
 ========== Step 35 ========== 
-W20240116 12:16:12.744252 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:16:12.818213 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=245149
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.086 ms                  | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.107 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 240.067 ms                | 259.047 ms                |
-| ProcessOneStep            | 257.305 ms                | 1.155 s                   |
-| BlockToStepN              | 33.959 ms                 | 49.016 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 36 ========== 
 ========== Step 36 ========== 
 ========== Step 36 ========== 
 ========== Step 36 ========== 
-E20240116 12:16:13.818010 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=5
-W20240116 12:16:13.917945 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=37, pq.top=37
 ========== Step 37 ========== 
 ========== Step 37 ========== 
 ========== Step 37 ========== 
 ========== Step 37 ========== 
-W20240116 12:16:13.958051 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 38 ========== 
 ========== Step 38 ========== 
 ========== Step 38 ========== 
 ========== Step 38 ========== 
-E20240116 12:16:14.818010 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=268689
-W20240116 12:16:15.136276 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=39, pq.top=39
 ========== Step 39 ========== 
 ========== Step 39 ========== 
 ========== Step 39 ========== 
 ========== Step 39 ========== 
-W20240116 12:16:15.181052 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 539.826 us                | 98.013 ms                 |
-| Backward                  | 900.638 us                | 25.639 ms                 |
-| Optimize                  | 127.147 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 874.566 us                | 10.933 ms                 |
-| AfterBackward             | 256.870 ms                | 1.155 s                   |
-| BlockToStepN              | 34.293 ms                 | 49.131 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:15.818028 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=1010
 ========== Step 40 ========== 
 ========== Step 40 ========== 
 ========== Step 40 ========== 
 ========== Step 40 ========== 
-W20240116 12:16:16.501873 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=41, pq.top=41
 ========== Step 41 ========== 
 ========== Step 41 ========== 
 ========== Step 41 ========== 
 ========== Step 41 ========== 
-W20240116 12:16:16.544656 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:16:16.818013 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=286416
 ========== Step 42 ========== 
 ========== Step 42 ========== 
 ========== Step 42 ========== 
 ========== Step 42 ========== 
-W20240116 12:16:17.793262 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=43, pq.top=43
-E20240116 12:16:17.818013 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=294458
 ========== Step 43 ========== 
 ========== Step 43 ========== 
 ========== Step 43 ========== 
 ========== Step 43 ========== 
-W20240116 12:16:17.835597 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.073 ms                  | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.114 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 240.067 ms                | 259.047 ms                |
-| ProcessOneStep            | 256.826 ms                | 1.155 s                   |
-| BlockToStepN              | 34.362 ms                 | 49.016 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 44 ========== 
 ========== Step 44 ========== 
 ========== Step 44 ========== 
 ========== Step 44 ========== 
-E20240116 12:16:18.818011 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=307458
-W20240116 12:16:19.070060 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=45, pq.top=45
 ========== Step 45 ========== 
 ========== Step 45 ========== 
 ========== Step 45 ========== 
 ========== Step 45 ========== 
-W20240116 12:16:19.111649 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 46 ========== 
 ========== Step 46 ========== 
 ========== Step 46 ========== 
 ========== Step 46 ========== 
-E20240116 12:16:19.818032 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=316505
-W20240116 12:16:20.492193 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=47, pq.top=47
 ========== Step 47 ========== 
 ========== Step 47 ========== 
 ========== Step 47 ========== 
 ========== Step 47 ========== 
-W20240116 12:16:20.536350 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 549.561 us                | 98.013 ms                 |
-| Backward                  | 900.638 us                | 25.639 ms                 |
-| Optimize                  | 127.147 us                | 988.305 us                |
-| BarrierTimeBeforeRank0    | 810.748 us                | 10.933 ms                 |
-| AfterBackward             | 257.142 ms                | 1.155 s                   |
-| BlockToStepN              | 34.643 ms                 | 49.131 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:20.818151 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=331088
 ========== Step 48 ========== 
 ========== Step 48 ========== 
 ========== Step 48 ========== 
 ========== Step 48 ========== 
-E20240116 12:16:21.818015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=348055
-W20240116 12:16:21.966217 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=49, pq.top=49
 ========== Step 49 ========== 
 ========== Step 49 ========== 
 ========== Step 49 ========== 
 ========== Step 49 ========== 
-W20240116 12:16:22.008062 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 50 ========== 
 ========== Step 50 ========== 
 ========== Step 50 ========== 
 ========== Step 50 ========== 
-E20240116 12:16:22.818085 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=365
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.086 ms                  | 189.989 ms                |
-| ProcessBack:UpdateCache   | 6.127 ms                  | 707.031 ms                |
-| ProcessBack:UpsertPq      | 241.221 ms                | 286.542 ms                |
-| ProcessOneStep            | 257.305 ms                | 1.155 s                   |
-| BlockToStepN              | 34.560 ms                 | 49.016 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:16:23.386482 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=51, pq.top=51
-E20240116 12:16:23.822867 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=603
-W20240116 12:16:24.386287 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=51, pq.top=51
-E20240116 12:16:24.822595 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1724
-W20240116 12:16:25.386498 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=51, pq.top=51
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 539.826 us                | 2.042 ms                  |
-| Backward                  | 901.543 us                | 2.334 ms                  |
-| Optimize                  | 127.147 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 810.748 us                | 9.606 ms                  |
-| AfterBackward             | 257.900 ms                | 398.370 ms                |
-| BlockToStepN              | 34.667 ms                 | 49.131 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:25.827028 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=2712
-W20240116 12:16:26.386027 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=51, pq.top=51
 ========== Step 51 ========== 
 ========== Step 51 ========== 
 ========== Step 51 ========== 
 ========== Step 51 ========== 
-W20240116 12:16:26.537109 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:16:26.827111 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=8744
 ========== Step 52 ========== 
 ========== Step 52 ========== 
 ========== Step 52 ========== 
 ========== Step 52 ========== 
-E20240116 12:16:27.827044 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=68
-W20240116 12:16:27.950867 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=53, pq.top=52
 ========== Step 53 ========== 
 ========== Step 53 ========== 
 ========== Step 53 ========== 
 ========== Step 53 ========== 
-W20240116 12:16:28.024374 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.457 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.130 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 240.271 ms                | 259.047 ms                |
-| ProcessOneStep            | 258.273 ms                | 398.285 ms                |
-| BlockToStepN              | 34.889 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 54 ========== 
 ========== Step 54 ========== 
 ========== Step 54 ========== 
 ========== Step 54 ========== 
-E20240116 12:16:28.827045 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=2585
-W20240116 12:16:29.425257 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=55, pq.top=54
 ========== Step 55 ========== 
 ========== Step 55 ========== 
 ========== Step 55 ========== 
 ========== Step 55 ========== 
-W20240116 12:16:29.475562 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:16:29.827020 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=8712
 ========== Step 56 ========== 
 ========== Step 56 ========== 
 ========== Step 56 ========== 
 ========== Step 56 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 539.826 us                | 2.042 ms                  |
-| Backward                  | 914.188 us                | 2.334 ms                  |
-| Optimize                  | 127.518 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 810.748 us                | 9.606 ms                  |
-| AfterBackward             | 258.863 ms                | 398.370 ms                |
-| BlockToStepN              | 35.218 ms                 | 78.584 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:30.827021 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=316
-W20240116 12:16:30.881808 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=57, pq.top=56
 ========== Step 57 ========== 
 ========== Step 57 ========== 
 ========== Step 57 ========== 
 ========== Step 57 ========== 
-W20240116 12:16:30.964180 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 58 ========== 
 ========== Step 58 ========== 
 ========== Step 58 ========== 
 ========== Step 58 ========== 
-E20240116 12:16:31.827183 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=14265
-W20240116 12:16:32.136711 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=59, pq.top=59
 ========== Step 59 ========== 
 ========== Step 59 ========== 
 ========== Step 59 ========== 
 ========== Step 59 ========== 
-W20240116 12:16:32.174312 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:16:32.827042 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=1102
 ========== Step 60 ========== 
 ========== Step 60 ========== 
 ========== Step 60 ========== 
 ========== Step 60 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.968 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.133 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 239.718 ms                | 275.818 ms                |
-| ProcessOneStep            | 258.791 ms                | 398.285 ms                |
-| BlockToStepN              | 35.111 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:16:33.449059 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=61, pq.top=60
 ========== Step 61 ========== 
 ========== Step 61 ========== 
 ========== Step 61 ========== 
 ========== Step 61 ========== 
-W20240116 12:16:33.531888 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:16:33.827015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=39349
 ========== Step 62 ========== 
 ========== Step 62 ========== 
 ========== Step 62 ========== 
 ========== Step 62 ========== 
-W20240116 12:16:34.730078 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=63, pq.top=63
 ========== Step 63 ========== 
 ========== Step 63 ========== 
 ========== Step 63 ========== 
 ========== Step 63 ========== 
-W20240116 12:16:34.775770 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:16:34.827008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=48141
 ========== Step 64 ========== 
 ========== Step 64 ========== 
 ========== Step 64 ========== 
 ========== Step 64 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 549.561 us                | 2.042 ms                  |
-| Backward                  | 916.446 us                | 2.334 ms                  |
-| Optimize                  | 127.518 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 751.701 us                | 9.606 ms                  |
-| AfterBackward             | 257.900 ms                | 398.370 ms                |
-| BlockToStepN              | 35.253 ms                 | 78.584 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:35.827023 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=60520
-W20240116 12:16:35.970197 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=65, pq.top=65
 ========== Step 65 ========== 
 ========== Step 65 ========== 
 ========== Step 65 ========== 
 ========== Step 65 ========== 
-W20240116 12:16:36.016711 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 66 ========== 
 ========== Step 66 ========== 
 ========== Step 66 ========== 
 ========== Step 66 ========== 
-E20240116 12:16:36.827183 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=70479
-W20240116 12:16:37.265578 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=67, pq.top=67
 ========== Step 67 ========== 
 ========== Step 67 ========== 
 ========== Step 67 ========== 
 ========== Step 67 ========== 
-W20240116 12:16:37.313712 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:16:37.827159 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=18
 ========== Step 68 ========== 
 ========== Step 68 ========== 
 ========== Step 68 ========== 
@@ -730,1954 +421,1023 @@ E20240116 12:16:37.827159 24622 parallel_pq_v2.h:76] insert failed, size(hashtab
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.457 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.133 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 238.313 ms                | 275.818 ms                |
-| ProcessOneStep            | 257.848 ms                | 398.285 ms                |
-| BlockToStepN              | 35.574 ms                 | 78.482 ms                 |
+| GenInput:CircleBuffer     | 96.476 us                 | 132.069 us                |
+| GenInput                  | 301.446 us                | 1.779 ms                  |
+| Forward                   | 289.103 us                | 513.797 us                |
+| Backward                  | 90.203 ms                 | 105.241 ms                |
+| Optimize                  | 18.381 ms                 | 22.139 ms                 |
+| BarrierTimeBeforeRank0    | 30.619 us                 | 69.181 us                 |
+| BlockToStepN              | 21.357 us                 | 296.542 us                |
+| OneStep                   | 109.532 ms                | 125.941 ms                |
 +---------------------------+---------------------------+---------------------------+
-W20240116 12:16:38.501348 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=69, pq.top=69
 ========== Step 69 ========== 
 ========== Step 69 ========== 
 ========== Step 69 ========== 
 ========== Step 69 ========== 
-W20240116 12:16:38.543251 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:16:38.827087 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=93667
 ========== Step 70 ========== 
 ========== Step 70 ========== 
 ========== Step 70 ========== 
 ========== Step 70 ========== 
-W20240116 12:16:39.752000 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=71, pq.top=71
 ========== Step 71 ========== 
 ========== Step 71 ========== 
 ========== Step 71 ========== 
 ========== Step 71 ========== 
-W20240116 12:16:39.800611 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:16:39.827044 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=102941
 ========== Step 72 ========== 
 ========== Step 72 ========== 
 ========== Step 72 ========== 
 ========== Step 72 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 541.431 us                | 2.042 ms                  |
-| Backward                  | 949.358 us                | 2.334 ms                  |
-| Optimize                  | 127.602 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 697.288 us                | 9.606 ms                  |
-| AfterBackward             | 257.142 ms                | 398.370 ms                |
-| BlockToStepN              | 35.901 ms                 | 78.584 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:40.827011 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=116712
-W20240116 12:16:40.987985 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=73, pq.top=73
 ========== Step 73 ========== 
 ========== Step 73 ========== 
 ========== Step 73 ========== 
 ========== Step 73 ========== 
-W20240116 12:16:41.031715 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 74 ========== 
 ========== Step 74 ========== 
 ========== Step 74 ========== 
 ========== Step 74 ========== 
-E20240116 12:16:41.827018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=126271
-W20240116 12:16:42.218346 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=75, pq.top=75
 ========== Step 75 ========== 
 ========== Step 75 ========== 
 ========== Step 75 ========== 
 ========== Step 75 ========== 
-W20240116 12:16:42.262066 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:16:42.827081 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=803
 ========== Step 76 ========== 
 ========== Step 76 ========== 
 ========== Step 76 ========== 
 ========== Step 76 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.224 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.127 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 238.272 ms                | 275.818 ms                |
-| ProcessOneStep            | 256.461 ms                | 398.285 ms                |
-| BlockToStepN              | 35.925 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:16:43.501482 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=77, pq.top=77
 ========== Step 77 ========== 
 ========== Step 77 ========== 
 ========== Step 77 ========== 
 ========== Step 77 ========== 
-W20240116 12:16:43.547444 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:16:43.827041 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=148528
 ========== Step 78 ========== 
 ========== Step 78 ========== 
 ========== Step 78 ========== 
 ========== Step 78 ========== 
-W20240116 12:16:44.748283 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=79, pq.top=79
 ========== Step 79 ========== 
 ========== Step 79 ========== 
 ========== Step 79 ========== 
 ========== Step 79 ========== 
-W20240116 12:16:44.791144 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:16:44.827117 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=158282
 ========== Step 80 ========== 
 ========== Step 80 ========== 
 ========== Step 80 ========== 
 ========== Step 80 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 539.826 us                | 2.042 ms                  |
-| Backward                  | 971.887 us                | 2.334 ms                  |
-| Optimize                  | 127.602 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 681.464 us                | 9.606 ms                  |
-| AfterBackward             | 256.084 ms                | 398.370 ms                |
-| BlockToStepN              | 36.347 ms                 | 78.584 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:45.827148 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=31
-W20240116 12:16:45.988298 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=81, pq.top=81
 ========== Step 81 ========== 
 ========== Step 81 ========== 
 ========== Step 81 ========== 
 ========== Step 81 ========== 
-W20240116 12:16:46.032248 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 82 ========== 
 ========== Step 82 ========== 
 ========== Step 82 ========== 
 ========== Step 82 ========== 
-E20240116 12:16:46.827019 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=181035
-W20240116 12:16:47.224890 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=83, pq.top=83
 ========== Step 83 ========== 
 ========== Step 83 ========== 
 ========== Step 83 ========== 
 ========== Step 83 ========== 
-W20240116 12:16:47.268170 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:16:47.827590 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=292
 ========== Step 84 ========== 
 ========== Step 84 ========== 
 ========== Step 84 ========== 
 ========== Step 84 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.126 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.115 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 237.692 ms                | 275.818 ms                |
-| ProcessOneStep            | 255.073 ms                | 398.285 ms                |
-| BlockToStepN              | 36.472 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:16:48.511847 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=85, pq.top=85
 ========== Step 85 ========== 
 ========== Step 85 ========== 
 ========== Step 85 ========== 
 ========== Step 85 ========== 
-W20240116 12:16:48.557027 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:16:48.827014 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=203016
 ========== Step 86 ========== 
 ========== Step 86 ========== 
 ========== Step 86 ========== 
 ========== Step 86 ========== 
-W20240116 12:16:49.707710 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=87, pq.top=87
 ========== Step 87 ========== 
 ========== Step 87 ========== 
 ========== Step 87 ========== 
 ========== Step 87 ========== 
-W20240116 12:16:49.748785 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:16:49.827009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=213214
 ========== Step 88 ========== 
 ========== Step 88 ========== 
 ========== Step 88 ========== 
 ========== Step 88 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 539.826 us                | 2.042 ms                  |
-| Backward                  | 995.252 us                | 2.334 ms                  |
-| Optimize                  | 127.147 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 678.382 us                | 9.606 ms                  |
-| AfterBackward             | 254.890 ms                | 398.370 ms                |
-| BlockToStepN              | 36.347 ms                 | 78.584 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:50.827142 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=1534
-W20240116 12:16:50.882381 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=89, pq.top=89
 ========== Step 89 ========== 
 ========== Step 89 ========== 
 ========== Step 89 ========== 
 ========== Step 89 ========== 
-W20240116 12:16:50.923954 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 90 ========== 
 ========== Step 90 ========== 
 ========== Step 90 ========== 
 ========== Step 90 ========== 
-E20240116 12:16:51.827064 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1479
-W20240116 12:16:52.095674 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=91, pq.top=91
 ========== Step 91 ========== 
 ========== Step 91 ========== 
 ========== Step 91 ========== 
 ========== Step 91 ========== 
-W20240116 12:16:52.134513 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 92 ========== 
 ========== Step 92 ========== 
 ========== Step 92 ========== 
 ========== Step 92 ========== 
-E20240116 12:16:52.827037 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=246692
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.104 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.126 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 237.495 ms                | 275.818 ms                |
-| ProcessOneStep            | 253.731 ms                | 398.285 ms                |
-| BlockToStepN              | 36.159 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:16:53.309448 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=93, pq.top=93
 ========== Step 93 ========== 
 ========== Step 93 ========== 
 ========== Step 93 ========== 
 ========== Step 93 ========== 
-W20240116 12:16:53.350394 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:16:53.827018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=258189
 ========== Step 94 ========== 
 ========== Step 94 ========== 
 ========== Step 94 ========== 
 ========== Step 94 ========== 
-W20240116 12:16:54.586241 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=95, pq.top=95
 ========== Step 95 ========== 
 ========== Step 95 ========== 
 ========== Step 95 ========== 
 ========== Step 95 ========== 
-W20240116 12:16:54.629897 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:16:54.827091 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=267296
 ========== Step 96 ========== 
 ========== Step 96 ========== 
 ========== Step 96 ========== 
 ========== Step 96 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 539.826 us                | 2.042 ms                  |
-| Backward                  | 1.000 ms                  | 2.334 ms                  |
-| Optimize                  | 125.955 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 673.982 us                | 9.606 ms                  |
-| AfterBackward             | 254.752 ms                | 398.370 ms                |
-| BlockToStepN              | 36.347 ms                 | 78.584 ms                 |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:16:55.827028 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=19
-W20240116 12:16:55.913369 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=97, pq.top=97
 ========== Step 97 ========== 
 ========== Step 97 ========== 
 ========== Step 97 ========== 
 ========== Step 97 ========== 
-W20240116 12:16:55.956657 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 98 ========== 
 ========== Step 98 ========== 
 ========== Step 98 ========== 
 ========== Step 98 ========== 
-E20240116 12:16:56.827142 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=287530
-W20240116 12:16:57.208909 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=99, pq.top=99
 ========== Step 99 ========== 
 ========== Step 99 ========== 
 ========== Step 99 ========== 
 ========== Step 99 ========== 
-W20240116 12:16:57.252549 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:16:57.827073 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=2355
-Step99:rank0, time: 92.220, per_step: 0.922204
-Step99:rank3, time: 92.221, per_step: 0.922209
-Step99:rank2, time: 92.221, per_step: 0.922206
-Step99:rank1, time: 92.220, per_step: 0.922203
+Step99:rank0, time: 13.465, per_step: 0.134646
+Step99:rank2, time: 13.464, per_step: 0.134644
+Step99:rank3, time: 13.464, per_step: 0.134644
+Step99:rank1, time: 13.464, per_step: 0.134644
 ========== Step 100 ========== 
 ========== Step 100 ========== 
 ========== Step 100 ========== 
 ========== Step 100 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.079 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.122 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 238.174 ms                | 275.818 ms                |
-| ProcessOneStep            | 254.707 ms                | 398.285 ms                |
-| BlockToStepN              | 36.340 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:16:58.440547 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=101, pq.top=101
 ========== Step 101 ========== 
 ========== Step 101 ========== 
 ========== Step 101 ========== 
 ========== Step 101 ========== 
-W20240116 12:16:58.482909 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:16:58.827015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=309043
 ========== Step 102 ========== 
 ========== Step 102 ========== 
 ========== Step 102 ========== 
 ========== Step 102 ========== 
-W20240116 12:16:59.670953 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=103, pq.top=103
 ========== Step 103 ========== 
 ========== Step 103 ========== 
 ========== Step 103 ========== 
 ========== Step 103 ========== 
-W20240116 12:16:59.713459 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:16:59.827004 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=318184
 ========== Step 104 ========== 
 ========== Step 104 ========== 
 ========== Step 104 ========== 
 ========== Step 104 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 532.276 us                | 2.042 ms                  |
-| Backward                  | 1.007 ms                  | 2.334 ms                  |
-| Optimize                  | 125.163 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 673.248 us                | 9.606 ms                  |
-| AfterBackward             | 253.557 ms                | 398.370 ms                |
-| BlockToStepN              | 36.430 ms                 | 78.584 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:00.827008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=328819
-W20240116 12:17:00.897634 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=105, pq.top=105
 ========== Step 105 ========== 
 ========== Step 105 ========== 
 ========== Step 105 ========== 
 ========== Step 105 ========== 
-W20240116 12:17:00.937263 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 106 ========== 
 ========== Step 106 ========== 
 ========== Step 106 ========== 
 ========== Step 106 ========== 
-E20240116 12:17:01.827157 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=339514
-W20240116 12:17:02.127805 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=107, pq.top=107
 ========== Step 107 ========== 
 ========== Step 107 ========== 
 ========== Step 107 ========== 
 ========== Step 107 ========== 
-W20240116 12:17:02.169574 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 108 ========== 
 ========== Step 108 ========== 
 ========== Step 108 ========== 
 ========== Step 108 ========== 
-E20240116 12:17:02.827015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=278
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.078 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.122 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 237.462 ms                | 275.818 ms                |
-| ProcessOneStep            | 253.300 ms                | 398.285 ms                |
-| BlockToStepN              | 36.266 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:03.337880 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=109, pq.top=109
 ========== Step 109 ========== 
 ========== Step 109 ========== 
 ========== Step 109 ========== 
 ========== Step 109 ========== 
-W20240116 12:17:03.378312 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:17:03.827010 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=171
 ========== Step 110 ========== 
 ========== Step 110 ========== 
 ========== Step 110 ========== 
 ========== Step 110 ========== 
-W20240116 12:17:04.550140 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=111, pq.top=111
 ========== Step 111 ========== 
 ========== Step 111 ========== 
 ========== Step 111 ========== 
 ========== Step 111 ========== 
-W20240116 12:17:04.592170 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:17:04.827057 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=370437
 ========== Step 112 ========== 
 ========== Step 112 ========== 
 ========== Step 112 ========== 
 ========== Step 112 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 529.728 us                | 2.042 ms                  |
-| Backward                  | 1.013 ms                  | 2.334 ms                  |
-| Optimize                  | 123.300 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 656.508 us                | 9.606 ms                  |
-| AfterBackward             | 251.376 ms                | 398.370 ms                |
-| BlockToStepN              | 36.257 ms                 | 78.584 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:05.759804 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=113, pq.top=113
 ========== Step 113 ========== 
 ========== Step 113 ========== 
 ========== Step 113 ========== 
 ========== Step 113 ========== 
-W20240116 12:17:05.801118 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:17:05.827273 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=380290
 ========== Step 114 ========== 
 ========== Step 114 ========== 
 ========== Step 114 ========== 
 ========== Step 114 ========== 
-E20240116 12:17:06.827013 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=30
-W20240116 12:17:06.979846 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=115, pq.top=115
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 95.056 us                 | 137.918 us                |
+| GenInput                  | 303.572 us                | 1.779 ms                  |
+| Forward                   | 288.688 us                | 513.797 us                |
+| Backward                  | 89.643 ms                 | 108.334 ms                |
+| Optimize                  | 18.367 ms                 | 22.800 ms                 |
+| BarrierTimeBeforeRank0    | 30.941 us                 | 69.181 us                 |
+| BlockToStepN              | 22.333 us                 | 296.542 us                |
+| OneStep                   | 109.219 ms                | 130.998 ms                |
+| E2E-100                   | 12.691 s                  | 12.691 s                  |
++---------------------------+---------------------------+---------------------------+
 ========== Step 115 ========== 
 ========== Step 115 ========== 
 ========== Step 115 ========== 
 ========== Step 115 ========== 
-W20240116 12:17:07.020373 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 116 ========== 
 ========== Step 116 ========== 
 ========== Step 116 ========== 
 ========== Step 116 ========== 
-E20240116 12:17:07.827025 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=400789
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.078 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.126 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 236.703 ms                | 286.542 ms                |
-| ProcessOneStep            | 251.230 ms                | 398.285 ms                |
-| BlockToStepN              | 36.007 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:08.292766 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=117, pq.top=117
 ========== Step 117 ========== 
 ========== Step 117 ========== 
 ========== Step 117 ========== 
 ========== Step 117 ========== 
-W20240116 12:17:08.339269 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:17:08.827003 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=411306
 ========== Step 118 ========== 
 ========== Step 118 ========== 
 ========== Step 118 ========== 
 ========== Step 118 ========== 
-W20240116 12:17:09.551386 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=119, pq.top=119
 ========== Step 119 ========== 
 ========== Step 119 ========== 
 ========== Step 119 ========== 
 ========== Step 119 ========== 
-W20240116 12:17:09.593494 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:17:09.827006 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=420754
 ========== Step 120 ========== 
 ========== Step 120 ========== 
 ========== Step 120 ========== 
 ========== Step 120 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 520.816 us                | 2.042 ms                  |
-| Backward                  | 1.024 ms                  | 2.334 ms                  |
-| Optimize                  | 122.538 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 673.248 us                | 9.606 ms                  |
-| AfterBackward             | 251.288 ms                | 398.370 ms                |
-| BlockToStepN              | 36.096 ms                 | 78.584 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:10.778363 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=121, pq.top=121
 ========== Step 121 ========== 
 ========== Step 121 ========== 
 ========== Step 121 ========== 
 ========== Step 121 ========== 
-W20240116 12:17:10.819520 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:17:10.827003 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=430226
 ========== Step 122 ========== 
 ========== Step 122 ========== 
 ========== Step 122 ========== 
 ========== Step 122 ========== 
-E20240116 12:17:11.827023 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=443195
-W20240116 12:17:12.030191 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=123, pq.top=123
 ========== Step 123 ========== 
 ========== Step 123 ========== 
 ========== Step 123 ========== 
 ========== Step 123 ========== 
-W20240116 12:17:12.072939 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 124 ========== 
 ========== Step 124 ========== 
 ========== Step 124 ========== 
 ========== Step 124 ========== 
-E20240116 12:17:12.827021 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=450198
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.078 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.122 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 236.512 ms                | 286.542 ms                |
-| ProcessOneStep            | 250.915 ms                | 398.285 ms                |
-| BlockToStepN              | 36.007 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:13.286607 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=125, pq.top=125
 ========== Step 125 ========== 
 ========== Step 125 ========== 
 ========== Step 125 ========== 
 ========== Step 125 ========== 
-W20240116 12:17:13.330413 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:17:13.827097 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=42
 ========== Step 126 ========== 
 ========== Step 126 ========== 
 ========== Step 126 ========== 
 ========== Step 126 ========== 
-W20240116 12:17:14.543547 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=127, pq.top=127
 ========== Step 127 ========== 
 ========== Step 127 ========== 
 ========== Step 127 ========== 
 ========== Step 127 ========== 
-W20240116 12:17:14.581923 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:17:14.827018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=470495
 ========== Step 128 ========== 
 ========== Step 128 ========== 
 ========== Step 128 ========== 
 ========== Step 128 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 513.788 us                | 2.042 ms                  |
-| Backward                  | 1.043 ms                  | 2.334 ms                  |
-| Optimize                  | 122.336 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 673.248 us                | 9.606 ms                  |
-| AfterBackward             | 250.697 ms                | 398.370 ms                |
-| BlockToStepN              | 36.096 ms                 | 78.584 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:15.790257 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=129, pq.top=129
 ========== Step 129 ========== 
 ========== Step 129 ========== 
 ========== Step 129 ========== 
 ========== Step 129 ========== 
-E20240116 12:17:15.827005 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=479087
-W20240116 12:17:15.833112 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 130 ========== 
 ========== Step 130 ========== 
 ========== Step 130 ========== 
 ========== Step 130 ========== 
-E20240116 12:17:16.827008 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=298
-W20240116 12:17:17.033705 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=131, pq.top=131
 ========== Step 131 ========== 
 ========== Step 131 ========== 
 ========== Step 131 ========== 
 ========== Step 131 ========== 
-W20240116 12:17:17.076753 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 132 ========== 
 ========== Step 132 ========== 
 ========== Step 132 ========== 
 ========== Step 132 ========== 
-E20240116 12:17:17.827148 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=499353
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.078 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.113 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 236.512 ms                | 286.542 ms                |
-| ProcessOneStep            | 250.495 ms                | 398.285 ms                |
-| BlockToStepN              | 36.007 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:18.290706 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=133, pq.top=133
 ========== Step 133 ========== 
 ========== Step 133 ========== 
 ========== Step 133 ========== 
 ========== Step 133 ========== 
-W20240116 12:17:18.336030 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:17:18.827061 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=37
 ========== Step 134 ========== 
 ========== Step 134 ========== 
 ========== Step 134 ========== 
 ========== Step 134 ========== 
-W20240116 12:17:19.540984 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=135, pq.top=135
 ========== Step 135 ========== 
 ========== Step 135 ========== 
 ========== Step 135 ========== 
 ========== Step 135 ========== 
-W20240116 12:17:19.582291 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:17:19.827008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=519319
 ========== Step 136 ========== 
 ========== Step 136 ========== 
 ========== Step 136 ========== 
 ========== Step 136 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 511.986 us                | 2.042 ms                  |
-| Backward                  | 1.046 ms                  | 2.334 ms                  |
-| Optimize                  | 122.451 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 665.946 us                | 9.606 ms                  |
-| AfterBackward             | 250.143 ms                | 398.370 ms                |
-| BlockToStepN              | 36.075 ms                 | 78.584 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:20.795909 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=137, pq.top=137
-E20240116 12:17:20.828575 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=528041
 ========== Step 137 ========== 
 ========== Step 137 ========== 
 ========== Step 137 ========== 
 ========== Step 137 ========== 
-W20240116 12:17:20.838622 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 138 ========== 
 ========== Step 138 ========== 
 ========== Step 138 ========== 
 ========== Step 138 ========== 
-E20240116 12:17:21.828372 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=536547
-W20240116 12:17:22.118165 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=139, pq.top=139
 ========== Step 139 ========== 
 ========== Step 139 ========== 
 ========== Step 139 ========== 
 ========== Step 139 ========== 
-W20240116 12:17:22.165452 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 140 ========== 
 ========== Step 140 ========== 
 ========== Step 140 ========== 
 ========== Step 140 ========== 
-E20240116 12:17:22.829646 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=543268
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.075 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.112 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 236.570 ms                | 286.542 ms                |
-| ProcessOneStep            | 250.274 ms                | 398.285 ms                |
-| BlockToStepN              | 36.007 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:23.495602 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=141, pq.top=141
 ========== Step 141 ========== 
 ========== Step 141 ========== 
 ========== Step 141 ========== 
 ========== Step 141 ========== 
-W20240116 12:17:23.540374 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:17:23.829015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=552930
 ========== Step 142 ========== 
 ========== Step 142 ========== 
 ========== Step 142 ========== 
 ========== Step 142 ========== 
-E20240116 12:17:24.829030 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=560783
-W20240116 12:17:24.858758 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=143, pq.top=143
 ========== Step 143 ========== 
 ========== Step 143 ========== 
 ========== Step 143 ========== 
 ========== Step 143 ========== 
-W20240116 12:17:24.900532 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 144 ========== 
 ========== Step 144 ========== 
 ========== Step 144 ========== 
 ========== Step 144 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 509.333 us                | 2.042 ms                  |
-| Backward                  | 1.049 ms                  | 2.334 ms                  |
-| Optimize                  | 122.421 us                | 468.082 us                |
-| BarrierTimeBeforeRank0    | 665.946 us                | 9.606 ms                  |
-| AfterBackward             | 250.555 ms                | 398.370 ms                |
-| BlockToStepN              | 36.096 ms                 | 78.584 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:25.829016 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=571098
-W20240116 12:17:26.140910 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=145, pq.top=145
 ========== Step 145 ========== 
 ========== Step 145 ========== 
 ========== Step 145 ========== 
 ========== Step 145 ========== 
-W20240116 12:17:26.181505 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 146 ========== 
 ========== Step 146 ========== 
 ========== Step 146 ========== 
 ========== Step 146 ========== 
-E20240116 12:17:26.829023 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=579904
-W20240116 12:17:27.387414 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=147, pq.top=147
 ========== Step 147 ========== 
 ========== Step 147 ========== 
 ========== Step 147 ========== 
 ========== Step 147 ========== 
-W20240116 12:17:27.430965 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:17:27.829020 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=592386
 ========== Step 148 ========== 
 ========== Step 148 ========== 
 ========== Step 148 ========== 
 ========== Step 148 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.074 ms                  | 123.379 ms                |
-| ProcessBack:UpdateCache   | 6.111 ms                  | 14.543 ms                 |
-| ProcessBack:UpsertPq      | 236.703 ms                | 286.542 ms                |
-| ProcessOneStep            | 250.075 ms                | 398.285 ms                |
-| BlockToStepN              | 35.995 ms                 | 78.482 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:28.623356 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=149, pq.top=149
 ========== Step 149 ========== 
 ========== Step 149 ========== 
 ========== Step 149 ========== 
 ========== Step 149 ========== 
-W20240116 12:17:28.664904 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:17:28.829032 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=599193
 ========== Step 150 ========== 
 ========== Step 150 ========== 
 ========== Step 150 ========== 
 ========== Step 150 ========== 
-E20240116 12:17:29.829016 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=3352
-W20240116 12:17:29.883347 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=151, pq.top=151
 ========== Step 151 ========== 
 ========== Step 151 ========== 
 ========== Step 151 ========== 
 ========== Step 151 ========== 
-W20240116 12:17:29.924927 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 152 ========== 
 ========== Step 152 ========== 
 ========== Step 152 ========== 
 ========== Step 152 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 507.622 us                | 1.062 ms                  |
-| Backward                  | 1.051 ms                  | 2.122 ms                  |
-| Optimize                  | 122.336 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 673.248 us                | 5.336 ms                  |
-| AfterBackward             | 250.142 ms                | 370.912 ms                |
-| BlockToStepN              | 36.075 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:30.829043 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=618035
-W20240116 12:17:31.119915 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=153, pq.top=153
 ========== Step 153 ========== 
 ========== Step 153 ========== 
 ========== Step 153 ========== 
 ========== Step 153 ========== 
-W20240116 12:17:31.160702 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 154 ========== 
 ========== Step 154 ========== 
 ========== Step 154 ========== 
 ========== Step 154 ========== 
-E20240116 12:17:31.829020 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=627063
-W20240116 12:17:32.378545 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=155, pq.top=155
 ========== Step 155 ========== 
 ========== Step 155 ========== 
 ========== Step 155 ========== 
 ========== Step 155 ========== 
-W20240116 12:17:32.421195 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:17:32.829021 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=3305
 ========== Step 156 ========== 
 ========== Step 156 ========== 
 ========== Step 156 ========== 
 ========== Step 156 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.073 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.110 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.570 ms                | 275.818 ms                |
-| ProcessOneStep            | 250.007 ms                | 370.836 ms                |
-| BlockToStepN              | 35.947 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:33.609355 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=157, pq.top=157
 ========== Step 157 ========== 
 ========== Step 157 ========== 
 ========== Step 157 ========== 
 ========== Step 157 ========== 
-W20240116 12:17:33.648290 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:17:33.829010 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=646336
 ========== Step 158 ========== 
 ========== Step 158 ========== 
 ========== Step 158 ========== 
 ========== Step 158 ========== 
-E20240116 12:17:34.829033 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=655199
-W20240116 12:17:34.873075 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=159, pq.top=159
 ========== Step 159 ========== 
 ========== Step 159 ========== 
 ========== Step 159 ========== 
 ========== Step 159 ========== 
-W20240116 12:17:34.913652 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 95.044 us                 | 147.427 us                |
+| GenInput                  | 301.446 us                | 882.281 us                |
+| Forward                   | 286.667 us                | 509.967 us                |
+| Backward                  | 90.149 ms                 | 105.241 ms                |
+| Optimize                  | 18.336 ms                 | 23.406 ms                 |
+| BarrierTimeBeforeRank0    | 30.378 us                 | 67.052 us                 |
+| BlockToStepN              | 22.333 us                 | 272.385 us                |
+| OneStep                   | 109.343 ms                | 125.941 ms                |
+| E2E-100                   | 12.691 s                  | 12.691 s                  |
++---------------------------+---------------------------+---------------------------+
 ========== Step 160 ========== 
 ========== Step 160 ========== 
 ========== Step 160 ========== 
 ========== Step 160 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 507.622 us                | 1.062 ms                  |
-| Backward                  | 1.051 ms                  | 2.122 ms                  |
-| Optimize                  | 122.333 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 681.464 us                | 5.336 ms                  |
-| AfterBackward             | 250.142 ms                | 370.912 ms                |
-| BlockToStepN              | 36.009 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:35.829078 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=665141
-W20240116 12:17:36.147833 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=161, pq.top=161
 ========== Step 161 ========== 
 ========== Step 161 ========== 
 ========== Step 161 ========== 
 ========== Step 161 ========== 
-W20240116 12:17:36.188903 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 162 ========== 
 ========== Step 162 ========== 
 ========== Step 162 ========== 
 ========== Step 162 ========== 
-E20240116 12:17:36.829008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=143
-W20240116 12:17:37.380422 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=163, pq.top=163
 ========== Step 163 ========== 
 ========== Step 163 ========== 
 ========== Step 163 ========== 
 ========== Step 163 ========== 
-W20240116 12:17:37.420068 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:17:37.829063 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=76
 ========== Step 164 ========== 
 ========== Step 164 ========== 
 ========== Step 164 ========== 
 ========== Step 164 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.062 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.110 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.512 ms                | 275.818 ms                |
-| ProcessOneStep            | 249.942 ms                | 370.836 ms                |
-| BlockToStepN              | 35.900 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:17:38.620280 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=165, pq.top=165
 ========== Step 165 ========== 
 ========== Step 165 ========== 
 ========== Step 165 ========== 
 ========== Step 165 ========== 
-W20240116 12:17:38.667337 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:17:38.829007 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=693102
 ========== Step 166 ========== 
 ========== Step 166 ========== 
 ========== Step 166 ========== 
 ========== Step 166 ========== 
-E20240116 12:17:39.829026 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=32
-W20240116 12:17:39.881220 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=167, pq.top=167
 ========== Step 167 ========== 
 ========== Step 167 ========== 
 ========== Step 167 ========== 
 ========== Step 167 ========== 
-W20240116 12:17:39.919770 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 168 ========== 
 ========== Step 168 ========== 
 ========== Step 168 ========== 
 ========== Step 168 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 506.509 us                | 1.062 ms                  |
-| Backward                  | 1.052 ms                  | 2.122 ms                  |
-| Optimize                  | 121.993 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 678.382 us                | 5.336 ms                  |
-| AfterBackward             | 249.997 ms                | 370.912 ms                |
-| BlockToStepN              | 36.000 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:40.829054 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=711748
-W20240116 12:17:41.170440 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=169, pq.top=169
 ========== Step 169 ========== 
 ========== Step 169 ========== 
 ========== Step 169 ========== 
 ========== Step 169 ========== 
-W20240116 12:17:41.214414 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:17:41.829020 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=723253
 ========== Step 170 ========== 
 ========== Step 170 ========== 
 ========== Step 170 ========== 
 ========== Step 170 ========== 
-W20240116 12:17:42.562378 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=171, pq.top=171
 ========== Step 171 ========== 
 ========== Step 171 ========== 
 ========== Step 171 ========== 
 ========== Step 171 ========== 
-W20240116 12:17:42.605366 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:17:42.829025 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1569
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.062 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.109 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.732 ms                | 275.818 ms                |
-| ProcessOneStep            | 250.007 ms                | 370.836 ms                |
-| BlockToStepN              | 35.947 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 172 ========== 
 ========== Step 172 ========== 
 ========== Step 172 ========== 
 ========== Step 172 ========== 
-W20240116 12:17:43.825019 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=173, pq.top=173
-E20240116 12:17:43.834519 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=739382
 ========== Step 173 ========== 
 ========== Step 173 ========== 
 ========== Step 173 ========== 
 ========== Step 173 ========== 
-W20240116 12:17:43.866925 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 174 ========== 
 ========== Step 174 ========== 
 ========== Step 174 ========== 
 ========== Step 174 ========== 
-E20240116 12:17:44.834013 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=747024
-W20240116 12:17:45.081441 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=175, pq.top=175
 ========== Step 175 ========== 
 ========== Step 175 ========== 
 ========== Step 175 ========== 
 ========== Step 175 ========== 
-W20240116 12:17:45.120939 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.965 us                | 1.062 ms                  |
-| Backward                  | 1.052 ms                  | 2.122 ms                  |
-| Optimize                  | 121.826 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 673.982 us                | 5.336 ms                  |
-| AfterBackward             | 250.053 ms                | 370.912 ms                |
-| BlockToStepN              | 36.009 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 176 ========== 
 ========== Step 176 ========== 
 ========== Step 176 ========== 
 ========== Step 176 ========== 
-E20240116 12:17:45.834061 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=755705
-W20240116 12:17:46.345223 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=177, pq.top=177
 ========== Step 177 ========== 
 ========== Step 177 ========== 
 ========== Step 177 ========== 
 ========== Step 177 ========== 
-W20240116 12:17:46.386479 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:17:46.834014 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=766700
 ========== Step 178 ========== 
 ========== Step 178 ========== 
 ========== Step 178 ========== 
 ========== Step 178 ========== 
-W20240116 12:17:47.615972 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=179, pq.top=179
 ========== Step 179 ========== 
 ========== Step 179 ========== 
 ========== Step 179 ========== 
 ========== Step 179 ========== 
-W20240116 12:17:47.659369 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:17:47.834067 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1287
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.062 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.107 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.803 ms                | 275.818 ms                |
-| ProcessOneStep            | 250.075 ms                | 370.836 ms                |
-| BlockToStepN              | 35.925 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 180 ========== 
 ========== Step 180 ========== 
 ========== Step 180 ========== 
 ========== Step 180 ========== 
-E20240116 12:17:48.834017 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=220
-W20240116 12:17:48.933758 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=181, pq.top=181
 ========== Step 181 ========== 
 ========== Step 181 ========== 
 ========== Step 181 ========== 
 ========== Step 181 ========== 
-W20240116 12:17:48.980243 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 182 ========== 
 ========== Step 182 ========== 
 ========== Step 182 ========== 
 ========== Step 182 ========== 
-E20240116 12:17:49.834031 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=791459
-W20240116 12:17:50.199870 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=183, pq.top=183
 ========== Step 183 ========== 
 ========== Step 183 ========== 
 ========== Step 183 ========== 
 ========== Step 183 ========== 
-W20240116 12:17:50.242847 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 507.622 us                | 1.062 ms                  |
-| Backward                  | 1.053 ms                  | 2.122 ms                  |
-| Optimize                  | 121.993 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 673.982 us                | 5.336 ms                  |
-| AfterBackward             | 250.309 ms                | 370.912 ms                |
-| BlockToStepN              | 36.048 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:50.838900 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=798864
 ========== Step 184 ========== 
 ========== Step 184 ========== 
 ========== Step 184 ========== 
 ========== Step 184 ========== 
-W20240116 12:17:51.453904 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=185, pq.top=185
 ========== Step 185 ========== 
 ========== Step 185 ========== 
 ========== Step 185 ========== 
 ========== Step 185 ========== 
-W20240116 12:17:51.493755 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:17:51.838006 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=810188
 ========== Step 186 ========== 
 ========== Step 186 ========== 
 ========== Step 186 ========== 
 ========== Step 186 ========== 
-W20240116 12:17:52.691561 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=187, pq.top=187
 ========== Step 187 ========== 
 ========== Step 187 ========== 
 ========== Step 187 ========== 
 ========== Step 187 ========== 
-W20240116 12:17:52.739112 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:17:52.838009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=744
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.058 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.107 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.795 ms                | 275.818 ms                |
-| ProcessOneStep            | 250.050 ms                | 370.836 ms                |
-| BlockToStepN              | 35.925 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 188 ========== 
 ========== Step 188 ========== 
 ========== Step 188 ========== 
 ========== Step 188 ========== 
-E20240116 12:17:53.838076 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=357
-W20240116 12:17:53.955402 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=189, pq.top=189
 ========== Step 189 ========== 
 ========== Step 189 ========== 
 ========== Step 189 ========== 
 ========== Step 189 ========== 
-W20240116 12:17:53.995934 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 190 ========== 
 ========== Step 190 ========== 
 ========== Step 190 ========== 
 ========== Step 190 ========== 
-E20240116 12:17:54.838017 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=836468
-W20240116 12:17:55.204192 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=191, pq.top=191
 ========== Step 191 ========== 
 ========== Step 191 ========== 
 ========== Step 191 ========== 
 ========== Step 191 ========== 
-W20240116 12:17:55.246387 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 506.509 us                | 1.062 ms                  |
-| Backward                  | 1.065 ms                  | 2.122 ms                  |
-| Optimize                  | 121.826 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 665.946 us                | 5.336 ms                  |
-| AfterBackward             | 249.997 ms                | 370.912 ms                |
-| BlockToStepN              | 36.000 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:17:55.838016 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=844470
 ========== Step 192 ========== 
 ========== Step 192 ========== 
 ========== Step 192 ========== 
 ========== Step 192 ========== 
-W20240116 12:17:56.453183 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=193, pq.top=193
 ========== Step 193 ========== 
 ========== Step 193 ========== 
 ========== Step 193 ========== 
 ========== Step 193 ========== 
-W20240116 12:17:56.495573 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:17:56.838014 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=855490
 ========== Step 194 ========== 
 ========== Step 194 ========== 
 ========== Step 194 ========== 
 ========== Step 194 ========== 
-W20240116 12:17:57.681741 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=195, pq.top=195
 ========== Step 195 ========== 
 ========== Step 195 ========== 
 ========== Step 195 ========== 
 ========== Step 195 ========== 
-W20240116 12:17:57.723965 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:17:57.838150 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=940
+========== Step 196 ========== 
+========== Step 196 ========== 
+========== Step 196 ========== 
+========== Step 196 ========== 
+========== Step 197 ========== 
+========== Step 197 ========== 
+========== Step 197 ========== 
+========== Step 197 ========== 
+========== Step 198 ========== 
+========== Step 198 ========== 
+========== Step 198 ========== 
+========== Step 198 ========== 
+========== Step 199 ========== 
+========== Step 199 ========== 
+========== Step 199 ========== 
+========== Step 199 ========== 
+Step199:rank0, time: 11.137, per_step: 0.110265
+Step199:rank2, time: 11.137, per_step: 0.110265
+Step199:rank1, time: 11.137, per_step: 0.110265
+Step199:rank3, time: 11.137, per_step: 0.110265
+========== Step 200 ========== 
+========== Step 200 ========== 
+========== Step 200 ========== 
+========== Step 200 ========== 
+========== Step 201 ========== 
+========== Step 201 ========== 
+========== Step 201 ========== 
+========== Step 201 ========== 
+========== Step 202 ========== 
+========== Step 202 ========== 
+========== Step 202 ========== 
+========== Step 202 ========== 
+========== Step 203 ========== 
+========== Step 203 ========== 
+========== Step 203 ========== 
+========== Step 203 ========== 
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.048 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.105 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.570 ms                | 275.818 ms                |
-| ProcessOneStep            | 249.751 ms                | 370.836 ms                |
-| BlockToStepN              | 35.900 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
-========== Step 196 ========== 
-========== Step 196 ========== 
-========== Step 196 ========== 
-========== Step 196 ========== 
-E20240116 12:17:58.838016 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=48
-W20240116 12:17:58.924767 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=197, pq.top=197
-========== Step 197 ========== 
-========== Step 197 ========== 
-========== Step 197 ========== 
-========== Step 197 ========== 
-W20240116 12:17:58.969741 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-========== Step 198 ========== 
-========== Step 198 ========== 
-========== Step 198 ========== 
-========== Step 198 ========== 
-E20240116 12:17:59.838071 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1787
-W20240116 12:18:00.191166 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=199, pq.top=199
-========== Step 199 ========== 
-========== Step 199 ========== 
-========== Step 199 ========== 
-========== Step 199 ========== 
-W20240116 12:18:00.230360 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.965 us                | 1.062 ms                  |
-| Backward                  | 1.075 ms                  | 2.122 ms                  |
-| Optimize                  | 121.751 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 649.292 us                | 5.336 ms                  |
-| AfterBackward             | 249.596 ms                | 370.912 ms                |
-| BlockToStepN              | 36.000 ms                 | 76.352 ms                 |
-| E2E-100                   | 68.428 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:00.838018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=889712
-Step199:rank0, time: 62.987, per_step: 0.623633
-Step199:rank3, time: 62.987, per_step: 0.623633
-Step199:rank2, time: 62.987, per_step: 0.623632
-========== Step 200 ========== 
-========== Step 200 ========== 
-========== Step 200 ========== 
-Step199:rank1, time: 62.987, per_step: 0.623633
-========== Step 200 ========== 
-W20240116 12:18:01.450199 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=201, pq.top=201
-========== Step 201 ========== 
-========== Step 201 ========== 
-========== Step 201 ========== 
-========== Step 201 ========== 
-W20240116 12:18:01.491940 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:18:01.838009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=900538
-========== Step 202 ========== 
-========== Step 202 ========== 
-========== Step 202 ========== 
-========== Step 202 ========== 
-W20240116 12:18:02.678731 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=203, pq.top=203
-========== Step 203 ========== 
-========== Step 203 ========== 
-========== Step 203 ========== 
-========== Step 203 ========== 
-W20240116 12:18:02.718581 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:18:02.838009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=909139
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 4.012 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.099 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.512 ms                | 275.818 ms                |
-| ProcessOneStep            | 248.816 ms                | 370.836 ms                |
-| BlockToStepN              | 35.845 ms                 | 76.195 ms                 |
+| GenInput:CircleBuffer     | 94.525 us                 | 151.389 us                |
+| GenInput                  | 302.481 us                | 1.209 ms                  |
+| Forward                   | 286.015 us                | 509.967 us                |
+| Backward                  | 90.516 ms                 | 107.904 ms                |
+| Optimize                  | 18.325 ms                 | 26.916 ms                 |
+| BarrierTimeBeforeRank0    | 30.378 us                 | 67.052 us                 |
+| BlockToStepN              | 22.048 us                 | 272.385 us                |
+| OneStep                   | 109.715 ms                | 130.998 ms                |
+| E2E-100                   | 11.137 s                  | 12.691 s                  |
 +---------------------------+---------------------------+---------------------------+
 ========== Step 204 ========== 
 ========== Step 204 ========== 
 ========== Step 204 ========== 
 ========== Step 204 ========== 
-E20240116 12:18:03.838057 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=52
-W20240116 12:18:03.917925 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=205, pq.top=205
 ========== Step 205 ========== 
 ========== Step 205 ========== 
 ========== Step 205 ========== 
 ========== Step 205 ========== 
-W20240116 12:18:03.958232 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 206 ========== 
 ========== Step 206 ========== 
 ========== Step 206 ========== 
 ========== Step 206 ========== 
-E20240116 12:18:04.838061 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=2023
-W20240116 12:18:05.154353 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=207, pq.top=207
 ========== Step 207 ========== 
 ========== Step 207 ========== 
 ========== Step 207 ========== 
 ========== Step 207 ========== 
-W20240116 12:18:05.195245 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 506.509 us                | 1.062 ms                  |
-| Backward                  | 1.078 ms                  | 2.122 ms                  |
-| Optimize                  | 121.751 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 649.292 us                | 5.336 ms                  |
-| AfterBackward             | 248.780 ms                | 370.912 ms                |
-| BlockToStepN              | 35.901 ms                 | 76.352 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 208 ========== 
 ========== Step 208 ========== 
 ========== Step 208 ========== 
 ========== Step 208 ========== 
-E20240116 12:18:05.838033 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=936328
-W20240116 12:18:06.389891 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=209, pq.top=209
 ========== Step 209 ========== 
 ========== Step 209 ========== 
 ========== Step 209 ========== 
 ========== Step 209 ========== 
-W20240116 12:18:06.431965 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:06.838276 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=10
 ========== Step 210 ========== 
 ========== Step 210 ========== 
 ========== Step 210 ========== 
 ========== Step 210 ========== 
-W20240116 12:18:07.630256 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=211, pq.top=211
 ========== Step 211 ========== 
 ========== Step 211 ========== 
 ========== Step 211 ========== 
 ========== Step 211 ========== 
-W20240116 12:18:07.683902 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:18:07.838016 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=953799
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.998 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.098 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.003 ms                | 275.818 ms                |
-| ProcessOneStep            | 248.428 ms                | 370.836 ms                |
-| BlockToStepN              | 35.845 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 212 ========== 
 ========== Step 212 ========== 
 ========== Step 212 ========== 
 ========== Step 212 ========== 
-E20240116 12:18:08.838044 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=40
-W20240116 12:18:08.875249 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=213, pq.top=213
 ========== Step 213 ========== 
 ========== Step 213 ========== 
 ========== Step 213 ========== 
 ========== Step 213 ========== 
-W20240116 12:18:08.919109 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 214 ========== 
 ========== Step 214 ========== 
 ========== Step 214 ========== 
 ========== Step 214 ========== 
-E20240116 12:18:09.838176 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=2394
-W20240116 12:18:10.123487 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=215, pq.top=215
 ========== Step 215 ========== 
 ========== Step 215 ========== 
 ========== Step 215 ========== 
 ========== Step 215 ========== 
-W20240116 12:18:10.169076 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.965 us                | 1.062 ms                  |
-| Backward                  | 1.083 ms                  | 2.122 ms                  |
-| Optimize                  | 121.411 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 636.176 us                | 5.336 ms                  |
-| AfterBackward             | 248.377 ms                | 370.912 ms                |
-| BlockToStepN              | 36.000 ms                 | 76.352 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 216 ========== 
 ========== Step 216 ========== 
 ========== Step 216 ========== 
 ========== Step 216 ========== 
-E20240116 12:18:10.838033 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=980385
-W20240116 12:18:11.370761 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=217, pq.top=217
 ========== Step 217 ========== 
 ========== Step 217 ========== 
 ========== Step 217 ========== 
 ========== Step 217 ========== 
-W20240116 12:18:11.409539 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:18:11.838012 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=40
 ========== Step 218 ========== 
 ========== Step 218 ========== 
 ========== Step 218 ========== 
 ========== Step 218 ========== 
-W20240116 12:18:12.632135 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=219, pq.top=219
 ========== Step 219 ========== 
 ========== Step 219 ========== 
 ========== Step 219 ========== 
 ========== Step 219 ========== 
-W20240116 12:18:12.738857 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:12.838085 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=997546
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.991 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.095 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 235.613 ms                | 275.818 ms                |
-| ProcessOneStep            | 248.083 ms                | 370.836 ms                |
-| BlockToStepN              | 35.900 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 220 ========== 
 ========== Step 220 ========== 
 ========== Step 220 ========== 
 ========== Step 220 ========== 
-E20240116 12:18:13.838012 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1007687
-W20240116 12:18:13.950049 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=221, pq.top=221
 ========== Step 221 ========== 
 ========== Step 221 ========== 
 ========== Step 221 ========== 
 ========== Step 221 ========== 
-W20240116 12:18:13.989375 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 222 ========== 
 ========== Step 222 ========== 
 ========== Step 222 ========== 
 ========== Step 222 ========== 
-E20240116 12:18:14.838018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1015168
-W20240116 12:18:15.196547 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=223, pq.top=223
 ========== Step 223 ========== 
 ========== Step 223 ========== 
 ========== Step 223 ========== 
 ========== Step 223 ========== 
-W20240116 12:18:15.236887 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.965 us                | 1.062 ms                  |
-| Backward                  | 1.093 ms                  | 2.122 ms                  |
-| Optimize                  | 121.287 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 626.964 us                | 5.336 ms                  |
-| AfterBackward             | 247.906 ms                | 370.912 ms                |
-| BlockToStepN              | 36.000 ms                 | 76.352 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:15.838018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1023208
 ========== Step 224 ========== 
 ========== Step 224 ========== 
 ========== Step 224 ========== 
 ========== Step 224 ========== 
-W20240116 12:18:16.440486 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=225, pq.top=225
 ========== Step 225 ========== 
 ========== Step 225 ========== 
 ========== Step 225 ========== 
 ========== Step 225 ========== 
-W20240116 12:18:16.484097 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:18:16.838004 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1033055
 ========== Step 226 ========== 
 ========== Step 226 ========== 
 ========== Step 226 ========== 
 ========== Step 226 ========== 
-W20240116 12:18:17.710459 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=227, pq.top=227
 ========== Step 227 ========== 
 ========== Step 227 ========== 
 ========== Step 227 ========== 
 ========== Step 227 ========== 
-W20240116 12:18:17.753989 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:18:17.838048 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1041222
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.986 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.094 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 235.543 ms                | 275.818 ms                |
-| ProcessOneStep            | 247.844 ms                | 370.836 ms                |
-| BlockToStepN              | 35.925 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 228 ========== 
 ========== Step 228 ========== 
 ========== Step 228 ========== 
 ========== Step 228 ========== 
-E20240116 12:18:18.838023 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=120
-W20240116 12:18:18.981685 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=229, pq.top=229
 ========== Step 229 ========== 
 ========== Step 229 ========== 
 ========== Step 229 ========== 
 ========== Step 229 ========== 
-W20240116 12:18:19.022997 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 230 ========== 
 ========== Step 230 ========== 
 ========== Step 230 ========== 
 ========== Step 230 ========== 
-E20240116 12:18:19.838057 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1058111
-W20240116 12:18:20.263358 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=231, pq.top=231
 ========== Step 231 ========== 
 ========== Step 231 ========== 
 ========== Step 231 ========== 
 ========== Step 231 ========== 
-W20240116 12:18:20.306401 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 506.303 us                | 1.062 ms                  |
-| Backward                  | 1.100 ms                  | 2.122 ms                  |
-| Optimize                  | 121.270 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 623.595 us                | 5.336 ms                  |
-| AfterBackward             | 247.906 ms                | 370.912 ms                |
-| BlockToStepN              | 36.009 ms                 | 76.352 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:20.838009 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=5
 ========== Step 232 ========== 
 ========== Step 232 ========== 
 ========== Step 232 ========== 
 ========== Step 232 ========== 
-W20240116 12:18:21.542537 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=233, pq.top=233
 ========== Step 233 ========== 
 ========== Step 233 ========== 
 ========== Step 233 ========== 
 ========== Step 233 ========== 
-W20240116 12:18:21.581565 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:18:21.838009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1075478
 ========== Step 234 ========== 
 ========== Step 234 ========== 
 ========== Step 234 ========== 
 ========== Step 234 ========== 
-E20240116 12:18:22.838009 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=2934
-W20240116 12:18:22.888185 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=235, pq.top=235
 ========== Step 235 ========== 
 ========== Step 235 ========== 
 ========== Step 235 ========== 
 ========== Step 235 ========== 
-W20240116 12:18:22.932499 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.985 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.092 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 235.687 ms                | 275.818 ms                |
-| ProcessOneStep            | 248.083 ms                | 370.836 ms                |
-| BlockToStepN              | 35.900 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
 ========== Step 236 ========== 
 ========== Step 236 ========== 
 ========== Step 236 ========== 
 ========== Step 236 ========== 
-E20240116 12:18:23.838083 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1091350
-W20240116 12:18:24.298596 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=237, pq.top=237
 ========== Step 237 ========== 
 ========== Step 237 ========== 
 ========== Step 237 ========== 
 ========== Step 237 ========== 
-W20240116 12:18:24.341071 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:18:24.838143 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=212
 ========== Step 238 ========== 
 ========== Step 238 ========== 
 ========== Step 238 ========== 
 ========== Step 238 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 506.509 us                | 1.062 ms                  |
-| Backward                  | 1.109 ms                  | 2.122 ms                  |
-| Optimize                  | 121.411 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 614.390 us                | 5.336 ms                  |
-| AfterBackward             | 248.370 ms                | 370.912 ms                |
-| BlockToStepN              | 36.000 ms                 | 76.352 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:25.717767 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=239, pq.top=239
 ========== Step 239 ========== 
 ========== Step 239 ========== 
 ========== Step 239 ========== 
 ========== Step 239 ========== 
-W20240116 12:18:25.761025 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:25.838018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1106774
 ========== Step 240 ========== 
 ========== Step 240 ========== 
 ========== Step 240 ========== 
 ========== Step 240 ========== 
-E20240116 12:18:26.838129 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=82
-W20240116 12:18:27.090140 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=241, pq.top=241
 ========== Step 241 ========== 
 ========== Step 241 ========== 
 ========== Step 241 ========== 
 ========== Step 241 ========== 
-W20240116 12:18:27.133477 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 242 ========== 
 ========== Step 242 ========== 
 ========== Step 242 ========== 
 ========== Step 242 ========== 
-E20240116 12:18:27.838009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1122423
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.978 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.092 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.013 ms                | 286.542 ms                |
-| ProcessOneStep            | 248.371 ms                | 370.836 ms                |
-| BlockToStepN              | 35.925 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:28.406531 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=243, pq.top=243
 ========== Step 243 ========== 
 ========== Step 243 ========== 
 ========== Step 243 ========== 
 ========== Step 243 ========== 
-W20240116 12:18:28.447985 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:18:28.838013 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=350
 ========== Step 244 ========== 
 ========== Step 244 ========== 
 ========== Step 244 ========== 
 ========== Step 244 ========== 
-W20240116 12:18:29.685132 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=245, pq.top=245
 ========== Step 245 ========== 
 ========== Step 245 ========== 
 ========== Step 245 ========== 
 ========== Step 245 ========== 
-W20240116 12:18:29.726531 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:18:29.838011 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1139399
 ========== Step 246 ========== 
 ========== Step 246 ========== 
 ========== Step 246 ========== 
 ========== Step 246 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 506.303 us                | 1.062 ms                  |
-| Backward                  | 1.117 ms                  | 2.122 ms                  |
-| Optimize                  | 121.411 us                | 404.786 us                |
-| BarrierTimeBeforeRank0    | 605.975 us                | 5.336 ms                  |
-| AfterBackward             | 248.430 ms                | 370.912 ms                |
-| BlockToStepN              | 36.011 ms                 | 76.352 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:30.838007 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=3152
-W20240116 12:18:30.946995 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=247, pq.top=247
 ========== Step 247 ========== 
 ========== Step 247 ========== 
 ========== Step 247 ========== 
 ========== Step 247 ========== 
-W20240116 12:18:30.987987 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 94.957 us                 | 151.389 us                |
+| GenInput                  | 303.934 us                | 1.209 ms                  |
+| Forward                   | 287.079 us                | 509.967 us                |
+| Backward                  | 90.909 ms                 | 107.904 ms                |
+| Optimize                  | 18.325 ms                 | 26.916 ms                 |
+| BarrierTimeBeforeRank0    | 30.494 us                 | 67.052 us                 |
+| BlockToStepN              | 22.191 us                 | 272.385 us                |
+| OneStep                   | 110.335 ms                | 130.998 ms                |
+| E2E-100                   | 11.137 s                  | 12.691 s                  |
++---------------------------+---------------------------+---------------------------+
 ========== Step 248 ========== 
 ========== Step 248 ========== 
 ========== Step 248 ========== 
 ========== Step 248 ========== 
-E20240116 12:18:31.838011 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1820
-W20240116 12:18:32.212249 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=249, pq.top=249
 ========== Step 249 ========== 
 ========== Step 249 ========== 
 ========== Step 249 ========== 
 ========== Step 249 ========== 
-W20240116 12:18:32.255105 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:32.840674 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1163522
 ========== Step 250 ========== 
 ========== Step 250 ========== 
 ========== Step 250 ========== 
 ========== Step 250 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.972 ms                  | 114.316 ms                |
-| ProcessBack:UpdateCache   | 6.094 ms                  | 12.044 ms                 |
-| ProcessBack:UpsertPq      | 236.003 ms                | 286.542 ms                |
-| ProcessOneStep            | 248.313 ms                | 370.836 ms                |
-| BlockToStepN              | 35.925 ms                 | 76.195 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:33.458889 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=251, pq.top=251
 ========== Step 251 ========== 
 ========== Step 251 ========== 
 ========== Step 251 ========== 
 ========== Step 251 ========== 
-W20240116 12:18:33.502427 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:18:33.840013 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1173308
 ========== Step 252 ========== 
 ========== Step 252 ========== 
 ========== Step 252 ========== 
 ========== Step 252 ========== 
-W20240116 12:18:34.731027 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=253, pq.top=253
 ========== Step 253 ========== 
 ========== Step 253 ========== 
 ========== Step 253 ========== 
 ========== Step 253 ========== 
-W20240116 12:18:34.772135 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:18:34.840090 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1181754
 ========== Step 254 ========== 
 ========== Step 254 ========== 
 ========== Step 254 ========== 
 ========== Step 254 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.857 us                | 936.181 us                |
-| Backward                  | 1.119 ms                  | 2.005 ms                  |
-| Optimize                  | 121.287 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 592.551 us                | 4.543 ms                  |
-| AfterBackward             | 248.370 ms                | 363.440 ms                |
-| BlockToStepN              | 36.036 ms                 | 75.385 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:35.840020 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1192569
-W20240116 12:18:35.998845 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=255, pq.top=255
 ========== Step 255 ========== 
 ========== Step 255 ========== 
 ========== Step 255 ========== 
 ========== Step 255 ========== 
-W20240116 12:18:36.042068 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 256 ========== 
 ========== Step 256 ========== 
 ========== Step 256 ========== 
 ========== Step 256 ========== 
-E20240116 12:18:36.840049 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1198687
-W20240116 12:18:37.247288 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=257, pq.top=257
 ========== Step 257 ========== 
 ========== Step 257 ========== 
 ========== Step 257 ========== 
 ========== Step 257 ========== 
-W20240116 12:18:37.287606 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:18:37.840116 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=3344
 ========== Step 258 ========== 
 ========== Step 258 ========== 
 ========== Step 258 ========== 
 ========== Step 258 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.956 ms                  | 106.183 ms                |
-| ProcessBack:UpdateCache   | 6.090 ms                  | 8.676 ms                  |
-| ProcessBack:UpsertPq      | 236.003 ms                | 284.127 ms                |
-| ProcessOneStep            | 248.083 ms                | 363.388 ms                |
-| BlockToStepN              | 35.930 ms                 | 75.214 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:38.507539 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=259, pq.top=259
 ========== Step 259 ========== 
 ========== Step 259 ========== 
 ========== Step 259 ========== 
 ========== Step 259 ========== 
-W20240116 12:18:38.549013 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:38.840016 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1215613
 ========== Step 260 ========== 
 ========== Step 260 ========== 
 ========== Step 260 ========== 
 ========== Step 260 ========== 
-W20240116 12:18:39.753942 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=261, pq.top=261
 ========== Step 261 ========== 
 ========== Step 261 ========== 
 ========== Step 261 ========== 
 ========== Step 261 ========== 
-W20240116 12:18:39.796114 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:18:39.840142 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1224311
 ========== Step 262 ========== 
 ========== Step 262 ========== 
 ========== Step 262 ========== 
 ========== Step 262 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.857 us                | 936.181 us                |
-| Backward                  | 1.121 ms                  | 2.005 ms                  |
-| Optimize                  | 121.270 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 588.827 us                | 4.543 ms                  |
-| AfterBackward             | 248.118 ms                | 363.440 ms                |
-| BlockToStepN              | 36.048 ms                 | 75.385 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:40.840008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1234072
-W20240116 12:18:41.026391 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=263, pq.top=263
 ========== Step 263 ========== 
 ========== Step 263 ========== 
 ========== Step 263 ========== 
 ========== Step 263 ========== 
-W20240116 12:18:41.070433 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 264 ========== 
 ========== Step 264 ========== 
 ========== Step 264 ========== 
 ========== Step 264 ========== 
-E20240116 12:18:41.840008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1207
-W20240116 12:18:42.282881 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=265, pq.top=265
 ========== Step 265 ========== 
 ========== Step 265 ========== 
 ========== Step 265 ========== 
 ========== Step 265 ========== 
-W20240116 12:18:42.323797 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:18:42.840014 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1250026
 ========== Step 266 ========== 
 ========== Step 266 ========== 
 ========== Step 266 ========== 
 ========== Step 266 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.955 ms                  | 106.183 ms                |
-| ProcessBack:UpdateCache   | 6.090 ms                  | 8.676 ms                  |
-| ProcessBack:UpsertPq      | 235.993 ms                | 284.127 ms                |
-| ProcessOneStep            | 247.748 ms                | 363.388 ms                |
-| BlockToStepN              | 35.947 ms                 | 75.214 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:43.539120 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=267, pq.top=267
 ========== Step 267 ========== 
 ========== Step 267 ========== 
 ========== Step 267 ========== 
 ========== Step 267 ========== 
-W20240116 12:18:43.579334 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:18:43.840018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1257845
 ========== Step 268 ========== 
 ========== Step 268 ========== 
 ========== Step 268 ========== 
 ========== Step 268 ========== 
-W20240116 12:18:44.792577 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=269, pq.top=269
 ========== Step 269 ========== 
 ========== Step 269 ========== 
 ========== Step 269 ========== 
 ========== Step 269 ========== 
-W20240116 12:18:44.833658 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:44.840039 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1266479
 ========== Step 270 ========== 
 ========== Step 270 ========== 
 ========== Step 270 ========== 
 ========== Step 270 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.965 us                | 936.181 us                |
-| Backward                  | 1.129 ms                  | 2.005 ms                  |
-| Optimize                  | 121.072 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 577.740 us                | 4.543 ms                  |
-| AfterBackward             | 247.721 ms                | 363.440 ms                |
-| BlockToStepN              | 36.036 ms                 | 75.385 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:45.840016 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1275837
-W20240116 12:18:46.046491 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=271, pq.top=271
 ========== Step 271 ========== 
 ========== Step 271 ========== 
 ========== Step 271 ========== 
 ========== Step 271 ========== 
-W20240116 12:18:46.087320 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
 ========== Step 272 ========== 
 ========== Step 272 ========== 
 ========== Step 272 ========== 
 ========== Step 272 ========== 
-E20240116 12:18:46.840011 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1283029
-W20240116 12:18:47.308950 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=273, pq.top=273
 ========== Step 273 ========== 
 ========== Step 273 ========== 
 ========== Step 273 ========== 
 ========== Step 273 ========== 
-W20240116 12:18:47.349923 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:18:47.840009 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=228
 ========== Step 274 ========== 
 ========== Step 274 ========== 
 ========== Step 274 ========== 
 ========== Step 274 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.949 ms                  | 106.183 ms                |
-| ProcessBack:UpdateCache   | 6.088 ms                  | 8.676 ms                  |
-| ProcessBack:UpsertPq      | 235.993 ms                | 284.127 ms                |
-| ProcessOneStep            | 247.658 ms                | 363.388 ms                |
-| BlockToStepN              | 35.925 ms                 | 75.214 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:48.559437 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=275, pq.top=275
 ========== Step 275 ========== 
 ========== Step 275 ========== 
 ========== Step 275 ========== 
 ========== Step 275 ========== 
-W20240116 12:18:48.600522 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
-E20240116 12:18:48.840286 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1299383
 ========== Step 276 ========== 
 ========== Step 276 ========== 
 ========== Step 276 ========== 
 ========== Step 276 ========== 
-W20240116 12:18:49.818101 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=277, pq.top=277
-E20240116 12:18:49.840009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1307137
 ========== Step 277 ========== 
 ========== Step 277 ========== 
 ========== Step 277 ========== 
 ========== Step 277 ========== 
-W20240116 12:18:49.860466 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 278 ========== 
 ========== Step 278 ========== 
 ========== Step 278 ========== 
 ========== Step 278 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.857 us                | 936.181 us                |
-| Backward                  | 1.137 ms                  | 2.005 ms                  |
-| Optimize                  | 121.022 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 570.725 us                | 4.543 ms                  |
-| AfterBackward             | 247.486 ms                | 363.440 ms                |
-| BlockToStepN              | 36.000 ms                 | 75.385 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:50.840009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1315636
-W20240116 12:18:51.153906 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=279, pq.top=279
 ========== Step 279 ========== 
 ========== Step 279 ========== 
 ========== Step 279 ========== 
 ========== Step 279 ========== 
-W20240116 12:18:51.197703 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
 ========== Step 280 ========== 
 ========== Step 280 ========== 
 ========== Step 280 ========== 
 ========== Step 280 ========== 
-E20240116 12:18:51.840018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=134
-W20240116 12:18:52.413873 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=281, pq.top=281
 ========== Step 281 ========== 
 ========== Step 281 ========== 
 ========== Step 281 ========== 
 ========== Step 281 ========== 
-W20240116 12:18:52.453069 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:18:52.840008 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=47
 ========== Step 282 ========== 
 ========== Step 282 ========== 
 ========== Step 282 ========== 
 ========== Step 282 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.915 ms                  | 106.183 ms                |
-| ProcessBack:UpdateCache   | 6.088 ms                  | 8.676 ms                  |
-| ProcessBack:UpsertPq      | 235.975 ms                | 284.127 ms                |
-| ProcessOneStep            | 247.329 ms                | 363.388 ms                |
-| BlockToStepN              | 35.916 ms                 | 75.214 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:18:53.716671 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=283, pq.top=283
 ========== Step 283 ========== 
 ========== Step 283 ========== 
 ========== Step 283 ========== 
 ========== Step 283 ========== 
-W20240116 12:18:53.753935 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
-E20240116 12:18:53.840333 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=835
 ========== Step 284 ========== 
 ========== Step 284 ========== 
 ========== Step 284 ========== 
 ========== Step 284 ========== 
-E20240116 12:18:54.840013 24622 parallel_pq_v2.h:76] insert failed, size(hashtable)=482
-W20240116 12:18:54.928628 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=285, pq.top=285
 ========== Step 285 ========== 
 ========== Step 285 ========== 
 ========== Step 285 ========== 
 ========== Step 285 ========== 
-W20240116 12:18:54.970029 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 286 ========== 
 ========== Step 286 ========== 
 ========== Step 286 ========== 
 ========== Step 286 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 504.820 us                | 936.181 us                |
-| Backward                  | 1.141 ms                  | 2.005 ms                  |
-| Optimize                  | 121.018 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 568.706 us                | 4.543 ms                  |
-| AfterBackward             | 247.041 ms                | 363.440 ms                |
-| BlockToStepN              | 36.011 ms                 | 75.385 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:18:55.840096 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1357288
-W20240116 12:18:56.140837 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=287, pq.top=287
 ========== Step 287 ========== 
 ========== Step 287 ========== 
 ========== Step 287 ========== 
 ========== Step 287 ========== 
-W20240116 12:18:56.181155 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
 ========== Step 288 ========== 
 ========== Step 288 ========== 
 ========== Step 288 ========== 
 ========== Step 288 ========== 
-E20240116 12:18:56.840072 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1366154
-W20240116 12:18:57.363685 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=289, pq.top=289
 ========== Step 289 ========== 
 ========== Step 289 ========== 
 ========== Step 289 ========== 
 ========== Step 289 ========== 
-W20240116 12:18:57.405570 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:18:57.840018 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1376535
 ========== Step 290 ========== 
 ========== Step 290 ========== 
 ========== Step 290 ========== 
 ========== Step 290 ========== 
+========== Step 291 ========== 
+========== Step 291 ========== 
+========== Step 291 ========== 
+========== Step 291 ========== 
+========== Step 292 ========== 
+========== Step 292 ========== 
+========== Step 292 ========== 
+========== Step 292 ========== 
 +---------------------------+---------------------------+---------------------------+
 | Name                      | P50                       | P99                       |
 +---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.909 ms                  | 106.183 ms                |
-| ProcessBack:UpdateCache   | 6.088 ms                  | 8.676 ms                  |
-| ProcessBack:UpsertPq      | 235.771 ms                | 284.127 ms                |
-| ProcessOneStep            | 246.914 ms                | 363.388 ms                |
-| BlockToStepN              | 35.900 ms                 | 75.214 ms                 |
+| GenInput:CircleBuffer     | 95.044 us                 | 151.389 us                |
+| GenInput                  | 303.572 us                | 882.281 us                |
+| Forward                   | 287.079 us                | 471.392 us                |
+| Backward                  | 90.816 ms                 | 107.904 ms                |
+| Optimize                  | 18.309 ms                 | 26.694 ms                 |
+| BarrierTimeBeforeRank0    | 30.378 us                 | 64.448 us                 |
+| BlockToStepN              | 21.679 us                 | 188.887 us                |
+| OneStep                   | 110.109 ms                | 130.998 ms                |
+| E2E-100                   | 11.137 s                  | 12.691 s                  |
 +---------------------------+---------------------------+---------------------------+
-W20240116 12:18:58.608024 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=291, pq.top=291
-========== Step 291 ========== 
-========== Step 291 ========== 
-========== Step 291 ========== 
-========== Step 291 ========== 
-W20240116 12:18:58.649654 25826 grad_async_v2.h:109] Detect new sample comes, old_end1, new_end2
-E20240116 12:18:58.840015 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1382859
-========== Step 292 ========== 
-========== Step 292 ========== 
-========== Step 292 ========== 
-========== Step 292 ========== 
-W20240116 12:18:59.816138 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=293, pq.top=293
-E20240116 12:18:59.840004 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1391111
 ========== Step 293 ========== 
 ========== Step 293 ========== 
 ========== Step 293 ========== 
 ========== Step 293 ========== 
-W20240116 12:18:59.855085 25826 grad_async_v2.h:109] Detect new sample comes, old_end3, new_end4
 ========== Step 294 ========== 
 ========== Step 294 ========== 
 ========== Step 294 ========== 
 ========== Step 294 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 504.820 us                | 936.181 us                |
-| Backward                  | 1.146 ms                  | 2.005 ms                  |
-| Optimize                  | 121.022 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 549.856 us                | 4.543 ms                  |
-| AfterBackward             | 246.773 ms                | 363.440 ms                |
-| BlockToStepN              | 35.964 ms                 | 75.385 ms                 |
-| E2E-100                   | 62.987 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-E20240116 12:19:00.840008 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1401887
-W20240116 12:19:01.019102 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=295, pq.top=295
 ========== Step 295 ========== 
 ========== Step 295 ========== 
 ========== Step 295 ========== 
 ========== Step 295 ========== 
-W20240116 12:19:01.055891 25826 grad_async_v2.h:109] Detect new sample comes, old_end5, new_end6
 ========== Step 296 ========== 
 ========== Step 296 ========== 
 ========== Step 296 ========== 
 ========== Step 296 ========== 
-E20240116 12:19:01.840193 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1408850
-W20240116 12:19:02.247427 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=297, pq.top=297
 ========== Step 297 ========== 
 ========== Step 297 ========== 
 ========== Step 297 ========== 
 ========== Step 297 ========== 
-W20240116 12:19:02.288435 25826 grad_async_v2.h:109] Detect new sample comes, old_end7, new_end8
-E20240116 12:19:02.840009 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=1416796
 ========== Step 298 ========== 
 ========== Step 298 ========== 
 ========== Step 298 ========== 
 ========== Step 298 ========== 
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| ProcessBack:Shuffle       | 3.898 ms                  | 106.183 ms                |
-| ProcessBack:UpdateCache   | 6.088 ms                  | 8.676 ms                  |
-| ProcessBack:UpsertPq      | 235.573 ms                | 284.127 ms                |
-| ProcessOneStep            | 246.606 ms                | 363.388 ms                |
-| BlockToStepN              | 35.843 ms                 | 75.214 ms                 |
-+---------------------------+---------------------------+---------------------------+
-W20240116 12:19:03.484556 24622 grad_async_v2.h:222] Sleep in <BlockToStepN>, step_no=299, pq.top=299
 ========== Step 299 ========== 
 ========== Step 299 ========== 
 ========== Step 299 ========== 
 ========== Step 299 ========== 
-W20240116 12:19:03.528820 25826 grad_async_v2.h:109] Detect new sample comes, old_end9, new_end0
-E20240116 12:19:03.840059 25826 parallel_pq_v2.h:76] insert failed, size(hashtable)=2693
-Step299:rank1, time: 63.279, per_step: 0.626527
-Step299:rank3, time: 63.279, per_step: 0.626529
-Step299:rank2, time: 63.279, per_step: 0.626529
-Step299:rank0, time: 63.279, per_step: 0.626529
+Step299:rank0, time: 11.207, per_step: 0.110961
+Step299:rank2, time: 11.207, per_step: 0.110961
+Step299:rank1, time: 11.207, per_step: 0.110961
+Step299:rank3, time: 11.207, per_step: 0.110961
+timer name is E2E-100timer name is 
+E2E-100
 timer name is E2E-100
 timer name is E2E-100
-timer name is E2E-100
-timer name is E2E-100
-[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
 [W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
 [W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
-ERROR [24622 PsKvstore.py:89] Delete tensor failed, not found
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+ERROR [58464 PsKvstore.py:89] Delete tensor failed, not found
 Successfully xmh
-+---------------------------+---------------------------+---------------------------+
-| Name                      | P50                       | P99                       |
-+---------------------------+---------------------------+---------------------------+
-| Forward                   | 505.857 us                | 936.181 us                |
-| Backward                  | 1.156 ms                  | 2.005 ms                  |
-| Optimize                  | 120.981 us                | 235.001 us                |
-| BarrierTimeBeforeRank0    | 545.501 us                | 4.543 ms                  |
-| AfterBackward             | 246.612 ms                | 363.440 ms                |
-| BlockToStepN              | 35.956 ms                 | 75.385 ms                 |
-| E2E-100                   | 63.280 s                  | 68.428 s                  |
-+---------------------------+---------------------------+---------------------------+
-*** Aborted at 1705378745 (Unix time, try 'date -d @1705378745') ***
-*** Signal 11 (SIGSEGV) (0x100004242e00) received by PID 24622 (pthread TID 0x7fdd057fa700) (linux TID 25821) (code: address not mapped to object), stack trace: ***
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZN5folly10symbolizer17getStackTraceSafeEPmm+0x7c)[0x7fe295c2a115]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZN5folly10symbolizer21SafeStackTracePrinter15printStackTraceEb+0x66)[0x7fe295be1d14]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(+0x7c71d9)[0x7fe295be01d9]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(+0x7c72b6)[0x7fe295be02b6]
-/lib/x86_64-linux-gnu/libpthread.so.0(+0x1297f)[0x7fe3d874a97f]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x53df1c5)[0x7fe2de9501c5]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(_ZNK2at18TensorIteratorBase15serial_for_eachEN3c1012function_refIFvPPcPKlllEEENS_5RangeE+0x17b)[0x7fe2da8d963b]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(_ZN2at18TensorIteratorBase8for_eachEN3c1012function_refIFvPPcPKlllEEEl+0x16e)[0x7fe2da8d9bbe]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x53e7cca)[0x7fe2de958cca]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x53e9bed)[0x7fe2de95abed]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x19a56bd)[0x7fe2daf166bd]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(_ZN2at6native28structured_index_add_cpu_out4implERKNS_6TensorElS4_S4_RKN3c106ScalarES4_+0x2b6)[0x7fe2daf2dd06]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x2600f2d)[0x7fe2dbb71f2d]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(_ZN2at4_ops10index_add_10redispatchEN3c1014DispatchKeySetERNS_6TensorElRKS4_S7_RKNS2_6ScalarE+0x99)[0x7fe2dba4f629]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x4580b9d)[0x7fe2ddaf1b9d]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(_ZN2at4_ops10index_add_10redispatchEN3c1014DispatchKeySetERNS_6TensorElRKS4_S7_RKNS2_6ScalarE+0x99)[0x7fe2dba4f629]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(+0x3f86b23)[0x7fe2dd4f7b23]
-/home/xieminhui/miniconda3/lib/python3.11/site-packages/torch/lib/libtorch_cpu.so(_ZN2at4_ops10index_add_4callERNS_6TensorElRKS2_S5_RKN3c106ScalarE+0x196)[0x7fe2dbab1d46]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZNK2at6Tensor10index_add_ElRKS0_S2_RKN3c106ScalarE+0x3a)[0x7fe295a18582]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZN8recstore21GradAsyncProcessingV214GradWorkThreadEi+0x2d4)[0x7fe295a2780a]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZSt13__invoke_implIvRMN8recstore21GradAsyncProcessingV2EFviERPS1_JRiEET_St21__invoke_memfun_derefOT0_OT1_DpOT2_+0x7d)[0x7fe295a97ede]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZSt8__invokeIRMN8recstore21GradAsyncProcessingV2EFviEJRPS1_RiEENSt15__invoke_resultIT_JDpT0_EE4typeEOS9_DpOSA_+0x4e)[0x7fe295a97e2e]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZNSt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS1_iEE6__callIvJEJLm0ELm1EEEET_OSt5tupleIJDpT0_EESt12_Index_tupleIJXspT1_EEE+0x83)[0x7fe295a97d4b]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZNSt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS1_iEEclIJEvEET0_DpOT_+0x32)[0x7fe295a97c48]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZSt13__invoke_implIvSt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS2_iEEJEET_St14__invoke_otherOT0_DpOT1_+0x1f)[0x7fe295a97a85]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZSt8__invokeISt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS2_iEEJEENSt15__invoke_resultIT_JDpT0_EE4typeEOS9_DpOSA_+0x1f)[0x7fe295a97918]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZNSt6thread8_InvokerISt5tupleIJSt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS4_iEEEEE9_M_invokeIJLm0EEEEvSt12_Index_tupleIJXspT_EEE+0x27)[0x7fe295a9782d]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZNSt6thread8_InvokerISt5tupleIJSt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS4_iEEEEEclEv+0x17)[0x7fe295a97797]
-/home/xieminhui/RecStore/build/lib/librecstore_pytorch.so(_ZNSt6thread11_State_implINS_8_InvokerISt5tupleIJSt5_BindIFMN8recstore21GradAsyncProcessingV2EFviEPS5_iEEEEEEE6_M_runEv+0x1b)[0x7fe295a9769f]
-/home/xieminhui/miniconda3/bin/../lib/libstdc++.so.6(+0xd3e94)[0x7fe2eb965e94]
-/lib/x86_64-linux-gnu/libpthread.so.0(+0x76da)[0x7fe3d873f6da]
-/lib/x86_64-linux-gnu/libc.so.6(clone+0x3e)[0x7fe3d7cc361e]
-(safe mode, symbolizer not available)
+timer name is AfterBackward
