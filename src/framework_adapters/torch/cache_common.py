@@ -74,13 +74,15 @@ class TorchNativeStdEmbDDP(AbsEmb):
         logging.info(f"weight.shape {weight.shape}")
 
         if device == 'cuda':
-            std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
+            std_emb = nn.Embedding.from_pretrained(
+                weight, freeze=False, sparse=True).cuda()
             self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
         elif device == 'cpu':
             # TODO(NOTE)
             # raise Exception(
             #     "发现.cuda()之后和不.cuda的DDP Emb行为不一致，为了diff test暂时不要用cpu")
-            std_emb = nn.Embedding.from_pretrained(weight, freeze=False)
+            std_emb = nn.Embedding.from_pretrained(
+                weight, freeze=False, sparse=True)
             self.std_emb_ddp = DDP(std_emb, device_ids=None,)
         else:
             assert False
@@ -122,10 +124,12 @@ class TorchNativeStdEmb(AbsEmb):
 
         if device == 'cuda':
             assert False, "NO CUDA"
-            std_emb = nn.Embedding.from_pretrained(weight, freeze=False).cuda()
+            std_emb = nn.Embedding.from_pretrained(
+                weight, freeze=False, sparse=True).cuda()
             self.std_emb = std_emb
         elif device == 'cpu':
-            std_emb = nn.Embedding.from_pretrained(weight, freeze=False)
+            std_emb = nn.Embedding.from_pretrained(
+                weight, freeze=False, sparse=True)
             self.std_emb = std_emb
         else:
             assert False
@@ -137,6 +141,7 @@ class TorchNativeStdEmb(AbsEmb):
             temp = self.std_emb(input_keys.cpu()).cuda()
             return temp
         elif self.device == 'cuda':
+            assert False, "NO CUDA"
             return self.std_emb(input_keys.cuda()).cuda()
         else:
             assert False
@@ -186,7 +191,8 @@ class KGExternelEmbeddingFn(torch.autograd.Function):
         grad_output_cpu = grad_output.cpu()
         i = 0
         for each in list(keys.cpu()):
-            embedding_weight.index_add_(0, each, -2 * grad_output_cpu[i].unsqueeze(0))
+            embedding_weight.index_add_(
+                0, each, -2 * grad_output_cpu[i].unsqueeze(0))
             i += 1
 
         # embedding_weight.index_add_(0, keys.cpu(), -2 * grad_output.cpu())

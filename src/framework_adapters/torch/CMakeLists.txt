@@ -2,6 +2,11 @@ set(TORCH_CUDA_ARCH_LIST "8.6" CACHE STRING "CUDA architecture version")
 find_package(Torch REQUIRED)
 find_package(Python3 COMPONENTS Interpreter Development)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_compile_definitions(GRAD_ASYNC_V1_DEBUG)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    # add_compile_definitions(GRAD_ASYNC_V1_DEBUG)
+endif()
 
 set(recstore_pytorch_srcs
     recstore.cu 

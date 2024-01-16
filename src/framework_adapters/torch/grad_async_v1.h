@@ -70,7 +70,9 @@ class AsyncGradElement {
     } else {
       priority_ = min_read_step;
     }
+#ifdef GRAD_ASYNC_V1_DEBUG
     CHECK((old_priority <= priority_) || (old_priority == kInf));
+#endif
   }
 
   int MinReadStep() const {
@@ -135,10 +137,10 @@ class AsyncGradElement {
 
 #ifdef GRAD_ASYNC_V1_DEBUG
     lock_.AssertLockHold();
-    CHECK_NE(read_step_.size(), 0);
+    CHECK_NE(read_step_.size(), 0) << "id is " << id_;
     CHECK_EQ(*read_step_.begin(), step_no) << "id is " << id_;
 #endif
-    read_step_.erase(read_step_.begin());
+    if (read_step_.size() != 0) read_step_.erase(read_step_.begin());
   }
 
   void Lock() { return lock_.Lock(); }
@@ -188,16 +190,22 @@ class GradAsyncProcessing : public GradProcessingBase {
       dict_[i] = new AsyncGradElement(i);
 
     if (kUseBackThread) {
+      LOG(INFO) << "Use background thread to update emb.";
       for (int i = 0; i < nr_background_threads_; ++i) {
         backthread_work_queues_.emplace_back(
             std::make_unique<folly::ProducerConsumerQueue<GradWorkTask>>(100));
       }
+    } else {
+      LOG(INFO) << "Use main thread to update emb.";
     }
 
     for (int rank = 0; rank < num_gpus_; rank++) {
       auto ret_tensor = IPCTensorFactory::FindIPCTensorFromName(
           folly::sformat("circle_buffer_end_cppseen_r{}", rank));
       circle_buffer_end_cppseen_.push_back(ret_tensor);
+    }
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      sample_step_cpp_seen_[rank].store(-1);
     }
   }
 
@@ -213,6 +221,8 @@ class GradAsyncProcessing : public GradProcessingBase {
       }
     }
     dispatch_thread_ = std::thread(&GradAsyncProcessing::DispatchThread, this);
+
+    detect_thread_ = std::thread(&GradAsyncProcessing::DetectThread, this);
   }
 
   void StopThreads() override {
@@ -223,10 +233,13 @@ class GradAsyncProcessing : public GradProcessingBase {
       return;
     }
 
-    grad_thread_stop_flag_ = true;
-    dispatch_thread_stop_flag_ = true;
+    detect_thread_stop_flag_ = true;
+    detect_thread_.join();
 
     dispatch_thread_.join();
+    dispatch_thread_stop_flag_ = true;
+
+    grad_thread_stop_flag_ = true;
     if (kUseBackThread) {
       for (int i = 0; i < nr_background_threads_; ++i) {
         backward_threads_[i].join();
@@ -271,10 +284,22 @@ class GradAsyncProcessing : public GradProcessingBase {
           int step = step_tensor_per_rank_[rank][pointer].item<int64_t>();
           WhenNewSampleComes(cached_id_circle_buffer_[rank][pointer], rank,
                              step);
+
+          // update the seen sample step of detect threads
+          CHECK_LT(sample_step_cpp_seen_[rank], step);
+          sample_step_cpp_seen_[rank] = step;
         }
         new_end = new_end % L_;
         *p_old_end = new_end;
       }
+    }
+  }
+
+  void DetectThread() {
+    CHECK(isInitialized_);
+    while (!detect_thread_stop_flag_.load()) {
+      base::LockGuard _(large_lock_);
+      DetectNewSamplesCome();
     }
   }
 
@@ -398,6 +423,7 @@ class GradAsyncProcessing : public GradProcessingBase {
 #ifdef USE_SUB_GRAD_TENSOR
         recstore::SubGradTensor grad_tensor(input_grads[rank], i);
 #else
+#error "not use SubGradTensor "
         torch::Tensor grad_tensor = input_grads[rank][i];
 #endif
 
@@ -426,6 +452,11 @@ class GradAsyncProcessing : public GradProcessingBase {
     // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
     // 如果在堆，建立映射，把grad指针填进去
 
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      while (sample_step_cpp_seen_[rank].load() < step_no)
+        ;
+    }
+
     UpsertPq(input_keys, input_grads, step_no);
 
     // LOG(ERROR) << dict_[33779]->ToString();
@@ -446,6 +477,7 @@ class GradAsyncProcessing : public GradProcessingBase {
   // base::CustomPriorityQueue<AsyncGradElement *, CompareAsyncGradElement> pq_;
   recstore::ParallelPq<AsyncGradElement *> pq_;
 
+  std::thread detect_thread_;
   std::thread dispatch_thread_;
   std::vector<std::thread> backward_threads_;
   std::vector<std::unique_ptr<folly::ProducerConsumerQueue<GradWorkTask>>>
@@ -456,6 +488,10 @@ class GradAsyncProcessing : public GradProcessingBase {
   // base::SpinLock large_lock_;
   base::PlaceboLock large_lock_;
 
+  // shape = [rank]
+  std::array<std::atomic_int, 8> sample_step_cpp_seen_;
+
+  std::atomic_bool detect_thread_stop_flag_{false};
   std::atomic_bool dispatch_thread_stop_flag_{false};
   std::atomic_bool grad_thread_stop_flag_{false};
 };

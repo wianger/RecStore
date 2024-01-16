@@ -15,7 +15,7 @@
 #include "parallel_pq.h"
 #include "torch_utils.h"
 
-#define GRAD_ASYNC_V1_DEBUG
+// #define GRAD_ASYNC_V1_DEBUG
 #define USE_SUB_GRAD_TENSOR
 // #define XMH_DEBUG_KG
 

@@ -16,7 +16,7 @@ _send_cpu, _recv_cpu = {}, {}
 
 RECSTORE_UTIL_DEBUG = False
 
-if RECSTORE_UTIL_DEBUG :
+if RECSTORE_UTIL_DEBUG:
     logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',
                         datefmt='%m-%d:%H:%M:%S', level=logging.DEBUG)
 else:
@@ -94,33 +94,51 @@ XLOG = logging
 #             return 0
 #         return self.total_time / self.runs
 
-import sys #nopep8
+import sys  # nopep8
 sys.path.append("/home/xieminhui/RecStore/build/lib")  # nopep8
-import timer_module #nopep8
+import timer_module  # nopep8
 
 
 class Timer:
     @classmethod
     def StartReportThread(cls):
         timer_module.Reporter.StartReportThread(5000)
-    
+
     def __init__(self, name):
         self._c_timer = timer_module.Timer(name, 1)
-    
+
     def start(self):
         self._c_timer.Start()
-    
+
     def stop(self):
         self._c_timer.End()
+
+
+class GPUTimer:
+    @classmethod
+    def StartReportThread(cls):
+        timer_module.Reporter.StartReportThread(5000)
+
+    def __init__(self, name):
+        self.name = name
+        self.start()
+
+    def start(self):
+        self.tick = torch.cuda.Event(enable_timing=True)
+        self.tick.record()
+
+    def stop(self):
+        self.tock = torch.cuda.Event(enable_timing=True)
+        self.tock.record()
+        self.tock.synchronize()
+        elapsed_time_ms = self.tick.elapsed_time(self.tock)
+        timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
 
 
 class PerfCounter:
     @classmethod
     def Record(cls, name, value):
         timer_module.PerfCounter.Record(name, value)
-
-    
-
 
 
 def XLOG_debug(str):

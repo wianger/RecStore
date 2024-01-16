@@ -155,13 +155,14 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
                     "emb_choice": [
                         "KGExternelEmbedding",
                         "KnownShardedCachedEmbedding",
+                        "TorchNativeStdEmb",
                     ]
                 },
                 {
 
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
-                        # "PySync",
+                        "PySync",
                         # "CppSync",
                         "CppAsyncV2",
                         # "CppAsync",
@@ -171,7 +172,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         }
 
         self.name = NAME
-        super().__init__(0, COMMON_CONFIGS,
+        super().__init__(3, COMMON_CONFIGS,
                          "127.0.0.1")
 
     def _SortConfigs(self, configs):

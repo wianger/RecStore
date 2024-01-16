@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     each = exp_config.ExpMacroPerfEmb()
     each.SetLogDir(f'{LOG_PREFIX}/0115-exp1-macro-perf-emb-{suffix}')
-    exp_lists.append(each)
+    # exp_lists.append(each)
 
     each = exp_config.ExpMotivationPerfEmb()
     each.SetLogDir(f'{LOG_PREFIX}/0116-exp2-motiv-emb-{suffix}')

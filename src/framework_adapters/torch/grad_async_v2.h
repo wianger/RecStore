@@ -43,6 +43,9 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
           folly::sformat("circle_buffer_end_cppseen_r{}", rank));
       circle_buffer_end_cppseen_.push_back(ret_tensor);
     }
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      sample_step_cpp_seen_[rank].store(-1);
+    }
   }
 
   void StartThreads() {
@@ -58,6 +61,8 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     }
     dispatch_thread_ =
         std::thread(&GradAsyncProcessingV2::DispatchThread, this);
+
+    detect_thread_ = std::thread(&GradAsyncProcessingV2::DetectThread, this);
   }
 
   void StopThreads() override {
@@ -68,10 +73,13 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
       return;
     }
 
-    grad_thread_stop_flag_ = true;
-    dispatch_thread_stop_flag_ = true;
+    detect_thread_stop_flag_ = true;
+    detect_thread_.join();
 
     dispatch_thread_.join();
+    dispatch_thread_stop_flag_ = true;
+
+    grad_thread_stop_flag_ = true;
     if (kUseBackThread) {
       for (int i = 0; i < nr_background_threads_; ++i) {
         backward_threads_[i].join();
@@ -102,12 +110,14 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
   void DetectNewSamplesCome() {
     for (int rank = 0; rank < num_gpus_; rank++) {
       int64_t new_end = circle_buffer_end_per_rank_[rank].item<int64_t>();
-      int64_t *p_old_end = circle_buffer_end_cppseen_[rank].data_ptr<int64_t>();
-      int64_t old_end = circle_buffer_end_cppseen_[rank][0].item<int64_t>();
+      int64_t *p_old_end =
+      circle_buffer_end_cppseen_[rank].data_ptr<int64_t>(); int64_t old_end =
+      circle_buffer_end_cppseen_[rank][0].item<int64_t>();
       CHECK_EQ(*p_old_end, old_end);
       if (new_end != old_end) {
         FB_LOG_EVERY_MS(WARNING, 1000) << folly::sformat(
-            "Detect new sample comes, old_end{}, new_end{}", old_end, new_end);
+            "Detect new sample comes, old_end{}, new_end{}", old_end,
+            new_end);
 
         // add [circle_buffer_old_end, new_end)
         if (new_end < old_end) new_end += L_;
@@ -116,12 +126,45 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
           int step = step_tensor_per_rank_[rank][pointer].item<int64_t>();
           WhenNewSampleComes(cached_id_circle_buffer_[rank][pointer], rank,
                              step);
+
+          // update the seen sample step of detect threads
+          CHECK_LT(sample_step_cpp_seen_[rank], step);
+          sample_step_cpp_seen_[rank] = step;
         }
         new_end = new_end % L_;
         *p_old_end = new_end;
       }
     }
   }
+
+  // void DetectNewSamplesCome() {
+  //   for (int rank = 0; rank < num_gpus_; rank++) {
+  //     int64_t new_end = circle_buffer_end_per_rank_[rank].item<int64_t>();
+  //     int64_t *p_old_end = circle_buffer_end_cppseen_[rank].data_ptr<int64_t>();
+  //     int64_t old_end = circle_buffer_end_cppseen_[rank][0].item<int64_t>();
+  //     CHECK_EQ(*p_old_end, old_end);
+  //     if (new_end != old_end) {
+  //       FB_LOG_EVERY_MS(WARNING, 1000) << folly::sformat(
+  //           "Detect new sample comes, old_end{}, new_end{}", old_end, new_end);
+
+  //       // add [circle_buffer_old_end, new_end)
+  //       if (new_end < old_end) new_end += L_;
+
+  //       // only consume one sample
+  //       int consumed_end = old_end + 1;
+  //       int pointer = (old_end % L_);
+  //       int step = step_tensor_per_rank_[rank][pointer].item<int64_t>();
+  //       WhenNewSampleComes(cached_id_circle_buffer_[rank][pointer], rank, step);
+
+  //       // update the seen sample step of detect threads
+  //       CHECK_LT(sample_step_cpp_seen_[rank], step);
+  //       sample_step_cpp_seen_[rank] = step;
+
+  //       consumed_end = consumed_end % L_;
+  //       *p_old_end = consumed_end;
+  //     }
+  //   }
+  // }
 
   void ChunkCleanHelper(AsyncGradElement *p) {
     CHECK_EQ(p->magic_, 0xdeadbeef);
@@ -167,11 +210,21 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     round_robin = (round_robin + 1) % nr_background_threads_;
   }
 
+  void DetectThread() {
+    CHECK(isInitialized_);
+    while (!detect_thread_stop_flag_.load()) {
+      base::LockGuard _(large_lock_);
+      DetectNewSamplesCome();
+    }
+  }
+
   void DispatchThread() {
     CHECK(isInitialized_);
     while (!dispatch_thread_stop_flag_.load()) {
       base::LockGuard _(large_lock_);
-      DetectNewSamplesCome();
+
+      // DetectNewSamplesCome();
+
       // 后台线程，不断取堆头，dispatch给worker
       if (pq_.empty()) {
         continue;
@@ -269,6 +322,11 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     // 如果不在堆，就插堆<ID, +无穷>，把grad指针填进去
     // 如果在堆，建立映射，把grad指针填进去
 
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      while (sample_step_cpp_seen_[rank].load() < step_no)
+        ;
+    }
+
     UpsertPq(input_keys, input_grads, step_no);
   }
 
@@ -286,6 +344,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
 
   recstore::ParallelPqV2<AsyncGradElement> pq_;
 
+  std::thread detect_thread_;
   std::thread dispatch_thread_;
   std::vector<std::thread> backward_threads_;
   std::vector<std::unique_ptr<folly::ProducerConsumerQueue<GradWorkTask>>>
@@ -296,6 +355,10 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
   // base::SpinLock large_lock_;
   base::PlaceboLock large_lock_;
 
+  // shape = [rank]
+  std::array<std::atomic_int, 8> sample_step_cpp_seen_;
+
+  std::atomic_bool detect_thread_stop_flag_{false};
   std::atomic_bool dispatch_thread_stop_flag_{false};
   std::atomic_bool grad_thread_stop_flag_{false};
 };

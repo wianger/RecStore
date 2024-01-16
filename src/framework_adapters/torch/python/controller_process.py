@@ -18,7 +18,7 @@ from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIte
 
 import recstore
 from cache_emb_factory import CacheEmbFactory
-from utils import XLOG, Timer
+from utils import XLOG, GPUTimer, Timer
 
 
 os.environ['MASTER_ADDR'] = 'localhost'
@@ -56,7 +56,7 @@ class CircleBuffer:
 
         self.async_process = self.backmode == "CppAsync" or self.backmode == "CppAsyncV2"
 
-    def push(self, step, item):
+    def push(self, step, item, sync=False):
         assert item.ndim == 1
         # self.buffer[self.end].Copy_(item, non_blocking=True)
         self.buffer[self.end].Copy_(item, non_blocking=False)
@@ -65,7 +65,8 @@ class CircleBuffer:
         self.end = (self.end + 1) % self.L
         self.circle_buffer_end[0] = self.end
 
-        if self.async_process:
+        if self.async_process and sync:
+            # NOTE: 没有确保cpp端此时一定会消费到， 但确保CPP端不会漏
             # DetectNewSamplesCome
             debug_count = 0
             while (self.circle_buffer_end[0] != self.circle_buffer_old_end[0]):
@@ -109,17 +110,21 @@ class BasePerfSampler:
             entity_id = self.gen_next_sample()
             self.samples_queue.append(
                 (self.sampler_iter_num, entity_id))
-            self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
+            self.ids_circle_buffer.push(
+                self.sampler_iter_num, entity_id, sync=True)
             self.sampler_iter_num += 1
 
     def __next__(self):
         entity_id = self.gen_next_sample()
-
         self.samples_queue.append(
             (self.sampler_iter_num, entity_id))
-        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id)
-        self.sampler_iter_num += 1
 
+        timer_CircleBuffer = Timer("GenInput:CircleBuffer")
+        # self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=True)
+        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=False)
+        timer_CircleBuffer.stop()
+
+        self.sampler_iter_num += 1
         _, entity_id = self.samples_queue.pop(0)
         return entity_id
 
@@ -161,6 +166,7 @@ class PerfSampler(BasePerfSampler):
             self.zipfianTorchFiller = recstore.ZipfianTorchFiller(
                 full_emb_capacity, alpha)
         self.distribution = distribution
+        self.rank = rank
 
     def gen_next_sample(self):
         if self.distribution == 'uniform':
@@ -169,8 +175,10 @@ class PerfSampler(BasePerfSampler):
             return self.ZipfianGen()
 
     def UniformGen(self):
+        # print(f'rank{self.rank} reached before next sampler {time.time()}')
         entity_id = th.randint(self.full_emb_capacity, size=(
             self.num_ids_per_step,), dtype=th.int64).cuda()
+        # print(f'rank{self.rank} reached after next sampler {time.time()}')
         return entity_id
 
     def ZipfianGen(self):
@@ -372,7 +380,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
     def AfterBackward(self,):
         # print(f"rank{self.rank}: reached AfterBackward, {time.time()}")
-        
+
         self.timer_BarrierTimeBeforeRank0.start()
         self.barrier.Wait()
         self.timer_BarrierTimeBeforeRank0.stop()
@@ -385,7 +393,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         # self.barrier.Wait()
 
         self.step += 1
-        
+
         self.timer_BlockToStepN.start()
         if self.use_cpp_controller and self.rank == 0:
             self.controller.BlockToStepN(self.step)

@@ -56,7 +56,7 @@ class CircleBuffer {
     circle_buffer_old_end_.fill_(0);
   }
 
-  void Push(int step, torch::Tensor item) {
+  void Push(int step, torch::Tensor item, bool sync = false) {
     sliced_id_tensor_[end_]->Copy_(item, false);
     step_tensor_[end_] = step;
 
@@ -65,7 +65,7 @@ class CircleBuffer {
     asm volatile("mfence" ::: "memory");
     circle_buffer_end_[0] = end_;
 
-    if (is_async_process_) {
+    if (is_async_process_ && sync) {
       while (circle_buffer_end_[0].item<int64_t>() !=
              circle_buffer_old_end_[0].item<int64_t>()) {
         FB_LOG_EVERY_MS(INFO, 1000) << folly::sformat(
@@ -109,7 +109,7 @@ class BasePerfSampler {
     // NOTE: must be L_ - 1
     for (int i = 0; i < L_ - 1; ++i) {
       torch::Tensor entity_id = gen_next_sample();
-      ids_circle_buffer_.Push(sampler_iter_num_, entity_id);
+      ids_circle_buffer_.Push(sampler_iter_num_, entity_id, true);
       ++sampler_iter_num_;
     }
   }
@@ -117,7 +117,7 @@ class BasePerfSampler {
   std::pair<int, torch::Tensor> __next__() {
     auto entity_id = gen_next_sample();
     auto [step, sample] = ids_circle_buffer_.Pop();
-    ids_circle_buffer_.Push(sampler_iter_num_, entity_id);
+    ids_circle_buffer_.Push(sampler_iter_num_, entity_id, false);
     ++sampler_iter_num_;
     return std::make_pair(step, sample->GetSlicedTensor());
   }
@@ -325,7 +325,7 @@ class VirtualEnvironment {
       barrier_->Wait();
 
       // if (rank == 0 && step_no == 100) ProfilerStop();
-      if (step_no == 100) break;
+      // if (step_no == 100) break;
     }
   }
 };

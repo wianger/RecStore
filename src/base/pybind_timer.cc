@@ -13,7 +13,8 @@ PYBIND11_MODULE(timer_module, m) {
   py::class_<Timer>(m, "Timer")
       .def(py::init<std::string, int>())
       .def("Start", &Timer::start)
-      .def("End", &Timer::end);
+      .def("End", &Timer::end)
+      .def_static("ManualRecordNs", &Timer::ManualRecordNs);
 
   py::class_<Reporter>(m, "Reporter")
       .def_static("StartReportThread", &Reporter::StartReportThread);

@@ -1,4 +1,5 @@
 import subprocess
+import json
 import os
 import datetime
 import time
@@ -254,6 +255,16 @@ class LocalOnlyExperiment(Experiment):
     def _CreateRun(self, run_id, run_log_dir, run_config,):
         raise NotImplementedError
 
+    def _FindAllRunedConfig(self, ):
+        configs = []
+        for each in os.listdir(self.log_dir):
+            if each.startswith("run_"):
+                with open(os.path.join(self.log_dir, each, "config"), 'r') as f:
+                    config = json.load(f)
+                    config.pop('command')
+                    configs.append(config)
+        return configs
+
     def get_next_config(self, ):
         configs = PreprocessConfig(self.common_config)
 
@@ -271,6 +282,8 @@ class LocalOnlyExperiment(Experiment):
             print(os.listdir(self.log_dir))
             return max_id + 1
 
+        self.runned_configs = self._FindAllRunedConfig()
+
         run_id = find_start_run_id()
         print(f"-------start run_id ={run_id} ====================")
         runs = []
@@ -278,6 +291,10 @@ class LocalOnlyExperiment(Experiment):
         for each_config in all_configs:
             # add custom process
             self._PostprocessConfig(each_config, )
+
+            if each_config in self.runned_configs:
+                print("already runned, continue next run")
+                continue
 
             runs.append(self._CreateRun(run_id, os.path.join(
                 self.log_dir, f'run_{run_id}'), each_config, self.execute_host))

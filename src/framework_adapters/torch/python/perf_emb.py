@@ -32,7 +32,7 @@ from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import ShmKVStore, kvinit
-from utils import XLOG, Timer
+from utils import XLOG, Timer, GPUTimer
 import time
 import DistOpt
 
@@ -85,7 +85,7 @@ def get_run_config():
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
         argparser.add_argument('--log_interval', type=int,
-                               default=100)
+                               default=50)
         argparser.add_argument('--run_steps', type=int,
                                default=500)
         argparser.add_argument('--emb_choice',
@@ -283,9 +283,11 @@ def routine_local_cache_helper(worker_id, args):
 
     perf_sampler.Prefill()
 
+    timer_geninput= Timer("GenInput")
     timer_Forward = Timer("Forward")
     timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
+    timer_onestep= Timer(f"OneStep")
     timer_start = Timer(f"E2E-{args['log_interval']}")
     timer_start.start()
 
@@ -296,6 +298,7 @@ def routine_local_cache_helper(worker_id, args):
     start_barrier.Wait()
 
     for _ in for_range:
+        timer_onestep.start()
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
 
@@ -323,8 +326,10 @@ def routine_local_cache_helper(worker_id, args):
                     torch_profiler.export_chrome_trace("trace.json")
             break
 
+        timer_geninput.start()
         input_keys = next(perf_sampler)
         start_barrier.Wait()
+        timer_geninput.stop()
 
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
@@ -368,6 +373,7 @@ def routine_local_cache_helper(worker_id, args):
             timer_start.stop()
             timer_start.start()
 
+        timer_onestep.stop()
 
 if __name__ == "__main__":
     # import debugpy
