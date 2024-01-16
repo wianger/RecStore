@@ -23,21 +23,27 @@ def config_each_server(hosts):
     ParallelSSH(
         hosts, f"sudo swapoff -a")
 
+if GetHostName() == "node182":
+    suffix = "A30"
+else:
+    suffix = "3090"
 
 if __name__ == "__main__":
     exp_lists = []
 
     each = exp_config.ExpOverallSingle()
-    if GetHostName() == "node182":
-        suffix = "A30"
-    else:
-        suffix = "3090"
     each.SetLogDir(f'{LOG_PREFIX}/0115-exp0-bigmodel-{suffix}')
     # exp_lists.append(each)
 
     each = exp_config.ExpMacroPerfEmb()
     each.SetLogDir(f'{LOG_PREFIX}/0115-exp1-macro-perf-emb-{suffix}')
     exp_lists.append(each)
+
+    each = exp_config.ExpMotivationPerfEmb()
+    each.SetLogDir(f'{LOG_PREFIX}/0116-exp2-motiv-emb-{suffix}')
+    exp_lists.append(each)
+
+
 
     for i, each in enumerate(exp_lists):
         # mount NFS

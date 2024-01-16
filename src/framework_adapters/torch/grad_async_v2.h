@@ -11,7 +11,8 @@ namespace recstore {
 class GradAsyncProcessingV2 : public GradProcessingBase {
   typedef std::pair<int64_t, torch::Tensor> GradWorkTask;
   static constexpr int kInf = std::numeric_limits<int>::max();
-  static constexpr bool kUseBackThread = false;
+  // static constexpr bool kUseBackThread = false;
+  static constexpr bool kUseBackThread = true;
 
  public:
   GradAsyncProcessingV2(const std::string &json_str,
@@ -28,10 +29,13 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
       dict_[i] = new AsyncGradElement(i);
 
     if (kUseBackThread) {
+      LOG(INFO) << "Use background thread to update emb.";
       for (int i = 0; i < nr_background_threads_; ++i) {
         backthread_work_queues_.emplace_back(
             std::make_unique<folly::ProducerConsumerQueue<GradWorkTask>>(100));
       }
+    } else {
+      LOG(INFO) << "Use main thread to update emb.";
     }
 
     for (int rank = 0; rank < num_gpus_; rank++) {
@@ -123,8 +127,11 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     CHECK_EQ(p->magic_, 0xdeadbeef);
     int64_t id = p->GetID();
 
-    base::LockGuard element_lock_guard(*p);
+    // base::LockGuard element_lock_guard(*p);
+
+    p->Lock();
     auto [not_used, vec_grads] = p->DrainWrites();
+    p->Unlock();
 
 #ifdef USE_SUB_GRAD_TENSOR
     std::vector<torch::Tensor> grads;
@@ -152,8 +159,11 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
         full_emb_.index_add_(0, torch::full({1}, id), -clr_ * grad);
       }
     }
+
+    p->Lock();
     p->RecaculatePriority();
     pq_.PushOrUpdate(p);
+    p->Unlock();
     round_robin = (round_robin + 1) % nr_background_threads_;
   }
 
@@ -230,6 +240,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
 #ifdef USE_SUB_GRAD_TENSOR
         recstore::SubGradTensor grad_tensor(input_grads[rank], i);
 #else
+#error "not use SubGradTensor "
         torch::Tensor grad_tensor = input_grads[rank][i];
 #endif
 

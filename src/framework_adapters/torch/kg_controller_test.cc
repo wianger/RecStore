@@ -1,5 +1,4 @@
 #include "IPC_barrier.h"
-
 #include "kg_controller.h"
 
 using namespace recstore;
@@ -326,7 +325,7 @@ class VirtualEnvironment {
       barrier_->Wait();
 
       // if (rank == 0 && step_no == 100) ProfilerStop();
-      // if (step_no == 50) break;
+      if (step_no == 100) break;
     }
   }
 };

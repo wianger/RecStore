@@ -5,6 +5,7 @@ from threading import Thread
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
 import json
+import time
 
 
 import torch as th
@@ -370,8 +371,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
             XLOG.info("call rank0 to StopThreads done")
 
     def AfterBackward(self,):
-        import time
-        print(f"rank{self.rank}: reached AfterBackward, {time.time()}")
+        # print(f"rank{self.rank}: reached AfterBackward, {time.time()}")
         
         self.timer_BarrierTimeBeforeRank0.start()
         self.barrier.Wait()

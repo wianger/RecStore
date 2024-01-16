@@ -50,8 +50,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "PerfEmbRun"
         COMMON_CONFIGS = {
-            # "num_workers": [1, 2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
-            "num_workers": [4],
+            "num_workers": [4, 8] if GetHostName() != "node182" else [4],
 
             "num_embs": [int(100*1e6),],
             "batch_size": [512, 1024, 2048, 4096,],
@@ -71,7 +70,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
                     "distribution": ['zipf'],
                     "zipf_alpha": [
                         0.9,
-                        # 0.99
+                        0.99
                     ],
                 },
             ],
@@ -80,7 +79,8 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
                 {
                     "emb_choice": [
                         # "TorchNativeStdEmb",
-                        "KGExternelEmbedding"
+                        "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
                     ]
                 },
                 {
@@ -95,6 +95,77 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
                     # "backgrad_init": [
                     #     "cpu", "both"
                     # ]
+                },
+            ],
+        }
+
+        self.name = NAME
+        super().__init__(0, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+
+    def _RunHook(self, previous_run, next_run):
+        # LocalNuke("perf_emb.py")
+        LocalNukeAllPython()
+        return
+
+    def _PostprocessConfig(self, each_config, ):
+        # don't use self
+        pass
+        # client_config['key_space_m'] *= WARM_UP_RATIO
+        # client_config['key_space_m'] = int(client_config['key_space_m'])
+
+    def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
+                          run_config, execute_host)
+
+    def _BeforeStartAllRun(self):
+        print("pnuke perf_emb.py")
+        # LocalNuke("perf_emb.py")
+        LocalNukeAllPython()
+
+
+class ExpMotivationPerfEmb(LocalOnlyExperiment):
+    def __init__(self, ) -> None:
+        NAME = "MotivationPerfEmb"
+        COMMON_CONFIGS = {
+            "num_workers": [4,] if GetHostName() != "node182" else [4],
+            "num_embs": [int(100*1e6),],
+            "batch_size": [512, 1024, 2048, 4096,],
+            "run_steps": [300],
+            "log_interval": [100],
+
+            "cache_ratio": [0.1, 0.2],
+            'binding2': [
+                {
+                    "distribution": ['uniform'],
+                },
+                {
+                    "distribution": ['zipf'],
+                    "zipf_alpha": [
+                        0.9,
+                        0.99
+                    ],
+                },
+            ],
+            "binding": [
+                {
+                    "emb_choice": [
+                        "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
+                    ]
+                },
+                {
+
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        # "PySync",
+                        # "CppSync",
+                        "CppAsyncV2",
+                        # "CppAsync",
+                    ],
                 },
             ],
         }
@@ -231,7 +302,7 @@ class ExpOverallSingle(GNNExperiment):
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding'],
+                    "cached_emb_type": ['KGExternelEmbedding', 'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -240,7 +311,7 @@ class ExpOverallSingle(GNNExperiment):
             # FB15k, FB15k-237, wn18, wn18rr and Freebase
             # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
 
-            "nr_gpus": [4],
+            "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
             "batch_size": [600, 1200, 1800, 3000, 4800, 6600, 8400],
             "cache_ratio": [0.1, 0.2],
 

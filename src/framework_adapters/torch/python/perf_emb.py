@@ -332,8 +332,6 @@ def routine_local_cache_helper(worker_id, args):
         loss = embed_value.sum(-1).sum(-1)
         timer_Forward.stop()
 
-        print(f"rank{rank}: after forward, {time.time()}")
-
         timer_Backward.start()
         loss.backward()
         timer_Backward.stop()

@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from DistEmb import DistEmbedding
 from cache_common import AbsEmb, NVGPUCache
-from utils import all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
+from utils import Timer, all2all_data_transfer, merge_op, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor
 from utils import XLOG
 
 
@@ -204,45 +204,54 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
             return cached_keys, keys[in_cache_mask.logical_not()], in_cache_mask, in_each_rank_cache_mask
 
     @staticmethod
-    def forward(ctx, keys, full_emb, emb_cache, fake_tensor, cached_range):
+    def forward(ctx, keys, full_emb, emb_cache, fake_tensor, cached_range, ret_value):
         rank, world_size = dist.get_rank(), dist.get_world_size()
         emb_dim = full_emb.shape[1]
 
         # 1. all to all keys
         # 1.1 split keys into shards
+
+        ctx.timer_BarrierTimeBeforeRank0 = Timer("bucket keys")
         cached_keys, missing_keys, in_cache_mask, in_each_rank_cache_mask = KnownShardedCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
             keys, cached_range)
+        ctx.timer_BarrierTimeBeforeRank0.stop()
 
         # 1.2 all to all keys with shapes
+        ctx.timer_a2akeys = Timer("forward: a2a keys")
         recv_keys = all2all_data_transfer(
             cached_keys, None, tag=120, dtype=keys.dtype)
+        ctx.timer_a2akeys.stop()
 
         # 2. search local cache
-
+        ctx.timer_searchcache = Timer("forward: search cache")
         cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
         ctx.cached_start_key = cached_start_key
         ctx.cached_end_key = cached_end_key
-
         cache_query_values = []
         for each_shard_recv_keys in recv_keys:
             # print("each_shard_recv_keys - cached_start_key",
             #       each_shard_recv_keys - cached_start_key)
             cache_query_values.append(
                 emb_cache[each_shard_recv_keys - cached_start_key])
+        ctx.timer_searchcache.stop()
 
         # 3. all to all searched values
+        ctx.timer_a2avalues = Timer("forward: a2a values")
         XLOG.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
             cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype)
         XLOG.debug(f"{rank}: a2a cache_query_values done",)
+        ctx.timer_a2avalues.stop()
 
         # 5. merge into final result
-        ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
+        # ret_value = torch.zeros((keys.shape[0], emb_dim)).cuda()
 
         # 5.1 join missing keys
+        ctx.timer_join = Timer("forward: join")
         if missing_keys.shape[0] > 0:
             if type(full_emb) is DistEmbedding:
-                missing_value = full_emb(missing_keys.cpu(), record_trace=False)
+                missing_value = full_emb(
+                    missing_keys.cpu(), record_trace=False)
                 # F.embedding(missing_keys.cpu(
                 # ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
 
@@ -257,6 +266,8 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         # 5.2 join in-cache keys
         for cache_query_value, mask in zip(cache_query_values_in_mine, in_each_rank_cache_mask):
             ret_value[mask] = cache_query_value
+
+        ctx.timer_join.stop()
 
         ctx.save_for_backward(keys, in_cache_mask, )
         ctx.emb_dim = emb_dim
@@ -279,16 +290,16 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
         # 1. all to all keys's grad
         # aggregate in-dram keys
+        ctx.timer_aggregate_dram = Timer("back: aggr dram keys")
         missing_keys = keys[in_cache_mask.logical_not()]
         missing_grads = grad_output[in_cache_mask.logical_not()]
 
         reduced_missing_grads = reduce_sparse_kv_tensor(
             missing_keys, missing_grads, embedding_weight.shape, 0)
-
-        XLOG.debug(f"{dist.get_rank()} missing_keys = {missing_keys}")
-        XLOG.debug(f"{dist.get_rank()} missing_grads = {missing_grads}")
+        ctx.timer_aggregate_dram.stop()
 
         if dist.get_rank() == 0:
+            ctx.timer_dram_grad = Timer("back: set dram grad")
             if type(embedding_weight) is DistEmbedding:
                 reduced_missing_grads = reduced_missing_grads.coalesce()
                 XLOG.debug(f"reduced_missing_grads = {reduced_missing_grads}")
@@ -296,14 +307,18 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
                     reduced_missing_grads.indices().squeeze(0), reduced_missing_grads.values())
             else:
                 embedding_weight.grad = reduced_missing_grads / dist.get_world_size()
+            ctx.timer_dram_grad.stop()
 
+        ctx.timer_chunk_grad = Timer("back: a2a grad")
         # split keys into shards
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
         sharded_grads = [grad_output[each] for each in in_each_rank_cache_mask]
         keys_in_this_rank, values_in_this_rank = all2all_sparse_tensor(
             sharded_keys, sharded_grads, tag=124)
+        ctx.timer_chunk_grad.stop()
 
         # all tensors minus cached_start_key in list(keys_in_this_rank)
+        ctx.timer_cache_grad = Timer("back: grad sum & grad cache ")
         cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
         cached_keys_in_this_rank = [
             each - cached_start_key for each in keys_in_this_rank]
@@ -312,7 +327,8 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
 
         grad = grad.cuda() / dist.get_world_size()
         emb_cache.grad = grad
-        return None, None, None, torch.randn(1, 1), None
+        ctx.timer_cache_grad.stop()
+        return None, None, None, torch.randn(1, 1), None, None
 
 
 class KnownShardedCachedEmbedding(AbsEmb):
@@ -330,10 +346,14 @@ class KnownShardedCachedEmbedding(AbsEmb):
 
         self.emb_cache.copy_(self.emb.weight[start:end])
 
+        self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
+
     def forward(self, input_keys, trace=True):
+        ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
+
         assert input_keys.is_cuda
         embed_value = KnownShardedCachedEmbeddingFn.apply(
-            input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range)
+            input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range, ret_value)
         if trace:
             assert embed_value.requires_grad
         else:
