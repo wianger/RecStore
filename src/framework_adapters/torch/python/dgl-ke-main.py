@@ -13,7 +13,7 @@ dglke_train --model_name TransE_l2
 
 
 from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
-from controller_process import GraphCachedSampler
+from controller_process import GraphCachedSampler, KGCacheControllerWrapperBase
 import test_utils
 import pickle
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
@@ -137,7 +137,7 @@ class ArgParser(CommonArgParser):
         self.add_argument('--cache_ratio', type=float, required=True, help='.')
         self.add_argument('--shuffle', type=bool, default=False, help='.')
         self.add_argument('--backwardMode', type=str, required=True,
-                          choices=['PySync', 'CppSync', 'CppAsync'], help='.')
+                          choices=['PySync', 'CppSync', 'CppAsync', 'CppAsyncV2'], help='.')
         self.add_argument('--L', type=int, default=10, help='lookahead value')
 
 
@@ -177,10 +177,12 @@ def main():
         "backgrad_init": "both", 
         "kForwardItersPerStep": 2,
         "clr": 1,
-        "nr_background_threads": 1,
+        "nr_background_threads": 32,
         "backwardMode": "{args.backwardMode}",
         "cache_ratio": {args.cache_ratio}
         }}'''
+
+    KGCacheControllerWrapperBase.BeforeDDPInit()
 
     json_config = json.loads(json_str)
 

@@ -17,6 +17,23 @@ def ConvertHostNumaList2Host(host_numa_lists):
 DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
 
 
+def GSWLock():
+    lock_file = "/tmp/xmh_gsw_lock"
+    print(f"Want to lock the lock")
+
+    while os.path.exists(lock_file):
+        time.sleep(1)
+    with open(lock_file, 'w') as file:
+        file.write(
+            'Hello, this is a new file!\nYou can add more content here.')
+    print(f"Escape the lock")
+
+
+def GSWUnlock():
+    lock_file = "/tmp/xmh_gsw_lock"
+    os.remove(lock_file)
+
+
 class PerfEmbRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
@@ -109,6 +126,12 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
         LocalNukeAllPython()
+
+        if previous_run is not None:
+            GSWUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GSWLock()
         return
 
     def _PostprocessConfig(self, each_config, ):
@@ -181,6 +204,11 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
         LocalNukeAllPython()
+        if previous_run is not None:
+            GSWUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GSWLock()
         return
 
     def _PostprocessConfig(self, each_config, ):
@@ -197,6 +225,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         print("pnuke perf_emb.py")
         # LocalNuke("perf_emb.py")
         LocalNukeAllPython()
+        GSWLock()
 
 
 ###########################
@@ -279,25 +308,21 @@ class ExpOverallSingle(GNNExperiment):
                 {
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.1, 0.2],
+                    # "cache_ratio": [0.1, 0.2],
+                    "cache_ratio": [0.1, ],
                 },
-                {
-                    "dataset": ["Freebase"],
-                    "hidden_dim": [400],
-                    "cache_ratio": [0.05, 0.1],
-                }
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.1],
+                # }
             ],
             "binding2": [
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["PySync"],
+                    "backwardMode": ["PySync", "CppAsyncV2"],
                 },
-                # {
-                #     "use_my_emb": ["true"],
-                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                #     "backwardMode": ["CppSync"],
-                # },
                 {
                     "use_my_emb": ["false"],
                     "cached_emb_type": ['None'],
@@ -311,16 +336,13 @@ class ExpOverallSingle(GNNExperiment):
                     "backwardMode": ["PySync"],
                 },
             ],
-
-
-            # FB15k, FB15k-237, wn18, wn18rr and Freebase
-            # "nr_gpus": [0, 1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [0, 1, 2, 3, 4],
-
             "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
-            "batch_size": [600, 1200, 1800, 3000, 4800, 6600, 8400],
+
+            # "batch_size": [600, 1200, 1800, 3000, 4800, 6600, 8400],
+            "batch_size": [8400],
 
             "max_step": [500],
-            "log_interval": [200],
+            "log_interval": [100],
             **COMMON_CLIENT_CONFIGS,
         }
 
@@ -338,4 +360,9 @@ class ExpOverallSingle(GNNExperiment):
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
+        if previous_run is not None:
+            GSWUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GSWLock()
         return

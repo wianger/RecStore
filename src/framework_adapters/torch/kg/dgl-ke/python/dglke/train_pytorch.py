@@ -19,10 +19,13 @@
 
 from cache_common import CacheShardingPolicy
 from python.controller_process import KGCacheControllerWrapper, KGCacheControllerWrapperDummy
+import recstore
 from recstore import KGCacheController
 from contextlib import contextmanager
 from pyinstrument import Profiler
 from torch.profiler import profile, record_function, ProfilerActivity
+
+from utils import Timer
 from .dataloader import get_dataset
 from .dataloader import EvalDataset
 import dgl.backend as F
@@ -159,11 +162,6 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     model.prepare_per_worker_process()
     barrier.wait()
 
-    # kgcache_controller = KGCacheController(json_str,
-    #                                        CacheShardingPolicy.generate_cached_range(
-    #                                            model.n_entities,
-    #                                            args.cache_ratio))
-
     if args.use_my_emb:
         kg_cache_controller = KGCacheControllerWrapper(
             json_str, model.n_entities,
@@ -182,8 +180,8 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
 
     warmup_iters = 20
 
-    # with_perf = True
-    with_perf = False
+    with_perf = True
+    # with_perf = False
 
     with_pyinstrucment = False
     with_cudaPerf = False
@@ -197,10 +195,22 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True)
         torch_profiler.start()
 
+    timer_geninput = Timer("GenInput")
+    timer_Forward = Timer("Forward")
+    timer_Backward = Timer("Backward")
+    timer_Optimize = Timer("Optimize")
+    timer_onestep = Timer(f"OneStep")
+
     import tqdm
     if rank == 0:
         all_start = time.time()
+
+    start_barrier = recstore.MultiProcessBarrierFactory.Create(
+        "start_barrier",  args.num_proc)
+    start_barrier.Wait()
+
     for step in range(0, args.max_step):
+        timer_onestep.start()
         # if rank == 0:
         #     print(f"+++++++++++++++++Step{step}+++++++++++++++++")
 
@@ -226,37 +236,34 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
                     torch_profiler.export_chrome_trace("trace.json")
             break
 
+        timer_geninput.start()
         start1 = time.time()
         try:
-            # print(f"Rank {rank}: start training", flush=True)
             pos_g, neg_g = next(train_sampler)
-            # print(f"Rank {rank}: start training done", flush=True)
         except StopIteration as e:
             break
-
-        '''
-        diff_forward(pos_g, neg_g, rank, step)
-        continue
-        '''
-
         sample_time += time.time() - start1
+        timer_geninput.stop()
 
         if client is not None:
             model.pull_model(client, pos_g, neg_g)
 
+        timer_Forward.start()
         with xmh_nvtx_range(f"Step{step}:forward", condition=rank == 0 and step >= warmup_iters):
             start1 = time.time()
             loss, log = model.forward(pos_g, neg_g, gpu_id)
-
             # print(f"rank{rank}: loss = {loss:.6f}")
-
             forward_time += time.time() - start1
+        timer_Forward.stop()
 
+        timer_Backward.start()
         with xmh_nvtx_range(f"Step{step}:backward", condition=rank == 0 and step >= warmup_iters):
             start1 = time.time()
             loss.backward()
             backward_time += time.time() - start1
+        timer_Backward.stop()
 
+        timer_Optimize.start()
         with xmh_nvtx_range(f"Step{step}:update", condition=rank == 0 and step >= warmup_iters):
             start1 = time.time()
             if client is not None:
@@ -268,6 +275,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
                 model.update(gpu_id)
             update_time += time.time() - start1
             logs.append(log)
+        timer_Optimize.stop()
 
         kg_cache_controller.AfterBackward()
 
@@ -312,7 +320,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
         if with_perf and with_torchPerf:
             torch_profiler.step()
 
-    # print('proc {} takes {:.3f} seconds'.format(rank, time.time() - train_start), flush=True)
+        timer_onestep.stop()
 
     if args.async_update:
         model.finish_async_update()
@@ -321,7 +329,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
 
     if rank == 0:
         print('Successfully xmh. training takes {} seconds'.format(
-            time.time() - all_start ), flush=True)
+            time.time() - all_start), flush=True)
 
 
 def test(args, model, test_samplers, rank=0, mode='Test', queue=None):

@@ -87,7 +87,7 @@ class TorchNativeStdEmbDDP(AbsEmb):
         else:
             assert False
 
-    def forward(self, input_keys):
+    def forward(self, input_keys, ):
         if self.device == 'cpu':
             return self.std_emb_ddp(input_keys.cpu())
         elif self.device == 'cuda':
@@ -136,7 +136,7 @@ class TorchNativeStdEmb(AbsEmb):
 
         logging.info(f"TorchNativeStdEmb construct done")
 
-    def forward(self, input_keys):
+    def forward(self, input_keys, trace=True):
         if self.device == 'cpu':
             temp = self.std_emb(input_keys.cpu()).cuda()
             return temp

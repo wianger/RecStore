@@ -455,7 +455,7 @@ class KEModel(object):
             head_ids, tail_ids = pos_g.all_edges(order='eid')
             if to_device is not None and gpu_id >= 0:
                 head_ids = to_device(head_ids, gpu_id)
-            head = pos_g.ndata['emb'][head_ids]
+            head = pos_g.ndata['emb'][head_ids].clone()
             rel = pos_g.edata['emb']
 
             # This is negative edge construction similar to the above.
