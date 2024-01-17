@@ -30,6 +30,7 @@ def GSWLock():
 
 
 def GSWUnlock():
+    print("unlock xmh_gsw_lock")
     lock_file = "/tmp/xmh_gsw_lock"
     os.remove(lock_file)
 
@@ -156,7 +157,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         COMMON_CONFIGS = {
             "num_workers": [4,] if GetHostName() != "node182" else [4],
             "num_embs": [int(100*1e6),],
-            "batch_size": [512, 1024, 2048, 4096,],
+            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
             "run_steps": [300],
             "log_interval": [100],
 
@@ -283,7 +284,8 @@ class GNNExperiment(LocalOnlyExperiment):
 COMMON_CLIENT_CONFIGS = {
     "no_save_emb": ['true'],
     "neg_sample_size": [200],
-    "regularization_coef": [1e-07],
+    # "regularization_coef": [1e-07],
+    "regularization_coef": [0],
     "gamma": [16.0],
     "lr": [0.01],
     "batch_size_eval": [16],
@@ -311,11 +313,11 @@ class ExpOverallSingle(GNNExperiment):
                     # "cache_ratio": [0.1, 0.2],
                     "cache_ratio": [0.1, ],
                 },
-                # {
-                #     "dataset": ["Freebase"],
-                #     "hidden_dim": [400],
-                #     "cache_ratio": [0.1],
-                # }
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.1],
+                }
             ],
             "binding2": [
                 {

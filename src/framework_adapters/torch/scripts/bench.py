@@ -32,11 +32,11 @@ if __name__ == "__main__":
     exp_lists = []
 
     each = exp_config.ExpOverallSingle()
-    each.SetLogDir(f'{LOG_PREFIX}/0116-exp0-KG-{suffix}')
+    each.SetLogDir(f'{LOG_PREFIX}/0117-exp0-KG-{suffix}')
     exp_lists.append(each)
 
     each = exp_config.ExpMacroPerfEmb()
-    each.SetLogDir(f'{LOG_PREFIX}/0116-exp1-macro-perf-emb-{suffix}')
+    each.SetLogDir(f'{LOG_PREFIX}/0117-exp1-macro-perf-emb-{suffix}')
     exp_lists.append(each)
 
     # each = exp_config.ExpMotivationPerfEmb()
