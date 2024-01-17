@@ -67,7 +67,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
 
   void StopThreads() override {
     CHECK(isInitialized_);
-
+    GradProcessingBase::StopThreads();
     bool expected = false;
     if (!grad_thread_stop_flag_.compare_exchange_strong(expected, true)) {
       return;
@@ -76,8 +76,8 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     detect_thread_stop_flag_ = true;
     detect_thread_.join();
 
-    dispatch_thread_.join();
     dispatch_thread_stop_flag_ = true;
+    dispatch_thread_.join();
 
     grad_thread_stop_flag_ = true;
     if (kUseBackThread) {

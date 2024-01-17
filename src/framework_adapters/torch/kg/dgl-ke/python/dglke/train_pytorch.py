@@ -184,7 +184,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     # with_perf = False
 
     with_pyinstrucment = False
-    with_cudaPerf = False
+    with_cudaPerf = True
     with_torchPerf = False
 
     if with_perf and with_pyinstrucment:
@@ -210,7 +210,6 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     start_barrier.Wait()
 
     for step in range(0, args.max_step):
-        timer_onestep.start()
         # if rank == 0:
         #     print(f"+++++++++++++++++Step{step}+++++++++++++++++")
 
@@ -236,6 +235,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
                     torch_profiler.export_chrome_trace("trace.json")
             break
 
+        timer_onestep.start()
         timer_geninput.start()
         start1 = time.time()
         try:
@@ -326,6 +326,10 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
         model.finish_async_update()
     if args.strict_rel_part or args.soft_rel_part:
         model.writeback_relation(rank, rel_parts)
+
+    print("before call kg_cache_controller.StopThreads()", flush=True)
+    if rank == 0:
+        kg_cache_controller.StopThreads()
 
     if rank == 0:
         print('Successfully xmh. training takes {} seconds'.format(

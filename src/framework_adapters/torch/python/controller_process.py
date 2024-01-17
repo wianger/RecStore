@@ -308,7 +308,7 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
         super()._RegisterFolly()
 
     def StopThreads(self):
-        pass
+        print("KGCacheControllerWrapperDummy.StopThreads")
 
     def AfterBackward(self,):
         dist.barrier()

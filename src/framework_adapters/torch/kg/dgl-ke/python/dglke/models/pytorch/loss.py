@@ -74,6 +74,7 @@ class LossGenerator(BaseLossGenerator):
         else:
             edge_weight = edge_weight.view(-1, 1)
         if self.pairwise:
+            assert False
             pos_score = pos_score.unsqueeze(-1)
             loss = th.mean(self.loss_criterion((pos_score - neg_score), 1) * edge_weight)
             log['loss'] = get_scalar(loss)
@@ -92,7 +93,7 @@ class LossGenerator(BaseLossGenerator):
         neg_loss = th.mean(neg_loss)
         pos_loss = th.mean(pos_loss)
         loss = (neg_loss + pos_loss) / 2
-        log['pos_loss'] = get_scalar(pos_loss)
-        log['neg_loss'] = get_scalar(neg_loss)
-        log['loss'] = get_scalar(loss)
+        # log['pos_loss'] = get_scalar(pos_loss)
+        # log['neg_loss'] = get_scalar(neg_loss)
+        # log['loss'] = get_scalar(loss)
         return loss, log
