@@ -230,7 +230,7 @@ class GradAsyncProcessing : public GradProcessingBase {
     GradProcessingBase::StopThreads();
 
     bool expected = false;
-    if (!grad_thread_stop_flag_.compare_exchange_strong(expected, true)) {
+    if (!detect_thread_stop_flag_.compare_exchange_strong(expected, true)) {
       return;
     }
 

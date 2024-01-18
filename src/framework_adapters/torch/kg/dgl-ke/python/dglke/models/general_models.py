@@ -65,25 +65,9 @@ else:
 
 EMB_INIT_EPS = 2.0
 
+from recstore import utils  # nopep8
+from utils import xmh_nvtx_range # nopep8
 
-from contextlib import contextmanager
-@contextmanager
-def xmh_nvtx_range(msg, condition=True):
-    """
-    Context manager / decorator that pushes an NVTX range at the beginning
-    of its scope, and pops it at the end. If extra arguments are given,
-    they are passed as arguments to msg.format().
-
-    Args:
-        msg (str): message to associate with the range
-    """
-    if condition:
-        th.cuda.nvtx.range_push(msg)
-        yield
-        th.cuda.nvtx.range_pop()
-    else:
-        yield
-        
 
 class InferModel(object):
     def __init__(self, device, model_name, hidden_dim,
@@ -423,7 +407,7 @@ class KEModel(object):
                       dtype=F.float32, ctx=F.context(pos_g.ndata['emb']))
         if neg_g.neg_head:
             neg_head_ids = neg_g.ndata['id'][neg_g.head_nid]
-            with xmh_nvtx_range("GetEmbInNegScore", gpu_id == 0):
+            with xmh_nvtx_range("GetEmbInNeg", gpu_id == 0):
                 neg_head = self.entity_emb(neg_head_ids, gpu_id, trace)
             head_ids, tail_ids = pos_g.all_edges(order='eid')
             if to_device is not None and gpu_id >= 0:
@@ -616,6 +600,7 @@ class KEModel(object):
                                                 gpu_id=gpu_id, trace=True,
                                                 neg_deg_sample=self.args.neg_deg_sample)
             else:
+                assert False
                 neg_score = self.predict_neg_score(pos_g, neg_g, trace=True,
                                                 neg_deg_sample=self.args.neg_deg_sample)
 
@@ -628,11 +613,17 @@ class KEModel(object):
             #    pos_score = (pos_score * subsampling_weight).sum() / subsampling_weight.sum()
             #    neg_score = (neg_score * subsampling_weight).sum() / subsampling_weight.sum()
             #else:
-            edge_weight = F.copy_to(pos_g.edata['impts'], get_dev(gpu_id)) if self.has_edge_importance else None
-            loss, log = self.loss_gen.get_total_loss(pos_score, neg_score, edge_weight)
+            with xmh_nvtx_range(f"edge_weight", gpu_id==0):
+                edge_weight = F.copy_to(pos_g.edata['impts'], get_dev(gpu_id)) if self.has_edge_importance else None
+
+            with xmh_nvtx_range(f"get_total_loss", gpu_id==0):
+                loss, log = self.loss_gen.get_total_loss(pos_score, neg_score, edge_weight)
             # regularization: TODO(zihao)
             #TODO: only reg ent&rel embeddings. other params to be added.
+
             if self.args.regularization_coef > 0.0 and self.args.regularization_norm > 0:
+                print("self.args.regularization_coef", self.args.regularization_coef)
+                assert False
                 coef, nm = self.args.regularization_coef, self.args.regularization_norm
                 reg = coef * (norm(self.entity_emb.curr_emb(), nm) + norm(self.relation_emb.curr_emb(), nm))
                 log['regularization'] = get_scalar(reg)

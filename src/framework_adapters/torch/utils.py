@@ -7,8 +7,10 @@ import torch.optim as optim
 
 import logging
 import time
-
+from contextlib import contextmanager
 from recstore import merge_op
+
+import torch as th
 
 _send_cpu, _recv_cpu = {}, {}
 
@@ -143,6 +145,26 @@ class PerfCounter:
     @classmethod
     def Record(cls, name, value):
         timer_module.PerfCounter.Record(name, value)
+
+from torch.profiler import record_function
+
+@contextmanager
+def xmh_nvtx_range(msg, condition=True):
+    """
+    Context manager / decorator that pushes an NVTX range at the beginning
+    of its scope, and pops it at the end. If extra arguments are given,
+    they are passed as arguments to msg.format().
+
+    Args:
+        msg (str): message to associate with the range
+    """
+    if condition:
+        th.cuda.nvtx.range_push(msg)
+        with record_function(msg):
+            yield
+        th.cuda.nvtx.range_pop()
+    else:
+        yield
 
 
 def XLOG_debug(str):

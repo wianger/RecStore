@@ -21,7 +21,10 @@ from cache_common import CacheShardingPolicy
 from python.controller_process import KGCacheControllerWrapper, KGCacheControllerWrapperDummy
 import recstore
 from recstore import KGCacheController
-from contextlib import contextmanager
+from recstore import utils
+from utils import xmh_nvtx_range
+
+
 from pyinstrument import Profiler
 from torch.profiler import profile, record_function, ProfilerActivity
 
@@ -50,26 +53,6 @@ if TH_VERSION.version[0] == 1 and TH_VERSION.version[1] < 2:
     raise Exception("DGL-ke has to work with Pytorch version >= 1.2")
 
 
-# from dgl.contrib import KVClient
-
-
-@contextmanager
-def xmh_nvtx_range(msg, condition=True):
-    """
-    Context manager / decorator that pushes an NVTX range at the beginning
-    of its scope, and pops it at the end. If extra arguments are given,
-    they are passed as arguments to msg.format().
-
-    Args:
-        msg (str): message to associate with the range
-    """
-    if condition:
-        th.cuda.nvtx.range_push(msg)
-        with record_function(msg):
-            yield
-        th.cuda.nvtx.range_pop()
-    else:
-        yield
 
 
 class KGEClient(KVClient):
@@ -180,12 +163,14 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
 
     warmup_iters = 20
 
-    with_perf = True
-    # with_perf = False
+    # with_perf = True
+    with_perf = False
 
     with_pyinstrucment = False
-    with_cudaPerf = True
-    with_torchPerf = False
+    with_cudaPerf = False
+    # with_torchPerf = False
+    with_torchPerf = True
+
 
     if with_perf and with_pyinstrucment:
         pyinstruct_profiler = Profiler()
@@ -254,6 +239,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             loss, log = model.forward(pos_g, neg_g, gpu_id)
             # print(f"rank{rank}: loss = {loss:.6f}")
             forward_time += time.time() - start1
+        th.cuda.synchronize()
         timer_Forward.stop()
 
         timer_Backward.start()
@@ -261,6 +247,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             start1 = time.time()
             loss.backward()
             backward_time += time.time() - start1
+        th.cuda.synchronize()
         timer_Backward.stop()
 
         timer_Optimize.start()
@@ -275,6 +262,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
                 model.update(gpu_id)
             update_time += time.time() - start1
             logs.append(log)
+        th.cuda.synchronize()
         timer_Optimize.stop()
 
         kg_cache_controller.AfterBackward()
@@ -327,13 +315,14 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     if args.strict_rel_part or args.soft_rel_part:
         model.writeback_relation(rank, rel_parts)
 
-    print("before call kg_cache_controller.StopThreads()", flush=True)
-    if rank == 0:
-        kg_cache_controller.StopThreads()
-
     if rank == 0:
         print('Successfully xmh. training takes {} seconds'.format(
             time.time() - all_start), flush=True)
+            
+    if rank == 0:
+        print("before call kg_cache_controller.StopThreads()", flush=True)
+        kg_cache_controller.StopThreads()
+
 
 
 def test(args, model, test_samplers, rank=0, mode='Test', queue=None):

@@ -305,7 +305,16 @@ class ExpOverallSingle(GNNExperiment):
     def __init__(self, ) -> None:
         NAME = "overall-single-machine"
         COMMON_CONFIGS = {
-            "model_name": ["TransE_l1"],
+            "model_name": [
+                "TransE_l1", 
+                'TransE',
+                # 'TransR',  OOM
+                # 'RESCAL',  too slow
+                'DistMult',
+                'ComplEx',
+                # 'RotatE',  BUG
+                'SimplE'
+            ],
             "binding": [
                 {
                     "dataset": ["FB15k",],
@@ -313,17 +322,18 @@ class ExpOverallSingle(GNNExperiment):
                     # "cache_ratio": [0.1, 0.2],
                     "cache_ratio": [0.1, ],
                 },
-                {
-                    "dataset": ["Freebase"],
-                    "hidden_dim": [400],
-                    "cache_ratio": [0.1],
-                }
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05, 0.1],
+                # }
             ],
             "binding2": [
+                # for debug performance
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["PySync", "CppAsyncV2"],
+                    "backwardMode": ["CppAsyncV2"],
                 },
                 {
                     "use_my_emb": ["false"],
@@ -337,11 +347,30 @@ class ExpOverallSingle(GNNExperiment):
                                         'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
+
+                ################################################################################
+                # {
+                #     "use_my_emb": ["true"],
+                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                #     "backwardMode": ["PySync", "CppAsyncV2"],
+                # },
+                # {
+                #     "use_my_emb": ["false"],
+                #     "cached_emb_type": ['None'],
+                #     "backwardMode": ["CppSync"],
+                # },
+                # {
+                #     "use_my_emb": ["true"],
+                #     "cached_emb_type": ['KGExternelEmbedding',
+                #                         "TorchNativeStdEmb",
+                #                         'KnownShardedCachedEmbedding'],
+                #     "backwardMode": ["PySync"],
+                # },
             ],
             "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
 
             # "batch_size": [600, 1200, 1800, 3000, 4800, 6600, 8400],
-            "batch_size": [8400],
+            "batch_size": [4800],
 
             "max_step": [500],
             "log_interval": [100],

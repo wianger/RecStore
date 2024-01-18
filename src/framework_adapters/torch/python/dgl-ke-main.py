@@ -46,7 +46,7 @@ from cache_common import CacheShardingPolicy  # nopep8
 
 random.seed(0)
 np.random.seed(0)
-torch.use_deterministic_algorithms(True)
+# torch.use_deterministic_algorithms(True)
 
 
 backend = os.environ.get('DGLBACKEND', 'pytorch')

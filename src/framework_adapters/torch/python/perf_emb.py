@@ -23,6 +23,7 @@ import sys
 sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
 import recstore
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
+from recstore import utils
 
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
 from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, PerfSampler, TestPerfSampler
@@ -32,7 +33,7 @@ from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import ShmKVStore, kvinit
-from utils import XLOG, Timer, GPUTimer
+from utils import XLOG, Timer, GPUTimer, xmh_nvtx_range
 import time
 import DistOpt
 
@@ -46,24 +47,6 @@ torch.use_deterministic_algorithms(True)
 LR = 1
 # DIFF_TEST = True
 DIFF_TEST = False
-
-
-@contextmanager
-def xmh_nvtx_range(msg, condition=True):
-    """
-    Context manager / decorator that pushes an NVTX range at the beginning
-    of its scope, and pops it at the end. If extra arguments are given,
-    they are passed as arguments to msg.format().
-
-    args:
-        msg (str): message to associate with the range
-    """
-    if condition:
-        th.cuda.nvtx.range_push(msg)
-        yield
-        th.cuda.nvtx.range_pop()
-    else:
-        yield
 
 
 def get_run_config():
@@ -283,11 +266,11 @@ def routine_local_cache_helper(worker_id, args):
 
     perf_sampler.Prefill()
 
-    timer_geninput= Timer("GenInput")
+    timer_geninput = Timer("GenInput")
     timer_Forward = Timer("Forward")
     timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
-    timer_onestep= Timer(f"OneStep")
+    timer_onestep = Timer(f"OneStep")
     timer_start = Timer(f"E2E-{args['log_interval']}")
     timer_start.start()
 
@@ -374,6 +357,7 @@ def routine_local_cache_helper(worker_id, args):
             timer_start.start()
 
         timer_onestep.stop()
+
 
 if __name__ == "__main__":
     # import debugpy

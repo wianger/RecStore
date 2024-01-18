@@ -53,12 +53,14 @@ class Mfence: public torch::CustomClassHolder {
   static void mfence() { asm volatile("mfence" ::: "memory"); }
   static void lfence() { asm volatile("lfence" ::: "memory"); }
   static void sfence() { asm volatile("sfence" ::: "memory"); }
+  static void complier_barrier() { asm volatile("" ::: "memory"); }
 };
 
 void RegisterIPCTensorFactory(torch::Library &m) {
   m.class_<SlicedTensor>("SlicedTensor")
       .def("GetSlicedTensor", &SlicedTensor::GetSlicedTensor)
       .def("__repr__", &SlicedTensor::__repr__)
+      .def("SetSameShape4Debug", &SlicedTensor::SetSameShape4Debug)
       .def("Copy_", &SlicedTensor::Copy_, "",
            {torch::arg("right"), torch::arg("non_blocking") = false});
 

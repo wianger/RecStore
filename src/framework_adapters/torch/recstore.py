@@ -23,3 +23,6 @@ ZipfianTorchFiller = torch.classes.librecstore_pytorch.ZipfianTorchFiller
 MultiProcessBarrierFactory = torch.classes.librecstore_pytorch.MultiProcessBarrierFactory
 
 Mfence = torch.classes.librecstore_pytorch.Mfence
+
+
+import utils as utils

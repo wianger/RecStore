@@ -206,7 +206,10 @@ class GradProcessingBase {
 
   virtual void StopThreads() {
     stop_processOneStepNegThread_flag_.store(true);
+    processOneStepNegThread_ping_.store(true);
+    LOG(WARNING) << "before processOneStepNegThread_.join();";
     processOneStepNegThread_.join();
+    LOG(WARNING) << "after processOneStepNegThread_.join();";
   };
 
   virtual void UpdateCache(
@@ -227,6 +230,7 @@ class GradProcessingBase {
     while (!stop_processOneStepNegThread_flag_.load()) {
       while (processOneStepNegThread_ping_.load() == false)
         ;
+      if (stop_processOneStepNegThread_flag_.load() == true) return;
       auto input_keys_neg_per_rank_tensors =
           SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
       auto backward_grads_neg_per_rank_tensors =

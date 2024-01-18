@@ -290,7 +290,7 @@ class CommonArgParser(argparse.ArgumentParser):
                                   'It will weight negative samples with higher scores more.')
         self.add_argument('-a', '--adversarial_temperature', default=1.0, type=float,
                           help='The temperature used for negative adversarial sampling.')
-        self.add_argument('-rc', '--regularization_coef', type=float, default=0.000002,
+        self.add_argument('-rc', '--regularization_coef', type=float, default=0,
                           help='The coefficient for regularization.')
         self.add_argument('-rn', '--regularization_norm', type=int, default=3,
                           help='norm used in regularization.')

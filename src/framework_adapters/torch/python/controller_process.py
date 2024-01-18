@@ -372,7 +372,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         KGCacheControllerWrapper.instance.StopThreads()
 
     def StopThreads(self):
-        if self.rank == 0:
+        if self.rank == 0 and self.use_cpp_controller:
             print(
                 f"On rank0, prepare to call self.controller.StopThreads(), self={self}")
             self.controller.StopThreads()

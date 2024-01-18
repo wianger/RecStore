@@ -497,6 +497,14 @@ class SlicedTensor : public torch::CustomClassHolder {
     tensor.slice(0, 0, end).copy_(right, non_blocking);
   }
 
+  void SetSameShape4Debug(torch::Tensor right) {
+    int64_t end = right.sizes()[0];
+    auto tensor = IPCTensorFactory::GetIPCTensorFromHandle(handle_);
+    CHECK(tensor.sizes()[0] >= end);
+    handle_->SetSlicedEnd(end);
+  }
+
+
   static std::vector<torch::Tensor> BatchConvertToTensors(
       const std::vector<c10::intrusive_ptr<SlicedTensor>> tensors) {
     nv::CudaDeviceRestorer _;

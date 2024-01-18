@@ -5,7 +5,7 @@
 #include <iostream>
 
 int main() {
-  int64_t start = 128 * 1024;
+  int64_t start = 1 * 1024;
   int64_t end = 128 * 1024 * 1024;
 
   float* hostData;
@@ -17,17 +17,15 @@ int main() {
     return 1;
   }
 
-  for (int64_t each = start; each < end; each *= 2) {
+  for (int64_t each = start; each <= end; each *= 2) {
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
-    for (int _ = 0; _ < 50; _++) {
-      cudaMemcpy(deviceData, hostData, each, cudaMemcpyHostToDevice);
-      cudaDeviceSynchronize();
-    }
+    cudaMemcpy(deviceData, hostData, each, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
     std::chrono::duration<double> diff = t2 - t1;
 
-    double s_avg = (double)diff.count() / 50.0;
+    double s_avg = (double)diff.count();
 
     std::cout << each << "\t" << ((double)each) / s_avg / (1024 * 1024 * 1024LL)
               << " GB/s\n";

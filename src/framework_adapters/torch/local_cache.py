@@ -291,6 +291,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
                 backward_grads_2.Copy_(
                     grad_output / dist.get_world_size(), non_blocking=True)
                 torch.cuda.synchronize()
+
             return None, None, None, torch.randn(1, 1), None, None, None, None
         else:
             assert False
