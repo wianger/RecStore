@@ -153,6 +153,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
         kg_cache_controller = KGCacheControllerWrapperDummy()
 
     kg_cache_controller.init()
+    print("train_sampler.Prefill()")
     train_sampler.Prefill()
 
     train_start = start = time.time()
@@ -190,10 +191,12 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     if rank == 0:
         all_start = time.time()
 
+    print("before start barrier")
     start_barrier = recstore.MultiProcessBarrierFactory.Create(
         "start_barrier",  args.num_proc)
     start_barrier.Wait()
 
+    print("start train")
     for step in range(0, args.max_step):
         # if rank == 0:
         #     print(f"+++++++++++++++++Step{step}+++++++++++++++++")

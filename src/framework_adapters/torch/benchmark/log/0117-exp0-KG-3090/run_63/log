@@ -1,0 +1,960 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240124 11:43:53.589031 58199 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/_deprecate/graph.py:1023: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
+  dgl_warning("multigraph will be deprecated." \
+/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/heterograph.py:72: DGLWarning: Recommend creating graphs by `dgl.graph(data)` instead of `dgl.DGLGraph(data)`.
+  dgl_warning('Recommend creating graphs by `dgl.graph(data)`'
+Reading train triples....
+Finished. Read 483142 train triples.
+Reading valid triples....
+Finished. Read 50000 valid triples.
+Reading test triples....
+Finished. Read 59071 test triples.
+ARGS:  Namespace(model_name='DistMult', data_path='/home/xieminhui/dgl-data', dataset='FB15k', format='built_in', data_files=None, delimiter='\t', save_path='/tmp/ckpts/DistMult_FB15k_18', no_save_emb=True, max_step=500, batch_size=800, batch_size_eval=16, neg_sample_size=200, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size_eval=14951, eval_percent=1, no_eval_filter=False, log_interval=100, eval_interval=10000, test=False, num_proc=8, num_thread=1, force_sync_interval=1, hidden_dim=400, lr=0.01, gamma=16.0, double_ent=False, double_rel=False, neg_adversarial_sampling=False, adversarial_temperature=1.0, regularization_coef=0.0, regularization_norm=3, pairwise=False, loss_genre='Logsigmoid', margin=1.0, nr_gpus=8, gpu=[0, 1, 2, 3, 4, 5, 6, 7], mix_cpu_gpu=True, valid=False, rel_part=False, async_update=None, has_edge_importance=False, cached_emb_type='TorchNativeStdEmb', use_my_emb=True, cache_ratio=0.1, shuffle=False, backwardMode='PySync', L=10, kForwardItersPerStep=2, backgrad_init='both', eval_filter=True, soft_rel_part=False)
+|Train|: 483142
+original graph:  DGLGraph(num_nodes=14951, num_edges=592213,
+         ndata_schemes={}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Loading cached metis
+WARNING [58199 sampler.py:454] Start PreSampling
+WARNING [58199 sampler.py:532] Before construct renumbering_dict
+WARNING [58199 sampler.py:555] PreSampling done
+W20240124 11:43:57.364926 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_0 [100000]0x100000002000 781.2 kB
+W20240124 11:43:57.365134 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_1 [100000]0x1000000c7000 781.2 kB
+W20240124 11:43:57.365181 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_2 [100000]0x10000018c000 781.2 kB
+W20240124 11:43:57.365216 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_3 [100000]0x100000251000 781.2 kB
+W20240124 11:43:57.365257 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_4 [100000]0x100000316000 781.2 kB
+W20240124 11:43:57.365300 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_5 [100000]0x1000003db000 781.2 kB
+W20240124 11:43:57.365346 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_6 [100000]0x1000004a0000 781.2 kB
+W20240124 11:43:57.365384 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_7 [100000]0x100000565000 781.2 kB
+W20240124 11:43:57.365427 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_8 [100000]0x10000062a000 781.2 kB
+W20240124 11:43:57.365463 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r0_9 [100000]0x1000006ef000 781.2 kB
+W20240124 11:43:57.365509 58199 IPCTensor.h:365] NewIPCTensor: step_r0 [10]0x1000007b4000 80 B 
+W20240124 11:43:57.365538 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r0 [1]0x1000007b6000 8 B 
+W20240124 11:43:57.365571 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x1000007b8000 8 B 
+W20240124 11:43:57.365705 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_0 [100000]0x1000007ba000 781.2 kB
+W20240124 11:43:57.365743 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_1 [100000]0x10000087f000 781.2 kB
+W20240124 11:43:57.365782 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_2 [100000]0x100000944000 781.2 kB
+W20240124 11:43:57.365816 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_3 [100000]0x100000a09000 781.2 kB
+W20240124 11:43:57.365865 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_4 [100000]0x100000ace000 781.2 kB
+W20240124 11:43:57.365903 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_5 [100000]0x100000b93000 781.2 kB
+W20240124 11:43:57.365940 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_6 [100000]0x100000c58000 781.2 kB
+W20240124 11:43:57.365979 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_7 [100000]0x100000d1d000 781.2 kB
+W20240124 11:43:57.366007 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_8 [100000]0x100000de2000 781.2 kB
+W20240124 11:43:57.366040 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r1_9 [100000]0x100000ea7000 781.2 kB
+W20240124 11:43:57.366076 58199 IPCTensor.h:365] NewIPCTensor: step_r1 [10]0x100000f6c000 80 B 
+W20240124 11:43:57.366102 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r1 [1]0x100000f6e000 8 B 
+W20240124 11:43:57.366128 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x100000f70000 8 B 
+W20240124 11:43:57.366190 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_0 [100000]0x100000f72000 781.2 kB
+W20240124 11:43:57.366235 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_1 [100000]0x100001037000 781.2 kB
+W20240124 11:43:57.366268 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_2 [100000]0x1000010fc000 781.2 kB
+W20240124 11:43:57.366300 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_3 [100000]0x1000011c1000 781.2 kB
+W20240124 11:43:57.366335 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_4 [100000]0x100001286000 781.2 kB
+W20240124 11:43:57.366375 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_5 [100000]0x10000134b000 781.2 kB
+W20240124 11:43:57.366410 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_6 [100000]0x100001410000 781.2 kB
+W20240124 11:43:57.366446 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_7 [100000]0x1000014d5000 781.2 kB
+W20240124 11:43:57.366503 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_8 [100000]0x10000159a000 781.2 kB
+W20240124 11:43:57.366544 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r2_9 [100000]0x10000165f000 781.2 kB
+W20240124 11:43:57.366575 58199 IPCTensor.h:365] NewIPCTensor: step_r2 [10]0x100001724000 80 B 
+W20240124 11:43:57.366600 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r2 [1]0x100001726000 8 B 
+W20240124 11:43:57.366623 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x100001728000 8 B 
+W20240124 11:43:57.366696 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_0 [100000]0x10000172a000 781.2 kB
+W20240124 11:43:57.366735 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_1 [100000]0x1000017ef000 781.2 kB
+W20240124 11:43:57.366770 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_2 [100000]0x1000018b4000 781.2 kB
+W20240124 11:43:57.366811 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_3 [100000]0x100001979000 781.2 kB
+W20240124 11:43:57.366847 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_4 [100000]0x100001a3e000 781.2 kB
+W20240124 11:43:57.366883 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_5 [100000]0x100001b03000 781.2 kB
+W20240124 11:43:57.366912 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_6 [100000]0x100001bc8000 781.2 kB
+W20240124 11:43:57.366953 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_7 [100000]0x100001c8d000 781.2 kB
+W20240124 11:43:57.366991 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_8 [100000]0x100001d52000 781.2 kB
+W20240124 11:43:57.367028 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r3_9 [100000]0x100001e17000 781.2 kB
+W20240124 11:43:57.367058 58199 IPCTensor.h:365] NewIPCTensor: step_r3 [10]0x100001edc000 80 B 
+W20240124 11:43:57.367082 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r3 [1]0x100001ede000 8 B 
+W20240124 11:43:57.367113 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x100001ee0000 8 B 
+W20240124 11:43:57.367177 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_0 [100000]0x100001ee2000 781.2 kB
+W20240124 11:43:57.367218 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_1 [100000]0x100001fa7000 781.2 kB
+W20240124 11:43:57.367249 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_2 [100000]0x10000206c000 781.2 kB
+W20240124 11:43:57.367280 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_3 [100000]0x100002131000 781.2 kB
+W20240124 11:43:57.367309 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_4 [100000]0x1000021f6000 781.2 kB
+W20240124 11:43:57.367355 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_5 [100000]0x1000022bb000 781.2 kB
+W20240124 11:43:57.367408 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_6 [100000]0x100002380000 781.2 kB
+W20240124 11:43:57.367447 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_7 [100000]0x100002445000 781.2 kB
+W20240124 11:43:57.367478 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_8 [100000]0x10000250a000 781.2 kB
+W20240124 11:43:57.367522 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r4_9 [100000]0x1000025cf000 781.2 kB
+W20240124 11:43:57.367552 58199 IPCTensor.h:365] NewIPCTensor: step_r4 [10]0x100002694000 80 B 
+W20240124 11:43:57.367583 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r4 [1]0x100002696000 8 B 
+W20240124 11:43:57.367609 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r4 [1]0x100002698000 8 B 
+W20240124 11:43:57.367676 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_0 [100000]0x10000269a000 781.2 kB
+W20240124 11:43:57.367720 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_1 [100000]0x10000275f000 781.2 kB
+W20240124 11:43:57.367758 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_2 [100000]0x100002824000 781.2 kB
+W20240124 11:43:57.367791 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_3 [100000]0x1000028e9000 781.2 kB
+W20240124 11:43:57.367825 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_4 [100000]0x1000029ae000 781.2 kB
+W20240124 11:43:57.367856 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_5 [100000]0x100002a73000 781.2 kB
+W20240124 11:43:57.367895 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_6 [100000]0x100002b38000 781.2 kB
+W20240124 11:43:57.367926 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_7 [100000]0x100002bfd000 781.2 kB
+W20240124 11:43:57.367956 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_8 [100000]0x100002cc2000 781.2 kB
+W20240124 11:43:57.367990 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r5_9 [100000]0x100002d87000 781.2 kB
+W20240124 11:43:57.368023 58199 IPCTensor.h:365] NewIPCTensor: step_r5 [10]0x100002e4c000 80 B 
+W20240124 11:43:57.368048 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r5 [1]0x100002e4e000 8 B 
+W20240124 11:43:57.368084 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r5 [1]0x100002e50000 8 B 
+W20240124 11:43:57.368144 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_0 [100000]0x100002e52000 781.2 kB
+W20240124 11:43:57.368177 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_1 [100000]0x100002f17000 781.2 kB
+W20240124 11:43:57.368213 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_2 [100000]0x100002fdc000 781.2 kB
+W20240124 11:43:57.368245 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_3 [100000]0x1000030a1000 781.2 kB
+W20240124 11:43:57.368285 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_4 [100000]0x100003166000 781.2 kB
+W20240124 11:43:57.368315 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_5 [100000]0x10000322b000 781.2 kB
+W20240124 11:43:57.368353 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_6 [100000]0x1000032f0000 781.2 kB
+W20240124 11:43:57.368383 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_7 [100000]0x1000033b5000 781.2 kB
+W20240124 11:43:57.368422 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_8 [100000]0x10000347a000 781.2 kB
+W20240124 11:43:57.368464 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r6_9 [100000]0x10000353f000 781.2 kB
+W20240124 11:43:57.368500 58199 IPCTensor.h:365] NewIPCTensor: step_r6 [10]0x100003604000 80 B 
+W20240124 11:43:57.368531 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r6 [1]0x100003606000 8 B 
+W20240124 11:43:57.368561 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r6 [1]0x100003608000 8 B 
+W20240124 11:43:57.368619 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_0 [100000]0x10000360a000 781.2 kB
+W20240124 11:43:57.368659 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_1 [100000]0x1000036cf000 781.2 kB
+W20240124 11:43:57.368701 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_2 [100000]0x100003794000 781.2 kB
+W20240124 11:43:57.368732 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_3 [100000]0x100003859000 781.2 kB
+W20240124 11:43:57.368780 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_4 [100000]0x10000391e000 781.2 kB
+W20240124 11:43:57.368824 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_5 [100000]0x1000039e3000 781.2 kB
+W20240124 11:43:57.368862 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_6 [100000]0x100003aa8000 781.2 kB
+W20240124 11:43:57.368901 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_7 [100000]0x100003b6d000 781.2 kB
+W20240124 11:43:57.368930 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_8 [100000]0x100003c32000 781.2 kB
+W20240124 11:43:57.368968 58199 IPCTensor.h:365] NewIPCTensor: cached_sampler_r7_9 [100000]0x100003cf7000 781.2 kB
+W20240124 11:43:57.369005 58199 IPCTensor.h:365] NewIPCTensor: step_r7 [10]0x100003dbc000 80 B 
+W20240124 11:43:57.369031 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_r7 [1]0x100003dbe000 8 B 
+W20240124 11:43:57.369058 58199 IPCTensor.h:365] NewIPCTensor: circle_buffer_end_cppseen_r7 [1]0x100003dc0000 8 B 
+W20240124 11:43:57.602664 58199 IPCTensor.h:365] NewIPCTensor: full_emb [14951, 400]0x100003dc2000 22.81 MB
+W20240124 11:43:57.602849 58199 IPCTensor.h:365] NewIPCTensor: full_emb_SparseRowWiseAdaGrad_sum [14951]0x100005494000 58.4 kB
+{0: Graph(num_nodes=8499, num_edges=86694,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 1: Graph(num_nodes=6140, num_edges=88951,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 2: Graph(num_nodes=8646, num_edges=109741,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 3: Graph(num_nodes=8503, num_edges=86907,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 4: Graph(num_nodes=10597, num_edges=122217,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 5: Graph(num_nodes=8255, num_edges=102550,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 6: Graph(num_nodes=7422, num_edges=104094,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 7: Graph(num_nodes=7815, num_edges=137832,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)})}
+MertisPartition: part 0 has 8499 N 86694 E
+MertisPartition: part 1 has 6140 N 88951 E
+MertisPartition: part 2 has 8646 N 109741 E
+MertisPartition: part 3 has 8503 N 86907 E
+MertisPartition: part 4 has 10597 N 122217 E
+MertisPartition: part 5 has 8255 N 102550 E
+MertisPartition: part 6 has 7422 N 104094 E
+MertisPartition: part 7 has 7815 N 137832 E
+Rank0: cached key size 186
+Rank1: cached key size 186
+Rank2: cached key size 186
+Rank3: cached key size 186
+Rank4: cached key size 186
+Rank5: cached key size 186
+Rank6: cached key size 186
+Rank7: cached key size 186
+Before renumbering graph:  {'_ID': tensor([    0,    15,    36,  ..., 11946,  9147, 13282]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 3, 7])}
+After renumbering graph:  {'_ID': tensor([1516, 2047, 2802,  ..., 9514, 9747, 8432]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 3, 7])}
+part_g: DGLGraph(num_nodes=8499, num_edges=86694,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+part_g: DGLGraph(num_nodes=8499, num_edges=86694,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Total initialize time 4.049 seconds
+[Rank1] pid = 58801
+[Rank2] pid = 58865
+[Rank3] pid = 58929
+[Rank4] pid = 58993
+[Rank5] pid = 59057
+[Rank6] pid = 59122
+INFO [58199 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [58801 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [58865 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [58929 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [59122 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 6
+INFO [58993 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 4
+INFO [59179 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 7
+INFO [59057 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 5
+INFO [59179 distributed_c10d.py:476] Rank 7: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [58929 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [59057 distributed_c10d.py:476] Rank 5: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [58865 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [59122 distributed_c10d.py:476] Rank 6: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [58993 distributed_c10d.py:476] Rank 4: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [59179 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [59057 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [58929 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [58865 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [59122 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [58993 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [59122 cache_common.py:137] TorchNativeStdEmb construct done
+INFO [59057 cache_common.py:137] TorchNativeStdEmb construct done
+INFO [58929 cache_common.py:137] TorchNativeStdEmb construct done
+INFO [59179 cache_common.py:137] TorchNativeStdEmb construct done
+INFO [58865 cache_common.py:137] TorchNativeStdEmb construct done
+INFO [58993 cache_common.py:137] TorchNativeStdEmb construct done
+WARNING [59122 DistTensor.py:56] The tensor name already exists in the kvstore
+WARNING [59057 DistTensor.py:56] The tensor name already exists in the kvstore
+WARNING [58929 DistTensor.py:56] The tensor name already exists in the kvstore
+WARNING [58865 DistTensor.py:56] The tensor name already exists in the kvstore
+WARNING [59179 DistTensor.py:56] The tensor name already exists in the kvstore
+WARNING [58993 DistTensor.py:56] The tensor name already exists in the kvstore
+INFO [58801 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [58199 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [58199 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [58801 cache_common.py:123] TorchNativeStdEmb: weight.shape torch.Size([14951, 400])
+INFO [58801 cache_common.py:137] TorchNativeStdEmb construct done
+WARNING [58801 DistTensor.py:56] The tensor name already exists in the kvstore
+INFO [58199 cache_common.py:137] TorchNativeStdEmb construct done
+WARNING [58199 DistTensor.py:56] The tensor name already exists in the kvstore
+I20240124 11:44:01.249670 59058 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.249804 58866 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.249930 58930 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.250049 59250 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.250176 58802 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.250304 59123 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.250418 58994 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:01.250593 59187 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240124 11:44:02.064951 58802 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 8
+I20240124 11:44:02.065004 59123 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240124 11:44:02.065529 59058 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240124 11:44:02.065889 58866 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240124 11:44:02.067152 58994 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240124 11:44:02.072818 59250 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240124 11:44:02.073798 59187 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240124 11:44:02.079036 58930 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 910.183 us                | 9.602 ms                  |
+| Forward                   | 4.734 ms                  | 11.302 ms                 |
+| Backward                  | 55.953 ms                 | 126.928 ms                |
+| Optimize                  | 1.466 ms                  | 3.432 ms                  |
+| BarrierTimeBeforeRank0    | 2.685 ms                  | 23.136 ms                 |
+| BlockToStepN              | 9.726 us                  | 95.331 us                 |
+| OneStep                   | 65.879 ms                 | 135.697 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.130 ms                  | 10.008 ms                 |
+| Forward                   | 4.650 ms                  | 11.302 ms                 |
+| Backward                  | 82.401 ms                 | 204.803 ms                |
+| Optimize                  | 1.461 ms                  | 3.432 ms                  |
+| BarrierTimeBeforeRank0    | 1.940 ms                  | 50.079 ms                 |
+| BlockToStepN              | 10.449 us                 | 134.728 us                |
+| OneStep                   | 93.841 ms                 | 238.189 ms                |
++---------------------------+---------------------------+---------------------------+
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 4] 100 steps, total: 11.635, sample: 0.177, forward: 0.879, backward: 9.103, update: 0.161
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 3] 100 steps, total: 11.623, sample: 0.198, forward: 0.858, backward: 9.157, update: 0.148
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 2] 100 steps, total: 11.636, sample: 0.197, forward: 0.883, backward: 8.838, update: 0.157
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 6] 100 steps, total: 11.638, sample: 0.177, forward: 0.885, backward: 9.122, update: 0.160
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 1] 100 steps, total: 11.638, sample: 0.188, forward: 0.870, backward: 8.300, update: 0.171
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 5] 100 steps, total: 11.637, sample: 0.176, forward: 0.847, backward: 9.075, update: 0.153
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 7] 100 steps, total: 11.630, sample: 0.188, forward: 0.882, backward: 8.896, update: 0.158
+[Rank7] pid = 59179
+New CachedEmbedding, name=full_emb, shape=(14951, 400), cache_type=TorchNativeStdEmb
+fixed cache_range is [(0, 1495), (1495, 2990), (2990, 4485), (4485, 5980), (5980, 7475), (7475, 8970), (8970, 10465), (10465, 11960)]
+train_sampler.Prefill()
+-------Step 0-------
+tensor([   74,    94,  3911,  3309, 12961, 14400,  1813,  7136, 14107, 11768]) tensor([ 2802, 10631,  6316, 10380,   117,  1784,  1122,  4890,   936, 13212])
+-------Step 1-------
+tensor([   74,    94,  3911,  3309, 12961, 14400,  1813,  7136, 14107, 11768]) tensor([ 1728,   123,   931, 14880,  1258,  6720, 11813,  1756,  6730,  1820])
+-------Step 2-------
+tensor([ 9957, 14738,    55,    24,    51,    30,  1575,  7277,   301,  6389]) tensor([ 1064,  6164,  3301, 11278, 11282,   983, 14320,   824,  9602,  6978])
+-------Step 3-------
+tensor([ 9957, 14738,    55,    24,    51,    30,  1575,  7277,   301,  6389]) tensor([12117,   184,  8820, 13273,  8364, 14704,  3519,  5513,  1551,  5777])
+-------Step 4-------
+tensor([ 7873,  6106,  6175,  7277,    58,  5660, 14303,    30,  6576,    73]) tensor([10992,  8639, 12677,  1929,  6774,  2177,  1992,  1917,  1194,  2439])
+-------Step 5-------
+tensor([ 7873,  6106,  6175,  7277,    58,  5660, 14303,    30,  6576,    73]) tensor([ 3158,  9772,  2764,  5108,  8903, 13837, 14240,  6097, 14702,  5776])
+-------Step 6-------
+tensor([   94, 14746, 11738,  6545,  8574,  4308,   164,  6198,   111,  1880]) tensor([1282, 1818,  657, 3431, 3327, 3059, 7136, 7961, 8355, 2486])
+-------Step 7-------
+tensor([   94, 14746, 11738,  6545,  8574,  4308,   164,  6198,   111,  1880]) tensor([ 6654,  6500,  7698,  9046,  8153,  3836, 10980, 12109,  8322, 11187])
+-------Step 8-------
+tensor([ 9902,  1875,    43,  4016, 12899,    53, 11401,    30,  1735,  3576]) tensor([ 5244,  9510,  2536, 10530,  9053, 13064, 12035,  2827, 14559,  5457])
+-------Step 9-------
+tensor([ 9902,  1875,    43,  4016, 12899,    53, 11401,    30,  1735,  3576]) tensor([ 1069,   333, 12674,  2121,  1908,  7098, 12925,  8485,  5621, 10993])
+before start barrier
+start train
+[proc 0] 100 steps, total: 11.629, sample: 0.227, forward: 0.909, backward: 9.558, update: 0.190
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.232 ms                  | 10.690 ms                 |
+| Forward                   | 4.675 ms                  | 11.302 ms                 |
+| Backward                  | 106.276 ms                | 267.064 ms                |
+| Optimize                  | 1.541 ms                  | 3.432 ms                  |
+| BarrierTimeBeforeRank0    | 1.900 ms                  | 62.032 ms                 |
+| BlockToStepN              | 10.585 us                 | 160.366 us                |
+| OneStep                   | 119.247 ms                | 299.207 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.274 ms                  | 10.944 ms                 |
+| Forward                   | 4.707 ms                  | 11.302 ms                 |
+| Backward                  | 119.724 ms                | 336.428 ms                |
+| Optimize                  | 1.568 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 1.887 ms                  | 68.112 ms                 |
+| BlockToStepN              | 10.698 us                 | 160.366 us                |
+| OneStep                   | 132.676 ms                | 357.025 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.303 ms                  | 10.944 ms                 |
+| Forward                   | 4.731 ms                  | 11.302 ms                 |
+| Backward                  | 138.408 ms                | 336.428 ms                |
+| Optimize                  | 1.610 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 1.361 ms                  | 81.718 ms                 |
+| BlockToStepN              | 10.956 us                 | 160.366 us                |
+| OneStep                   | 151.892 ms                | 385.278 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.326 ms                  | 10.690 ms                 |
+| Forward                   | 4.731 ms                  | 10.640 ms                 |
+| Backward                  | 152.461 ms                | 359.192 ms                |
+| Optimize                  | 1.619 ms                  | 3.432 ms                  |
+| BarrierTimeBeforeRank0    | 772.400 us                | 73.698 ms                 |
+| BlockToStepN              | 11.041 us                 | 137.780 us                |
+| OneStep                   | 168.409 ms                | 411.717 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.348 ms                  | 10.690 ms                 |
+| Forward                   | 4.744 ms                  | 11.302 ms                 |
+| Backward                  | 161.910 ms                | 415.964 ms                |
+| Optimize                  | 1.624 ms                  | 3.432 ms                  |
+| BarrierTimeBeforeRank0    | 590.266 us                | 73.698 ms                 |
+| BlockToStepN              | 11.256 us                 | 160.366 us                |
+| OneStep                   | 178.181 ms                | 433.985 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.354 ms                  | 10.690 ms                 |
+| Forward                   | 4.735 ms                  | 11.302 ms                 |
+| Backward                  | 170.847 ms                | 432.344 ms                |
+| Optimize                  | 1.640 ms                  | 3.432 ms                  |
+| BarrierTimeBeforeRank0    | 386.968 us                | 81.718 ms                 |
+| BlockToStepN              | 11.314 us                 | 160.366 us                |
+| OneStep                   | 201.392 ms                | 460.038 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 2] 200 steps, total: 32.512, sample: 0.236, forward: 0.442, backward: 25.222, update: 0.138
+[proc 6] 200 steps, total: 32.512, sample: 0.193, forward: 0.461, backward: 25.912, update: 0.113
+[proc 5] 200 steps, total: 32.512, sample: 0.196, forward: 0.411, backward: 26.097, update: 0.121
+[proc 7] 200 steps, total: 32.512, sample: 0.194, forward: 0.441, backward: 25.115, update: 0.123
+[proc 4] 200 steps, total: 32.512, sample: 0.207, forward: 0.445, backward: 26.073, update: 0.121
+[proc 3] 200 steps, total: 32.512, sample: 0.206, forward: 0.418, backward: 25.785, update: 0.118
+[proc 1] 200 steps, total: 32.512, sample: 0.206, forward: 0.430, backward: 23.471, update: 0.136
+[proc 0] 200 steps, total: 32.512, sample: 0.282, forward: 0.505, backward: 30.319, update: 0.170
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.356 ms                  | 10.690 ms                 |
+| Forward                   | 4.738 ms                  | 11.302 ms                 |
+| Backward                  | 185.106 ms                | 486.900 ms                |
+| Optimize                  | 1.644 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 224.156 us                | 110.170 ms                |
+| BlockToStepN              | 11.955 us                 | 202.277 us                |
+| OneStep                   | 212.504 ms                | 510.343 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.356 ms                  | 12.030 ms                 |
+| Forward                   | 4.735 ms                  | 11.302 ms                 |
+| Backward                  | 198.339 ms                | 565.623 ms                |
+| Optimize                  | 1.646 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 131.779 us                | 110.170 ms                |
+| BlockToStepN              | 12.313 us                 | 202.277 us                |
+| OneStep                   | 223.666 ms                | 581.336 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.366 ms                  | 12.030 ms                 |
+| Forward                   | 4.744 ms                  | 11.302 ms                 |
+| Backward                  | 208.855 ms                | 565.623 ms                |
+| Optimize                  | 1.653 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 108.693 us                | 110.170 ms                |
+| BlockToStepN              | 12.309 us                 | 202.277 us                |
+| OneStep                   | 229.604 ms                | 581.336 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.374 ms                  | 12.030 ms                 |
+| Forward                   | 4.751 ms                  | 11.302 ms                 |
+| Backward                  | 216.089 ms                | 567.089 ms                |
+| Optimize                  | 1.656 ms                  | 7.188 ms                  |
+| BarrierTimeBeforeRank0    | 101.220 us                | 110.170 ms                |
+| BlockToStepN              | 12.450 us                 | 727.762 us                |
+| OneStep                   | 245.920 ms                | 588.840 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.381 ms                  | 12.030 ms                 |
+| Forward                   | 4.751 ms                  | 11.302 ms                 |
+| Backward                  | 234.006 ms                | 573.081 ms                |
+| Optimize                  | 1.672 ms                  | 7.188 ms                  |
+| BarrierTimeBeforeRank0    | 97.030 us                 | 110.170 ms                |
+| BlockToStepN              | 12.566 us                 | 727.762 us                |
+| OneStep                   | 255.408 ms                | 652.869 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.382 ms                  | 10.966 ms                 |
+| Forward                   | 4.754 ms                  | 10.640 ms                 |
+| Backward                  | 245.615 ms                | 641.912 ms                |
+| Optimize                  | 1.679 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 92.579 us                 | 108.184 ms                |
+| BlockToStepN              | 12.574 us                 | 202.277 us                |
+| OneStep                   | 269.607 ms                | 663.307 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.383 ms                  | 10.966 ms                 |
+| Forward                   | 4.761 ms                  | 10.640 ms                 |
+| Backward                  | 260.950 ms                | 664.191 ms                |
+| Optimize                  | 1.688 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 85.362 us                 | 108.184 ms                |
+| BlockToStepN              | 12.876 us                 | 202.277 us                |
+| OneStep                   | 280.498 ms                | 675.829 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.397 ms                  | 10.966 ms                 |
+| Forward                   | 4.765 ms                  | 10.640 ms                 |
+| Backward                  | 268.521 ms                | 668.309 ms                |
+| Optimize                  | 1.710 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 83.530 us                 | 108.184 ms                |
+| BlockToStepN              | 13.013 us                 | 202.277 us                |
+| OneStep                   | 292.033 ms                | 684.044 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.412 ms                  | 10.966 ms                 |
+| Forward                   | 4.765 ms                  | 10.640 ms                 |
+| Backward                  | 281.576 ms                | 673.421 ms                |
+| Optimize                  | 1.727 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 83.834 us                 | 108.184 ms                |
+| BlockToStepN              | 13.027 us                 | 202.277 us                |
+| OneStep                   | 299.207 ms                | 684.687 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.412 ms                  | 10.966 ms                 |
+| Forward                   | 4.768 ms                  | 10.640 ms                 |
+| Backward                  | 284.658 ms                | 687.644 ms                |
+| Optimize                  | 1.734 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 80.552 us                 | 108.184 ms                |
+| BlockToStepN              | 13.028 us                 | 202.277 us                |
+| OneStep                   | 301.874 ms                | 698.046 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.415 ms                  | 11.393 ms                 |
+| Forward                   | 4.768 ms                  | 10.640 ms                 |
+| Backward                  | 290.448 ms                | 733.353 ms                |
+| Optimize                  | 1.749 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 79.985 us                 | 108.184 ms                |
+| BlockToStepN              | 13.104 us                 | 202.277 us                |
+| OneStep                   | 312.815 ms                | 746.136 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 6] 300 steps, total: 55.028, sample: 0.198, forward: 0.450, backward: 42.831, update: 0.115
+[proc 7] 300 steps, total: 55.028, sample: 0.180, forward: 0.450, backward: 41.327, update: 0.133
+[proc 4] 300 steps, total: 55.028, sample: 0.197, forward: 0.457, backward: 42.421, update: 0.118
+[proc 2] 300 steps, total: 55.028, sample: 0.188, forward: 0.408, backward: 40.206, update: 0.136
+[proc 3] 300 steps, total: 55.028, sample: 0.189, forward: 0.409, backward: 41.374, update: 0.130
+[proc 5] 300 steps, total: 55.028, sample: 0.183, forward: 0.406, backward: 42.826, update: 0.122
+[proc 1] 300 steps, total: 55.028, sample: 0.186, forward: 0.420, backward: 37.968, update: 0.139
+[proc 0] 300 steps, total: 55.028, sample: 0.281, forward: 0.501, backward: 52.988, update: 0.195
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.412 ms                  | 11.393 ms                 |
+| Forward                   | 4.768 ms                  | 10.640 ms                 |
+| Backward                  | 293.967 ms                | 781.280 ms                |
+| Optimize                  | 1.751 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 79.985 us                 | 108.184 ms                |
+| BlockToStepN              | 13.349 us                 | 202.277 us                |
+| OneStep                   | 318.106 ms                | 790.171 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.415 ms                  | 11.393 ms                 |
+| Forward                   | 4.769 ms                  | 10.640 ms                 |
+| Backward                  | 296.568 ms                | 796.251 ms                |
+| Optimize                  | 1.764 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 79.985 us                 | 108.184 ms                |
+| BlockToStepN              | 13.495 us                 | 202.277 us                |
+| OneStep                   | 322.632 ms                | 811.581 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.416 ms                  | 11.393 ms                 |
+| Forward                   | 4.775 ms                  | 10.640 ms                 |
+| Backward                  | 300.929 ms                | 801.335 ms                |
+| Optimize                  | 1.777 ms                  | 5.866 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 108.184 ms                |
+| BlockToStepN              | 13.600 us                 | 202.277 us                |
+| OneStep                   | 331.157 ms                | 813.980 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.418 ms                  | 11.393 ms                 |
+| Forward                   | 4.769 ms                  | 10.640 ms                 |
+| Backward                  | 307.298 ms                | 808.117 ms                |
+| Optimize                  | 1.791 ms                  | 5.866 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 108.184 ms                |
+| BlockToStepN              | 13.636 us                 | 202.277 us                |
+| OneStep                   | 336.389 ms                | 820.376 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.420 ms                  | 11.393 ms                 |
+| Forward                   | 4.775 ms                  | 10.640 ms                 |
+| Backward                  | 311.460 ms                | 833.461 ms                |
+| Optimize                  | 1.793 ms                  | 5.866 ms                  |
+| BarrierTimeBeforeRank0    | 77.251 us                 | 108.184 ms                |
+| BlockToStepN              | 13.877 us                 | 202.277 us                |
+| OneStep                   | 342.805 ms                | 843.631 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.421 ms                  | 11.393 ms                 |
+| Forward                   | 4.778 ms                  | 10.640 ms                 |
+| Backward                  | 323.344 ms                | 853.054 ms                |
+| Optimize                  | 1.801 ms                  | 5.866 ms                  |
+| BarrierTimeBeforeRank0    | 77.251 us                 | 108.184 ms                |
+| BlockToStepN              | 14.147 us                 | 202.277 us                |
+| OneStep                   | 355.250 ms                | 862.818 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.423 ms                  | 11.393 ms                 |
+| Forward                   | 4.782 ms                  | 10.640 ms                 |
+| Backward                  | 332.087 ms                | 870.730 ms                |
+| Optimize                  | 1.803 ms                  | 5.866 ms                  |
+| BarrierTimeBeforeRank0    | 77.251 us                 | 108.184 ms                |
+| BlockToStepN              | 14.175 us                 | 202.277 us                |
+| OneStep                   | 357.025 ms                | 881.321 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.432 ms                  | 11.393 ms                 |
+| Forward                   | 4.786 ms                  | 10.640 ms                 |
+| Backward                  | 336.428 ms                | 884.647 ms                |
+| Optimize                  | 1.813 ms                  | 5.866 ms                  |
+| BarrierTimeBeforeRank0    | 77.152 us                 | 108.184 ms                |
+| BlockToStepN              | 14.271 us                 | 202.277 us                |
+| OneStep                   | 368.563 ms                | 894.556 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.435 ms                  | 11.045 ms                 |
+| Forward                   | 4.782 ms                  | 10.514 ms                 |
+| Backward                  | 348.750 ms                | 884.647 ms                |
+| Optimize                  | 1.822 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.152 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.497 us                 | 201.312 us                |
+| OneStep                   | 385.278 ms                | 894.556 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.435 ms                  | 11.045 ms                 |
+| Forward                   | 4.780 ms                  | 10.514 ms                 |
+| Backward                  | 360.946 ms                | 901.082 ms                |
+| Optimize                  | 1.827 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.235 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.610 us                 | 201.312 us                |
+| OneStep                   | 388.966 ms                | 912.361 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.442 ms                  | 11.045 ms                 |
+| Forward                   | 4.782 ms                  | 10.514 ms                 |
+| Backward                  | 369.647 ms                | 924.016 ms                |
+| Optimize                  | 1.844 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.152 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.718 us                 | 201.312 us                |
+| OneStep                   | 395.145 ms                | 934.637 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.442 ms                  | 11.045 ms                 |
+| Forward                   | 4.785 ms                  | 10.640 ms                 |
+| Backward                  | 374.978 ms                | 937.137 ms                |
+| Optimize                  | 1.847 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 76.964 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.806 us                 | 201.312 us                |
+| OneStep                   | 405.192 ms                | 946.719 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.442 ms                  | 11.045 ms                 |
+| Forward                   | 4.786 ms                  | 11.302 ms                 |
+| Backward                  | 379.991 ms                | 949.602 ms                |
+| Optimize                  | 1.853 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.152 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.718 us                 | 201.312 us                |
+| OneStep                   | 411.717 ms                | 959.712 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.444 ms                  | 11.045 ms                 |
+| Forward                   | 4.786 ms                  | 11.302 ms                 |
+| Backward                  | 383.480 ms                | 961.131 ms                |
+| Optimize                  | 1.863 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.152 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.718 us                 | 201.312 us                |
+| OneStep                   | 414.148 ms                | 969.956 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.448 ms                  | 11.045 ms                 |
+| Forward                   | 4.798 ms                  | 11.302 ms                 |
+| Backward                  | 388.983 ms                | 1.008 s                   |
+| Optimize                  | 1.871 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.235 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.718 us                 | 201.312 us                |
+| OneStep                   | 418.563 ms                | 1.017 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.452 ms                  | 11.045 ms                 |
+| Forward                   | 4.803 ms                  | 11.302 ms                 |
+| Backward                  | 396.992 ms                | 1.020 s                   |
+| Optimize                  | 1.875 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.269 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.728 us                 | 201.312 us                |
+| OneStep                   | 425.545 ms                | 1.030 s                   |
++---------------------------+---------------------------+---------------------------+
+[proc 6] 400 steps, total: 78.736, sample: 0.187, forward: 0.449, backward: 59.148, update: 0.113
+[proc 4] 400 steps, total: 78.736, sample: 0.175, forward: 0.442, backward: 58.933, update: 0.118
+[proc 2] 400 steps, total: 78.736, sample: 0.175, forward: 0.408, backward: 56.041, update: 0.138
+[proc 7] 400 steps, total: 78.736, sample: 0.190, forward: 0.434, backward: 56.878, update: 0.133
+[proc 5] 400 steps, total: 78.736, sample: 0.177, forward: 0.423, backward: 59.189, update: 0.122
+[proc 1] 400 steps, total: 78.736, sample: 0.179, forward: 0.416, backward: 52.448, update: 0.139
+[proc 3] 400 steps, total: 78.736, sample: 0.192, forward: 0.406, backward: 57.158, update: 0.121
+[proc 0] 400 steps, total: 78.736, sample: 0.281, forward: 0.497, backward: 76.934, update: 0.201
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.456 ms                  | 11.045 ms                 |
+| Forward                   | 4.809 ms                  | 11.302 ms                 |
+| Backward                  | 400.843 ms                | 1.034 s                   |
+| Optimize                  | 1.879 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.535 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.859 us                 | 201.312 us                |
+| OneStep                   | 428.261 ms                | 1.042 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.461 ms                  | 11.045 ms                 |
+| Forward                   | 4.825 ms                  | 11.302 ms                 |
+| Backward                  | 405.836 ms                | 1.074 s                   |
+| Optimize                  | 1.891 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.332 us                 | 86.073 ms                 |
+| BlockToStepN              | 14.907 us                 | 201.312 us                |
+| OneStep                   | 430.093 ms                | 1.085 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.461 ms                  | 11.045 ms                 |
+| Forward                   | 4.825 ms                  | 11.302 ms                 |
+| Backward                  | 412.497 ms                | 1.080 s                   |
+| Optimize                  | 1.904 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.332 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.150 us                 | 201.312 us                |
+| OneStep                   | 434.430 ms                | 1.092 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.477 ms                  | 11.045 ms                 |
+| Forward                   | 4.832 ms                  | 11.302 ms                 |
+| Backward                  | 414.984 ms                | 1.082 s                   |
+| Optimize                  | 1.906 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 77.332 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.150 us                 | 201.312 us                |
+| OneStep                   | 438.862 ms                | 1.093 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.500 ms                  | 11.393 ms                 |
+| Forward                   | 4.858 ms                  | 11.302 ms                 |
+| Backward                  | 421.423 ms                | 1.092 s                   |
+| Optimize                  | 1.919 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.310 us                 | 201.312 us                |
+| OneStep                   | 441.071 ms                | 1.103 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.500 ms                  | 11.961 ms                 |
+| Forward                   | 4.860 ms                  | 11.302 ms                 |
+| Backward                  | 423.824 ms                | 1.093 s                   |
+| Optimize                  | 1.919 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.310 us                 | 201.312 us                |
+| OneStep                   | 447.075 ms                | 1.110 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.514 ms                  | 11.961 ms                 |
+| Forward                   | 4.861 ms                  | 11.302 ms                 |
+| Backward                  | 431.935 ms                | 1.100 s                   |
+| Optimize                  | 1.949 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.350 us                 | 201.312 us                |
+| OneStep                   | 453.202 ms                | 1.110 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.514 ms                  | 12.030 ms                 |
+| Forward                   | 4.862 ms                  | 11.302 ms                 |
+| Backward                  | 433.885 ms                | 1.119 s                   |
+| Optimize                  | 1.949 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 78.722 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.365 us                 | 201.312 us                |
+| OneStep                   | 459.518 ms                | 1.130 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.539 ms                  | 12.030 ms                 |
+| Forward                   | 4.880 ms                  | 11.302 ms                 |
+| Backward                  | 441.476 ms                | 1.149 s                   |
+| Optimize                  | 1.958 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 79.378 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.447 us                 | 201.312 us                |
+| OneStep                   | 463.874 ms                | 1.159 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.539 ms                  | 12.030 ms                 |
+| Forward                   | 4.884 ms                  | 11.302 ms                 |
+| Backward                  | 443.563 ms                | 1.149 s                   |
+| Optimize                  | 1.973 ms                  | 5.738 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 86.073 ms                 |
+| BlockToStepN              | 15.541 us                 | 201.312 us                |
+| OneStep                   | 469.300 ms                | 1.160 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.539 ms                  | 11.961 ms                 |
+| Forward                   | 4.884 ms                  | 11.178 ms                 |
+| Backward                  | 454.356 ms                | 1.149 s                   |
+| Optimize                  | 1.978 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.722 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.779 us                 | 177.904 us                |
+| OneStep                   | 481.345 ms                | 1.160 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.548 ms                  | 11.961 ms                 |
+| Forward                   | 4.903 ms                  | 11.178 ms                 |
+| Backward                  | 458.012 ms                | 1.154 s                   |
+| Optimize                  | 1.986 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.810 us                 | 177.904 us                |
+| OneStep                   | 495.964 ms                | 1.166 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.551 ms                  | 11.961 ms                 |
+| Forward                   | 4.909 ms                  | 11.178 ms                 |
+| Backward                  | 470.484 ms                | 1.162 s                   |
+| Optimize                  | 1.998 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.817 us                 | 177.904 us                |
+| OneStep                   | 498.508 ms                | 1.176 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.551 ms                  | 11.961 ms                 |
+| Forward                   | 4.912 ms                  | 11.178 ms                 |
+| Backward                  | 476.195 ms                | 1.166 s                   |
+| Optimize                  | 2.038 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.722 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.893 us                 | 177.904 us                |
+| OneStep                   | 502.676 ms                | 1.182 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.554 ms                  | 11.961 ms                 |
+| Forward                   | 4.912 ms                  | 11.178 ms                 |
+| Backward                  | 482.185 ms                | 1.197 s                   |
+| Optimize                  | 2.040 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.905 us                 | 177.904 us                |
+| OneStep                   | 508.488 ms                | 1.218 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.565 ms                  | 11.961 ms                 |
+| Forward                   | 4.922 ms                  | 11.178 ms                 |
+| Backward                  | 485.862 ms                | 1.209 s                   |
+| Optimize                  | 2.044 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.695 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.952 us                 | 183.977 us                |
+| OneStep                   | 511.332 ms                | 1.221 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.583 ms                  | 11.961 ms                 |
+| Forward                   | 4.925 ms                  | 11.178 ms                 |
+| Backward                  | 486.920 ms                | 1.240 s                   |
+| Optimize                  | 2.054 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.722 us                 | 82.142 ms                 |
+| BlockToStepN              | 15.982 us                 | 183.977 us                |
+| OneStep                   | 513.617 ms                | 1.249 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.587 ms                  | 11.961 ms                 |
+| Forward                   | 4.926 ms                  | 11.178 ms                 |
+| Backward                  | 493.657 ms                | 1.263 s                   |
+| Optimize                  | 2.075 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.819 us                 | 82.142 ms                 |
+| BlockToStepN              | 16.102 us                 | 183.977 us                |
+| OneStep                   | 520.779 ms                | 1.272 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.587 ms                  | 11.961 ms                 |
+| Forward                   | 4.926 ms                  | 11.178 ms                 |
+| Backward                  | 498.038 ms                | 1.265 s                   |
+| Optimize                  | 2.077 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.695 us                 | 82.142 ms                 |
+| BlockToStepN              | 16.102 us                 | 183.977 us                |
+| OneStep                   | 524.336 ms                | 1.284 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.599 ms                  | 11.961 ms                 |
+| Forward                   | 4.926 ms                  | 11.178 ms                 |
+| Backward                  | 500.291 ms                | 1.273 s                   |
+| Optimize                  | 2.084 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.695 us                 | 82.142 ms                 |
+| BlockToStepN              | 16.164 us                 | 183.977 us                |
+| OneStep                   | 525.457 ms                | 1.285 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.599 ms                  | 11.961 ms                 |
+| Forward                   | 4.926 ms                  | 11.178 ms                 |
+| Backward                  | 503.735 ms                | 1.273 s                   |
+| Optimize                  | 2.085 ms                  | 5.488 ms                  |
+| BarrierTimeBeforeRank0    | 78.695 us                 | 82.142 ms                 |
+| BlockToStepN              | 16.164 us                 | 183.977 us                |
+| OneStep                   | 527.629 ms                | 1.285 s                   |
++---------------------------+---------------------------+---------------------------+
+[proc 4] 500 steps, total: 105.237, sample: 0.174, forward: 0.446, backward: 74.698, update: 0.119
+[proc 6] 500 steps, total: 105.237, sample: 0.186, forward: 0.445, backward: 75.160, update: 0.116
+[proc 2] 500 steps, total: 105.237, sample: 0.173, forward: 0.406, backward: 71.230, update: 0.142
+[proc 3] 500 steps, total: 105.236, sample: 0.174, forward: 0.408, backward: 73.179, update: 0.122
+[proc 5] 500 steps, total: 105.237, sample: 0.186, forward: 0.421, backward: 74.964, update: 0.122
+[proc 0] 500 steps, total: 105.236, sample: 0.290, forward: 0.519, backward: 103.988, update: 0.210
+Successfully xmh. training takes 283.14298248291016 seconds
+before call kg_cache_controller.StopThreads()
+[proc 7] 500 steps, total: 105.237, sample: 0.178, forward: 0.440, backward: 72.386, update: 0.133
+[proc 1] 500 steps, total: 105.237, sample: 0.196, forward: 0.422, backward: 68.599, update: 0.146
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+INFO [58199 controller_process.py:380] call rank0 to StopThreads
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker5: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker4: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker7: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker6: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)

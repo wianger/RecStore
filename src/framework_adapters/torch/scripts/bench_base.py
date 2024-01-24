@@ -265,6 +265,7 @@ class LocalOnlyExperiment(Experiment):
                     configs.append(config)
         return configs
 
+
     def get_next_config(self, ):
         configs = PreprocessConfig(self.common_config)
 
