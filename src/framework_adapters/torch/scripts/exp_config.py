@@ -415,13 +415,15 @@ class ExpKGScalability(GNNExperiment):
                     "hidden_dim": [400],
                     # "cache_ratio": [0.1, 0.2],
                     "cache_ratio": [0.05, ],
-                    "batch_size": [400, 800, 1200],
+                    # "batch_size": [400, 800, 1200],
+                    "batch_size": [1200],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
                     "cache_ratio": [0.05],
-                    "batch_size": [1200, 1600, 2000],
+                    # "batch_size": [1200, 1600, 2000],
+                    "batch_size": [2000],
                 }
             ],
             "binding2": [
@@ -452,6 +454,76 @@ class ExpKGScalability(GNNExperiment):
 
         self.name = NAME
         super().__init__(10, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        for each in configs:
+            print(each)
+        return list(sorted(configs, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GSWUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GSWLock()
+        return
+
+
+class ExpKGPerfDebug(GNNExperiment):
+    def __init__(self, ) -> None:
+        NAME = "debug-kg"
+        COMMON_CONFIGS = {
+            "model_name": [
+                'TransE',
+            ],
+            "binding": [
+                {
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05, ],
+                    "batch_size": [400, 800, 1200],
+                },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05],
+                #     # "batch_size": [1200, 1600, 2000],
+                #     "batch_size": [2000],
+                # }
+            ],
+            "binding2": [
+                # for debug performance
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": ["CppAsyncV2"],
+                },
+                # {
+                #     "use_my_emb": ["false"],
+                #     "cached_emb_type": ['None'],
+                #     "backwardMode": ["CppSync"],
+                # },
+                # {
+                #     "use_my_emb": ["true"],
+                #     "cached_emb_type": ['KGExternelEmbedding',
+                #                         "TorchNativeStdEmb",
+                #                         'KnownShardedCachedEmbedding'],
+                #     "backwardMode": ["PySync"],
+                # },
+            ],
+            "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        super().__init__(11, COMMON_CONFIGS,
                          "127.0.0.1")
 
     def _SortConfigs(self, configs):
