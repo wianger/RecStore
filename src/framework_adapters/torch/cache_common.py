@@ -87,6 +87,8 @@ class TorchNativeStdEmbDDP(AbsEmb):
         else:
             assert False
 
+        logging.info(f"TorchNativeStdEmbDDP done")
+
     def forward(self, input_keys, ):
         if self.device == 'cpu':
             return self.std_emb_ddp(input_keys.cpu())

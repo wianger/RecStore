@@ -14,6 +14,9 @@ fi
 rm -rf ${temp_dir}
 mkdir ${temp_dir}
 cd ${temp_dir}
+
+export CC=`which gcc-7`
+export CXX=`which g++-7`
 cmake -DUSE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda  ..
 make -j
 cd ..
@@ -28,7 +31,8 @@ cd python
 python setup.py develop
 cd -
 
-pip install paramiko ogb pyinstrument gpustat debugpy
+pip install paramiko ogb pyinstrument gpustat debugpy pytest
+pip install "pybind11[global]"
 
 
 conda install fmt

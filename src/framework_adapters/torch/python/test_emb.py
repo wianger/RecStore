@@ -193,23 +193,30 @@ class TestShardedCache:
             print(json_str)
 
         # Generate standard embedding
+        print("TorchNativeStdEmbDDP(emb, device='cuda')", flush=True)
         std_emb = TorchNativeStdEmbDDP(emb, device='cuda')
         std_emb.reg_opt(sparse_opt)
+        print("TorchNativeStdEmbDDP(emb, device='cuda') done", flush=True)
         # Generate standard embedding done
 
+
+        print("CacheEmbFactory.New(cached_emb_type, emb, args)", flush=True)
         # Generate our embedding
         cached_emb_type = args['test_cache']
         abs_emb = CacheEmbFactory.New(cached_emb_type, emb, args)
-
         abs_emb.reg_opt(sparse_opt)
+        print("CacheEmbFactory.New(cached_emb_type, emb, args) done", flush=True)
 
+        print("TestPerfSampler", flush=True)
         test_perf_sampler = TestPerfSampler(rank=rank,
                                             L=args['L'],
                                             num_ids_per_step=TestShardedCache.BATCH_SIZE,
                                             full_emb_capacity=emb.shape[0],
                                             backmode=args['backwardMode'],
                                             )
+        print("TestPerfSampler done", flush=True)
 
+        print("kg_cache_controller = KGCacheControllerWrapper")
         if cached_emb_type == "KnownLocalCachedEmbedding":
             kg_cache_controller = KGCacheControllerWrapper(
                 json_str, emb.shape[0],
@@ -217,8 +224,10 @@ class TestShardedCache:
         else:
             kg_cache_controller = KGCacheControllerWrapperDummy()
 
+        print("kg_cache_controller.init")
         kg_cache_controller.init()
         test_perf_sampler.Prefill()
+        print("test_perf_sampler.Prefill")
 
         # Generate our embedding done
         timer_Forward = Timer("Forward")
