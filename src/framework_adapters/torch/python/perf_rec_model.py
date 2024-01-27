@@ -25,14 +25,16 @@ import recstore
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from recstore import utils
 
+from rec_dataloader import RecDatasetCapacity
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
-from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, PerfSampler, TestPerfSampler
+from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, PerfSampler, RecModelSampler, TestPerfSampler
 from cache_emb_factory import CacheEmbFactory
 from controller_process import KGCacheControllerWrapper
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import ShmKVStore, kvinit
+from test_emb import TestShardedCache
 from utils import XLOG, Timer, GPUTimer, xmh_nvtx_range
 import time
 import DistOpt
@@ -45,8 +47,8 @@ torch.use_deterministic_algorithms(True)
 
 
 LR = 1
-# DIFF_TEST = True
-DIFF_TEST = False
+DIFF_TEST = True
+# DIFF_TEST = False
 
 
 def get_run_config():
@@ -54,9 +56,6 @@ def get_run_config():
         argparser = argparse.ArgumentParser("Training")
         argparser.add_argument('--num_workers', type=int,
                                default=4)
-        argparser.add_argument('--num_embs', type=int,
-                               default=int(10*1e6))
-        #    default=1*1e6)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
         argparser.add_argument('--L', type=int,
@@ -64,7 +63,7 @@ def get_run_config():
         argparser.add_argument('--with_perf', type=bool,
                                default=False)
         argparser.add_argument('--batch_size', type=int,
-                               default=5000)
+                               default=32)
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
         argparser.add_argument('--log_interval', type=int,
@@ -92,15 +91,16 @@ def get_run_config():
         argparser.add_argument('--nr_background_threads', type=int,
                                default=16)
 
-        argparser.add_argument('--distribution', choices=['uniform', 'zipf'],
-                               default='zipf')
-        argparser.add_argument('--zipf_alpha', type=float, default=0.99)
+        argparser.add_argument('--dataset', choices=['criteo', 'avazu'],
+                               default='criteo')
 
         argparser.add_argument('--with_nn', type=list, default=[256,])
         return vars(argparser.parse_args())
 
     run_config = {}
     run_config.update(parse_args(run_config))
+    run_config['num_embs'] = RecDatasetCapacity.Capacity(run_config['dataset'])
+
     return run_config
 
 
@@ -243,15 +243,21 @@ def routine_local_cache_helper(worker_id, args):
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True)
         torch_profiler.start()
 
-    perf_sampler = PerfSampler(rank=rank,
-                               L=args['L'],
-                               num_ids_per_step=args['batch_size'],
-                               full_emb_capacity=emb.shape[0],
-                               backmode=args['backwardMode'],
-                               distribution=args['distribution'],
-                               alpha=args['zipf_alpha'],
-                               )
-    print("Construct PerfSampler done", flush=True)
+    perf_sampler = RecModelSampler(rank=rank,
+                                   L=args['L'],
+                                   batch_size=args['batch_size'],
+                                   dataset_name=args['dataset'],
+                                   backmode=args['backwardMode'],
+                                   )
+    print("Construct RecModelSampler done", flush=True)
+
+    # perf_sampler = TestPerfSampler(rank=rank,
+    #                                L=args['L'],
+    #                                num_ids_per_step=TestShardedCache.BATCH_SIZE,
+    #                                full_emb_capacity=emb.shape[0],
+    #                                backmode=args['backwardMode'],
+    #                                )
+    # print("Construct TestPerfSampler done", flush=True)
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
         kg_cache_controller = KGCacheControllerWrapper(

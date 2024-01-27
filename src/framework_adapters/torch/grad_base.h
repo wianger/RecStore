@@ -363,7 +363,7 @@ class GradProcessingBase {
                        const std::vector<std::vector<torch::Tensor>>
                            &shuffled_grads_in_each_rank_cache) {
     xmh::Timer timer_SyncUpdateCache("ProcessBack:UpdateCache");
-    // #pragma omp parallel for num_threads(num_gpus_)
+    #pragma omp parallel for num_threads(num_gpus_)
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
         // update per rank cache

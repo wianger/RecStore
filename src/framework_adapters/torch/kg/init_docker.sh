@@ -1,6 +1,9 @@
 # pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
 set -e
 
+# sudo apt-get install libboost-all-dev
+
+
 cd dgl-0.9.1
 
 if [[ `hostname` == "node182" ]]; then

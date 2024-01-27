@@ -255,7 +255,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
   void UpsertPq(const std::vector<torch::Tensor> &input_keys,
                 const std::vector<torch::Tensor> &input_grads, int step_no) {
     xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
-    // #pragma omp parallel for num_threads(num_gpus_)
+    #pragma omp parallel for num_threads(num_gpus_)
     for (int rank = 0; rank < input_keys.size(); ++rank) {
       auto *data = input_keys[rank].data_ptr<int64_t>();
       CHECK(input_keys[rank].is_cpu());
