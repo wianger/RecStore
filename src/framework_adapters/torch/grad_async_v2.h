@@ -255,33 +255,66 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
   void UpsertPq(const std::vector<torch::Tensor> &input_keys,
                 const std::vector<torch::Tensor> &input_grads, int step_no) {
     xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
-    // #pragma omp parallel for num_threads(num_gpus_)
-    for (int rank = 0; rank < input_keys.size(); ++rank) {
-      auto *data = input_keys[rank].data_ptr<int64_t>();
-      CHECK(input_keys[rank].is_cpu());
-      CHECK_EQ(input_grads[rank].dim(), 2);
+    if (update_pq_use_omp_) {
+#pragma omp parallel for num_threads(num_gpus_)
+      for (int rank = 0; rank < input_keys.size(); ++rank) {
+        auto *data = input_keys[rank].data_ptr<int64_t>();
+        CHECK(input_keys[rank].is_cpu());
+        CHECK_EQ(input_grads[rank].dim(), 2);
 
-      for (int i = 0; i < input_keys[rank].size(0); ++i) {
-        int64_t id = data[i];
+        for (int i = 0; i < input_keys[rank].size(0); ++i) {
+          int64_t id = data[i];
 
 #ifdef USE_SUB_GRAD_TENSOR
-        recstore::SubGradTensor grad_tensor(input_grads[rank], i);
+          recstore::SubGradTensor grad_tensor(input_grads[rank], i);
 #else
 #error "not use SubGradTensor "
-        torch::Tensor grad_tensor = input_grads[rank][i];
+          torch::Tensor grad_tensor = input_grads[rank][i];
 #endif
 
-        auto *p = dict_[id];
-        // NOTE: 改了优先级
-        base::LockGuard element_lock_guard(*p);
-        p->RemoveReadStep(step_no);
-        p->MarkWriteInStepN(step_no, grad_tensor);
-        p->RecaculatePriority();
+          auto *p = dict_[id];
+          // NOTE: 改了优先级
+          base::LockGuard element_lock_guard(*p);
+          p->RemoveReadStep(step_no);
+          p->MarkWriteInStepN(step_no, grad_tensor);
+          p->RecaculatePriority();
 #ifdef XMH_DEBUG_KG
-        LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}", id,
-                                    step_no, toString(grad_tensor, false));
+          LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}",
+                                      id, step_no,
+                                      toString(grad_tensor, false));
 #endif
-        pq_.PushOrUpdate(p);
+          pq_.PushOrUpdate(p);
+        }
+      }
+    } else {
+      for (int rank = 0; rank < input_keys.size(); ++rank) {
+        auto *data = input_keys[rank].data_ptr<int64_t>();
+        CHECK(input_keys[rank].is_cpu());
+        CHECK_EQ(input_grads[rank].dim(), 2);
+
+        for (int i = 0; i < input_keys[rank].size(0); ++i) {
+          int64_t id = data[i];
+
+#ifdef USE_SUB_GRAD_TENSOR
+          recstore::SubGradTensor grad_tensor(input_grads[rank], i);
+#else
+#error "not use SubGradTensor "
+          torch::Tensor grad_tensor = input_grads[rank][i];
+#endif
+
+          auto *p = dict_[id];
+          // NOTE: 改了优先级
+          base::LockGuard element_lock_guard(*p);
+          p->RemoveReadStep(step_no);
+          p->MarkWriteInStepN(step_no, grad_tensor);
+          p->RecaculatePriority();
+#ifdef XMH_DEBUG_KG
+          LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}",
+                                      id, step_no,
+                                      toString(grad_tensor, false));
+#endif
+          pq_.PushOrUpdate(p);
+        }
       }
     }
     timer_ProcessBackwardAsync.end();
