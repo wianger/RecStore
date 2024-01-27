@@ -1,4 +1,5 @@
 #include <ATen/cuda/CUDAContext.h>
+#include <stdlib.h>
 #include <torch/custom_class.h>
 #include <torch/extension.h>
 #include <torch/torch.h>
@@ -52,14 +53,15 @@ void ConstructRenumberingDict(torch::Tensor renumbering_dict, int64_t nr_world,
 }
 
 void init_folly() {
-  std::vector<std::string> arguments = {"program_name", "--logtostderr"};
-  int argc = static_cast<int>(arguments.size());
-  char **argv = new char *[argc];
-  for (int i = 0; i < argc; ++i) {
-    argv[i] = new char[arguments[i].size() + 1];
-    std::strcpy(argv[i], arguments[i].c_str());
-  }
-  folly::init(&argc, (char ***)&argv, false);
+  // std::vector<std::string> arguments = {"program_name", "--logtostderr=1"};
+  // int argc = static_cast<int>(arguments.size());
+  // char **argv = new char *[argc];
+  // for (int i = 0; i < argc; ++i) {
+  //   argv[i] = new char[arguments[i].size() + 1];
+  //   std::strcpy(argv[i], arguments[i].c_str());
+  // }
+  // folly::init(&argc, (char ***)&argv, false);
+  putenv("GLOG_logtostderr=1");
   xmh::Reporter::StartReportThread();
 }
 

@@ -139,6 +139,8 @@ class ArgParser(CommonArgParser):
         self.add_argument('--backwardMode', type=str, required=True,
                           choices=['PySync', 'CppSync', 'CppAsync', 'CppAsyncV2'], help='.')
         self.add_argument('--L', type=int, default=10, help='lookahead value')
+        self.add_argument('--update_cache_use_omp', type=int, help='use omp')
+        self.add_argument('--update_pq_use_omp', type=int, help='use omp')
 
 
 def prepare_save_path(args):
@@ -179,7 +181,9 @@ def main():
         "clr": 1,
         "nr_background_threads": 32,
         "backwardMode": "{args.backwardMode}",
-        "cache_ratio": {args.cache_ratio}
+        "cache_ratio": {args.cache_ratio},
+        "update_cache_use_omp":  {args.update_cache_use_omp},
+        "update_pq_use_omp":  {args.update_pq_use_omp}
         }}'''
 
     KGCacheControllerWrapperBase.BeforeDDPInit()

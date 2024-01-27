@@ -517,6 +517,8 @@ class ExpKGPerfDebug(GNNExperiment):
                 # },
             ],
             "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
+            "update_cache_use_omp": [0, 1],
+            "update_pq_use_omp": [0, 1],
             "max_step": [500],
             "log_interval": [100],
             **COMMON_CLIENT_CONFIGS,
