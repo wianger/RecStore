@@ -34,7 +34,7 @@ class CircleBuffer:
         self.buffer = []
         for i in range(L):
             sliced_id_tensor = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-                f"cached_sampler_r{rank}_{i}", (int(1e5), ), th.int64, )
+                f"cached_sampler_r{rank}_{i}", (int(1e6), ), th.int64, )
             self.buffer.append(sliced_id_tensor)
 
         self.step_tensor = recstore.IPCTensorFactory.NewIPCTensor(
@@ -59,7 +59,7 @@ class CircleBuffer:
 
     def push(self, step, item, sync=False):
         assert item.ndim == 1
-        assert item.shape[0] < 1e5
+        assert item.shape[0] < 1e6
 
         # self.buffer[self.end].Copy_(item, non_blocking=True)
         self.buffer[self.end].Copy_(item, non_blocking=False)
@@ -217,7 +217,7 @@ class RecModelSampler(BasePerfSampler):
     def gen_next_sample(self):
         sample = self.dataset.get(self.batch_size)
         assert sample.ndim == 1
-        assert sample.shape[0] < 1e5
+        assert sample.shape[0] < 1e6
         sample = sample.cuda()
         return sample
 

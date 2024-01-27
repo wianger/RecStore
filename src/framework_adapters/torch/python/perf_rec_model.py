@@ -34,7 +34,6 @@ from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
 from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
 from DistEmb import DistEmbedding
 from PsKvstore import ShmKVStore, kvinit
-from test_emb import TestShardedCache
 from utils import XLOG, Timer, GPUTimer, xmh_nvtx_range
 import time
 import DistOpt
@@ -43,12 +42,12 @@ import DistOpt
 import random
 random.seed(0)
 np.random.seed(0)
-torch.use_deterministic_algorithms(True)
+# torch.use_deterministic_algorithms(True)
 
 
 LR = 1
-DIFF_TEST = True
-# DIFF_TEST = False
+# DIFF_TEST = True
+DIFF_TEST = False
 
 
 def get_run_config():
@@ -94,13 +93,16 @@ def get_run_config():
         argparser.add_argument('--dataset', choices=['criteo', 'avazu'],
                                default='criteo')
 
-        argparser.add_argument('--with_nn', type=list, default=[256,])
+        argparser.add_argument('--with_nn', type=str, default="256,")
         return vars(argparser.parse_args())
 
     run_config = {}
     run_config.update(parse_args(run_config))
     run_config['num_embs'] = RecDatasetCapacity.Capacity(run_config['dataset'])
 
+    run_config['with_nn'] = [int(item)
+                             for item in run_config['with_nn'].split(',')]
+    run_config['with_nn'].insert(0, run_config['emb_dim'])
     return run_config
 
 
@@ -165,6 +167,20 @@ def main_routine(args, routine):
     for each in workers:
         each.join()
         assert each.exitcode == 0
+
+
+class SimpleModel(nn.Module):
+    def __init__(self, dim_list):
+        super(SimpleModel, self).__init__()
+
+        self.list = nn.Sequential()
+
+        for i in range(len(dim_list)-1):
+            self.list.append(nn.Linear(dim_list[i], dim_list[i+1]))
+        self.list.append(nn.Linear(dim_list[-1], 1))
+
+    def forward(self, x):
+        return self.list(x)
 
 
 def routine_local_cache_helper(worker_id, args):
@@ -273,10 +289,17 @@ def routine_local_cache_helper(worker_id, args):
 
     perf_sampler.Prefill()
 
+    # define NN
+    nn_model = SimpleModel(args['with_nn'])
+    nn_model = nn_model.cuda()
+    nn_model = DDP(nn_model, device_ids=[rank])
+    sparse_opt.add_param_group({'params': nn_model.parameters()})
+
     timer_geninput = Timer("GenInput")
     timer_Forward = Timer("Forward")
     timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
+    timer_NN = Timer("NN")
     timer_onestep = Timer(f"OneStep")
     timer_start = Timer(f"E2E-{args['log_interval']}")
     timer_start.start()
@@ -324,7 +347,15 @@ def routine_local_cache_helper(worker_id, args):
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
-        loss = embed_value.sum(-1).sum(-1)
+
+        # loss = embed_value.sum(-1).sum(-1)
+
+        timer_NN.start()
+        # embed_value = embed_value.unsqueeze(0)
+        embed_value = embed_value.sum(0)
+        loss = nn_model(embed_value)
+        timer_NN.stop()
+
         timer_Forward.stop()
 
         timer_Backward.start()

@@ -32,7 +32,7 @@ class CircleBuffer {
                           backmode_ == "CppAsyncV2") {
     for (int i = 0; i < L_; i++) {
       sliced_id_tensor_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-          folly::sformat("cached_sampler_r{}_{}", rank, i), {int(1e5)},
+          folly::sformat("cached_sampler_r{}_{}", rank, i), {int(1e6)},
           torch::kInt64));
     }
 
@@ -215,39 +215,39 @@ class VirtualEnvironment {
           {cached_capacity_, emb_dim_}, torch::kFloat32, rank));
 
       input_keys_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-          folly::sformat("input_keys_{}", rank), {int(1e5)}, torch::kInt64));
+          folly::sformat("input_keys_{}", rank), {int(1e6)}, torch::kInt64));
       input_keys_neg_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-          folly::sformat("input_keys_neg_{}", rank), {int(1e5)},
+          folly::sformat("input_keys_neg_{}", rank), {int(1e6)},
           torch::kInt64));
 
       if (backgrad_init_ == "cpu") {
         backward_grads_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-            folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_{}", rank), {int(1e6), emb_dim_},
             torch::kFloat32));
         backward_grads_neg_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-            folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_neg_{}", rank), {int(1e6), emb_dim_},
             torch::kFloat32));
       } else if (backgrad_init_ == "gpu") {
         backward_grads_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
-            folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_{}", rank), {int(1e6), emb_dim_},
             torch::kFloat32, rank));
         backward_grads_neg_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
-            folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_neg_{}", rank), {int(1e6), emb_dim_},
             torch::kFloat32, rank));
       } else if (backgrad_init_ == "both") {
         backward_grads_gpu_.push_back(IPCTensorFactory::NewSlicedIPCGPUTensor(
-            folly::sformat("backward_grads_{}_gpu", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_{}_gpu", rank), {int(1e6), emb_dim_},
             torch::kFloat32, rank));
         backward_grads_neg_gpu_.push_back(
             IPCTensorFactory::NewSlicedIPCGPUTensor(
                 folly::sformat("backward_grads_neg_{}_gpu", rank),
-                {int(1e5), emb_dim_}, torch::kFloat32, rank));
+                {int(1e6), emb_dim_}, torch::kFloat32, rank));
 
         backward_grads_cpu_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-            folly::sformat("backward_grads_{}", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_{}", rank), {int(1e6), emb_dim_},
             torch::kFloat32));
         backward_grads_neg_cpu_.push_back(IPCTensorFactory::NewSlicedIPCTensor(
-            folly::sformat("backward_grads_neg_{}", rank), {int(1e5), emb_dim_},
+            folly::sformat("backward_grads_neg_{}", rank), {int(1e6), emb_dim_},
             torch::kFloat32));
 
       } else {

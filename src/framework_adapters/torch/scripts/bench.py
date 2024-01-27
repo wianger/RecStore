@@ -23,6 +23,7 @@ def config_each_server(hosts):
     ParallelSSH(
         hosts, f"sudo swapoff -a")
 
+
 if GetHostName() == "node182":
     suffix = "A30"
 else:
@@ -31,29 +32,36 @@ else:
 if __name__ == "__main__":
     exp_lists = []
 
-    each = exp_config.ExpKGPerfDebug()
-    each.SetLogDir(f'{LOG_PREFIX}/expdebug-KG-{suffix}-noomp')
-    exp_lists.append(each)
+    if suffix == 'A30':
+        each = exp_config.ExpRecPerfA30()
+        each.SetLogDir(f'{LOG_PREFIX}/expdebug-Rec-{suffix}')
+        exp_lists.append(each)
 
+        each = exp_config.ExpKGPerfA30()
+        each.SetLogDir(f'{LOG_PREFIX}/expdebug-KG-{suffix}')
+        exp_lists.append(each)
 
-    # each = exp_config.ExpKGScalability()
-    # each.SetLogDir(f'{LOG_PREFIX}/exp3-KG-scale-{suffix}')
-    # exp_lists.append(each)
+    else:
+        each = exp_config.ExpKGPerfDebug()
+        each.SetLogDir(f'{LOG_PREFIX}/expdebug-KG-{suffix}-noomp')
+        exp_lists.append(each)
 
-    # each = exp_config.ExpOverallSingle()
-    # each.SetLogDir(f'{LOG_PREFIX}/0117-exp0-KG-{suffix}')
-    # exp_lists.append(each)
+        # each = exp_config.ExpKGScalability()
+        # each.SetLogDir(f'{LOG_PREFIX}/exp3-KG-scale-{suffix}')
+        # exp_lists.append(each)
 
-    # # 别用下面的了
-    # # each = exp_config.ExpMacroPerfEmb()
-    # # each.SetLogDir(f'{LOG_PREFIX}/0117-exp1-macro-perf-emb-{suffix}')
-    # # exp_lists.append(each)
+        # each = exp_config.ExpOverallSingle()
+        # each.SetLogDir(f'{LOG_PREFIX}/0117-exp0-KG-{suffix}')
+        # exp_lists.append(each)
 
-    # each = exp_config.ExpMotivationPerfEmb()
-    # each.SetLogDir(f'{LOG_PREFIX}/0116-exp2-motiv-emb-{suffix}')
-    # exp_lists.append(each)
+        # # 别用下面的了
+        # # each = exp_config.ExpMacroPerfEmb()
+        # # each.SetLogDir(f'{LOG_PREFIX}/0117-exp1-macro-perf-emb-{suffix}')
+        # # exp_lists.append(each)
 
-    
+        # each = exp_config.ExpMotivationPerfEmb()
+        # each.SetLogDir(f'{LOG_PREFIX}/0116-exp2-motiv-emb-{suffix}')
+        # exp_lists.append(each)
 
     for i, each in enumerate(exp_lists):
         # mount NFS
