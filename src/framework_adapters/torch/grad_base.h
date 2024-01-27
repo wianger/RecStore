@@ -169,8 +169,8 @@ class GradProcessingBase {
     L_ = json_config.at("L");
     kForwardItersPerStep_ = json_config.at("kForwardItersPerStep");
     clr_ = json_config.at("clr");
-    update_cache_use_omp_ = json_config.at("update_cache_use_omp");
-    update_pq_use_omp_ = json_config.at("update_pq_use_omp");
+    update_cache_use_omp_ = json_config.value("update_cache_use_omp", 1);
+    update_pq_use_omp_ = json_config.value("update_pq_use_omp", 1);
 
     if (backgrad_init_ == "cpu") {
       backgrad_init_enum_ = BackGradInitEnum::CPU;

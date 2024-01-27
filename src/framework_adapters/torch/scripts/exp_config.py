@@ -284,6 +284,54 @@ class GNNExperiment(LocalOnlyExperiment):
         LocalNuke("dgl-ke-main.py")
 
 
+class RecRun(LocalOnlyRun):
+    def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
+        self.execute_host = execute_host
+        super().__init__(exp_id, run_id,
+                         log_dir, config,  "python3 perf_rec_model.py", DIR_PATH, execute_host)
+
+    def check_config(self,):
+        super().check_config()
+
+    def run(self):
+        super().run()
+        sleep_seconds = 0
+        while True:
+            ret = subprocess.run(
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+            if ret == 0:
+                break
+            time.sleep(5)
+            sleep_seconds += 5
+
+            if sleep_seconds > 60*60:
+                for _ in range(100):
+                    print("DEADLOCK in wait client finish")
+                break
+
+        print("tail down")
+        LocalNuke("perf_rec_model.py")
+
+
+class RecExperiment(LocalOnlyExperiment):
+    def __init__(self, exp_id, common_config, execute_host) -> None:
+        super().__init__(exp_id, common_config, execute_host)
+
+    def _PostprocessConfig(self, each_config, ):
+        # don't use self
+        pass
+        # client_config['key_space_m'] *= WARM_UP_RATIO
+        # client_config['key_space_m'] = int(client_config['key_space_m'])
+
+    def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
+        return RecRun(self.exp_id, run_id, run_log_dir,
+                      run_config, execute_host)
+
+    def _BeforeStartAllRun(self):
+        print("lnuke perf_rec_model.py")
+        LocalNuke("perf_rec_model.py")
+
+
 COMMON_CLIENT_CONFIGS = {
     "no_save_emb": ['true'],
     "neg_sample_size": [200],
@@ -486,15 +534,14 @@ class ExpKGPerfDebug(GNNExperiment):
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
                     "cache_ratio": [0.05, ],
-                    "batch_size": [400, 800, 1200],
+                    "batch_size": [1200],
                 },
-                # {
-                #     "dataset": ["Freebase"],
-                #     "hidden_dim": [400],
-                #     "cache_ratio": [0.05],
-                #     # "batch_size": [1200, 1600, 2000],
-                #     "batch_size": [2000],
-                # }
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05],
+                    "batch_size": [2000],
+                }
             ],
             "binding2": [
                 # for debug performance
@@ -502,23 +549,23 @@ class ExpKGPerfDebug(GNNExperiment):
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
                     "backwardMode": ["CppAsyncV2"],
+                    "update_cache_use_omp": [1],
+                    "update_pq_use_omp": [1],
                 },
-                # {
-                #     "use_my_emb": ["false"],
-                #     "cached_emb_type": ['None'],
-                #     "backwardMode": ["CppSync"],
-                # },
-                # {
-                #     "use_my_emb": ["true"],
-                #     "cached_emb_type": ['KGExternelEmbedding',
-                #                         "TorchNativeStdEmb",
-                #                         'KnownShardedCachedEmbedding'],
-                #     "backwardMode": ["PySync"],
-                # },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KGExternelEmbedding',
+                                        "TorchNativeStdEmb",
+                                        'KnownShardedCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
             ],
             "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
-            "update_cache_use_omp": [0, 1],
-            "update_pq_use_omp": [0, 1],
             "max_step": [500],
             "log_interval": [100],
             **COMMON_CLIENT_CONFIGS,
@@ -537,6 +584,142 @@ class ExpKGPerfDebug(GNNExperiment):
         LocalExecute('rm -rf /tmp/cached_tensor_*', '')
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GSWUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GSWLock()
+        return
+
+
+class ExpKGPerfA30(GNNExperiment):
+    def __init__(self, ) -> None:
+        NAME = "kg a30"
+        COMMON_CONFIGS = {
+            "model_name": [
+                'TransE',
+            ],
+            "binding": [
+                {
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05, 0.1, ],
+                    "batch_size": [1200, 1800, 2400],
+                },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05],
+                #     "batch_size": [2000],
+                # }
+            ],
+            "binding2": [
+                # for debug performance
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": ["CppAsyncV2"],
+                    "update_cache_use_omp": [1],
+                    "update_pq_use_omp": [1],
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KGExternelEmbedding',
+                                        "TorchNativeStdEmb",
+                                        'KnownShardedCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
+            ],
+            "nr_gpus": [4],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        super().__init__(13, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        for each in configs:
+            print(each)
+        return list(sorted(configs, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GSWUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GSWLock()
+        return
+
+
+class ExpRecPerfA30(RecExperiment):
+    def __init__(self, ) -> None:
+        NAME = "rec perf a30"
+        COMMON_CONFIGS = {
+            "with_nn": [
+                '128,128,128',
+            ],
+            "binding": [
+                {
+                    "dataset": ["criteo",],
+                    "cache_ratio": [0.05, 0.1],
+                    "batch_size": [128, 256, 512, 1024],
+                },
+                {
+                    "dataset": ["avazu"],
+                    "cache_ratio": [0.05, 0.1],
+                    "batch_size": [128, 256, 512, 1024,],
+                }
+            ],
+            "binding2": [
+                {
+                    "emb_choice": [
+                        "TorchNativeStdEmb",
+                        "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
+                    ]
+                },
+                {
+
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        "PySync",
+                        # "CppSync",
+                        "CppAsyncV2",
+                        # "CppAsync",
+                    ],
+                },
+            ],
+            "num_workers": [4],
+            "run_steps": [500],
+            "log_interval": [100],
+        }
+
+        self.name = NAME
+        super().__init__(12, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        for each in configs:
+            print(each)
+        return list(sorted(configs, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke perf_rec_model.py")
+        LocalNuke("perf_rec_model.py")
         LocalNukeAllPython()
         if previous_run is not None:
             GSWUnlock()

@@ -317,32 +317,32 @@ class KnownLocalCachedEmbedding(AbsEmb):
             f"embedding_cache_{rank}", [cached_capacity, self.emb_dim], torch.float32, rank)
 
         self.input_keys_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-            f"input_keys_{rank}", [int(1e5),], torch.int64, )
+            f"input_keys_{rank}", [int(1e6),], torch.int64, )
         self.input_keys_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-            f"input_keys_neg_{rank}", [int(1e5),], torch.int64, )
+            f"input_keys_neg_{rank}", [int(1e6),], torch.int64, )
 
         self.backgrad_init = backgrad_init
 
         if backgrad_init == 'cpu':
             self.backward_grads_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-                f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, )
+                f"backward_grads_{rank}", [int(1e6), self.emb_dim], torch.float, )
             self.backward_grads_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-                f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, )
+                f"backward_grads_neg_{rank}", [int(1e6), self.emb_dim], torch.float, )
         elif backgrad_init == 'gpu':
             self.backward_grads_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-                f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
+                f"backward_grads_{rank}", [int(1e6), self.emb_dim], torch.float, rank)
             self.backward_grads_neg_shm = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-                f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, rank)
+                f"backward_grads_neg_{rank}", [int(1e6), self.emb_dim], torch.float, rank)
         elif backgrad_init == 'both':
             self.backward_grads_shm_cpu = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-                f"backward_grads_{rank}", [int(1e5), self.emb_dim], torch.float, )
+                f"backward_grads_{rank}", [int(1e6), self.emb_dim], torch.float, )
             self.backward_grads_neg_shm_cpu = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-                f"backward_grads_neg_{rank}", [int(1e5), self.emb_dim], torch.float, )
+                f"backward_grads_neg_{rank}", [int(1e6), self.emb_dim], torch.float, )
 
             self.backward_grads_shm_gpu = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-                f"backward_grads_{rank}_gpu", [int(1e5), self.emb_dim], torch.float, rank)
+                f"backward_grads_{rank}_gpu", [int(1e6), self.emb_dim], torch.float, rank)
             self.backward_grads_neg_shm_gpu = recstore.IPCTensorFactory.NewSlicedIPCGPUTensor(
-                f"backward_grads_neg_{rank}_gpu", [int(1e5), self.emb_dim], torch.float, rank)
+                f"backward_grads_neg_{rank}_gpu", [int(1e6), self.emb_dim], torch.float, rank)
         else:
             assert False
 
@@ -358,9 +358,9 @@ class KnownLocalCachedEmbedding(AbsEmb):
         dist.barrier()
 
         # TODO: 检查一下为啥直接这样分配会有问题
-        self.ret_value = torch.zeros((int(1e5), self.emb_dim)).cuda()
+        self.ret_value = torch.zeros((int(1e6), self.emb_dim)).cuda()
         # self.ret_value = recstore.IPCTensorFactory.NewIPCGPUTensor(
-        #     f"ret_value{rank}", [int(1e5), self.emb_dim], torch.float, rank)
+        #     f"ret_value{rank}", [int(1e6), self.emb_dim], torch.float, rank)
         self.iter = 0
         XLOG.debug(f"{rank}: KnownLocalCachedEmbedding init done")
         print(f"{rank}: KnownLocalCachedEmbedding init done", flush=True)

@@ -174,7 +174,9 @@ private:
 
 class IPCMemory {
   static constexpr int kMaxRegTensorNum = 200;
-  static constexpr int64_t kShmSize = 200 * (1024 * 1024 * 1024LL);
+
+  // static constexpr int64_t kShmSize = 200 * (1024 * 1024 * 1024LL);
+  static constexpr int64_t kShmSize = 50 * (1024 * 1024 * 1024LL);
 
   struct IPCShmRegion {
     IPCShmRegion() {}
@@ -189,6 +191,7 @@ class IPCMemory {
         folly::MemoryMapping::writable().setPrefault(true).setShared(true);
     options.address = (void *)(0x100000000000);
     system("touch /dev/shm/recstore_ipc_memory");
+
     mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_memory", 0,
                                         kShmSize, options);
     header_ =

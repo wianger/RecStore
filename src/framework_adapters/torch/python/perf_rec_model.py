@@ -25,8 +25,9 @@ import recstore
 from recstore import IPCTensorFactory, KGCacheController, load_recstore_library, Mfence
 from recstore import utils
 
+from rec_dataloader import RecDatasetCapacity
 from cache_common import ShmTensorStore, TorchNativeStdEmb, CacheShardingPolicy, TorchNativeStdEmbDDP
-from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, PerfSampler, TestPerfSampler
+from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, PerfSampler, RecModelSampler, TestPerfSampler
 from cache_emb_factory import CacheEmbFactory
 from controller_process import KGCacheControllerWrapper
 from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
@@ -41,7 +42,7 @@ import DistOpt
 import random
 random.seed(0)
 np.random.seed(0)
-torch.use_deterministic_algorithms(True)
+# torch.use_deterministic_algorithms(True)
 
 
 LR = 1
@@ -54,9 +55,6 @@ def get_run_config():
         argparser = argparse.ArgumentParser("Training")
         argparser.add_argument('--num_workers', type=int,
                                default=4)
-        argparser.add_argument('--num_embs', type=int,
-                               default=int(10*1e6))
-        #    default=1*1e6)
         argparser.add_argument('--emb_dim', type=int,
                                default=32)
         argparser.add_argument('--L', type=int,
@@ -64,7 +62,7 @@ def get_run_config():
         argparser.add_argument('--with_perf', type=bool,
                                default=False)
         argparser.add_argument('--batch_size', type=int,
-                               default=5000)
+                               default=32)
         argparser.add_argument('--cache_ratio', type=float,
                                default=0.1)
         argparser.add_argument('--log_interval', type=int,
@@ -92,15 +90,19 @@ def get_run_config():
         argparser.add_argument('--nr_background_threads', type=int,
                                default=16)
 
-        argparser.add_argument('--distribution', choices=['uniform', 'zipf'],
-                               default='zipf')
-        argparser.add_argument('--zipf_alpha', type=float, default=0.99)
+        argparser.add_argument('--dataset', choices=['criteo', 'avazu'],
+                               default='criteo')
 
-        argparser.add_argument('--with_nn', type=list, default=[256,])
+        argparser.add_argument('--with_nn', type=str, default="256,")
         return vars(argparser.parse_args())
 
     run_config = {}
     run_config.update(parse_args(run_config))
+    run_config['num_embs'] = RecDatasetCapacity.Capacity(run_config['dataset'])
+
+    run_config['with_nn'] = [int(item)
+                             for item in run_config['with_nn'].split(',')]
+    run_config['with_nn'].insert(0, run_config['emb_dim'])
     return run_config
 
 
@@ -165,6 +167,20 @@ def main_routine(args, routine):
     for each in workers:
         each.join()
         assert each.exitcode == 0
+
+
+class SimpleModel(nn.Module):
+    def __init__(self, dim_list):
+        super(SimpleModel, self).__init__()
+
+        self.list = nn.Sequential()
+
+        for i in range(len(dim_list)-1):
+            self.list.append(nn.Linear(dim_list[i], dim_list[i+1]))
+        self.list.append(nn.Linear(dim_list[-1], 1))
+
+    def forward(self, x):
+        return self.list(x)
 
 
 def routine_local_cache_helper(worker_id, args):
@@ -243,15 +259,21 @@ def routine_local_cache_helper(worker_id, args):
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True)
         torch_profiler.start()
 
-    perf_sampler = PerfSampler(rank=rank,
-                               L=args['L'],
-                               num_ids_per_step=args['batch_size'],
-                               full_emb_capacity=emb.shape[0],
-                               backmode=args['backwardMode'],
-                               distribution=args['distribution'],
-                               alpha=args['zipf_alpha'],
-                               )
-    print("Construct PerfSampler done", flush=True)
+    perf_sampler = RecModelSampler(rank=rank,
+                                   L=args['L'],
+                                   batch_size=args['batch_size'],
+                                   dataset_name=args['dataset'],
+                                   backmode=args['backwardMode'],
+                                   )
+    print("Construct RecModelSampler done", flush=True)
+
+    # perf_sampler = TestPerfSampler(rank=rank,
+    #                                L=args['L'],
+    #                                num_ids_per_step=TestShardedCache.BATCH_SIZE,
+    #                                full_emb_capacity=emb.shape[0],
+    #                                backmode=args['backwardMode'],
+    #                                )
+    # print("Construct TestPerfSampler done", flush=True)
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
         kg_cache_controller = KGCacheControllerWrapper(
@@ -267,10 +289,17 @@ def routine_local_cache_helper(worker_id, args):
 
     perf_sampler.Prefill()
 
+    # define NN
+    nn_model = SimpleModel(args['with_nn'])
+    nn_model = nn_model.cuda()
+    nn_model = DDP(nn_model, device_ids=[rank])
+    sparse_opt.add_param_group({'params': nn_model.parameters()})
+
     timer_geninput = Timer("GenInput")
     timer_Forward = Timer("Forward")
     timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
+    timer_NN = Timer("NN")
     timer_onestep = Timer(f"OneStep")
     timer_start = Timer(f"E2E-{args['log_interval']}")
     timer_start.start()
@@ -318,7 +347,15 @@ def routine_local_cache_helper(worker_id, args):
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
-        loss = embed_value.sum(-1).sum(-1)
+
+        # loss = embed_value.sum(-1).sum(-1)
+
+        timer_NN.start()
+        # embed_value = embed_value.unsqueeze(0)
+        embed_value = embed_value.sum(0)
+        loss = nn_model(embed_value)
+        timer_NN.stop()
+
         timer_Forward.stop()
 
         timer_Backward.start()

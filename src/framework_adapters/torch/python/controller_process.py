@@ -20,6 +20,7 @@ import recstore
 from cache_emb_factory import CacheEmbFactory
 from utils import XLOG, GPUTimer, Timer
 
+from rec_dataloader import RecDatasetLoader
 
 os.environ['MASTER_ADDR'] = 'localhost'
 os.environ['MASTER_PORT'] = '29500'
@@ -33,7 +34,7 @@ class CircleBuffer:
         self.buffer = []
         for i in range(L):
             sliced_id_tensor = recstore.IPCTensorFactory.NewSlicedIPCTensor(
-                f"cached_sampler_r{rank}_{i}", (int(1e5), ), th.int64, )
+                f"cached_sampler_r{rank}_{i}", (int(1e6), ), th.int64, )
             self.buffer.append(sliced_id_tensor)
 
         self.step_tensor = recstore.IPCTensorFactory.NewIPCTensor(
@@ -58,6 +59,8 @@ class CircleBuffer:
 
     def push(self, step, item, sync=False):
         assert item.ndim == 1
+        assert item.shape[0] < 1e6
+
         # self.buffer[self.end].Copy_(item, non_blocking=True)
         self.buffer[self.end].Copy_(item, non_blocking=False)
         self.step_tensor[self.end] = step
@@ -92,13 +95,12 @@ class CircleBuffer:
 
 
 class BasePerfSampler:
-    def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
+    def __init__(self, rank, L, num_ids_per_step, backmode) -> None:
         self.rank = rank
         self.L = L
         self.ids_circle_buffer = CircleBuffer(L, rank, backmode)
         self.sampler_iter_num = 0
         self.num_ids_per_step = num_ids_per_step
-        self.full_emb_capacity = full_emb_capacity
         self.samples_queue = []
         self.backmode = backmode
 
@@ -121,7 +123,8 @@ class BasePerfSampler:
 
         timer_CircleBuffer = Timer("GenInput:CircleBuffer")
         # self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=True)
-        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=False)
+        self.ids_circle_buffer.push(
+            self.sampler_iter_num, entity_id, sync=False)
         timer_CircleBuffer.stop()
 
         self.sampler_iter_num += 1
@@ -131,7 +134,8 @@ class BasePerfSampler:
 
 class TestPerfSampler(BasePerfSampler):
     def __init__(self, rank, L, num_ids_per_step, full_emb_capacity, backmode) -> None:
-        super().__init__(rank, L, num_ids_per_step, full_emb_capacity, backmode)
+        super().__init__(rank, L, num_ids_per_step, backmode)
+        self.full_emb_capacity = full_emb_capacity
 
     def gen_next_sample(self):
         from test_emb import XMH_DEBUG
@@ -158,13 +162,15 @@ class PerfSampler(BasePerfSampler):
                  distribution,
                  alpha,
                  ) -> None:
-        super().__init__(rank, L, num_ids_per_step, full_emb_capacity, backmode)
+        super().__init__(rank, L, num_ids_per_step, backmode)
 
         if distribution == 'uniform':
             pass
         elif distribution == 'zipf':
             self.zipfianTorchFiller = recstore.ZipfianTorchFiller(
                 full_emb_capacity, alpha)
+
+        self.full_emb_capacity = full_emb_capacity
         self.distribution = distribution
         self.rank = rank
 
@@ -185,6 +191,35 @@ class PerfSampler(BasePerfSampler):
         entity_id = th.empty((self.num_ids_per_step,), dtype=th.int64)
         self.zipfianTorchFiller.fillArrayTorch(entity_id)
         return entity_id.cuda()
+
+
+class RecModelSampler(BasePerfSampler):
+    def __init__(self, rank, L, batch_size, dataset_name, backmode,
+                 ) -> None:
+
+        if dataset_name == "criteo":
+            nr_ids_one_sample = 26
+            self.dataset = RecDatasetLoader(
+                "/home/xieminhui/RecStoreDataset/criteo_binary", dist.get_world_size(), rank)
+        elif dataset_name == "avazu":
+            nr_ids_one_sample = 21
+            self.dataset = RecDatasetLoader(
+                "/home/xieminhui/RecStoreDataset/avazu_binary", dist.get_world_size(), rank)
+        else:
+            assert False
+
+        super().__init__(rank, L, batch_size * nr_ids_one_sample, backmode)
+
+        self.dataset_name = dataset_name
+        self.rank = rank
+        self.batch_size = batch_size
+
+    def gen_next_sample(self):
+        sample = self.dataset.get(self.batch_size)
+        assert sample.ndim == 1
+        assert sample.shape[0] < 1e6
+        sample = sample.cuda()
+        return sample
 
 
 class GraphCachedSampler:
@@ -316,7 +351,6 @@ class KGCacheControllerWrapperDummy(KGCacheControllerWrapperBase):
 
 class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
     instance = None
-
 
     def __del__(self):
         Timer.StopReportThread()
