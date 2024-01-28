@@ -142,10 +142,10 @@ class TestPerfSampler(BasePerfSampler):
         if XMH_DEBUG:
             # if self.rank == 0:
             #     # input_keys = th.tensor([0, 1,],).long().cuda()
-            #     input_keys = th.tensor([0, 1, 2],).long().cuda()
+            #     # input_keys = th.tensor([0, 1, 2],).long().cuda()
             # else:
-            #     input_keys = th.tensor([1, 2, 3, 4, 5],).long().cuda()
-            #     # input_keys = th.tensor([3, 4, 5],).long().cuda()
+            #     # input_keys = th.tensor([1, 2,],).long().cuda()
+            #     input_keys = th.tensor([3, 4, 5],).long().cuda()
             # return input_keys
 
             entity_id = th.randint(self.full_emb_capacity, size=(

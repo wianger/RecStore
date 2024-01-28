@@ -308,7 +308,7 @@ class GradAsyncProcessing : public GradProcessingBase {
     CHECK(isInitialized_);
     while (!dispatch_thread_stop_flag_.load()) {
       base::LockGuard _(large_lock_);
-      DetectNewSamplesCome();
+
       // 后台线程，不断取堆头，dispatch给worker
       if (pq_.empty()) {
         continue;

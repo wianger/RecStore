@@ -214,17 +214,6 @@ class GradProcessingBase {
     LOG(WARNING) << "after processOneStepNegThread_.join();";
   };
 
-  virtual void UpdateCache(
-      const std::vector<torch::Tensor> &input_keys_per_rank_tensors,
-      const std::vector<torch::Tensor> &backward_grads_per_rank_tensors) {
-    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
-        ShuffleKeysAndGrads(input_keys_per_rank_tensors,
-                            backward_grads_per_rank_tensors);
-
-    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
-                    shuffled_grads_in_each_rank_cache);
-  }
-
   virtual void ProcessOneStepNegThread() {
     if (kForwardItersPerStep_ == 1) {
       return;
@@ -360,6 +349,18 @@ class GradProcessingBase {
                           shuffled_grads_in_each_rank_cache);
   }
 
+ private:
+  virtual void UpdateCache(
+      const std::vector<torch::Tensor> &input_keys_per_rank_tensors,
+      const std::vector<torch::Tensor> &backward_grads_per_rank_tensors) {
+    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
+        ShuffleKeysAndGrads(input_keys_per_rank_tensors,
+                            backward_grads_per_rank_tensors);
+
+    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
+                    shuffled_grads_in_each_rank_cache);
+  }
+
   void SyncUpdateCache(const std::vector<std::vector<torch::Tensor>>
                            &shuffled_keys_in_each_rank_cache,
                        const std::vector<std::vector<torch::Tensor>>
@@ -466,8 +467,8 @@ class GradSyncProcessing : public GradProcessingBase {
                          &shuffled_grads_in_each_rank_cache,
                      const std::vector<torch::Tensor> &input_keys,
                      const std::vector<torch::Tensor> &input_grads) {
-    SyncUpdateCache(shuffled_keys_in_each_rank_cache,
-                    shuffled_grads_in_each_rank_cache);
+    // SyncUpdateCache(shuffled_keys_in_each_rank_cache,
+    //                 shuffled_grads_in_each_rank_cache);
 #if 0
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {

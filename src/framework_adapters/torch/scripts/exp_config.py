@@ -370,14 +370,15 @@ class ExpOverallSingle(GNNExperiment):
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
                     # "cache_ratio": [0.1, 0.2],
-                    "cache_ratio": [0.1, ],
-                    "batch_size": [400, 600, 800, 1200, 1600],
+                    "cache_ratio": [0.01, 0.05, 0.1, ],
+                    "batch_size": [600, 1200, 1800, 2400],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
                     "cache_ratio": [0.05,],
-                    "batch_size": [400, 800, 1600, 2000,],
+                    # "batch_size": [400, 800, 1600, 2000,],
+                    "batch_size": [600, 1200, 1800, 2400],
                 }
             ],
             "binding2": [
@@ -395,7 +396,7 @@ class ExpOverallSingle(GNNExperiment):
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",
+                                        "TorchNativeStdEmb",  #too slow
                                         'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },

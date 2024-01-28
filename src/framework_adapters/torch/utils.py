@@ -17,6 +17,7 @@ _send_cpu, _recv_cpu = {}, {}
 # data: [rank0_data, rank1_data, ...]
 
 RECSTORE_UTIL_DEBUG = False
+# RECSTORE_UTIL_DEBUG = True
 
 if RECSTORE_UTIL_DEBUG:
     logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d] %(message)s',

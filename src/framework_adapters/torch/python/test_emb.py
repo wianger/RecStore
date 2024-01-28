@@ -237,7 +237,7 @@ class TestShardedCache:
         timer_start = Timer(f"E2E-{args['log_interval']}")
         timer_start.start()
         # forward
-        for _ in tqdm.trange(500):
+        for _ in tqdm.trange(100):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
 
@@ -312,12 +312,12 @@ class TestShardedCache:
             #                     'KnownShardedCachedEmbedding',
             #                     'TorchNativeStdEmb'],
 
-            # "backwardMode": ["PySync", "CppSync"],
+            "backwardMode": ["PySync", "CppSync", "CppAsync", "CppAsyncV2"],
 
             # "backwardMode": ["PySync",],
             # "backwardMode": ["CppSync",],
             # "backwardMode": ["CppAsync",],
-            "backwardMode": ["CppAsyncV2",],
+            # "backwardMode": ["CppAsyncV2",],
 
             # "backgrad_init":['cpu', 'gpu', 'both'],
             "backgrad_init": ['both'],
