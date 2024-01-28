@@ -71,6 +71,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
     LOG(WARNING) << "call StopThreads. PID = " << getpid();
     GradProcessingBase::StopThreads();
     LOG(WARNING) << "call GradProcessingBase::StopThreads.";
+
     bool expected = false;
     if (!detect_thread_stop_flag_.compare_exchange_strong(expected, true)) {
       return;

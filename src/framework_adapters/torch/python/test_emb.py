@@ -299,7 +299,7 @@ class TestShardedCache:
             #     kg_cache_controller.controller.PrintPq()
 
         if rank == 0:
-            kg_cache_controller.StopThreads()
+            kg_cache_controller.GraceFullyStopThreads()
 
     def test_known_sharded_cache(self,):
         # for test_cache in ["KnownShardedCachedEmbedding", "KnownLocalCachedEmbedding"]:

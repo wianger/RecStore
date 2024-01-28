@@ -227,7 +227,9 @@ class GradAsyncProcessing : public GradProcessingBase {
 
   void StopThreads() override {
     CHECK(isInitialized_);
+    LOG(WARNING) << "call StopThreads. PID = " << getpid();
     GradProcessingBase::StopThreads();
+    LOG(WARNING) << "call GradProcessingBase::StopThreads.";
 
     bool expected = false;
     if (!detect_thread_stop_flag_.compare_exchange_strong(expected, true)) {
@@ -237,8 +239,8 @@ class GradAsyncProcessing : public GradProcessingBase {
     detect_thread_stop_flag_ = true;
     detect_thread_.join();
 
-    dispatch_thread_.join();
     dispatch_thread_stop_flag_ = true;
+    dispatch_thread_.join();
 
     grad_thread_stop_flag_ = true;
     if (kUseBackThread) {
