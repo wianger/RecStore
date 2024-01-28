@@ -33,30 +33,31 @@ if __name__ == "__main__":
     exp_lists = []
 
     if suffix == 'A30':
-        each = exp_config.ExpRecPerfA30()
-        each.SetLogDir(f'{LOG_PREFIX}/expdebug-Rec-{suffix}')
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
         exp_lists.append(each)
 
         each = exp_config.ExpKGPerfA30()
-        each.SetLogDir(f'{LOG_PREFIX}/expdebug-KG-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-perfA30-{suffix}')
         exp_lists.append(each)
 
-        each = exp_config.ExpOverallSingle()
-        each.SetLogDir(f'{LOG_PREFIX}/0128-exp0-KG-{suffix}')
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-scale-{suffix}')
         exp_lists.append(each)
 
     else:
-        each = exp_config.ExpKGPerfDebug()
-        each.SetLogDir(f'{LOG_PREFIX}/expdebug-KG-{suffix}-noomp')
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
         exp_lists.append(each)
 
-        # each = exp_config.ExpKGScalability()
-        # each.SetLogDir(f'{LOG_PREFIX}/exp3-KG-scale-{suffix}')
-        # exp_lists.append(each)
+        each = exp_config.ExpKGPerfDebug()
+        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-debugomp{suffix}')
+        exp_lists.append(each)
 
-        # each = exp_config.ExpOverallSingle()
-        # each.SetLogDir(f'{LOG_PREFIX}/0117-exp0-KG-{suffix}')
-        # exp_lists.append(each)
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-scale-{suffix}')
+        exp_lists.append(each)
+
 
         # # 别用下面的了
         # # each = exp_config.ExpMacroPerfEmb()
@@ -76,5 +77,6 @@ if __name__ == "__main__":
             [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
 
         print("=================-====================")
-        print(f"Experiment {i}/{len(exp_lists)}: ", each.name)
+        print(f"Experiment {i}/{len(exp_lists)}: ", each.name,)
+
         each.RunExperiment()

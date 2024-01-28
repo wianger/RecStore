@@ -352,127 +352,44 @@ COMMON_CLIENT_CONFIGS = {
  'SimplE'],
 
 
-class ExpOverallSingle(GNNExperiment):
-    def __init__(self, ) -> None:
-        NAME = "overall-single-machine"
-        COMMON_CONFIGS = {
-            "model_name": [
-                'TransE',
-                # 'TransR',  OOM
-                # 'RESCAL',  too slow
-                'DistMult',
-                'ComplEx',
-                # 'RotatE',  BUG
-                'SimplE'
-            ],
-            "binding": [
-                {
-                    "dataset": ["FB15k",],
-                    "hidden_dim": [400],
-                    # "cache_ratio": [0.1, 0.2],
-                    "cache_ratio": [0.01, 0.05, 0.1, ],
-                    "batch_size": [600, 1200, 1800, 2400],
-                },
-                {
-                    "dataset": ["Freebase"],
-                    "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
-                    # "batch_size": [400, 800, 1600, 2000,],
-                    "batch_size": [600, 1200, 1800, 2400],
-                }
-            ],
-            "binding2": [
-                # for debug performance
-                {
-                    "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["CppAsyncV2"],
-                },
-                {
-                    "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
-                    "backwardMode": ["CppSync"],
-                },
-                {
-                    "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",  #too slow
-                                        'KnownShardedCachedEmbedding'],
-                    "backwardMode": ["PySync"],
-                },
-
-                ################################################################################
-                # {
-                #     "use_my_emb": ["true"],
-                #     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                #     "backwardMode": ["PySync", "CppAsyncV2"],
-                # },
-                # {
-                #     "use_my_emb": ["false"],
-                #     "cached_emb_type": ['None'],
-                #     "backwardMode": ["CppSync"],
-                # },
-                # {
-                #     "use_my_emb": ["true"],
-                #     "cached_emb_type": ['KGExternelEmbedding',
-                #                         "TorchNativeStdEmb",
-                #                         'KnownShardedCachedEmbedding'],
-                #     "backwardMode": ["PySync"],
-                # },
-            ],
-            "nr_gpus": [8] if GetHostName() != "node182" else [4],
-
-            # "batch_size": [4800],
-
-            "max_step": [500],
-            "log_interval": [100],
-            **COMMON_CLIENT_CONFIGS,
-        }
-
-        self.name = NAME
-        super().__init__(1, COMMON_CONFIGS,
-                         "127.0.0.1")
-
-    def _SortConfigs(self, configs):
-        for each in configs:
-            print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
-
-    def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
-        print("lnuke dgl-ke-main.py")
-        LocalNuke("dgl-ke-main.py")
-        LocalNukeAllPython()
-        if previous_run is not None:
-            GSWUnlock()
-        time.sleep(5)
-        if next_run is not None:
-            GSWLock()
-        return
-
-
 class ExpKGScalability(GNNExperiment):
     def __init__(self, ) -> None:
         NAME = "overall-kg-scalability"
         COMMON_CONFIGS = {
             "model_name": [
                 'TransE',
+                # 'SimplE'
+
+                # 'TransR',  OOM
+                # 'RESCAL',  too slow
+                # 'RotatE',  BUG
+
+                # 'DistMult',
+                # 'ComplEx',
+                # 'SimplE'
             ],
             "binding": [
                 {
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
-                    # "cache_ratio": [0.1, 0.2],
-                    "cache_ratio": [0.05, ],
-                    # "batch_size": [400, 800, 1200],
+                    "cache_ratio": [0.05, 0.1],
                     "batch_size": [1200],
+                    "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05],
-                    # "batch_size": [1200, 1600, 2000],
+                    "cache_ratio": [0.05, 0.1],
                     "batch_size": [2000],
+                    "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
+                },
+                # for scalability
+                {
+                    "dataset": ["FB15k", "Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [2000],
+                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
                 }
             ],
             "binding2": [
@@ -480,7 +397,10 @@ class ExpKGScalability(GNNExperiment):
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["CppAsyncV2"],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        "PySync",
+                        "CppAsync"],
                 },
                 {
                     "use_my_emb": ["false"],
@@ -490,12 +410,11 @@ class ExpKGScalability(GNNExperiment):
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",
+                                        # "TorchNativeStdEmb",
                                         'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
             ],
-            "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
             "max_step": [500],
             "log_interval": [100],
             **COMMON_CLIENT_CONFIGS,
@@ -550,23 +469,11 @@ class ExpKGPerfDebug(GNNExperiment):
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
                     "backwardMode": ["CppAsyncV2"],
-                    "update_cache_use_omp": [1],
-                    "update_pq_use_omp": [1],
-                },
-                {
-                    "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
-                    "backwardMode": ["CppSync"],
-                },
-                {
-                    "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",
-                                        'KnownShardedCachedEmbedding'],
-                    "backwardMode": ["PySync"],
+                    "update_cache_use_omp": [0, 1],
+                    "update_pq_use_omp": [0, 1],
                 },
             ],
-            "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
+            "nr_gpus": [8] if GetHostName() != "node182" else [4],
             "max_step": [500],
             "log_interval": [100],
             **COMMON_CLIENT_CONFIGS,
@@ -600,29 +507,26 @@ class ExpKGPerfA30(GNNExperiment):
         COMMON_CONFIGS = {
             "model_name": [
                 'TransE',
+                'SimplE'
             ],
             "binding": [
                 {
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05, 0.1, ],
-                    "batch_size": [1200, 1800, 2400],
+                    "cache_ratio": [0.05, 0.1],
+                    "batch_size": [1200],
+                    "nr_gpus": [4],
                 },
-                # {
-                #     "dataset": ["Freebase"],
-                #     "hidden_dim": [400],
-                #     "cache_ratio": [0.05],
-                #     "batch_size": [2000],
-                # }
             ],
             "binding2": [
                 # for debug performance
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": ["CppAsyncV2"],
-                    "update_cache_use_omp": [1],
-                    "update_pq_use_omp": [1],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        "PySync",
+                        "CppAsync"],
                 },
                 {
                     "use_my_emb": ["false"],
@@ -637,7 +541,6 @@ class ExpKGPerfA30(GNNExperiment):
                     "backwardMode": ["PySync"],
                 },
             ],
-            "nr_gpus": [4],
             "max_step": [500],
             "log_interval": [100],
             **COMMON_CLIENT_CONFIGS,
@@ -665,7 +568,7 @@ class ExpKGPerfA30(GNNExperiment):
         return
 
 
-class ExpRecPerfA30(RecExperiment):
+class ExpRecPerf(RecExperiment):
     def __init__(self, ) -> None:
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
@@ -675,13 +578,25 @@ class ExpRecPerfA30(RecExperiment):
             "binding": [
                 {
                     "dataset": ["criteo",],
-                    "cache_ratio": [0.05, 0.1],
-                    "batch_size": [128, 256, 512, 1024],
+                    # "cache_ratio": [0.05, 0.1],
+                    "cache_ratio": [0.05],
+                    "batch_size": [256, 512, 1024, 2048],
+                    "num_workers": [4, 8] if GetHostName() != "node182" else [4],
                 },
                 {
                     "dataset": ["avazu"],
-                    "cache_ratio": [0.05, 0.1],
-                    "batch_size": [128, 256, 512, 1024,],
+                    # "cache_ratio": [0.05, 0.1],
+                    "cache_ratio": [0.05],
+                    "batch_size": [256, 512, 1024, 2048],
+                    "num_workers": [4, 8] if GetHostName() != "node182" else [4],
+                },
+
+                # for scalability
+                {
+                    "dataset": ["avazu"],
+                    "cache_ratio": [0.05],
+                    "batch_size": [2048],
+                    "num_workers": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
                 }
             ],
             "binding2": [
@@ -703,7 +618,6 @@ class ExpRecPerfA30(RecExperiment):
                     ],
                 },
             ],
-            "num_workers": [4],
             "run_steps": [500],
             "log_interval": [100],
         }

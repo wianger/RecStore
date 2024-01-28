@@ -46,6 +46,9 @@ class Experiment:
     def SetLogDir(self, log_dir):
         self.log_dir = log_dir
 
+    def LenAllRuns(self):
+        return len(self._AllRuns())
+
     def RunExperiment(self):
         if self.log_dir is None:
             raise Exception("invalid log dir")
