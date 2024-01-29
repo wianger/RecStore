@@ -373,14 +373,16 @@ class ExpKGScalability(GNNExperiment):
                     "dataset": ["FB15k",],
                     "hidden_dim": [400],
                     "cache_ratio": [0.05, 0.1],
-                    "batch_size": [1200],
+                    # "batch_size": [1200],
+                    "batch_size": [600, 1200, 1800, 2400, 3000] if GetHostName() == 'node182' else [1200],
                     "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
                     "cache_ratio": [0.05, 0.1],
-                    "batch_size": [2000],
+                    # "batch_size": [2000],
+                    "batch_size": [600, 1200, 1800, 2400, 3000] if GetHostName() == 'node182' else [2000],
                     "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
                 },
                 # for scalability
@@ -389,7 +391,7 @@ class ExpKGScalability(GNNExperiment):
                     "hidden_dim": [400],
                     "cache_ratio": [0.05,],
                     "batch_size": [2000],
-                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
+                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4],
                 }
             ],
             "binding2": [
@@ -432,7 +434,7 @@ class ExpKGScalability(GNNExperiment):
                 continue
             print(each)
             need_run.append(each)
-        
+
         return list(sorted(need_run, key=lambda each: each['dataset']))
 
     def _RunHook(self, previous_run, next_run):
@@ -584,15 +586,15 @@ class ExpRecPerf(RecExperiment):
             "binding": [
                 {
                     "dataset": ["criteo",],
-                    # "cache_ratio": [0.05, 0.1],
-                    "cache_ratio": [0.05],
+                    # "cache_ratio": [0.05,],
+                    "cache_ratio": [0.05, 0.1] if GetHostName() == "node182" else [0.05],
                     "batch_size": [256, 512, 1024, 2048],
                     "num_workers": [4, 8] if GetHostName() != "node182" else [4],
                 },
                 {
                     "dataset": ["avazu"],
-                    # "cache_ratio": [0.05, 0.1],
-                    "cache_ratio": [0.05],
+                    # "cache_ratio": [0.05,],
+                    "cache_ratio": [0.05, 0.1] if GetHostName() == "node182" else [0.05],
                     "batch_size": [256, 512, 1024, 2048],
                     "num_workers": [4, 8] if GetHostName() != "node182" else [4],
                 },
@@ -602,7 +604,7 @@ class ExpRecPerf(RecExperiment):
                     "dataset": ["avazu"],
                     "cache_ratio": [0.05],
                     "batch_size": [2048],
-                    "num_workers": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
+                    "num_workers": [2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
                 }
             ],
             "binding2": [
