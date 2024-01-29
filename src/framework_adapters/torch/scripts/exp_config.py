@@ -1,3 +1,4 @@
+from pymemcache.client.base import Client
 from pprint import pprint
 import subprocess
 import os
@@ -17,7 +18,7 @@ def ConvertHostNumaList2Host(host_numa_lists):
 DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
 
 
-def GSWLock():
+def GswLock():
     lock_file = "/tmp/xmh_gsw_lock"
     print(f"Want to lock the lock")
 
@@ -29,13 +30,64 @@ def GSWLock():
     print(f"Escape the lock")
 
 
-def GSWUnlock():
+def GswUnlock():
     print("unlock xmh_gsw_lock")
     lock_file = "/tmp/xmh_gsw_lock"
     try:
         os.remove(lock_file)
     except:
         pass
+
+
+def MC_cas(key, old_value, new_value):
+    mc = Client('localhost:11211')
+    mc_old_value, cas_unique = mc.gets(key)
+    mc_old_value = mc_old_value.decode('utf-8')
+    if mc_old_value == old_value:
+        ret = mc.cas(key, new_value, cas_unique)
+        if ret == True:
+            return True
+    else:
+        print(f"old value({old_value}) != readed_value({mc_old_value})",)
+    return False
+
+
+def MC_lock():
+    print(f"Want to lock the lock")
+    while True:
+        ret = MC_cas("GPU_lock", "unlocked", "locked")
+        if ret == True:
+            break
+        time.sleep(5)
+    print(f"Escape the lock")
+
+
+def MC_Unlock():
+    print(f"Want to unlock the lock")
+    while True:
+        ret = MC_cas("GPU_lock", "locked", "unlocked")
+        if ret == True:
+            break
+        time.sleep(5)
+    print(f"unlock successfully")
+
+
+def GPULock():
+    if GetHostName() == "node182":
+        GswLock()
+    elif GetHostName() == "3090-server":
+        MC_lock()
+    else:
+        assert 0
+
+
+def GPUUnlock():
+    if GetHostName() == "node182":
+        GswUnlock()
+    elif GetHostName() == "3090-server":
+        MC_Unlock()
+    else:
+        assert 0
 
 
 class PerfEmbRun(LocalOnlyRun):
@@ -132,10 +184,10 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         LocalNukeAllPython()
 
         if previous_run is not None:
-            GSWUnlock()
+            GPUUnlock()
         time.sleep(5)
         if next_run is not None:
-            GSWLock()
+            GPULock()
         return
 
     def _PostprocessConfig(self, each_config, ):
@@ -192,7 +244,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
                         "PySync",
                         # "CppSync",
                         "CppAsyncV2",
-                        # "CppAsync",
+                        "CppAsync",
                     ],
                 },
             ],
@@ -209,10 +261,10 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         # LocalNuke("perf_emb.py")
         LocalNukeAllPython()
         if previous_run is not None:
-            GSWUnlock()
+            GPUUnlock()
         time.sleep(5)
         if next_run is not None:
-            GSWLock()
+            GPULock()
         return
 
     def _PostprocessConfig(self, each_config, ):
@@ -429,7 +481,7 @@ class ExpKGScalability(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if each['dataset'] == 'Freebase':
+            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
                 print("pass Freebase")
                 continue
             print(each)
@@ -443,10 +495,10 @@ class ExpKGScalability(GNNExperiment):
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
         if previous_run is not None:
-            GSWUnlock()
+            GPUUnlock()
         time.sleep(5)
         if next_run is not None:
-            GSWLock()
+            GPULock()
         return
 
 
@@ -502,10 +554,10 @@ class ExpKGPerfDebug(GNNExperiment):
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
         if previous_run is not None:
-            GSWUnlock()
+            GPUUnlock()
         time.sleep(5)
         if next_run is not None:
-            GSWLock()
+            GPULock()
         return
 
 
@@ -569,10 +621,10 @@ class ExpKGPerfA30(GNNExperiment):
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
         if previous_run is not None:
-            GSWUnlock()
+            GPUUnlock()
         time.sleep(5)
         if next_run is not None:
-            GSWLock()
+            GPULock()
         return
 
 
@@ -645,8 +697,8 @@ class ExpRecPerf(RecExperiment):
         LocalNuke("perf_rec_model.py")
         LocalNukeAllPython()
         if previous_run is not None:
-            GSWUnlock()
+            GPUUnlock()
         time.sleep(5)
         if next_run is not None:
-            GSWLock()
+            GPULock()
         return
