@@ -18,5 +18,6 @@ PYBIND11_MODULE(timer_module, m) {
 
   py::class_<Reporter>(m, "Reporter")
       .def_static("StartReportThread", &Reporter::StartReportThread)
-      .def_static("StopReportThread", &Reporter::StopReportThread);
+      .def_static("StopReportThread", &Reporter::StopReportThread)
+      .def_static("Report", &Reporter::Report);
 }

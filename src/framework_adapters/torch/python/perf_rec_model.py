@@ -267,14 +267,6 @@ def routine_local_cache_helper(worker_id, args):
                                    )
     print("Construct RecModelSampler done", flush=True)
 
-    # perf_sampler = TestPerfSampler(rank=rank,
-    #                                L=args['L'],
-    #                                num_ids_per_step=TestShardedCache.BATCH_SIZE,
-    #                                full_emb_capacity=emb.shape[0],
-    #                                backmode=args['backwardMode'],
-    #                                )
-    # print("Construct TestPerfSampler done", flush=True)
-
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
         kg_cache_controller = KGCacheControllerWrapper(
             json_str, emb.shape[0],
@@ -393,6 +385,9 @@ def routine_local_cache_helper(worker_id, args):
             start_step = _
             timer_start.stop()
             timer_start.start()
+
+            if rank == 0:
+                Timer.Report()
 
         timer_onestep.stop()
 
