@@ -244,7 +244,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
                         "PySync",
                         # "CppSync",
                         "CppAsyncV2",
-                        # "CppAsync",
+                        "CppAsync",
                     ],
                 },
             ],
@@ -441,7 +441,7 @@ class ExpKGScalability(GNNExperiment):
                     "hidden_dim": [400],
                     "cache_ratio": [0.05,],
                     "batch_size": [2000],
-                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [4],
+                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4],
                 }
             ],
             "binding2": [
@@ -479,7 +479,7 @@ class ExpKGScalability(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if each['dataset'] == 'Freebase':
+            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
                 print("pass Freebase")
                 continue
             print(each)
