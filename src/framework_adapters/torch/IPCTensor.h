@@ -176,7 +176,8 @@ class IPCMemory {
   static constexpr int kMaxRegTensorNum = 200;
 
   // static constexpr int64_t kShmSize = 200 * (1024 * 1024 * 1024LL);
-  static constexpr int64_t kShmSize = 50 * (1024 * 1024 * 1024LL);
+  // static constexpr int64_t kShmSize = 50* (1024 * 1024 * 1024LL);
+  static constexpr int64_t kShmSize = DEFINED_SHM_GB* (1024 * 1024 * 1024LL);
 
   struct IPCShmRegion {
     IPCShmRegion() {}

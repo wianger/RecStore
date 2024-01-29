@@ -425,9 +425,15 @@ class ExpKGScalability(GNNExperiment):
                          "127.0.0.1")
 
     def _SortConfigs(self, configs):
+        need_run = []
         for each in configs:
+            if each['dataset'] == 'Freebase':
+                print("pass Freebase")
+                continue
             print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
+            need_run.append(each)
+        
+        return list(sorted(need_run, key=lambda each: each['dataset']))
 
     def _RunHook(self, previous_run, next_run):
         LocalExecute('rm -rf /tmp/cached_tensor_*', '')

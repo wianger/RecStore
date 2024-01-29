@@ -2,23 +2,27 @@ import shutil
 import glob
 import os
 import tqdm
-# exp_dir = "/home/xieminhui/RecStore/src/framework_adapters/torch/benchmark/log/exp3-KG-scale-3090"
+all_dir = "/home/xieminhui/RecStore/src/framework_adapters/torch/benchmark/log"
 
-exp_dir = "/home/xieminhui/RecStore/src/framework_adapters/torch/benchmark/log/0116-exp2-motiv-emb-3090"
-log_files = glob.glob(f"{exp_dir}/*")
+all_exp_dirs = glob.glob(f"{all_dir}/*")
 
-for run_path in tqdm.tqdm(log_files):
-    run_id = run_path.split("/")[-1]
-    logfile = glob.glob(f'{run_path}/log')
-    assert len(logfile) == 1
-    logfile = logfile[0]
+for exp_path in tqdm.tqdm(all_exp_dirs):
+    exp_dir = exp_path
 
-    with open(logfile, "r") as f:
-        lines = f.readlines()
-    content = ''.join(lines)
-    # print(content)
-    if content.find("Successfully xmh") != -1:
-        print(run_id, "find")
-    else:
-        print(run_id, "not find")
-        shutil.rmtree(run_path)
+    log_files = glob.glob(f"{exp_dir}/*")
+
+    for run_path in tqdm.tqdm(log_files):
+        run_id = run_path.split("/")[-1]
+        logfile = glob.glob(f'{run_path}/log')
+        assert len(logfile) == 1
+        logfile = logfile[0]
+
+        with open(logfile, "r") as f:
+            lines = f.readlines()
+        content = ''.join(lines)
+        if content.find("Successfully xmh") != -1:
+            # print(run_id, "find")
+            pass
+        else:
+            print(run_id, run_path, "not find")
+            shutil.rmtree(run_path)
