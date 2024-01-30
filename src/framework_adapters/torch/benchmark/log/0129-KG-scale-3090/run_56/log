@@ -1,0 +1,1934 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240129 18:34:56.805665 61643 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/_deprecate/graph.py:1023: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
+  dgl_warning("multigraph will be deprecated." \
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/heterograph.py:72: DGLWarning: Recommend creating graphs by `dgl.graph(data)` instead of `dgl.DGLGraph(data)`.
+  dgl_warning('Recommend creating graphs by `dgl.graph(data)`'
+Reading train triples....
+Finished. Read 304727650 train triples.
+Reading valid triples....
+Finished. Read 16929318 valid triples.
+Reading test triples....
+Finished. Read 16929308 test triples.
+ARGS:  Namespace(model_name='TransE', data_path='/home/xieminhui/dgl-data', dataset='Freebase', format='built_in', data_files=None, delimiter='\t', save_path='/tmp/ckpts/TransE_Freebase_8', no_save_emb=True, max_step=500, batch_size=2000, batch_size_eval=16, neg_sample_size=200, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size_eval=86054151, eval_percent=1, no_eval_filter=False, log_interval=100, eval_interval=10000, test=False, num_proc=8, num_thread=1, force_sync_interval=1, hidden_dim=400, lr=0.01, gamma=16.0, double_ent=False, double_rel=False, neg_adversarial_sampling=False, adversarial_temperature=1.0, regularization_coef=0.0, regularization_norm=3, pairwise=False, loss_genre='Logsigmoid', margin=1.0, nr_gpus=8, gpu=[0, 1, 2, 3, 4, 5, 6, 7], mix_cpu_gpu=True, valid=False, rel_part=False, async_update=None, has_edge_importance=False, cached_emb_type='KnownLocalCachedEmbedding', use_my_emb=True, cache_ratio=0.05, shuffle=False, backwardMode='CppAsync', L=10, update_cache_use_omp=0, update_pq_use_omp=0, kForwardItersPerStep=2, backgrad_init='both', eval_filter=True, soft_rel_part=False)
+|Train|: 304727650
+original graph:  DGLGraph(num_nodes=86054151, num_edges=338586276,
+         ndata_schemes={}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Loading cached metis
+WARNING [61643 sampler.py:454] Start PreSampling
+WARNING [61643 sampler.py:532] Before construct renumbering_dict
+WARNING [61643 sampler.py:555] PreSampling done
+W20240129 18:55:21.412374 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_0 [1000000]0x100000002000 7.629 MB
+W20240129 18:55:21.412555 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_1 [1000000]0x1000007a5000 7.629 MB
+W20240129 18:55:21.412600 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_2 [1000000]0x100000f48000 7.629 MB
+W20240129 18:55:21.412638 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_3 [1000000]0x1000016eb000 7.629 MB
+W20240129 18:55:21.412672 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_4 [1000000]0x100001e8e000 7.629 MB
+W20240129 18:55:21.412714 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_5 [1000000]0x100002631000 7.629 MB
+W20240129 18:55:21.412750 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_6 [1000000]0x100002dd4000 7.629 MB
+W20240129 18:55:21.412791 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_7 [1000000]0x100003577000 7.629 MB
+W20240129 18:55:21.412824 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_8 [1000000]0x100003d1a000 7.629 MB
+W20240129 18:55:21.412855 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_9 [1000000]0x1000044bd000 7.629 MB
+W20240129 18:55:21.412887 61643 IPCTensor.h:369] NewIPCTensor: step_r0 [10]0x100004c60000 80 B 
+W20240129 18:55:21.412914 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r0 [1]0x100004c62000 8 B 
+W20240129 18:55:21.412947 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100004c64000 8 B 
+W20240129 18:55:21.413115 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_0 [1000000]0x100004c66000 7.629 MB
+W20240129 18:55:21.413156 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_1 [1000000]0x100005409000 7.629 MB
+W20240129 18:55:21.413183 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_2 [1000000]0x100005bac000 7.629 MB
+W20240129 18:55:21.413233 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_3 [1000000]0x10000634f000 7.629 MB
+W20240129 18:55:21.413265 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_4 [1000000]0x100006af2000 7.629 MB
+W20240129 18:55:21.413290 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_5 [1000000]0x100007295000 7.629 MB
+W20240129 18:55:21.413322 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_6 [1000000]0x100007a38000 7.629 MB
+W20240129 18:55:21.413352 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_7 [1000000]0x1000081db000 7.629 MB
+W20240129 18:55:21.413388 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_8 [1000000]0x10000897e000 7.629 MB
+W20240129 18:55:21.413422 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_9 [1000000]0x100009121000 7.629 MB
+W20240129 18:55:21.413455 61643 IPCTensor.h:369] NewIPCTensor: step_r1 [10]0x1000098c4000 80 B 
+W20240129 18:55:21.413476 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r1 [1]0x1000098c6000 8 B 
+W20240129 18:55:21.413503 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1000098c8000 8 B 
+W20240129 18:55:21.413564 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_0 [1000000]0x1000098ca000 7.629 MB
+W20240129 18:55:21.413601 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_1 [1000000]0x10000a06d000 7.629 MB
+W20240129 18:55:21.413627 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_2 [1000000]0x10000a810000 7.629 MB
+W20240129 18:55:21.413662 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_3 [1000000]0x10000afb3000 7.629 MB
+W20240129 18:55:21.413689 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_4 [1000000]0x10000b756000 7.629 MB
+W20240129 18:55:21.413722 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_5 [1000000]0x10000bef9000 7.629 MB
+W20240129 18:55:21.413758 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_6 [1000000]0x10000c69c000 7.629 MB
+W20240129 18:55:21.413782 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_7 [1000000]0x10000ce3f000 7.629 MB
+W20240129 18:55:21.413808 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_8 [1000000]0x10000d5e2000 7.629 MB
+W20240129 18:55:21.413841 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_9 [1000000]0x10000dd85000 7.629 MB
+W20240129 18:55:21.413870 61643 IPCTensor.h:369] NewIPCTensor: step_r2 [10]0x10000e528000 80 B 
+W20240129 18:55:21.413892 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r2 [1]0x10000e52a000 8 B 
+W20240129 18:55:21.413921 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x10000e52c000 8 B 
+W20240129 18:55:21.413985 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_0 [1000000]0x10000e52e000 7.629 MB
+W20240129 18:55:21.414023 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_1 [1000000]0x10000ecd1000 7.629 MB
+W20240129 18:55:21.414050 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_2 [1000000]0x10000f474000 7.629 MB
+W20240129 18:55:21.414076 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_3 [1000000]0x10000fc17000 7.629 MB
+W20240129 18:55:21.414108 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_4 [1000000]0x1000103ba000 7.629 MB
+W20240129 18:55:21.414134 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_5 [1000000]0x100010b5d000 7.629 MB
+W20240129 18:55:21.414170 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_6 [1000000]0x100011300000 7.629 MB
+W20240129 18:55:21.414204 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_7 [1000000]0x100011aa3000 7.629 MB
+W20240129 18:55:21.414232 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_8 [1000000]0x100012246000 7.629 MB
+W20240129 18:55:21.414264 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_9 [1000000]0x1000129e9000 7.629 MB
+W20240129 18:55:21.414290 61643 IPCTensor.h:369] NewIPCTensor: step_r3 [10]0x10001318c000 80 B 
+W20240129 18:55:21.414312 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r3 [1]0x10001318e000 8 B 
+W20240129 18:55:21.414335 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x100013190000 8 B 
+W20240129 18:55:21.414388 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_0 [1000000]0x100013192000 7.629 MB
+W20240129 18:55:21.414423 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_1 [1000000]0x100013935000 7.629 MB
+W20240129 18:55:21.414454 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_2 [1000000]0x1000140d8000 7.629 MB
+W20240129 18:55:21.414484 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_3 [1000000]0x10001487b000 7.629 MB
+W20240129 18:55:21.414515 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_4 [1000000]0x10001501e000 7.629 MB
+W20240129 18:55:21.414541 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_5 [1000000]0x1000157c1000 7.629 MB
+W20240129 18:55:21.414573 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_6 [1000000]0x100015f64000 7.629 MB
+W20240129 18:55:21.414602 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_7 [1000000]0x100016707000 7.629 MB
+W20240129 18:55:21.414631 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_8 [1000000]0x100016eaa000 7.629 MB
+W20240129 18:55:21.414664 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_9 [1000000]0x10001764d000 7.629 MB
+W20240129 18:55:21.414691 61643 IPCTensor.h:369] NewIPCTensor: step_r4 [10]0x100017df0000 80 B 
+W20240129 18:55:21.414714 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r4 [1]0x100017df2000 8 B 
+W20240129 18:55:21.414736 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r4 [1]0x100017df4000 8 B 
+W20240129 18:55:21.414790 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_0 [1000000]0x100017df6000 7.629 MB
+W20240129 18:55:21.414832 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_1 [1000000]0x100018599000 7.629 MB
+W20240129 18:55:21.414865 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_2 [1000000]0x100018d3c000 7.629 MB
+W20240129 18:55:21.414896 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_3 [1000000]0x1000194df000 7.629 MB
+W20240129 18:55:21.414923 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_4 [1000000]0x100019c82000 7.629 MB
+W20240129 18:55:21.414949 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_5 [1000000]0x10001a425000 7.629 MB
+W20240129 18:55:21.414983 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_6 [1000000]0x10001abc8000 7.629 MB
+W20240129 18:55:21.415012 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_7 [1000000]0x10001b36b000 7.629 MB
+W20240129 18:55:21.415041 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_8 [1000000]0x10001bb0e000 7.629 MB
+W20240129 18:55:21.415071 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_9 [1000000]0x10001c2b1000 7.629 MB
+W20240129 18:55:21.415098 61643 IPCTensor.h:369] NewIPCTensor: step_r5 [10]0x10001ca54000 80 B 
+W20240129 18:55:21.415122 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r5 [1]0x10001ca56000 8 B 
+W20240129 18:55:21.415143 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r5 [1]0x10001ca58000 8 B 
+W20240129 18:55:21.415194 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_0 [1000000]0x10001ca5a000 7.629 MB
+W20240129 18:55:21.415223 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_1 [1000000]0x10001d1fd000 7.629 MB
+W20240129 18:55:21.415253 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_2 [1000000]0x10001d9a0000 7.629 MB
+W20240129 18:55:21.415285 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_3 [1000000]0x10001e143000 7.629 MB
+W20240129 18:55:21.415313 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_4 [1000000]0x10001e8e6000 7.629 MB
+W20240129 18:55:21.415345 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_5 [1000000]0x10001f089000 7.629 MB
+W20240129 18:55:21.415376 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_6 [1000000]0x10001f82c000 7.629 MB
+W20240129 18:55:21.415403 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_7 [1000000]0x10001ffcf000 7.629 MB
+W20240129 18:55:21.415436 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_8 [1000000]0x100020772000 7.629 MB
+W20240129 18:55:21.415470 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_9 [1000000]0x100020f15000 7.629 MB
+W20240129 18:55:21.415503 61643 IPCTensor.h:369] NewIPCTensor: step_r6 [10]0x1000216b8000 80 B 
+W20240129 18:55:21.415526 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r6 [1]0x1000216ba000 8 B 
+W20240129 18:55:21.415549 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r6 [1]0x1000216bc000 8 B 
+W20240129 18:55:21.415597 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_0 [1000000]0x1000216be000 7.629 MB
+W20240129 18:55:21.415637 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_1 [1000000]0x100021e61000 7.629 MB
+W20240129 18:55:21.415668 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_2 [1000000]0x100022604000 7.629 MB
+W20240129 18:55:21.415704 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_3 [1000000]0x100022da7000 7.629 MB
+W20240129 18:55:21.415731 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_4 [1000000]0x10002354a000 7.629 MB
+W20240129 18:55:21.415767 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_5 [1000000]0x100023ced000 7.629 MB
+W20240129 18:55:21.415802 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_6 [1000000]0x100024490000 7.629 MB
+W20240129 18:55:21.415833 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_7 [1000000]0x100024c33000 7.629 MB
+W20240129 18:55:21.415868 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_8 [1000000]0x1000253d6000 7.629 MB
+W20240129 18:55:21.415899 61643 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_9 [1000000]0x100025b79000 7.629 MB
+W20240129 18:55:21.415927 61643 IPCTensor.h:369] NewIPCTensor: step_r7 [10]0x10002631c000 80 B 
+W20240129 18:55:21.415951 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r7 [1]0x10002631e000 8 B 
+W20240129 18:55:21.415973 61643 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r7 [1]0x100026320000 8 B 
+W20240129 18:55:21.865944 61643 IPCTensor.h:369] NewIPCTensor: full_emb [86054151, 400]0x100026322000 128.2 GB
+W20240129 18:55:21.866101 61643 IPCTensor.h:369] NewIPCTensor: full_emb_SparseRowWiseAdaGrad_sum [86054151]0x102034f5a000 328.3 MB
+{0: Graph(num_nodes=18863774, num_edges=55186826,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 1: Graph(num_nodes=13493829, num_edges=51786811,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 2: Graph(num_nodes=12506959, num_edges=45797296,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 3: Graph(num_nodes=12605014, num_edges=52067933,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 4: Graph(num_nodes=14435508, num_edges=39101576,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 5: Graph(num_nodes=13252778, num_edges=37365728,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 6: Graph(num_nodes=14444909, num_edges=60122064,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 7: Graph(num_nodes=14493336, num_edges=37760331,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)})}
+MertisPartition: part 0 has 18863774 N 55186826 E
+MertisPartition: part 1 has 13493829 N 51786811 E
+MertisPartition: part 2 has 12506959 N 45797296 E
+MertisPartition: part 3 has 12605014 N 52067933 E
+MertisPartition: part 4 has 14435508 N 39101576 E
+MertisPartition: part 5 has 13252778 N 37365728 E
+MertisPartition: part 6 has 14444909 N 60122064 E
+MertisPartition: part 7 has 14493336 N 37760331 E
+Rank0: cached key size 537838
+Rank1: cached key size 537838
+Rank2: cached key size 537838
+Rank3: cached key size 537838
+Rank4: cached key size 537838
+Rank5: cached key size 537838
+Rank6: cached key size 537838
+Rank7: cached key size 537838
+Before renumbering graph:  {'_ID': tensor([       0,        1,        2,  ..., 39512110,  9797409, 32293938]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 6, 6])}
+After renumbering graph:  {'_ID': tensor([ 4302712,  4302732,    82591,  ..., 64572953, 58948786,  4957276]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 6, 6])}
+part_g: DGLGraph(num_nodes=18863774, num_edges=55186826,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+part_g: DGLGraph(num_nodes=18863774, num_edges=55186826,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Total initialize time 1733.701 seconds
+[Rank1] pid = 62541
+[Rank2] pid = 62635
+[Rank3] pid = 62704
+[Rank4] pid = 62771
+[Rank5] pid = 62841
+[Rank6] pid = 62908
+INFO [61643 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [62541 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [62635 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [62704 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [62841 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 5
+INFO [62908 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 6
+INFO [62975 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 7
+INFO [62771 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 4
+INFO [62841 distributed_c10d.py:476] Rank 5: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [62704 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [62975 distributed_c10d.py:476] Rank 7: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [62771 distributed_c10d.py:476] Rank 4: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [62908 distributed_c10d.py:476] Rank 6: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [61643 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [62541 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+W20240129 19:04:03.943953 62842 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_5 [4302707, 400]; dev=5; size=6.412 GB
+W20240129 19:04:03.944253 63040 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_7 [4302707, 400]; dev=7; size=6.412 GB
+W20240129 19:04:03.944381 62772 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_4 [4302707, 400]; dev=4; size=6.412 GB
+W20240129 19:04:03.944335 62909 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_6 [4302707, 400]; dev=6; size=6.412 GB
+W20240129 19:04:03.944550 62705 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_3 [4302707, 400]; dev=3; size=6.412 GB
+W20240129 19:04:03.944751 62976 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_0 [4302707, 400]; dev=0; size=6.412 GB
+INFO [62635 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+W20240129 19:04:03.946612 62542 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_1 [4302707, 400]; dev=1; size=6.412 GB
+W20240129 19:04:03.948676 62636 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_2 [4302707, 400]; dev=2; size=6.412 GB
+W20240129 19:04:04.019937 62842 IPCTensor.h:369] NewIPCTensor: input_keys_5 [1000000]0x1020497a5000 7.629 MB
+W20240129 19:04:04.019977 62772 IPCTensor.h:369] NewIPCTensor: input_keys_4 [1000000]0x102049f48000 7.629 MB
+W20240129 19:04:04.020172 62842 IPCTensor.h:369] NewIPCTensor: input_keys_neg_5 [1000000]0x10204a6eb000 7.629 MB
+W20240129 19:04:04.020210 62772 IPCTensor.h:369] NewIPCTensor: input_keys_neg_4 [1000000]0x10204ae8e000 7.629 MB
+W20240129 19:04:04.020247 62842 IPCTensor.h:369] NewIPCTensor: backward_grads_5 [1000000, 400]0x10204b631000 1.49 GB
+W20240129 19:04:04.020280 62772 IPCTensor.h:369] NewIPCTensor: backward_grads_4 [1000000, 400]0x1020aac14000 1.49 GB
+W20240129 19:04:04.020299 62842 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_5 [1000000, 400]0x10210a1f7000 1.49 GB
+W20240129 19:04:04.020335 62772 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_4 [1000000, 400]0x1021697da000 1.49 GB
+W20240129 19:04:04.020354 62842 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_5_gpu [1000000, 400]; dev=5; size=1.49 GB
+W20240129 19:04:04.020385 62772 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240129 19:04:04.026815 62909 IPCTensor.h:369] NewIPCTensor: input_keys_6 [1000000]0x1021c8dbf000 7.629 MB
+W20240129 19:04:04.026970 62909 IPCTensor.h:369] NewIPCTensor: input_keys_neg_6 [1000000]0x1021c9562000 7.629 MB
+W20240129 19:04:04.027027 62909 IPCTensor.h:369] NewIPCTensor: backward_grads_6 [1000000, 400]0x1021c9d05000 1.49 GB
+W20240129 19:04:04.027069 62909 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_6 [1000000, 400]0x1022292e8000 1.49 GB
+W20240129 19:04:04.027113 62909 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_6_gpu [1000000, 400]; dev=6; size=1.49 GB
+W20240129 19:04:04.030287 62636 IPCTensor.h:369] NewIPCTensor: input_keys_2 [1000000]0x1022888cd000 7.629 MB
+W20240129 19:04:04.030443 62636 IPCTensor.h:369] NewIPCTensor: input_keys_neg_2 [1000000]0x102289070000 7.629 MB
+W20240129 19:04:04.030496 62636 IPCTensor.h:369] NewIPCTensor: backward_grads_2 [1000000, 400]0x102289813000 1.49 GB
+W20240129 19:04:04.030534 62636 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_2 [1000000, 400]0x1022e8df6000 1.49 GB
+W20240129 19:04:04.030576 62636 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+W20240129 19:04:04.033764 62705 IPCTensor.h:369] NewIPCTensor: input_keys_3 [1000000]0x1023483e1000 7.629 MB
+W20240129 19:04:04.033860 62842 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_5_gpu [1000000, 400]; dev=5; size=1.49 GB
+W20240129 19:04:04.033871 63040 IPCTensor.h:369] NewIPCTensor: input_keys_7 [1000000]0x102348b88000 7.629 MB
+W20240129 19:04:04.033979 62636 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+W20240129 19:04:04.034031 63040 IPCTensor.h:369] NewIPCTensor: input_keys_neg_7 [1000000]0x10234932b000 7.629 MB
+W20240129 19:04:04.034091 63040 IPCTensor.h:369] NewIPCTensor: backward_grads_7 [1000000, 400]0x102349ace000 1.49 GB
+W20240129 19:04:04.034135 63040 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_7 [1000000, 400]0x1023a90b1000 1.49 GB
+W20240129 19:04:04.034180 63040 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_7_gpu [1000000, 400]; dev=7; size=1.49 GB
+W20240129 19:04:04.036943 62909 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_6_gpu [1000000, 400]; dev=6; size=1.49 GB
+W20240129 19:04:04.036964 62772 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240129 19:04:04.037072 62705 IPCTensor.h:369] NewIPCTensor: input_keys_neg_3 [1000000]0x102408694000 7.629 MB
+W20240129 19:04:04.037189 62705 IPCTensor.h:369] NewIPCTensor: backward_grads_3 [1000000, 400]0x102408e37000 1.49 GB
+W20240129 19:04:04.037273 62705 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_3 [1000000, 400]0x10246841a000 1.49 GB
+W20240129 19:04:04.037357 62705 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240129 19:04:04.046103 63040 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_7_gpu [1000000, 400]; dev=7; size=1.49 GB
+W20240129 19:04:04.046125 62705 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240129 19:04:04.070256 62976 IPCTensor.h:369] NewIPCTensor: input_keys_0 [1000000]0x1024c7a11000 7.629 MB
+W20240129 19:04:04.070360 62542 IPCTensor.h:369] NewIPCTensor: input_keys_1 [1000000]0x1024c81b4000 7.629 MB
+W20240129 19:04:04.070422 62976 IPCTensor.h:369] NewIPCTensor: input_keys_neg_0 [1000000]0x1024c8957000 7.629 MB
+W20240129 19:04:04.070483 62976 IPCTensor.h:369] NewIPCTensor: backward_grads_0 [1000000, 400]0x1024c90fa000 1.49 GB
+W20240129 19:04:04.070513 62542 IPCTensor.h:369] NewIPCTensor: input_keys_neg_1 [1000000]0x1025286dd000 7.629 MB
+W20240129 19:04:04.070531 62976 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_0 [1000000, 400]0x102528e80000 1.49 GB
+W20240129 19:04:04.070569 62542 IPCTensor.h:369] NewIPCTensor: backward_grads_1 [1000000, 400]0x102588463000 1.49 GB
+W20240129 19:04:04.070601 62976 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240129 19:04:04.070613 62542 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_1 [1000000, 400]0x1025e7a46000 1.49 GB
+W20240129 19:04:04.070664 62542 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+W20240129 19:04:04.075201 62976 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240129 19:04:04.075232 62542 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+cudaHostRegister 0x100026322000
+1: KnownLocalCachedEmbedding init done
+WARNING [62541 DistTensor.py:56] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+5: KnownLocalCachedEmbedding init done
+WARNING [62841 DistTensor.py:56] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+6: KnownLocalCachedEmbedding init done
+WARNING [62908 DistTensor.py:56] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+4: KnownLocalCachedEmbedding init done
+WARNING [62771 DistTensor.py:56] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+3: KnownLocalCachedEmbedding init done
+WARNING [62704 DistTensor.py:56] The tensor name already exists in the kvstore
+[Rank7] pid = 62975
+New CachedEmbedding, name=full_emb, shape=(86054151, 400), cache_type=KnownLocalCachedEmbedding
+fixed cache_range is [(0, 4302707), (4302707, 8605414), (8605414, 12908121), (12908121, 17210828), (17210828, 21513535), (21513535, 25816242), (25816242, 30118949), (30118949, 34421656)]
+cudaHostRegister 0x100026322000
+0: KnownLocalCachedEmbedding init done
+WARNING [61643 DistTensor.py:56] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+2: KnownLocalCachedEmbedding init done
+WARNING [62635 DistTensor.py:56] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+7: KnownLocalCachedEmbedding init done
+WARNING [62975 DistTensor.py:56] The tensor name already exists in the kvstore
+I20240129 19:04:53.007359 63040 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007467 62976 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007512 62636 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007537 62705 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007651 62542 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007728 62909 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007797 62842 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240129 19:04:53.007860 62772 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+W20240129 19:04:53.009068 62976 grad_base.h:55] KGCacheController, config={
+        "num_gpus": 8,
+        "L": 10,
+        "backgrad_init": "both", 
+        "kForwardItersPerStep": 2,
+        "clr": 1,
+        "nr_background_threads": 32,
+        "backwardMode": "CppAsync",
+        "cache_ratio": 0.05,
+        "update_cache_use_omp":  0,
+        "update_pq_use_omp":  0
+        }
+W20240129 19:04:53.009233 62976 grad_base.h:184] Init GradProcessingBase done
+I20240129 19:05:05.600937 62976 grad_async_v1.h:199] Use main thread to update emb.
+W20240129 19:05:05.601089 62976 kg_controller.h:75] after init GradAsyncProcessing
+I20240129 19:05:05.601099 62976 kg_controller.h:84] Construct KGCacheController done
+E20240129 19:05:06.384653 63040 recstore.cc:66] init folly done
+E20240129 19:05:06.384660 62909 recstore.cc:66] init folly done
+E20240129 19:05:06.384655 62842 recstore.cc:66] init folly done
+E20240129 19:05:06.384665 62772 recstore.cc:66] init folly done
+E20240129 19:05:06.384670 62976 recstore.cc:66] init folly done
+E20240129 19:05:06.384667 62705 recstore.cc:66] init folly done
+E20240129 19:05:06.384696 62636 recstore.cc:66] init folly done
+E20240129 19:05:06.384701 62542 recstore.cc:66] init folly done
+I20240129 19:05:06.385751 62976 grad_base.h:60] GraphEnv RegTensorsPerProcess
+W20240129 19:05:24.953701 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
+W20240129 19:05:26.103333 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
+W20240129 19:05:27.733078 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+I20240129 19:05:27.870012 63040 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 8
+I20240129 19:05:28.292428 62772 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240129 19:05:28.417366 62842 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+W20240129 19:05:29.236105 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+I20240129 19:05:29.380106 62636 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240129 19:05:30.148562 62542 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240129 19:05:30.180725 62705 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240129 19:05:30.277710 62976 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+W20240129 19:05:30.495744 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end0
+I20240129 19:05:31.301373 62909 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+W20240129 19:05:31.498064 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 6.849 ms                  | 6.849 ms                  |
+| Forward                   | 694.114 ms                | 694.114 ms                |
+| Backward                  | 177.185 ms                | 177.185 ms                |
+| Optimize                  | 4.823 ms                  | 4.823 ms                  |
+| BarrierTimeBeforeRank0    | 96.794 ms                 | 96.794 ms                 |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:33.598404 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=1, pq.top=1
+W20240129 19:05:34.416193 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:05:34.632635 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=3, pq.top=3
+W20240129 19:05:35.448029 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:05:35.655898 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=5, pq.top=5
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.453 ms                  | 349.105 ms                |
+| ProcessBack:UpdateCache   | 11.848 ms                 | 671.793 ms                |
+| ProcessBack:UpsertPq      | 41.045 ms                 | 56.868 ms                 |
+| ProcessOneStep            | 74.110 ms                 | 1.316 s                   |
+| BlockToStepN              | 1.850 ms                  | 811.990 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:36.449251 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:05:36.834422 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=7, pq.top=7
+W20240129 19:05:37.651944 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:05:37.904057 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=8, pq.top=8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 6.234 ms                  | 93.034 ms                 |
+| Forward                   | 6.280 ms                  | 694.114 ms                |
+| Backward                  | 10.221 ms                 | 177.185 ms                |
+| Optimize                  | 2.366 ms                  | 4.823 ms                  |
+| BarrierTimeBeforeRank0    | 9.402 ms                  | 159.369 ms                |
+| AfterBackward             | 71.276 ms                 | 1.316 s                   |
+| BlockToStepN              | 5.689 ms                  | 813.684 ms                |
+| OneStep                   | 303.926 ms                | 3.111 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:38.775650 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:05:38.963133 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=11, pq.top=11
+W20240129 19:05:39.784281 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:05:39.963008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=13, pq.top=13
+W20240129 19:05:40.788519 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:05:40.987021 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=15, pq.top=15
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.421 ms                  | 349.105 ms                |
+| ProcessBack:UpdateCache   | 9.985 ms                  | 671.793 ms                |
+| ProcessBack:UpsertPq      | 42.411 ms                 | 76.068 ms                 |
+| ProcessOneStep            | 68.294 ms                 | 1.316 s                   |
+| BlockToStepN              | 5.631 ms                  | 821.539 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:41.811261 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:05:41.987007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=17, pq.top=17
+W20240129 19:05:42.825675 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:05:42.987007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=19, pq.top=19
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 5.435 ms                  | 93.034 ms                 |
+| Forward                   | 5.567 ms                  | 694.114 ms                |
+| Backward                  | 10.331 ms                 | 177.185 ms                |
+| Optimize                  | 2.608 ms                  | 4.823 ms                  |
+| BarrierTimeBeforeRank0    | 3.929 ms                  | 159.369 ms                |
+| AfterBackward             | 74.150 ms                 | 1.316 s                   |
+| BlockToStepN              | 5.689 ms                  | 821.651 ms                |
+| OneStep                   | 303.926 ms                | 3.111 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:43.832353 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:05:44.016721 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=21, pq.top=21
+W20240129 19:05:44.838238 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:05:45.239647 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=23, pq.top=23
+W20240129 19:05:46.168767 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:05:46.294548 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=24, pq.top=24
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.347 ms                  | 349.105 ms                |
+| ProcessBack:UpdateCache   | 10.101 ms                 | 671.793 ms                |
+| ProcessBack:UpsertPq      | 44.075 ms                 | 82.914 ms                 |
+| ProcessOneStep            | 71.221 ms                 | 1.316 s                   |
+| BlockToStepN              | 12.681 ms                 | 886.647 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:47.278015 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:05:47.356571 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=26, pq.top=26
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 6.131 ms                  | 112.362 ms                |
+| Forward                   | 5.459 ms                  | 694.114 ms                |
+| Backward                  | 10.401 ms                 | 177.185 ms                |
+| Optimize                  | 2.826 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 2.279 ms                  | 159.369 ms                |
+| AfterBackward             | 69.239 ms                 | 1.316 s                   |
+| BlockToStepN              | 12.736 ms                 | 886.752 ms                |
+| OneStep                   | 303.926 ms                | 3.111 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:48.339344 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:05:48.419282 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=28, pq.top=28
+W20240129 19:05:49.387482 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:05:49.462600 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=30, pq.top=30
+W20240129 19:05:50.441051 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:05:50.515977 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=32, pq.top=32
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.347 ms                  | 314.852 ms                |
+| ProcessBack:UpdateCache   | 9.705 ms                  | 670.498 ms                |
+| ProcessBack:UpsertPq      | 41.045 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 64.883 ms                 | 1.316 s                   |
+| BlockToStepN              | 12.681 ms                 | 886.810 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:51.488093 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:05:51.585083 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=34, pq.top=34
+W20240129 19:05:52.585008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=35, pq.top=35
+W20240129 19:05:52.589143 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 6.475 ms                  | 112.362 ms                |
+| Forward                   | 5.422 ms                  | 694.114 ms                |
+| Backward                  | 10.384 ms                 | 177.185 ms                |
+| Optimize                  | 2.795 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 852.364 us                | 159.369 ms                |
+| AfterBackward             | 64.917 ms                 | 1.316 s                   |
+| BlockToStepN              | 12.736 ms                 | 894.425 ms                |
+| OneStep                   | 303.926 ms                | 3.111 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:53.585011 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=37, pq.top=37
+W20240129 19:05:53.708014 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:05:54.585011 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=39, pq.top=39
+W20240129 19:05:55.072896 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:05:55.585009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=41, pq.top=41
+W20240129 19:05:56.277312 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.421 ms                  | 314.852 ms                |
+| ProcessBack:UpdateCache   | 9.718 ms                  | 670.498 ms                |
+| ProcessBack:UpsertPq      | 40.051 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 64.883 ms                 | 1.316 s                   |
+| BlockToStepN              | 12.681 ms                 | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:56.585006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=43, pq.top=43
+W20240129 19:05:57.381441 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:05:57.606118 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=45, pq.top=45
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 7.044 ms                  | 231.698 ms                |
+| Forward                   | 5.422 ms                  | 694.114 ms                |
+| Backward                  | 10.330 ms                 | 177.185 ms                |
+| Optimize                  | 2.608 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 348.928 us                | 159.369 ms                |
+| AfterBackward             | 64.917 ms                 | 1.316 s                   |
+| BlockToStepN              | 12.736 ms                 | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 3.111 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:05:58.510221 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:05:58.606006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=46, pq.top=46
+W20240129 19:05:59.606011 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=47, pq.top=47
+W20240129 19:05:59.624374 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:06:00.606010 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=49, pq.top=49
+W20240129 19:06:00.740873 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 314.852 ms                |
+| ProcessBack:UpdateCache   | 9.694 ms                  | 670.498 ms                |
+| ProcessBack:UpsertPq      | 39.982 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 65.655 ms                 | 100.432 ms                |
+| BlockToStepN              | 13.694 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:01.606006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=51, pq.top=51
+W20240129 19:06:01.916594 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:02.606009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=53, pq.top=53
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.121 ms                  | 139.246 ms                |
+| Forward                   | 5.358 ms                  | 23.826 ms                 |
+| Backward                  | 10.275 ms                 | 11.321 ms                 |
+| Optimize                  | 2.495 ms                  | 5.014 ms                  |
+| BarrierTimeBeforeRank0    | 51.096 us                 | 98.387 ms                 |
+| AfterBackward             | 66.571 ms                 | 146.494 ms                |
+| BlockToStepN              | 13.735 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:03.073915 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:03.606009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=55, pq.top=55
+W20240129 19:06:04.435178 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:06:04.810000 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=57, pq.top=57
+W20240129 19:06:05.665426 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:06:05.908217 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=59, pq.top=59
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.453 ms                  | 314.852 ms                |
+| ProcessBack:UpdateCache   | 9.788 ms                  | 670.498 ms                |
+| ProcessBack:UpsertPq      | 41.613 ms                 | 125.862 ms                |
+| ProcessOneStep            | 68.523 ms                 | 157.559 ms                |
+| BlockToStepN              | 13.694 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:06.772815 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:06:07.004824 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=61, pq.top=61
+W20240129 19:06:07.896095 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:08.008387 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=62, pq.top=62
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.223 ms                  | 170.508 ms                |
+| Forward                   | 5.343 ms                  | 23.826 ms                 |
+| Backward                  | 10.275 ms                 | 13.505 ms                 |
+| Optimize                  | 2.518 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 59.121 us                 | 98.387 ms                 |
+| AfterBackward             | 68.554 ms                 | 157.604 ms                |
+| BlockToStepN              | 734.302 ms                | 913.942 ms                |
+| OneStep                   | 858.450 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:09.009984 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:09.101486 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=64, pq.top=64
+W20240129 19:06:10.097338 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:06:10.185209 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=66, pq.top=66
+W20240129 19:06:11.171185 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:06:11.256059 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=68, pq.top=68
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.457 ms                  | 314.852 ms                |
+| ProcessBack:UpdateCache   | 9.694 ms                  | 670.498 ms                |
+| ProcessBack:UpsertPq      | 40.789 ms                 | 125.862 ms                |
+| ProcessOneStep            | 66.542 ms                 | 157.559 ms                |
+| BlockToStepN              | 13.694 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:12.240402 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:06:12.325230 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=70, pq.top=70
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.659 ms                  | 170.508 ms                |
+| Forward                   | 5.459 ms                  | 23.826 ms                 |
+| Backward                  | 10.300 ms                 | 13.505 ms                 |
+| Optimize                  | 2.510 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 44.928 us                 | 98.387 ms                 |
+| AfterBackward             | 66.346 ms                 | 157.604 ms                |
+| BlockToStepN              | 13.735 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:13.325011 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=71, pq.top=71
+W20240129 19:06:13.483481 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:14.325008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=73, pq.top=73
+W20240129 19:06:14.563042 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:15.325009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=75, pq.top=75
+W20240129 19:06:15.625208 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:06:16.325008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=77, pq.top=77
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.678 ms                  | 27.800 ms                 |
+| ProcessBack:UpsertPq      | 39.061 ms                 | 97.213 ms                 |
+| ProcessOneStep            | 64.841 ms                 | 157.559 ms                |
+| BlockToStepN              | 13.694 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:16.688326 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:06:17.325009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=79, pq.top=79
+W20240129 19:06:17.745184 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.443 ms                  | 170.508 ms                |
+| Forward                   | 5.375 ms                  | 23.826 ms                 |
+| Backward                  | 10.335 ms                 | 13.505 ms                 |
+| Optimize                  | 2.495 ms                  | 5.583 ms                  |
+| BarrierTimeBeforeRank0    | 43.250 us                 | 98.387 ms                 |
+| AfterBackward             | 63.016 ms                 | 157.604 ms                |
+| BlockToStepN              | 13.735 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:18.325008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=81, pq.top=81
+W20240129 19:06:18.791721 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:19.325008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=83, pq.top=83
+W20240129 19:06:19.840420 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:20.325008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=85, pq.top=85
+W20240129 19:06:20.909219 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:06:21.325008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=87, pq.top=87
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.552 ms                  | 27.800 ms                 |
+| ProcessBack:UpsertPq      | 36.923 ms                 | 97.213 ms                 |
+| ProcessOneStep            | 62.083 ms                 | 157.559 ms                |
+| BlockToStepN              | 13.694 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:22.223419 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:06:22.325007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=88, pq.top=88
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.187 ms                  | 170.508 ms                |
+| Forward                   | 5.343 ms                  | 23.826 ms                 |
+| Backward                  | 10.383 ms                 | 13.505 ms                 |
+| Optimize                  | 2.510 ms                  | 6.119 ms                  |
+| BarrierTimeBeforeRank0    | 50.637 us                 | 98.387 ms                 |
+| AfterBackward             | 61.943 ms                 | 157.604 ms                |
+| BlockToStepN              | 18.471 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:23.305532 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:06:23.401208 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=90, pq.top=90
+W20240129 19:06:24.329921 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:24.440620 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=93, pq.top=93
+W20240129 19:06:25.343281 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
+W20240129 19:06:25.440006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=95, pq.top=95
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 27.800 ms                 |
+| ProcessBack:UpsertPq      | 36.344 ms                 | 97.213 ms                 |
+| ProcessOneStep            | 61.896 ms                 | 157.559 ms                |
+| BlockToStepN              | 18.407 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:26.399344 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end7
+W20240129 19:06:26.440003 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=97, pq.top=97
+W20240129 19:06:27.440008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=99, pq.top=99
+W20240129 19:06:27.455171 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 8.613 ms                  | 170.508 ms                |
+| Forward                   | 5.375 ms                  | 23.826 ms                 |
+| Backward                  | 10.387 ms                 | 13.505 ms                 |
+| Optimize                  | 2.608 ms                  | 6.119 ms                  |
+| BarrierTimeBeforeRank0    | 51.096 us                 | 98.387 ms                 |
+| AfterBackward             | 61.900 ms                 | 157.604 ms                |
+| BlockToStepN              | 18.471 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 6] 100 steps, total: 56.813, sample: 2.003, forward: 1.204, backward: 0.682, update: 0.230
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 2] 100 steps, total: 58.734, sample: 1.608, forward: 1.200, backward: 0.738, update: 0.230
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 1] 100 steps, total: 57.966, sample: 1.864, forward: 1.165, backward: 1.190, update: 0.268
+train_sampler.Prefill()
+-------Step 0-------
+tensor([   56730,    56757,    56788,    56837,  5794110,    99668, 53251204,
+        16489625, 21184845,    56873]) tensor([ 5200318, 14368739, 56176632, 78767045, 19958761, 30817767, 37489625,
+        73926706, 65459714, 30074960])
+-------Step 1-------
+tensor([   56730,    56757,    56788,    56837,  5794110,    99668, 53251204,
+        16489625, 21184845,    56873]) tensor([64176125, 26828063, 11165272, 75443094, 84507001, 42644292, 74657476,
+        53458668, 38358505, 12337853])
+-------Step 2-------
+tensor([  143361,   143402,   143443,    28734,   143473,   143507,   143546,
+        26118974,   143575,   143610]) tensor([74021642, 23095670, 76125539, 45647222, 41006879, 28935198, 64489047,
+        39515537, 15817581, 41924189])
+-------Step 3-------
+tensor([  143361,   143402,   143443,    28734,   143473,   143507,   143546,
+        26118974,   143575,   143610]) tensor([51058071, 80476865, 32036270, 36841510, 65786864, 67296330, 37765873,
+        15270088, 27234703,   705452])
+-------Step 4-------
+tensor([  230516, 42320076,   230544,   125038,   230583,   125069,   230614,
+        38402419,   230651,   230690]) tensor([76674002,  9416900, 85060575, 17975381, 74675824, 42158844, 67885341,
+        36152015, 78851669, 48170794])
+-------Step 5-------
+tensor([  230516, 42320076,   230544,   125038,   230583,   125069,   230614,
+        38402419,   230651,   230690]) tensor([33240405, 78646466,   304871, 82367359, 55305205, 60446909, 16564494,
+         9988293, 66606141, 44761075])
+-------Step 6-------
+tensor([  316931,    60472,   316962,   317005,    60499, 77722305,   317039,
+          317074,   138075, 35177008]) tensor([13675857, 35115253, 33192013, 83572726, 31463625, 37534667, 25290673,
+         6736582, 70167267, 77119945])
+-------Step 7-------
+tensor([  316931,    60472,   316962,   317005,    60499, 77722305,   317039,
+          317074,   138075, 35177008]) tensor([23933776, 54172299, 65921713, 56878060, 83914615, 47973363, 52712807,
+        58841355, 32778325, 35558563])
+-------Step 8-------
+tensor([  402109, 24733842,   402135,   150414,   402179,    76097,   402208,
+          402239,   402263,   402298]) tensor([40908818, 26227636, 34876205,  1960404, 51170410, 67139806, 15798010,
+        75720627,  1600509, 58010636])
+-------Step 9-------
+tensor([  402109, 24733842,   402135,   150414,   402179,    76097,   402208,
+          402239,   402263,   402298]) tensor([53867273, 35416805, 14443690, 51101215,  9454898, 38113584, 24887731,
+        34921896, 82925934, 66842080])
+before start barrier
+start train
+[proc 0] 100 steps, total: 57.836, sample: 2.239, forward: 1.279, backward: 1.200, update: 0.313
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 3] 100 steps, total: 57.934, sample: 1.411, forward: 1.171, backward: 1.197, update: 0.260
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 5] 100 steps, total: 59.697, sample: 2.072, forward: 1.202, backward: 1.248, update: 0.289
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 7] 100 steps, total: 60.244, sample: 1.305, forward: 1.198, backward: 1.274, update: 0.266
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 4] 100 steps, total: 59.822, sample: 2.060, forward: 1.201, backward: 1.134, update: 0.263
+W20240129 19:06:28.440009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=101, pq.top=101
+W20240129 19:06:28.457475 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
+W20240129 19:06:29.440008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=103, pq.top=103
+W20240129 19:06:30.088788 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:30.440009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=105, pq.top=105
+W20240129 19:06:31.089583 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 27.800 ms                 |
+| ProcessBack:UpsertPq      | 36.229 ms                 | 97.213 ms                 |
+| ProcessOneStep            | 61.862 ms                 | 157.559 ms                |
+| BlockToStepN              | 18.407 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:31.440006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=107, pq.top=107
+W20240129 19:06:32.117800 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
+W20240129 19:06:32.440009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=109, pq.top=109
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 7.957 ms                  | 170.508 ms                |
+| Forward                   | 5.358 ms                  | 23.826 ms                 |
+| Backward                  | 10.416 ms                 | 13.505 ms                 |
+| Optimize                  | 2.688 ms                  | 6.119 ms                  |
+| BarrierTimeBeforeRank0    | 44.928 us                 | 98.387 ms                 |
+| AfterBackward             | 61.932 ms                 | 157.604 ms                |
+| BlockToStepN              | 731.394 ms                | 913.942 ms                |
+| OneStep                   | 836.739 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:33.119150 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end1
+W20240129 19:06:33.440009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=111, pq.top=111
+W20240129 19:06:34.146107 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end3
+W20240129 19:06:34.440011 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=113, pq.top=113
+W20240129 19:06:35.165329 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
+W20240129 19:06:35.440009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=115, pq.top=115
+W20240129 19:06:36.217407 63555 grad_async_v1.h:280] Detect new sample comes, old_end6, new_end7
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.574 ms                  | 27.800 ms                 |
+| ProcessBack:UpsertPq      | 36.344 ms                 | 97.213 ms                 |
+| ProcessOneStep            | 61.906 ms                 | 157.559 ms                |
+| BlockToStepN              | 18.407 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:36.440026 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=117, pq.top=117
+W20240129 19:06:37.253094 63555 grad_async_v1.h:280] Detect new sample comes, old_end8, new_end9
+W20240129 19:06:37.440009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=119, pq.top=119
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 8.290 ms                  | 231.698 ms                |
+| Forward                   | 5.358 ms                  | 23.826 ms                 |
+| Backward                  | 10.416 ms                 | 13.505 ms                 |
+| Optimize                  | 2.688 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 42.419 us                 | 98.387 ms                 |
+| AfterBackward             | 62.013 ms                 | 157.604 ms                |
+| BlockToStepN              | 18.471 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:38.270876 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:06:38.469300 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=121, pq.top=121
+W20240129 19:06:39.286696 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:39.469008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=123, pq.top=123
+W20240129 19:06:40.324132 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
+W20240129 19:06:40.469007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=125, pq.top=125
+W20240129 19:06:41.370471 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end7
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.022 ms                 |
+| ProcessBack:UpdateCache   | 9.634 ms                  | 27.360 ms                 |
+| ProcessBack:UpsertPq      | 36.229 ms                 | 92.466 ms                 |
+| ProcessOneStep            | 61.744 ms                 | 157.559 ms                |
+| BlockToStepN              | 18.407 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:41.469004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=127, pq.top=127
+W20240129 19:06:42.423354 63555 grad_async_v1.h:280] Detect new sample comes, old_end8, new_end9
+W20240129 19:06:42.469003 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=129, pq.top=129
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.121 ms                  | 231.698 ms                |
+| Forward                   | 5.375 ms                  | 23.826 ms                 |
+| Backward                  | 10.386 ms                 | 13.505 ms                 |
+| Optimize                  | 2.674 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 42.280 us                 | 98.387 ms                 |
+| AfterBackward             | 61.495 ms                 | 157.604 ms                |
+| BlockToStepN              | 731.394 ms                | 913.942 ms                |
+| OneStep                   | 834.653 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:43.469009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=131, pq.top=131
+W20240129 19:06:43.881073 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:44.469012 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=133, pq.top=133
+W20240129 19:06:44.912938 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:45.469007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=135, pq.top=135
+W20240129 19:06:46.190549 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.022 ms                 |
+| ProcessBack:UpdateCache   | 9.582 ms                  | 27.360 ms                 |
+| ProcessBack:UpsertPq      | 35.547 ms                 | 92.466 ms                 |
+| ProcessOneStep            | 60.479 ms                 | 157.559 ms                |
+| BlockToStepN              | 18.407 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:46.469004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=137, pq.top=137
+W20240129 19:06:47.277617 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:06:47.469005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=139, pq.top=139
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.187 ms                  | 290.980 ms                |
+| Forward                   | 5.375 ms                  | 23.826 ms                 |
+| Backward                  | 10.380 ms                 | 13.505 ms                 |
+| Optimize                  | 2.688 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 42.280 us                 | 98.387 ms                 |
+| AfterBackward             | 60.428 ms                 | 157.604 ms                |
+| BlockToStepN              | 18.471 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.252 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:48.284118 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end1
+W20240129 19:06:48.469004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=141, pq.top=141
+W20240129 19:06:49.314249 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:49.469007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=143, pq.top=143
+W20240129 19:06:50.330673 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
+W20240129 19:06:50.469005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=145, pq.top=145
+W20240129 19:06:51.331171 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end7
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.421 ms                  | 17.022 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 27.360 ms                 |
+| ProcessBack:UpsertPq      | 35.122 ms                 | 92.466 ms                 |
+| ProcessOneStep            | 60.009 ms                 | 157.559 ms                |
+| BlockToStepN              | 91.640 ms                 | 913.847 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:51.469005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=147, pq.top=147
+W20240129 19:06:52.358384 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
+W20240129 19:06:52.469007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=149, pq.top=149
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.187 ms                  | 290.980 ms                |
+| Forward                   | 5.379 ms                  | 23.826 ms                 |
+| Backward                  | 10.358 ms                 | 13.505 ms                 |
+| Optimize                  | 2.640 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 41.415 us                 | 98.387 ms                 |
+| AfterBackward             | 60.357 ms                 | 157.604 ms                |
+| BlockToStepN              | 91.683 ms                 | 913.942 ms                |
+| OneStep                   | 303.926 ms                | 1.252 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:53.368432 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:06:53.694752 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=151, pq.top=151
+W20240129 19:06:54.493144 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:06:54.694010 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=153, pq.top=153
+W20240129 19:06:55.500968 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:06:55.694008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=155, pq.top=155
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 27.360 ms                 |
+| ProcessBack:UpsertPq      | 34.705 ms                 | 92.466 ms                 |
+| ProcessOneStep            | 59.996 ms                 | 146.451 ms                |
+| BlockToStepN              | 705.398 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:56.532891 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end7
+W20240129 19:06:56.694007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=157, pq.top=157
+W20240129 19:06:57.559360 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
+W20240129 19:06:57.694008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=159, pq.top=159
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.223 ms                  | 267.734 ms                |
+| Forward                   | 5.436 ms                  | 11.963 ms                 |
+| Backward                  | 10.308 ms                 | 12.773 ms                 |
+| Optimize                  | 2.622 ms                  | 9.445 ms                  |
+| BarrierTimeBeforeRank0    | 38.980 us                 | 96.794 ms                 |
+| AfterBackward             | 58.886 ms                 | 146.494 ms                |
+| BlockToStepN              | 91.683 ms                 | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:06:58.572818 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end1
+W20240129 19:06:58.694010 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=161, pq.top=161
+W20240129 19:06:59.609346 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end3
+W20240129 19:06:59.694008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=163, pq.top=163
+W20240129 19:07:00.646507 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
+W20240129 19:07:00.694005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=165, pq.top=165
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 18.010 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 27.360 ms                 |
+| ProcessBack:UpsertPq      | 34.457 ms                 | 92.466 ms                 |
+| ProcessOneStep            | 59.275 ms                 | 146.451 ms                |
+| BlockToStepN              | 141.318 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:01.669421 63555 grad_async_v1.h:280] Detect new sample comes, old_end6, new_end7
+W20240129 19:07:01.894816 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=167, pq.top=167
+W20240129 19:07:02.703716 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:02.939419 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=169, pq.top=169
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.443 ms                  | 267.734 ms                |
+| Forward                   | 5.443 ms                  | 11.963 ms                 |
+| Backward                  | 10.275 ms                 | 12.773 ms                 |
+| Optimize                  | 2.608 ms                  | 9.445 ms                  |
+| BarrierTimeBeforeRank0    | 38.980 us                 | 96.794 ms                 |
+| AfterBackward             | 58.886 ms                 | 146.494 ms                |
+| BlockToStepN              | 141.410 ms                | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:03.728284 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:03.939007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=171, pq.top=171
+W20240129 19:07:04.732095 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:04.939009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=173, pq.top=173
+W20240129 19:07:05.739732 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:05.939009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=175, pq.top=175
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 18.010 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 27.360 ms                 |
+| ProcessBack:UpsertPq      | 33.864 ms                 | 92.466 ms                 |
+| ProcessOneStep            | 58.679 ms                 | 146.451 ms                |
+| BlockToStepN              | 141.318 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:06.739526 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:06.939007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=177, pq.top=177
+W20240129 19:07:07.766855 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:07.939007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=179, pq.top=179
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.187 ms                  | 267.734 ms                |
+| Forward                   | 5.436 ms                  | 19.558 ms                 |
+| Backward                  | 10.232 ms                 | 12.773 ms                 |
+| Optimize                  | 2.608 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 38.418 us                 | 96.794 ms                 |
+| AfterBackward             | 58.161 ms                 | 146.494 ms                |
+| BlockToStepN              | 141.410 ms                | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:08.791725 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:08.939007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=181, pq.top=181
+W20240129 19:07:09.809128 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:10.218554 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=183, pq.top=183
+W20240129 19:07:11.015744 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:11.266052 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=185, pq.top=185
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 24.413 ms                 |
+| ProcessBack:UpsertPq      | 33.930 ms                 | 86.187 ms                 |
+| ProcessOneStep            | 58.679 ms                 | 146.451 ms                |
+| BlockToStepN              | 141.318 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:12.035769 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:12.266008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=187, pq.top=187
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.121 ms                  | 267.734 ms                |
+| Forward                   | 5.442 ms                  | 19.558 ms                 |
+| Backward                  | 10.189 ms                 | 12.773 ms                 |
+| Optimize                  | 2.549 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 36.860 us                 | 96.794 ms                 |
+| AfterBackward             | 58.737 ms                 | 146.494 ms                |
+| BlockToStepN              | 705.471 ms                | 910.570 ms                |
+| OneStep                   | 797.950 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:13.049813 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:13.276445 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=189, pq.top=189
+W20240129 19:07:14.055035 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:14.328287 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=191, pq.top=191
+W20240129 19:07:15.077919 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:15.370357 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=193, pq.top=193
+W20240129 19:07:16.125476 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 24.413 ms                 |
+| ProcessBack:UpsertPq      | 33.991 ms                 | 86.187 ms                 |
+| ProcessOneStep            | 58.679 ms                 | 146.451 ms                |
+| BlockToStepN              | 141.318 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:16.414728 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=195, pq.top=195
+W20240129 19:07:17.183275 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:17.517590 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=197, pq.top=197
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.443 ms                  | 267.734 ms                |
+| Forward                   | 5.442 ms                  | 19.558 ms                 |
+| Backward                  | 10.184 ms                 | 12.773 ms                 |
+| Optimize                  | 2.595 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 36.458 us                 | 96.794 ms                 |
+| AfterBackward             | 58.886 ms                 | 146.494 ms                |
+| BlockToStepN              | 141.410 ms                | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:18.262702 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:18.848260 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=199, pq.top=199
+W20240129 19:07:19.631786 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+[proc 2] 200 steps, total: 51.650, sample: 1.324, forward: 0.519, backward: 0.513, update: 0.225
+[proc 6] 200 steps, total: 51.650, sample: 1.708, forward: 0.562, backward: 0.497, update: 0.224
+[proc 4] 200 steps, total: 51.650, sample: 1.752, forward: 0.565, backward: 0.991, update: 0.257
+[proc 3] 200 steps, total: 51.650, sample: 1.293, forward: 0.517, backward: 0.712, update: 0.234
+[proc 7] 200 steps, total: 51.650, sample: 1.344, forward: 0.539, backward: 1.036, update: 0.243
+[proc 0] 200 steps, total: 51.650, sample: 3.182, forward: 0.588, backward: 0.882, update: 0.320
+[proc 1] 200 steps, total: 51.650, sample: 1.658, forward: 0.494, backward: 0.999, update: 0.250
+[proc 5] 200 steps, total: 51.650, sample: 1.941, forward: 0.539, backward: 0.978, update: 0.255
+W20240129 19:07:19.877076 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=201, pq.top=201
+W20240129 19:07:20.655797 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:20.877008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=203, pq.top=203
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 24.413 ms                 |
+| ProcessBack:UpsertPq      | 34.259 ms                 | 86.187 ms                 |
+| ProcessOneStep            | 59.275 ms                 | 146.451 ms                |
+| BlockToStepN              | 141.318 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:21.655262 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:21.877008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=205, pq.top=205
+W20240129 19:07:22.662616 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:22.877009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=207, pq.top=207
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.466 ms                  | 283.236 ms                |
+| Forward                   | 5.436 ms                  | 19.558 ms                 |
+| Backward                  | 10.166 ms                 | 12.773 ms                 |
+| Optimize                  | 2.569 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 36.860 us                 | 96.794 ms                 |
+| AfterBackward             | 59.320 ms                 | 146.494 ms                |
+| BlockToStepN              | 141.410 ms                | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:23.664717 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:23.889231 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=209, pq.top=209
+W20240129 19:07:24.683606 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:24.942977 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=211, pq.top=211
+W20240129 19:07:25.702730 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:25.997725 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=213, pq.top=213
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.558 ms                  | 24.413 ms                 |
+| ProcessBack:UpsertPq      | 34.036 ms                 | 86.187 ms                 |
+| ProcessOneStep            | 58.679 ms                 | 146.451 ms                |
+| BlockToStepN              | 141.318 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:26.751771 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:27.270568 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=215, pq.top=215
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.466 ms                  | 283.236 ms                |
+| Forward                   | 5.421 ms                  | 19.558 ms                 |
+| Backward                  | 10.138 ms                 | 12.773 ms                 |
+| Optimize                  | 2.595 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 36.653 us                 | 96.794 ms                 |
+| AfterBackward             | 58.718 ms                 | 146.494 ms                |
+| BlockToStepN              | 705.471 ms                | 910.570 ms                |
+| OneStep                   | 797.950 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:28.063791 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:28.270005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=217, pq.top=217
+W20240129 19:07:29.091842 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:29.270006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=219, pq.top=219
+W20240129 19:07:30.096196 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:30.270006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=221, pq.top=221
+W20240129 19:07:31.101305 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:31.300583 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=223, pq.top=223
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.618 ms                 |
+| ProcessBack:UpdateCache   | 9.522 ms                  | 24.413 ms                 |
+| ProcessBack:UpsertPq      | 33.935 ms                 | 86.187 ms                 |
+| ProcessOneStep            | 58.077 ms                 | 146.451 ms                |
+| BlockToStepN              | 143.659 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:32.117607 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:32.385916 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=225, pq.top=225
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.484 ms                  | 283.236 ms                |
+| Forward                   | 5.379 ms                  | 19.558 ms                 |
+| Backward                  | 10.128 ms                 | 12.773 ms                 |
+| Optimize                  | 2.569 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 35.311 us                 | 96.794 ms                 |
+| AfterBackward             | 57.920 ms                 | 146.494 ms                |
+| BlockToStepN              | 150.797 ms                | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:33.154014 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:33.431067 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=227, pq.top=227
+W20240129 19:07:34.198792 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:34.507016 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=229, pq.top=229
+W20240129 19:07:35.264631 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:35.798703 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=231, pq.top=231
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.499 ms                  | 16.369 ms                 |
+| ProcessBack:UpsertPq      | 33.930 ms                 | 82.914 ms                 |
+| ProcessOneStep            | 57.689 ms                 | 146.451 ms                |
+| BlockToStepN              | 163.795 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:36.582613 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:36.798007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=233, pq.top=233
+W20240129 19:07:37.586858 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:37.798007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=235, pq.top=235
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.524 ms                  | 283.236 ms                |
+| Forward                   | 5.358 ms                  | 19.558 ms                 |
+| Backward                  | 10.076 ms                 | 12.773 ms                 |
+| Optimize                  | 2.549 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 34.491 us                 | 96.794 ms                 |
+| AfterBackward             | 57.638 ms                 | 146.494 ms                |
+| BlockToStepN              | 163.863 ms                | 910.570 ms                |
+| OneStep                   | 303.926 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:38.600225 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:38.833753 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=237, pq.top=237
+W20240129 19:07:39.618643 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:39.910810 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=239, pq.top=239
+W20240129 19:07:40.657750 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:40.987072 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=241, pq.top=241
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.472 ms                  | 16.369 ms                 |
+| ProcessBack:UpsertPq      | 33.860 ms                 | 82.914 ms                 |
+| ProcessOneStep            | 57.473 ms                 | 146.451 ms                |
+| BlockToStepN              | 163.795 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:41.751355 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:41.987007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=242, pq.top=242
+W20240129 19:07:42.852248 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:42.987007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=244, pq.top=244
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.484 ms                  | 283.236 ms                |
+| Forward                   | 5.346 ms                  | 19.558 ms                 |
+| Backward                  | 10.004 ms                 | 12.773 ms                 |
+| Optimize                  | 2.549 ms                  | 9.721 ms                  |
+| BarrierTimeBeforeRank0    | 34.369 us                 | 96.794 ms                 |
+| AfterBackward             | 57.506 ms                 | 146.494 ms                |
+| BlockToStepN              | 705.471 ms                | 910.570 ms                |
+| OneStep                   | 797.950 ms                | 1.220 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:43.940553 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:44.018754 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=246, pq.top=246
+W20240129 19:07:45.018007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=247, pq.top=247
+W20240129 19:07:45.256811 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:46.018007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=249, pq.top=249
+W20240129 19:07:46.256829 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.407 ms                  | 16.369 ms                 |
+| ProcessBack:UpsertPq      | 33.860 ms                 | 82.914 ms                 |
+| ProcessOneStep            | 57.473 ms                 | 146.451 ms                |
+| BlockToStepN              | 705.398 ms                | 910.472 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:47.018007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=251, pq.top=251
+W20240129 19:07:47.289101 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:48.018007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=253, pq.top=253
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.524 ms                  | 267.734 ms                |
+| Forward                   | 5.341 ms                  | 11.963 ms                 |
+| Backward                  | 9.943 ms                  | 12.008 ms                 |
+| Optimize                  | 2.542 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 33.842 us                 | 93.043 ms                 |
+| AfterBackward             | 57.728 ms                 | 119.786 ms                |
+| BlockToStepN              | 166.815 ms                | 908.744 ms                |
+| OneStep                   | 303.926 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:48.410432 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:49.018007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=255, pq.top=255
+W20240129 19:07:49.524612 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:50.018009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=257, pq.top=257
+W20240129 19:07:50.626310 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:07:51.018007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=259, pq.top=259
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.354 ms                  | 16.369 ms                 |
+| ProcessBack:UpsertPq      | 33.991 ms                 | 82.914 ms                 |
+| ProcessOneStep            | 57.843 ms                 | 119.751 ms                |
+| BlockToStepN              | 174.075 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:51.730674 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:52.097528 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=261, pq.top=261
+W20240129 19:07:52.857190 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.524 ms                  | 267.734 ms                |
+| Forward                   | 5.331 ms                  | 11.963 ms                 |
+| Backward                  | 9.841 ms                  | 12.008 ms                 |
+| Optimize                  | 2.518 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 32.768 us                 | 93.043 ms                 |
+| AfterBackward             | 57.814 ms                 | 119.786 ms                |
+| BlockToStepN              | 705.471 ms                | 908.744 ms                |
+| OneStep                   | 797.950 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:53.380239 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=263, pq.top=263
+W20240129 19:07:54.157598 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:07:54.390168 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=265, pq.top=265
+W20240129 19:07:55.165711 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:07:55.407228 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=267, pq.top=267
+W20240129 19:07:56.169970 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.290 ms                  | 16.369 ms                 |
+| ProcessBack:UpsertPq      | 33.991 ms                 | 82.914 ms                 |
+| ProcessOneStep            | 57.780 ms                 | 119.751 ms                |
+| BlockToStepN              | 705.398 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:56.407004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=268, pq.top=268
+W20240129 19:07:57.300055 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:07:57.407006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=270, pq.top=270
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.975 ms                  | 267.734 ms                |
+| Forward                   | 5.331 ms                  | 11.963 ms                 |
+| Backward                  | 9.826 ms                  | 12.008 ms                 |
+| Optimize                  | 2.504 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 32.405 us                 | 93.043 ms                 |
+| AfterBackward             | 57.912 ms                 | 119.786 ms                |
+| BlockToStepN              | 186.259 ms                | 908.744 ms                |
+| OneStep                   | 303.926 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:07:58.407008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=271, pq.top=271
+W20240129 19:07:58.437310 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:07:59.407009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=273, pq.top=273
+W20240129 19:07:59.558967 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:00.407009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=275, pq.top=275
+W20240129 19:08:00.672597 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.453 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.236 ms                  | 13.572 ms                 |
+| ProcessBack:UpsertPq      | 33.991 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.904 ms                 | 119.751 ms                |
+| BlockToStepN              | 186.772 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:01.407004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=277, pq.top=277
+W20240129 19:08:01.794247 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:02.407008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=279, pq.top=279
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.975 ms                  | 267.734 ms                |
+| Forward                   | 5.321 ms                  | 11.963 ms                 |
+| Backward                  | 9.756 ms                  | 12.008 ms                 |
+| Optimize                  | 2.499 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 32.405 us                 | 93.043 ms                 |
+| AfterBackward             | 57.937 ms                 | 119.786 ms                |
+| BlockToStepN              | 194.294 ms                | 908.744 ms                |
+| OneStep                   | 303.926 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:03.144474 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:08:03.407006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=281, pq.top=281
+W20240129 19:08:04.153136 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:04.419174 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=283, pq.top=283
+W20240129 19:08:05.172916 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:05.419008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=284, pq.top=284
+W20240129 19:08:06.295069 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.453 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.186 ms                  | 13.572 ms                 |
+| ProcessBack:UpsertPq      | 34.027 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.881 ms                 | 119.751 ms                |
+| BlockToStepN              | 705.398 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:06.419005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=286, pq.top=286
+W20240129 19:08:07.412861 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:07.491044 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=288, pq.top=288
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.978 ms                  | 267.734 ms                |
+| Forward                   | 5.307 ms                  | 11.963 ms                 |
+| Backward                  | 9.724 ms                  | 12.008 ms                 |
+| Optimize                  | 2.504 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 32.210 us                 | 93.043 ms                 |
+| AfterBackward             | 57.920 ms                 | 119.786 ms                |
+| BlockToStepN              | 194.294 ms                | 908.744 ms                |
+| OneStep                   | 303.926 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:08.491007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=289, pq.top=289
+W20240129 19:08:08.529212 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:08:09.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=291, pq.top=291
+W20240129 19:08:09.640851 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:10.491009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=293, pq.top=293
+W20240129 19:08:10.762776 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.453 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.180 ms                  | 13.572 ms                 |
+| ProcessBack:UpsertPq      | 34.027 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.861 ms                 | 119.751 ms                |
+| BlockToStepN              | 194.224 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:11.491004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=295, pq.top=295
+W20240129 19:08:12.077514 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:12.491009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=297, pq.top=297
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.975 ms                  | 267.734 ms                |
+| Forward                   | 5.307 ms                  | 11.963 ms                 |
+| Backward                  | 9.708 ms                  | 12.008 ms                 |
+| Optimize                  | 2.504 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 31.390 us                 | 93.043 ms                 |
+| AfterBackward             | 57.877 ms                 | 119.786 ms                |
+| BlockToStepN              | 705.471 ms                | 908.744 ms                |
+| OneStep                   | 797.950 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:13.079926 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:13.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=299, pq.top=299
+W20240129 19:08:14.114244 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+[proc 6] 300 steps, total: 54.623, sample: 1.524, forward: 0.532, backward: 0.518, update: 0.227
+[proc 4] 300 steps, total: 54.623, sample: 1.301, forward: 0.566, backward: 0.998, update: 0.262
+[proc 0] 300 steps, total: 54.623, sample: 2.553, forward: 0.505, backward: 0.931, update: 0.326
+[proc 1] 300 steps, total: 54.623, sample: 1.357, forward: 0.484, backward: 1.029, update: 0.251
+[proc 7] 300 steps, total: 54.623, sample: 1.217, forward: 0.546, backward: 0.633, update: 0.239
+[proc 2] 300 steps, total: 54.623, sample: 1.065, forward: 0.487, backward: 0.519, update: 0.208
+[proc 3] 300 steps, total: 54.623, sample: 1.140, forward: 0.514, backward: 0.829, update: 0.231
+[proc 5] 300 steps, total: 54.624, sample: 1.341, forward: 0.546, backward: 1.018, update: 0.263
+W20240129 19:08:14.491007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=301, pq.top=301
+W20240129 19:08:15.235381 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:15.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=302, pq.top=302
+W20240129 19:08:16.358764 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.159 ms                  | 13.572 ms                 |
+| ProcessBack:UpsertPq      | 34.027 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.861 ms                 | 119.751 ms                |
+| BlockToStepN              | 705.398 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:16.491006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=304, pq.top=304
+W20240129 19:08:17.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=305, pq.top=305
+W20240129 19:08:17.493321 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.978 ms                  | 267.734 ms                |
+| Forward                   | 5.296 ms                  | 11.963 ms                 |
+| Backward                  | 9.690 ms                  | 12.008 ms                 |
+| Optimize                  | 2.495 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 31.029 us                 | 93.043 ms                 |
+| AfterBackward             | 57.877 ms                 | 119.786 ms                |
+| BlockToStepN              | 198.426 ms                | 908.744 ms                |
+| OneStep                   | 303.926 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:18.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=307, pq.top=307
+W20240129 19:08:18.629909 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:19.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=309, pq.top=309
+W20240129 19:08:19.763864 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:08:20.491007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=311, pq.top=311
+W20240129 19:08:21.094013 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.441 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.136 ms                  | 13.572 ms                 |
+| ProcessBack:UpsertPq      | 34.096 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.843 ms                 | 119.751 ms                |
+| BlockToStepN              | 207.654 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:21.491004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=313, pq.top=313
+W20240129 19:08:22.118151 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:22.491006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=315, pq.top=315
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.978 ms                  | 267.734 ms                |
+| Forward                   | 5.286 ms                  | 11.963 ms                 |
+| Backward                  | 9.677 ms                  | 12.008 ms                 |
+| Optimize                  | 2.495 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 31.029 us                 | 93.043 ms                 |
+| AfterBackward             | 57.877 ms                 | 119.786 ms                |
+| BlockToStepN              | 207.717 ms                | 908.744 ms                |
+| OneStep                   | 303.926 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:23.226228 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:23.491007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=316, pq.top=316
+W20240129 19:08:24.374642 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:24.491006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=318, pq.top=318
+W20240129 19:08:25.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=319, pq.top=319
+W20240129 19:08:25.511550 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.124 ms                  | 13.572 ms                 |
+| ProcessBack:UpsertPq      | 34.036 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.843 ms                 | 119.751 ms                |
+| BlockToStepN              | 207.654 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:26.491004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=321, pq.top=321
+W20240129 19:08:26.648061 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:27.491007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=323, pq.top=323
+W20240129 19:08:27.785964 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.975 ms                  | 267.734 ms                |
+| Forward                   | 5.277 ms                  | 11.963 ms                 |
+| Backward                  | 9.655 ms                  | 12.008 ms                 |
+| Optimize                  | 2.495 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 30.552 us                 | 93.043 ms                 |
+| AfterBackward             | 57.854 ms                 | 119.786 ms                |
+| BlockToStepN              | 705.471 ms                | 908.744 ms                |
+| OneStep                   | 797.950 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:28.491008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=325, pq.top=325
+W20240129 19:08:28.918028 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:29.491007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=327, pq.top=327
+W20240129 19:08:30.210803 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:30.491006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=329, pq.top=329
+W20240129 19:08:31.242213 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.110 ms                  | 13.444 ms                 |
+| ProcessBack:UpsertPq      | 34.096 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 57.843 ms                 | 119.751 ms                |
+| BlockToStepN              | 705.398 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:31.491004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=330, pq.top=330
+W20240129 19:08:32.405725 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:32.502622 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=332, pq.top=332
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.975 ms                  | 267.734 ms                |
+| Forward                   | 5.273 ms                  | 11.963 ms                 |
+| Backward                  | 9.644 ms                  | 12.008 ms                 |
+| Optimize                  | 2.490 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 30.552 us                 | 93.043 ms                 |
+| AfterBackward             | 57.912 ms                 | 119.786 ms                |
+| BlockToStepN              | 217.949 ms                | 908.744 ms                |
+| OneStep                   | 307.769 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:33.502009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=333, pq.top=333
+W20240129 19:08:33.584892 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:34.502009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=335, pq.top=335
+W20240129 19:08:34.712530 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:35.502009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=337, pq.top=337
+W20240129 19:08:35.896634 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.444 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.101 ms                  | 13.444 ms                 |
+| ProcessBack:UpsertPq      | 34.338 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 57.904 ms                 | 119.751 ms                |
+| BlockToStepN              | 221.839 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:36.502003 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=339, pq.top=339
+W20240129 19:08:37.073016 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:08:37.502007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=341, pq.top=341
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.958 ms                  | 267.734 ms                |
+| Forward                   | 5.255 ms                  | 11.963 ms                 |
+| Backward                  | 9.635 ms                  | 12.008 ms                 |
+| Optimize                  | 2.479 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 30.528 us                 | 93.043 ms                 |
+| AfterBackward             | 58.014 ms                 | 119.786 ms                |
+| BlockToStepN              | 221.907 ms                | 908.744 ms                |
+| OneStep                   | 323.279 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:38.237843 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:38.502007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=342, pq.top=342
+W20240129 19:08:39.502008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=343, pq.top=343
+W20240129 19:08:39.555102 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:40.502009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=345, pq.top=345
+W20240129 19:08:40.570245 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.099 ms                  | 13.444 ms                 |
+| ProcessBack:UpsertPq      | 34.385 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 58.077 ms                 | 119.751 ms                |
+| BlockToStepN              | 228.113 ms                | 908.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:41.502005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=347, pq.top=347
+W20240129 19:08:41.755405 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:42.502008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=349, pq.top=349
+W20240129 19:08:42.949911 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.975 ms                  | 267.734 ms                |
+| Forward                   | 5.248 ms                  | 11.963 ms                 |
+| Backward                  | 9.633 ms                  | 12.008 ms                 |
+| Optimize                  | 2.477 ms                  | 9.694 ms                  |
+| BarrierTimeBeforeRank0    | 30.490 us                 | 93.043 ms                 |
+| AfterBackward             | 58.124 ms                 | 119.786 ms                |
+| BlockToStepN              | 705.471 ms                | 908.744 ms                |
+| OneStep                   | 797.950 ms                | 1.198 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:43.502054 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=351, pq.top=351
+W20240129 19:08:44.115621 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:44.503051 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=353, pq.top=353
+W20240129 19:08:45.295519 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:45.503006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=354, pq.top=354
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.089 ms                  | 13.444 ms                 |
+| ProcessBack:UpsertPq      | 34.425 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 58.129 ms                 | 114.959 ms                |
+| BlockToStepN              | 229.573 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:46.498968 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:46.585383 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=356, pq.top=356
+W20240129 19:08:47.585007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=357, pq.top=357
+W20240129 19:08:47.694336 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.978 ms                  | 234.614 ms                |
+| Forward                   | 5.248 ms                  | 11.726 ms                 |
+| Backward                  | 9.631 ms                  | 11.514 ms                 |
+| Optimize                  | 2.467 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.252 us                 | 85.349 ms                 |
+| AfterBackward             | 58.194 ms                 | 114.990 ms                |
+| BlockToStepN              | 234.923 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:48.585011 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=359, pq.top=359
+W20240129 19:08:49.073144 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:08:49.585008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=361, pq.top=361
+W20240129 19:08:50.087498 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:08:50.585007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=363, pq.top=363
+W20240129 19:08:51.281395 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.074 ms                  | 13.444 ms                 |
+| ProcessBack:UpsertPq      | 34.425 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 58.229 ms                 | 114.959 ms                |
+| BlockToStepN              | 705.398 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:51.585005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=364, pq.top=364
+W20240129 19:08:52.461094 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:52.585005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=366, pq.top=366
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.993 ms                  | 234.614 ms                |
+| Forward                   | 5.239 ms                  | 11.726 ms                 |
+| Backward                  | 9.625 ms                  | 11.514 ms                 |
+| Optimize                  | 2.473 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.418 us                 | 85.349 ms                 |
+| AfterBackward             | 58.341 ms                 | 114.990 ms                |
+| BlockToStepN              | 235.339 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:53.585008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=367, pq.top=367
+W20240129 19:08:53.640882 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:54.585007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=369, pq.top=369
+W20240129 19:08:54.821151 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:08:55.585008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=371, pq.top=371
+W20240129 19:08:56.012445 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.394 ms                 |
+| ProcessBack:UpdateCache   | 9.074 ms                  | 13.444 ms                 |
+| ProcessBack:UpsertPq      | 34.425 ms                 | 80.655 ms                 |
+| ProcessOneStep            | 58.307 ms                 | 114.959 ms                |
+| BlockToStepN              | 235.265 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:56.585004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=373, pq.top=373
+W20240129 19:08:57.196580 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:08:57.737172 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=375, pq.top=375
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.993 ms                  | 234.614 ms                |
+| Forward                   | 5.228 ms                  | 11.726 ms                 |
+| Backward                  | 9.619 ms                  | 11.514 ms                 |
+| Optimize                  | 2.473 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.418 us                 | 85.349 ms                 |
+| AfterBackward             | 58.417 ms                 | 114.990 ms                |
+| BlockToStepN              | 235.339 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:08:58.521914 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:08:58.799391 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=377, pq.top=377
+W20240129 19:08:59.586516 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:08:59.799007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=378, pq.top=378
+W20240129 19:09:00.778077 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:09:00.860291 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=380, pq.top=380
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.060 ms                  | 13.430 ms                 |
+| ProcessBack:UpsertPq      | 34.425 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 58.379 ms                 | 114.959 ms                |
+| BlockToStepN              | 235.265 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:01.860004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=381, pq.top=381
+W20240129 19:09:01.955699 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:09:02.860008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=383, pq.top=383
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.993 ms                  | 234.614 ms                |
+| Forward                   | 5.219 ms                  | 11.726 ms                 |
+| Backward                  | 9.619 ms                  | 11.514 ms                 |
+| Optimize                  | 2.479 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.528 us                 | 85.349 ms                 |
+| AfterBackward             | 58.417 ms                 | 114.990 ms                |
+| BlockToStepN              | 237.419 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:03.143586 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:09:03.860008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=385, pq.top=385
+W20240129 19:09:04.316745 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:09:04.860006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=387, pq.top=387
+W20240129 19:09:05.374522 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:09:05.860006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=389, pq.top=389
+W20240129 19:09:06.376642 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.048 ms                  | 13.430 ms                 |
+| ProcessBack:UpsertPq      | 34.385 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 58.229 ms                 | 114.959 ms                |
+| BlockToStepN              | 237.323 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:06.860006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=393, pq.top=393
+W20240129 19:09:07.436095 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
+W20240129 19:09:07.860006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=396, pq.top=396
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.958 ms                  | 234.614 ms                |
+| Forward                   | 5.202 ms                  | 11.726 ms                 |
+| Backward                  | 9.623 ms                  | 11.514 ms                 |
+| Optimize                  | 2.479 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.418 us                 | 85.349 ms                 |
+| AfterBackward             | 58.259 ms                 | 114.990 ms                |
+| BlockToStepN              | 237.419 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:08.463459 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
+W20240129 19:09:08.860008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=399, pq.top=399
+[proc 3] 400 steps, total: 54.645, sample: 1.186, forward: 0.516, backward: 1.035, update: 0.256
+[proc 0] 400 steps, total: 54.645, sample: 2.021, forward: 0.497, backward: 0.946, update: 0.293
+[proc 5] 400 steps, total: 54.644, sample: 1.241, forward: 0.583, backward: 1.016, update: 0.282
+[proc 7] 400 steps, total: 54.645, sample: 1.147, forward: 0.540, backward: 0.821, update: 0.245
+[proc 4] 400 steps, total: 54.645, sample: 1.230, forward: 0.569, backward: 0.954, update: 0.274
+[proc 2] 400 steps, total: 54.645, sample: 1.016, forward: 0.473, backward: 0.554, update: 0.187
+[proc 6] 400 steps, total: 54.645, sample: 1.351, forward: 0.540, backward: 0.801, update: 0.244
+[proc 1] 400 steps, total: 54.645, sample: 1.325, forward: 0.486, backward: 0.937, update: 0.272
+W20240129 19:09:09.465502 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:09:09.860008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=403, pq.top=403
+W20240129 19:09:10.474643 63555 grad_async_v1.h:280] Detect new sample comes, old_end4, new_end5
+W20240129 19:09:10.965049 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=407, pq.top=407
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.037 ms                  | 13.430 ms                 |
+| ProcessBack:UpsertPq      | 34.344 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 58.229 ms                 | 114.959 ms                |
+| BlockToStepN              | 340.647 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:11.523908 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
+W20240129 19:09:12.032907 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=411, pq.top=411
+W20240129 19:09:12.535300 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end3
+W20240129 19:09:13.039426 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=414, pq.top=414
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.715 ms                  | 234.614 ms                |
+| Forward                   | 5.194 ms                  | 11.726 ms                 |
+| Backward                  | 9.630 ms                  | 11.514 ms                 |
+| Optimize                  | 2.484 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.405 us                 | 85.349 ms                 |
+| AfterBackward             | 58.239 ms                 | 114.990 ms                |
+| BlockToStepN              | 340.718 ms                | 902.514 ms                |
+| OneStep                   | 425.641 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:13.547410 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end6
+W20240129 19:09:14.039008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=417, pq.top=417
+W20240129 19:09:14.565687 63555 grad_async_v1.h:280] Detect new sample comes, old_end8, new_end9
+W20240129 19:09:15.039006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=421, pq.top=421
+W20240129 19:09:15.587687 63555 grad_async_v1.h:280] Detect new sample comes, old_end2, new_end3
+W20240129 19:09:16.153450 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=425, pq.top=425
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.326 ms                 |
+| ProcessBack:UpdateCache   | 9.030 ms                  | 13.430 ms                 |
+| ProcessBack:UpsertPq      | 34.338 ms                 | 77.960 ms                 |
+| ProcessOneStep            | 58.209 ms                 | 114.959 ms                |
+| BlockToStepN              | 237.323 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:16.599277 63555 grad_async_v1.h:280] Detect new sample comes, old_end5, new_end7
+W20240129 19:09:17.153008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=428, pq.top=428
+W20240129 19:09:17.607663 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.484 ms                  | 234.614 ms                |
+| Forward                   | 5.181 ms                  | 11.726 ms                 |
+| Backward                  | 9.625 ms                  | 11.514 ms                 |
+| Optimize                  | 2.484 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.418 us                 | 85.349 ms                 |
+| AfterBackward             | 58.259 ms                 | 114.990 ms                |
+| BlockToStepN              | 237.419 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:18.153007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=431, pq.top=431
+W20240129 19:09:18.619449 63555 grad_async_v1.h:280] Detect new sample comes, old_end2, new_end3
+W20240129 19:09:19.153008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=435, pq.top=435
+W20240129 19:09:19.660377 63555 grad_async_v1.h:280] Detect new sample comes, old_end6, new_end7
+W20240129 19:09:20.268013 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=439, pq.top=439
+W20240129 19:09:20.666429 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end0
+W20240129 19:09:21.339814 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=443, pq.top=443
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.022 ms                 |
+| ProcessBack:UpdateCache   | 9.011 ms                  | 13.403 ms                 |
+| ProcessBack:UpsertPq      | 34.266 ms                 | 76.068 ms                 |
+| ProcessOneStep            | 58.229 ms                 | 114.959 ms                |
+| BlockToStepN              | 237.323 ms                | 902.420 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:21.683377 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:09:22.360889 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=446, pq.top=446
+W20240129 19:09:22.711033 63555 grad_async_v1.h:280] Detect new sample comes, old_end6, new_end7
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.410 ms                  | 234.614 ms                |
+| Forward                   | 5.147 ms                  | 11.726 ms                 |
+| Backward                  | 9.619 ms                  | 11.514 ms                 |
+| Optimize                  | 2.495 ms                  | 9.483 ms                  |
+| BarrierTimeBeforeRank0    | 30.528 us                 | 85.349 ms                 |
+| AfterBackward             | 58.340 ms                 | 114.990 ms                |
+| BlockToStepN              | 237.419 ms                | 902.514 ms                |
+| OneStep                   | 330.820 ms                | 1.196 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:23.360009 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=449, pq.top=449
+W20240129 19:09:23.731150 63555 grad_async_v1.h:280] Detect new sample comes, old_end9, new_end1
+W20240129 19:09:24.360006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=453, pq.top=453
+W20240129 19:09:24.757149 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
+W20240129 19:09:25.537397 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=457, pq.top=457
+W20240129 19:09:25.792507 63555 grad_async_v1.h:280] Detect new sample comes, old_end6, new_end7
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 17.022 ms                 |
+| ProcessBack:UpdateCache   | 8.997 ms                  | 13.403 ms                 |
+| ProcessBack:UpsertPq      | 34.266 ms                 | 76.068 ms                 |
+| ProcessOneStep            | 58.270 ms                 | 107.490 ms                |
+| BlockToStepN              | 237.323 ms                | 902.262 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:26.546680 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=460, pq.top=460
+W20240129 19:09:26.792973 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
+W20240129 19:09:27.546008 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=463, pq.top=463
+W20240129 19:09:27.794692 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.223 ms                  | 233.962 ms                |
+| Forward                   | 5.124 ms                  | 11.667 ms                 |
+| Backward                  | 9.606 ms                  | 11.386 ms                 |
+| Optimize                  | 2.504 ms                  | 9.445 ms                  |
+| BarrierTimeBeforeRank0    | 30.528 us                 | 64.608 ms                 |
+| AfterBackward             | 58.340 ms                 | 107.525 ms                |
+| BlockToStepN              | 237.419 ms                | 902.333 ms                |
+| OneStep                   | 330.820 ms                | 1.179 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:28.546010 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=467, pq.top=467
+W20240129 19:09:28.836333 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:09:29.546005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=470, pq.top=470
+W20240129 19:09:29.852456 63555 grad_async_v1.h:280] Detect new sample comes, old_end0, new_end1
+W20240129 19:09:30.546007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=473, pq.top=473
+W20240129 19:09:30.888906 63555 grad_async_v1.h:280] Detect new sample comes, old_end3, new_end5
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 16.620 ms                 |
+| ProcessBack:UpdateCache   | 9.000 ms                  | 13.397 ms                 |
+| ProcessBack:UpsertPq      | 34.344 ms                 | 75.181 ms                 |
+| ProcessOneStep            | 58.308 ms                 | 107.490 ms                |
+| BlockToStepN              | 334.284 ms                | 902.262 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:31.546005 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=477, pq.top=477
+W20240129 19:09:31.909404 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:09:32.546006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=480, pq.top=480
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 9.121 ms                  | 233.962 ms                |
+| Forward                   | 5.122 ms                  | 11.667 ms                 |
+| Backward                  | 9.596 ms                  | 11.386 ms                 |
+| Optimize                  | 2.499 ms                  | 9.445 ms                  |
+| BarrierTimeBeforeRank0    | 30.405 us                 | 64.608 ms                 |
+| AfterBackward             | 58.345 ms                 | 107.525 ms                |
+| BlockToStepN              | 237.419 ms                | 902.333 ms                |
+| OneStep                   | 330.820 ms                | 1.179 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:33.047567 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
+W20240129 19:09:33.546007 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=483, pq.top=483
+W20240129 19:09:34.085570 63555 grad_async_v1.h:280] Detect new sample comes, old_end4, new_end5
+W20240129 19:09:34.588681 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=487, pq.top=487
+W20240129 19:09:35.085568 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end8
+W20240129 19:09:35.600564 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=490, pq.top=490
+W20240129 19:09:36.087788 63555 grad_async_v1.h:280] Detect new sample comes, old_end1, new_end2
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 8.451 ms                  | 16.620 ms                 |
+| ProcessBack:UpdateCache   | 8.987 ms                  | 13.397 ms                 |
+| ProcessBack:UpsertPq      | 34.344 ms                 | 75.181 ms                 |
+| ProcessOneStep            | 58.379 ms                 | 107.490 ms                |
+| BlockToStepN              | 237.323 ms                | 902.262 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:36.600004 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=493, pq.top=493
+W20240129 19:09:37.089746 63555 grad_async_v1.h:280] Detect new sample comes, old_end4, new_end5
+W20240129 19:09:37.600006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=497, pq.top=497
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 8.961 ms                  | 233.962 ms                |
+| Forward                   | 5.110 ms                  | 11.667 ms                 |
+| Backward                  | 9.591 ms                  | 11.386 ms                 |
+| Optimize                  | 2.508 ms                  | 9.445 ms                  |
+| BarrierTimeBeforeRank0    | 30.252 us                 | 64.608 ms                 |
+| AfterBackward             | 58.417 ms                 | 107.525 ms                |
+| BlockToStepN              | 237.419 ms                | 902.333 ms                |
+| OneStep                   | 330.820 ms                | 1.179 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240129 19:09:38.105134 63555 grad_async_v1.h:280] Detect new sample comes, old_end7, new_end9
+W20240129 19:09:38.600006 62976 grad_async_v1.h:406] Sleep in <BlockToStepN>, step_no=500, pq.top=500
+[proc 0] 500 steps, total: 29.606, sample: 1.493, forward: 0.484, backward: 0.946, update: 0.305
+[proc 7] 500 steps, total: 29.606, sample: 0.969, forward: 0.560, backward: 1.021, update: 0.267
+[proc 2] 500 steps, total: 29.606, sample: 0.848, forward: 0.457, backward: 0.537, update: 0.182
+Successfully xmh. training takes 248.3615186214447 seconds
+[proc 6] 500 steps, total: 29.606, sample: 1.154, forward: 0.538, backward: 1.053, update: 0.267
+[proc 1] 500 steps, total: 29.606, sample: 1.019, forward: 0.522, backward: 0.886, update: 0.253
+before call kg_cache_controller.StopThreads()
+[proc 5] 500 steps, total: 29.606, sample: 1.007, forward: 0.544, backward: 1.031, update: 0.261
+[proc 4] 500 steps, total: 29.606, sample: 1.076, forward: 0.599, backward: 0.517, update: 0.255
+[proc 3] 500 steps, total: 29.606, sample: 1.075, forward: 0.503, backward: 1.037, update: 0.242
+W20240129 19:09:38.639304 62976 grad_async_v1.h:230] call StopThreads. PID = 61643
+W20240129 19:09:38.639323 62976 grad_base.h:212] before processOneStepNegThread_.join();
+W20240129 19:09:38.647193 62976 grad_base.h:214] after processOneStepNegThread_.join();
+W20240129 19:09:38.647219 62976 grad_async_v1.h:232] call GradProcessingBase::StopThreads.
+W20240129 19:09:38.729684 62976 grad_async_v1.h:251] StopThreads done.

@@ -702,3 +702,80 @@ class ExpRecPerf(RecExperiment):
         if next_run is not None:
             GPULock()
         return
+
+
+
+class ExpRecDebug(RecExperiment):
+    def __init__(self, ) -> None:
+        NAME = "rec perf a30"
+        COMMON_CONFIGS = {
+            "with_nn": [
+                '128,128,128',
+            ],
+            "binding": [
+                {
+                    "dataset": ["criteo",],
+                    # "cache_ratio": [0.05,],
+                    "cache_ratio": [0.05, 0.1] if GetHostName() == "node182" else [0.05],
+                    "batch_size": [256, 512, 1024, 2048],
+                    "num_workers": [4, 8] if GetHostName() != "node182" else [4],
+                },
+                # {
+                #     "dataset": ["avazu"],
+                #     # "cache_ratio": [0.05,],
+                #     "cache_ratio": [0.05, 0.1] if GetHostName() == "node182" else [0.05],
+                #     "batch_size": [256, 512, 1024, 2048],
+                #     "num_workers": [4, 8] if GetHostName() != "node182" else [4],
+                # },
+
+                # # for scalability
+                # {
+                #     "dataset": ["avazu"],
+                #     "cache_ratio": [0.05],
+                #     "batch_size": [2048],
+                #     "num_workers": [2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
+                # }
+            ],
+            "binding2": [
+                {
+                    "emb_choice": [
+                        "TorchNativeStdEmb",
+                        "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
+                    ]
+                },
+                {
+
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        "PySync",
+                        # "CppSync",
+                        "CppAsyncV2",
+                        # "CppAsync",
+                    ],
+                },
+            ],
+            "run_steps": [500],
+            "log_interval": [100],
+        }
+
+        self.name = NAME
+        super().__init__(13, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        for each in configs:
+            print(each)
+        return list(sorted(configs, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke perf_rec_model.py")
+        LocalNuke("perf_rec_model.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return

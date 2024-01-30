@@ -33,17 +33,21 @@ if __name__ == "__main__":
     exp_lists = []
 
     if suffix == 'A30':
-        each = exp_config.ExpRecPerf()
+        each = exp_config.ExpRecDebug()
         each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
         exp_lists.append(each)
 
-        each = exp_config.ExpKGPerfA30()
-        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-perfA30-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpRecPerf()
+        # each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
+        # exp_lists.append(each)
 
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-scale-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpKGPerfA30()
+        # each.SetLogDir(f'{LOG_PREFIX}/0128-KG-perfA30-{suffix}')
+        # exp_lists.append(each)
+
+        # each = exp_config.ExpKGScalability()
+        # each.SetLogDir(f'{LOG_PREFIX}/0128-KG-scale-{suffix}')
+        # exp_lists.append(each)
 
     else:
         each = exp_config.ExpKGScalability()
