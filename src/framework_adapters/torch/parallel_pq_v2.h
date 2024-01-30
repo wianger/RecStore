@@ -90,6 +90,7 @@ class PriorityHashTable {
   }
 
   index_type *Clean(index_type *new_index, std::function<void(T *)> drain_fn) {
+    xmh::Timer clean_timer("clean");
     // base::NamedLockGuard _(lock_, "clean");
     isCleaning_ = true;
     auto old_index = base::Atomic::load(&index_);
@@ -107,18 +108,36 @@ class PriorityHashTable {
 
     if (!success) return nullptr;
 
-    // LOG(INFO) << "cleaning priorityhashtable, priority=" << queue_priority_
-    //           << ", size=" << old_index->size();
+      // LOG(INFO) << "cleaning priorityhashtable, priority=" << queue_priority_
+      //           << ", size=" << old_index->size();
+
+#if 0
     int count = 0;
     for (auto [key, value] : *old_index) {
-      //   FB_LOG_EVERY_MS(INFO, 1000) << "Clean, count = " << count
-      //             << ", index.size=" << old_index->size();
       drain_fn(value);
       count++;
     }
+#else
+#pragma omp parallel num_threads(32)
+    {
+      int avg_shard =
+          (old_index->get_num_shards() + omp_get_num_threads() - 1) /
+          omp_get_num_threads();
+
+      int thread_id = omp_get_thread_num();
+      auto shard_begin = old_index->get_shard(avg_shard * thread_id);
+      auto shard_end = old_index->get_shard(avg_shard * (thread_id + 1));
+      for (; shard_begin != shard_end; ++shard_begin) {
+        auto &it = *shard_begin;
+        drain_fn(it.second);
+      }
+    }
+
+#endif
 
     old_index->clear();
     isCleaning_ = false;
+    clean_timer.end();
     return old_index;
   }
 

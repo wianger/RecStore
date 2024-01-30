@@ -67,7 +67,7 @@ class MinEpochTable {
   static_assert(sizeof(Entry) == 64, "Unexpected table entry size");
 
  public:
-  MinEpochTable(int max_thread_num = 64) : max_thread_num_(max_thread_num) {
+  MinEpochTable(int max_thread_num = 128) : max_thread_num_(max_thread_num) {
     // (char[sizeof(Entry)]) "bla";
     table_ = new Entry[max_thread_num_];
     CHECK(table_);

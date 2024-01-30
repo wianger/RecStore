@@ -44,9 +44,9 @@ using uint64 = uint64_t;
 using uint32 = uint32_t;
 
 #ifndef DISALLOW_COPY_AND_ASSIGN
-#define DISALLOW_COPY_AND_ASSIGN(TypeName)                                     \
-private:                                                                       \
-  TypeName(const TypeName &);                                                  \
+#define DISALLOW_COPY_AND_ASSIGN(TypeName) \
+ private:                                  \
+  TypeName(const TypeName &);              \
   void operator=(const TypeName &)
 #endif
 
@@ -71,16 +71,16 @@ inline void bind_core(int n) {
 }
 
 class Lock {
-public:
+ public:
   void lock() { m.lock(); }
   void unLock() { m.unlock(); }
 
-private:
+ private:
   std::mutex m;
 };
 
 class AutoLock {
-public:
+ public:
   AutoLock(Lock &lock) {
     lock_ = &lock;
     lock_->lock();
@@ -88,7 +88,7 @@ public:
 
   ~AutoLock() { lock_->unLock(); }
 
-private:
+ private:
   Lock *lock_;
 };
 
@@ -96,10 +96,9 @@ inline std::string IntToString(int x) { return std::to_string(x); }
 inline std::string Int64ToString(int64 x) { return std::to_string(x); }
 
 class file_util {
-public:
+ public:
   static bool Delete(const std::string &path, bool recursive) {
-    if (!PathExists(path))
-      return false;
+    if (!PathExists(path)) return false;
     if (recursive) {
       fs::remove_all(path);
     } else {
@@ -119,7 +118,7 @@ public:
 class PseudoRandom {
   folly::Random::DefaultGenerator rng;
 
-public:
+ public:
   explicit PseudoRandom(uint64 seed) { rng.seed(seed); }
 
   PseudoRandom() { rng.seed(base::GetTimestamp()); }
@@ -147,15 +146,13 @@ public:
 class Rdtsc {
   static constexpr int CPU_FREQ_MHZ = 3300;
 
-public:
+ public:
   static inline void CPUPause(void) { __asm__ volatile("pause" ::: "memory"); }
 
   static inline void SleepNS(uint64_t ns) {
-    if (ns == 0)
-      return;
+    if (ns == 0) return;
     unsigned long etcs = ReadTSC() + (unsigned long)(ns * CPU_FREQ_MHZ / 1000);
-    while (ReadTSC() < etcs)
-      CPUPause();
+    while (ReadTSC() < etcs) CPUPause();
   }
 
   static inline unsigned long ReadTSC(void) {
@@ -168,11 +165,11 @@ public:
 };
 
 class ScopedTempDir {
-public:
+ public:
   class FilePath {
     std::string path_;
 
-  public:
+   public:
     FilePath() {}
 
     bool exists() const { return fs::exists(path_); }
@@ -207,7 +204,7 @@ public:
     return r;
   }
 
-private:
+ private:
   FilePath path_;
 };
 
@@ -215,7 +212,7 @@ private:
 #include <unistd.h>
 
 class HostName {
-public:
+ public:
   static std::string GetHostName() {
     char hostname[30];
     gethostname(hostname, 30);
@@ -223,5 +220,18 @@ public:
   }
 };
 
-} // namespace base
+class WorkParititon {
+ public:
+  static std::pair<int, int> MultiThreadWorkPartititon(int thread_id,
+                                                       int thread_num,
+                                                       int all_work_num) {
+    int per_thread = (all_work_num + thread_num - 1) / thread_num;
+    int thread_start = thread_id * per_thread;
+    int thread_end = (thread_id + 1) * per_thread;
+    thread_end = std::min(thread_end, all_work_num);
+    return std::make_pair(thread_start, thread_end);
+  }
+};
+
+}  // namespace base
 const int32 kInt32Max = static_cast<int32>(0x7FFFFFFF);
