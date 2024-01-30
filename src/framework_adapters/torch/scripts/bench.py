@@ -33,7 +33,7 @@ if __name__ == "__main__":
     exp_lists = []
 
     if suffix == 'A30':
-        each = exp_config.ExpRecDebug()
+        each = exp_config.ExpRecPerf()
         each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
         exp_lists.append(each)
 
