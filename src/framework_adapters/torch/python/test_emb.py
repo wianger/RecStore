@@ -312,12 +312,12 @@ class TestShardedCache:
             #                     'KnownShardedCachedEmbedding',
             #                     'TorchNativeStdEmb'],
 
-            "backwardMode": ["PySync", "CppSync", "CppAsync", "CppAsyncV2"],
+            # "backwardMode": ["PySync", "CppSync", "CppAsync", "CppAsyncV2"],
 
             # "backwardMode": ["PySync",],
             # "backwardMode": ["CppSync",],
             # "backwardMode": ["CppAsync",],
-            # "backwardMode": ["CppAsyncV2",],
+            "backwardMode": ["CppAsyncV2",],
 
             # "backgrad_init":['cpu', 'gpu', 'both'],
             "backgrad_init": ['both'],

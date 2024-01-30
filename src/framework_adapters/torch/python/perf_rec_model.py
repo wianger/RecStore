@@ -223,7 +223,9 @@ def routine_local_cache_helper(worker_id, args):
         "backwardMode": "{backwardMode}",
         "nr_background_threads": {nr_background_threads}, 
         "cache_ratio": {cache_ratio},
-        "backgrad_init": "{backgrad_init}"
+        "backgrad_init": "{backgrad_init}",
+        "update_pq_use_omp": 2,
+        "kUpdatePqWorkerNum": 8
     }}'''.format(num_workers=args['num_workers'],
                  kForwardItersPerStep=args['kForwardItersPerStep'],
                  L=args['L'],
@@ -266,14 +268,6 @@ def routine_local_cache_helper(worker_id, args):
                                    backmode=args['backwardMode'],
                                    )
     print("Construct RecModelSampler done", flush=True)
-
-    # perf_sampler = TestPerfSampler(rank=rank,
-    #                                L=args['L'],
-    #                                num_ids_per_step=TestShardedCache.BATCH_SIZE,
-    #                                full_emb_capacity=emb.shape[0],
-    #                                backmode=args['backwardMode'],
-    #                                )
-    # print("Construct TestPerfSampler done", flush=True)
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
         kg_cache_controller = KGCacheControllerWrapper(
@@ -394,7 +388,13 @@ def routine_local_cache_helper(worker_id, args):
             timer_start.stop()
             timer_start.start()
 
+            if rank == 0:
+                Timer.Report()
+
         timer_onestep.stop()
+
+    if rank == 0:
+        kg_cache_controller.StopThreads()
 
 
 if __name__ == "__main__":

@@ -19,7 +19,10 @@ target_link_libraries(test_hash_map PUBLIC
     ${FOLLY_LIBRARIES}
 )
 
-target_compile_options(test_hash_map PUBLIC -msse -msse2 -msse3 -msse4)
+target_compile_options(test_hash_map PUBLIC -fopenmp)
+
+target_link_libraries(test_hash_map PUBLIC -fopenmp)
+
 
 add_executable(corotine 
     corotine.cpp

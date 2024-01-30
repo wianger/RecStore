@@ -170,7 +170,7 @@ class GradProcessingBase {
     kForwardItersPerStep_ = json_config.at("kForwardItersPerStep");
     clr_ = json_config.at("clr");
     update_cache_use_omp_ = json_config.value("update_cache_use_omp", 1);
-    update_pq_use_omp_ = json_config.value("update_pq_use_omp", 1);
+    update_pq_use_omp_ = json_config.value("update_pq_use_omp", 2);
 
     if (backgrad_init_ == "cpu") {
       backgrad_init_enum_ = BackGradInitEnum::CPU;
@@ -439,8 +439,8 @@ class GradProcessingBase {
   std::thread processOneStepNegThread_;
   std::atomic_bool stop_processOneStepNegThread_flag_{false};
   std::atomic_bool processOneStepNegThread_ping_{false};
-  bool update_cache_use_omp_ = true;
-  bool update_pq_use_omp_ = true;
+  int update_cache_use_omp_;
+  int update_pq_use_omp_;
 };
 
 class GradSyncProcessing : public GradProcessingBase {

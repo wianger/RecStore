@@ -108,6 +108,10 @@ class Timer:
         timer_module.Reporter.StartReportThread(5000)
 
     @classmethod
+    def Report(cls):
+        timer_module.Reporter.Report()
+
+    @classmethod
     def StopReportThread(cls):
         timer_module.Reporter.StopReportThread()
 
