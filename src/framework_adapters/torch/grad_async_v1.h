@@ -18,6 +18,8 @@
 #include "parallel_pq.h"
 #include "torch_utils.h"
 
+#include "folly/executors/CPUThreadPoolExecutor.h"
+
 namespace recstore {
 class AsyncGradElement {
   static constexpr int kInf = std::numeric_limits<int>::max();
@@ -175,6 +177,10 @@ class GradAsyncProcessing : public GradProcessingBase {
   static constexpr int kInf = std::numeric_limits<int>::max();
   static constexpr bool kUseBackThread = false;
 
+  // for method 2
+  const int kUpdatePqWorkerNum_ = 0;
+  std::unique_ptr<folly::CPUThreadPoolExecutor> update_pq_thread_pool_;
+
  public:
   GradAsyncProcessing(const std::string &json_str,
                       const std::vector<std::vector<int64_t>> &cached_range)
@@ -206,6 +212,15 @@ class GradAsyncProcessing : public GradProcessingBase {
     }
     for (int rank = 0; rank < num_gpus_; rank++) {
       sample_step_cpp_seen_[rank].store(-1);
+    }
+    if (update_pq_use_omp_ == 2) {
+      int temp = json_config.value("kUpdatePqWorkerNum", 8);
+      *((int *)&kUpdatePqWorkerNum_) = temp;
+      folly::CPUThreadPoolExecutor::Options option;
+      option.setBlocking(
+          folly::CPUThreadPoolExecutor::Options::Blocking::prohibit);
+      update_pq_thread_pool_.reset(new folly::CPUThreadPoolExecutor(
+          kUpdatePqWorkerNum_, std::move(option)));
     }
   }
 
@@ -411,16 +426,20 @@ class GradAsyncProcessing : public GradProcessingBase {
     pq_.UpdatePossibleMIN(step_no);
   }
 
-  void UpsertPq(const std::vector<torch::Tensor> &input_keys,
-                const std::vector<torch::Tensor> &input_grads, int step_no) {
-    xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
-    // #pragma omp parallel for num_threads(num_gpus_)
+  void UpsertPqThreadMethod2ThreadPool(
+      const std::vector<torch::Tensor> &input_keys,
+      const std::vector<torch::Tensor> &input_grads, int step_no,
+      int thread_id) {
     for (int rank = 0; rank < input_keys.size(); ++rank) {
       auto *data = input_keys[rank].data_ptr<int64_t>();
       CHECK(input_keys[rank].is_cpu());
       CHECK_EQ(input_grads[rank].dim(), 2);
 
-      for (int i = 0; i < input_keys[rank].size(0); ++i) {
+      auto [thread_start, thread_end] =
+          base::WorkParititon::MultiThreadWorkPartititon(
+              thread_id, kUpdatePqWorkerNum_, input_keys[rank].size(0));
+
+      for (int i = thread_start; i < thread_end; ++i) {
         int64_t id = data[i];
 
 #ifdef USE_SUB_GRAD_TENSOR
@@ -442,6 +461,52 @@ class GradAsyncProcessing : public GradProcessingBase {
 #endif
         pq_.PushOrUpdate(p);
       }
+    }
+  }
+
+  void UpsertPq(const std::vector<torch::Tensor> &input_keys,
+                const std::vector<torch::Tensor> &input_grads, int step_no) {
+    xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
+    if (update_pq_use_omp_ == 1) {
+#pragma omp parallel for num_threads(num_gpus_)
+      for (int rank = 0; rank < input_keys.size(); ++rank) {
+        auto *data = input_keys[rank].data_ptr<int64_t>();
+        CHECK(input_keys[rank].is_cpu());
+        CHECK_EQ(input_grads[rank].dim(), 2);
+
+        for (int i = 0; i < input_keys[rank].size(0); ++i) {
+          int64_t id = data[i];
+
+#ifdef USE_SUB_GRAD_TENSOR
+          recstore::SubGradTensor grad_tensor(input_grads[rank], i);
+#else
+#error "not use SubGradTensor "
+          torch::Tensor grad_tensor = input_grads[rank][i];
+#endif
+
+          auto *p = dict_[id];
+          // NOTE: 改了优先级
+          base::LockGuard element_lock_guard(*p);
+          p->RemoveReadStep(step_no);
+          p->MarkWriteInStepN(step_no, grad_tensor);
+          p->RecaculatePriority();
+#ifdef XMH_DEBUG_KG
+          LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}",
+                                      id, step_no,
+                                      toString(grad_tensor, false));
+#endif
+          pq_.PushOrUpdate(p);
+        }
+      }
+    } else if (update_pq_use_omp_ == 2) {
+      for (int i = 0; i < kUpdatePqWorkerNum_; i++) {
+        update_pq_thread_pool_->add(
+            std::bind(&GradAsyncProcessing::UpsertPqThreadMethod2ThreadPool,
+                      this, input_keys, input_grads, step_no, i));
+      }
+      update_pq_thread_pool_->join();
+    } else {
+      LOG(FATAL) << "invalid update_pq_use_omp";
     }
     timer_ProcessBackwardAsync.end();
   }
