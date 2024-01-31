@@ -199,7 +199,6 @@ class TestShardedCache:
         print("TorchNativeStdEmbDDP(emb, device='cuda') done", flush=True)
         # Generate standard embedding done
 
-
         print("CacheEmbFactory.New(cached_emb_type, emb, args)", flush=True)
         # Generate our embedding
         cached_emb_type = args['test_cache']
@@ -237,7 +236,7 @@ class TestShardedCache:
         timer_start = Timer(f"E2E-{args['log_interval']}")
         timer_start.start()
         # forward
-        for _ in tqdm.trange(100):
+        for _ in tqdm.trange(900):
             sparse_opt.zero_grad()
             dist_opt.zero_grad()
 
@@ -319,11 +318,16 @@ class TestShardedCache:
             # "backwardMode": ["CppAsync",],
             "backwardMode": ["CppAsyncV2",],
 
+            "update_pq_use_omp": [0], #0没问题，1、2的时候会有bug，应该也是多线程的Upsert时候的问题，但目前来看不影响性能
+            "kUseParallelClean": [1], #里面默认是1，哪怕上面是0会有bug，需要范如文调一下
+
+            # "update_pq_use_omp": [2],
+
             # "backgrad_init":['cpu', 'gpu', 'both'],
             "backgrad_init": ['both'],
 
             # "cache_ratio": [0.1, 0.3, 0.5],
-            "cache_ratio": [0.1,]
+            "cache_ratio": [0.1,],
         }
 
         def GenProduct(config):
@@ -338,6 +342,7 @@ class TestShardedCache:
             backmode = each['backwardMode']
             cache_ratio = each['cache_ratio']
             backgrad_init = each['backgrad_init']
+            update_pq_use_omp = each['update_pq_use_omp']
 
             KGCacheControllerWrapperBase.BeforeDDPInit()
             args = {

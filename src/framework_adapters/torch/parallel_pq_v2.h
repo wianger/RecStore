@@ -56,9 +56,12 @@ class PriorityHashTable {
   base::epoch::EpochManager *epoch_manager_ =
       base::epoch::EpochManager::GetInstance();
 
+  const int kUseParallelClean_ = false;
+
  public:
-  PriorityHashTable(int queue_priority, index_type *init_index)
-      : queue_priority_(queue_priority) {
+  PriorityHashTable(int queue_priority, index_type *init_index,
+                    int kUseParallelClean)
+      : queue_priority_(queue_priority), kUseParallelClean_(kUseParallelClean) {
     index_ = init_index;
   }
 
@@ -108,32 +111,31 @@ class PriorityHashTable {
 
     if (!success) return nullptr;
 
-      // LOG(INFO) << "cleaning priorityhashtable, priority=" << queue_priority_
-      //           << ", size=" << old_index->size();
+    // LOG(INFO) << "cleaning priorityhashtable, priority=" << queue_priority_
+    //           << ", size=" << old_index->size();
 
-#if 0
-    int count = 0;
-    for (auto [key, value] : *old_index) {
-      drain_fn(value);
-      count++;
-    }
-#else
+    if (!kUseParallelClean_) {
+      int count = 0;
+      for (auto [key, value] : *old_index) {
+        drain_fn(value);
+        count++;
+      }
+    } else {
 #pragma omp parallel num_threads(32)
-    {
-      int avg_shard =
-          (old_index->get_num_shards() + omp_get_num_threads() - 1) /
-          omp_get_num_threads();
+      {
+        int avg_shard =
+            (old_index->get_num_shards() + omp_get_num_threads() - 1) /
+            omp_get_num_threads();
 
-      int thread_id = omp_get_thread_num();
-      auto shard_begin = old_index->get_shard(avg_shard * thread_id);
-      auto shard_end = old_index->get_shard(avg_shard * (thread_id + 1));
-      for (; shard_begin != shard_end; ++shard_begin) {
-        auto &it = *shard_begin;
-        drain_fn(it.second);
+        int thread_id = omp_get_thread_num();
+        auto shard_begin = old_index->get_shard(avg_shard * thread_id);
+        auto shard_end = old_index->get_shard(avg_shard * (thread_id + 1));
+        for (; shard_begin != shard_end; ++shard_begin) {
+          auto &it = *shard_begin;
+          drain_fn(it.second);
+        }
       }
     }
-
-#endif
 
     old_index->clear();
     isCleaning_ = false;
@@ -195,13 +197,13 @@ class ParallelPqV2 {
   }
 
  public:
-  ParallelPqV2(int64_t total_count)
+  ParallelPqV2(int64_t total_count, int kUseParallelClean)
       : index_(total_count), hash_map_pool_(kMaxPriority + 100, 100000) {
     for (int i = 0; i < kMaxPriority; i++) {
       if (i == kMaxPriority - 1)
-        qs_[i] = new PriorityHashTable<T>(kInf, hash_map_pool_.Get());
+        qs_[i] = new PriorityHashTable<T>(kInf, hash_map_pool_.Get(), kUseParallelClean);
       else
-        qs_[i] = new PriorityHashTable<T>(i, hash_map_pool_.Get());
+        qs_[i] = new PriorityHashTable<T>(i, hash_map_pool_.Get(), kUseParallelClean);
     }
   }
 
