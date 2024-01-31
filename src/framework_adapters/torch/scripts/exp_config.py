@@ -41,6 +41,10 @@ def GswUnlock():
 def MC_cas(key, old_value, new_value):
     mc = Client('localhost:11211')
     mc_old_value, cas_unique = mc.gets(key)
+    if mc_old_value is None:
+        ret = mc.set(key, new_value)
+        assert ret
+        return True
     mc_old_value = mc_old_value.decode('utf-8')
     if mc_old_value == old_value:
         ret = mc.cas(key, new_value, cas_unique)
