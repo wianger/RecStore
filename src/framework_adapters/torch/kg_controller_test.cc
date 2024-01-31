@@ -68,15 +68,26 @@ class CircleBuffer {
     if (is_async_process_ && sync) {
       while (circle_buffer_end_[0].item<int64_t>() !=
              circle_buffer_old_end_[0].item<int64_t>()) {
-        FB_LOG_EVERY_MS(INFO, 1000) << folly::sformat(
+        FB_LOG_EVERY_MS(INFO, 5000) << folly::sformat(
             "Waiting for CppAsync to finish processing the item {}",
             circle_buffer_old_end_[0].item<int64_t>());
       }
     }
 
-    if (end_ == start_) start_ = (start_ + 1) % L_;
-
-    // if (step == 10) std::this_thread::sleep_for(std::chrono::seconds(100));
+    if (end_ == start_) {
+      // 这里防止吃样本
+      // TODO:只有当start_在cppend~end_之间的时候，才能不等待，往后走  不这么写是有BUG的，但没时间查了
+      // while (1) {
+      //   int64_t cppend = circle_buffer_old_end_[0].item<int64_t>();
+      //   for (int i = cppend; i < end_ + L_; i++) {
+      //     int j = i % L_;
+      //     if (j == start_) {
+      //       break;
+      //     }
+      //   }
+      // }
+      start_ = (start_ + 1) % L_;
+    }
   }
 
   std::pair<int, c10::intrusive_ptr<SlicedTensor>> Pop() {
@@ -117,7 +128,10 @@ class BasePerfSampler {
   std::pair<int, torch::Tensor> __next__() {
     auto entity_id = gen_next_sample();
     auto [step, sample] = ids_circle_buffer_.Pop();
+    
+    // TODO: 继上面的问题，这里只能先用同步
     ids_circle_buffer_.Push(sampler_iter_num_, entity_id, false);
+    // ids_circle_buffer_.Push(sampler_iter_num_, entity_id, true);
     ++sampler_iter_num_;
     return std::make_pair(step, sample->GetSlicedTensor());
   }
@@ -290,7 +304,7 @@ class VirtualEnvironment {
       auto [sample_step, next_ids] = test_perf_sampler_[rank].__next__();
       CHECK_EQ(sample_step, step_no);
 
-      LOG(INFO) << folly::sformat("rank{}: {}", rank, toString(next_ids));
+      // LOG(INFO) << folly::sformat("rank{}: {}", rank, toString(next_ids));
 
       input_keys_[rank]->Copy_(next_ids, false);
 
@@ -325,7 +339,7 @@ class VirtualEnvironment {
       barrier_->Wait();
 
       // if (rank == 0 && step_no == 100) ProfilerStop();
-      // if (step_no == 100) break;
+      if (step_no == 30) break;
     }
   }
 };
@@ -343,7 +357,7 @@ int main(int argc, char **argv) {
             "nr_background_threads": 32,
             "full_emb_capacity": 10000000,
             "emb_dim" : 400,
-            "num_ids_per_step": 5000,
+            "num_ids_per_step": 25000,
             "backgrad_init": "both"
         }})";
 

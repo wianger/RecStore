@@ -13,12 +13,11 @@
 #include "base/lock.h"
 #include "base/pq.h"
 #include "base/timer.h"
+#include "folly/executors/CPUThreadPoolExecutor.h"
 #include "grad_base.h"
 #include "grad_memory_manager.h"
 #include "parallel_pq.h"
 #include "torch_utils.h"
-
-#include "folly/executors/CPUThreadPoolExecutor.h"
 
 namespace recstore {
 class AsyncGradElement {
@@ -188,8 +187,7 @@ class GradAsyncProcessing : public GradProcessingBase {
         kEmbNumber_(full_emb_.size(0)),
         kGradDim_(full_emb_.size(1)),
         pq_(kEmbNumber_) {
-    auto json_config = json::parse(json_str);
-    nr_background_threads_ = json_config.at("nr_background_threads");
+    nr_background_threads_ = json_config_.at("nr_background_threads");
     CHECK_GT(nr_background_threads_, 0);
     dict_.assign(full_emb_.size(0), nullptr);
     for (int i = 0; i < full_emb_.size(0); i++)
@@ -214,7 +212,7 @@ class GradAsyncProcessing : public GradProcessingBase {
       sample_step_cpp_seen_[rank].store(-1);
     }
     if (update_pq_use_omp_ == 2) {
-      int temp = json_config.value("kUpdatePqWorkerNum", 8);
+      int temp = json_config_.value("kUpdatePqWorkerNum", 8);
       *((int *)&kUpdatePqWorkerNum_) = temp;
       folly::CPUThreadPoolExecutor::Options option;
       option.setBlocking(
@@ -287,13 +285,19 @@ class GradAsyncProcessing : public GradProcessingBase {
 
   void DetectNewSamplesCome() {
     for (int rank = 0; rank < num_gpus_; rank++) {
-      int64_t new_end = circle_buffer_end_per_rank_[rank].item<int64_t>();
-      int64_t *p_old_end = circle_buffer_end_cppseen_[rank].data_ptr<int64_t>();
-      int64_t old_end = circle_buffer_end_cppseen_[rank][0].item<int64_t>();
+      volatile int64_t *p_new_end =
+          circle_buffer_end_per_rank_[rank].data_ptr<int64_t>();
+      int64_t new_end = *p_new_end;
+      volatile int64_t *p_old_end =
+          circle_buffer_end_cppseen_[rank].data_ptr<int64_t>();
+      int64_t old_end = *p_old_end;
+
       CHECK_EQ(*p_old_end, old_end);
       if (new_end != old_end) {
-        FB_LOG_EVERY_MS(WARNING, 1000) << folly::sformat(
-            "Detect new sample comes, old_end{}, new_end{}", old_end, new_end);
+        // FB_LOG_EVERY_MS(WARNING, 1000) << folly::sformat(
+        // LOG(WARNING) << folly::sformat(
+        //     "Rank{}: Detect new sample comes, old_end{}, new_end{}", rank,
+        //     old_end, new_end);
 
         // add [circle_buffer_old_end, new_end)
         if (new_end < old_end) new_end += L_;
@@ -307,6 +311,7 @@ class GradAsyncProcessing : public GradProcessingBase {
           CHECK_LT(sample_step_cpp_seen_[rank], step);
           sample_step_cpp_seen_[rank] = step;
         }
+
         new_end = new_end % L_;
         *p_old_end = new_end;
       }
@@ -314,6 +319,7 @@ class GradAsyncProcessing : public GradProcessingBase {
   }
 
   void DetectThread() {
+    torch::AutoGradMode guard_false(false);
     CHECK(isInitialized_);
     while (!detect_thread_stop_flag_.load()) {
       base::LockGuard _(large_lock_);
@@ -322,6 +328,7 @@ class GradAsyncProcessing : public GradProcessingBase {
   }
 
   void DispatchThread() {
+    torch::AutoGradMode guard_false(false);
     CHECK(isInitialized_);
     while (!dispatch_thread_stop_flag_.load()) {
       base::LockGuard _(large_lock_);
@@ -382,6 +389,7 @@ class GradAsyncProcessing : public GradProcessingBase {
   }
 
   void GradWorkThread(int thread_id) {
+    torch::AutoGradMode guard_false(false);
     auto *queue = backthread_work_queues_[thread_id].get();
     CHECK(queue != nullptr);
     while (!grad_thread_stop_flag_.load()) {
@@ -467,8 +475,8 @@ class GradAsyncProcessing : public GradProcessingBase {
   void UpsertPq(const std::vector<torch::Tensor> &input_keys,
                 const std::vector<torch::Tensor> &input_grads, int step_no) {
     xmh::Timer timer_ProcessBackwardAsync("ProcessBack:UpsertPq");
-    if (update_pq_use_omp_ == 1) {
-#pragma omp parallel for num_threads(num_gpus_)
+    if (update_pq_use_omp_ == 0 || update_pq_use_omp_ == 1) {
+#pragma omp parallel for num_threads(num_gpus_) if (update_pq_use_omp_)
       for (int rank = 0; rank < input_keys.size(); ++rank) {
         auto *data = input_keys[rank].data_ptr<int64_t>();
         CHECK(input_keys[rank].is_cpu());
@@ -522,7 +530,12 @@ class GradAsyncProcessing : public GradProcessingBase {
 
     for (int rank = 0; rank < num_gpus_; rank++) {
       while (sample_step_cpp_seen_[rank].load() < step_no)
-        ;
+        FB_LOG_EVERY_MS(ERROR, 5000)
+            << "Stalled in ProcessBackward: "
+            << folly::sformat(
+                   "rank={}, step_no={}, "
+                   "sample_step_cpp_seen_[rank]={}",
+                   rank, step_no, sample_step_cpp_seen_[rank].load());
     }
 
     UpsertPq(input_keys, input_grads, step_no);

@@ -678,7 +678,7 @@ class ExpRecPerf(RecExperiment):
                     ],
                 },
             ],
-            "run_steps": [500],
+            "run_steps": [300],
             "log_interval": [100],
         }
 

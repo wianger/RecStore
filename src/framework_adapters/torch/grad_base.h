@@ -141,7 +141,8 @@ class GradProcessingBase {
  public:
   GradProcessingBase(const std::string &json_str,
                      const std::vector<std::vector<int64_t>> &cached_range)
-      : full_emb_(GraphEnv::GetInstance()->full_emb_),
+      : json_config_(json::parse(json_str)),
+        full_emb_(GraphEnv::GetInstance()->full_emb_),
         cache_per_rank_(GraphEnv::GetInstance()->cache_per_rank_),
         step_tensor_per_rank_(GraphEnv::GetInstance()->step_tensor_per_rank_),
         circle_buffer_end_per_rank_(
@@ -164,13 +165,12 @@ class GradProcessingBase {
         processOneStepNegThread_(&GradProcessingBase::ProcessOneStepNegThread,
                                  this) {
     cached_range_ = cached_range;
-    auto json_config = json::parse(json_str);
-    num_gpus_ = json_config.at("num_gpus");
-    L_ = json_config.at("L");
-    kForwardItersPerStep_ = json_config.at("kForwardItersPerStep");
-    clr_ = json_config.at("clr");
-    update_cache_use_omp_ = json_config.value("update_cache_use_omp", 1);
-    update_pq_use_omp_ = json_config.value("update_pq_use_omp", 2);
+    num_gpus_ = json_config_.at("num_gpus");
+    L_ = json_config_.at("L");
+    kForwardItersPerStep_ = json_config_.at("kForwardItersPerStep");
+    clr_ = json_config_.at("clr");
+    update_cache_use_omp_ = json_config_.value("update_cache_use_omp", 1);
+    update_pq_use_omp_ = json_config_.value("update_pq_use_omp", 2);
 
     if (backgrad_init_ == "cpu") {
       backgrad_init_enum_ = BackGradInitEnum::CPU;
@@ -215,6 +215,7 @@ class GradProcessingBase {
   };
 
   virtual void ProcessOneStepNegThread() {
+    torch::AutoGradMode guard_false(false);
     if (kForwardItersPerStep_ == 1) {
       return;
     }
@@ -327,13 +328,15 @@ class GradProcessingBase {
 
     for (int rank = 0; rank < num_gpus_; rank++) {
       // CHECK(!input_keys[rank].is_cuda());
+      // CHECK(input_grads[rank].is_cuda());
+
       auto in_each_rank_cache_mask =
           split_keys_to_shards(input_keys[rank], cached_range_);
 
       std::vector<torch::Tensor> sharded_keys_in_this_rank =
           TensorUtil::IndexVectors(input_keys[rank], in_each_rank_cache_mask);
       std::vector<torch::Tensor> sharded_grads_in_this_rank =
-          TensorUtil::IndexVectors(input_grads[rank], in_each_rank_cache_mask);
+          TensorUtil::IndexVectorsDebug(input_grads[rank], in_each_rank_cache_mask);
 
       // shuffle keys and grads
       for (int i = 0; i < num_gpus_; i++) {
@@ -366,36 +369,19 @@ class GradProcessingBase {
                        const std::vector<std::vector<torch::Tensor>>
                            &shuffled_grads_in_each_rank_cache) {
     xmh::Timer timer_SyncUpdateCache("ProcessBack:UpdateCache");
-    if (update_cache_use_omp_) {
-#pragma omp parallel for num_threads(num_gpus_)
-      for (int rank = 0; rank < num_gpus_; rank++) {
-        for (int j = 0; j < num_gpus_; j++) {
-          // update per rank cache
-          // CUDA_CHECK(cudaSetDevice(rank));
-          torch::Device device(torch::kCUDA, rank);
-          auto in_rank_keys =
-              shuffled_keys_in_each_rank_cache[rank][j].to(device, true) -
-              cached_range_[rank][0];
-          auto shuffle_grads_cuda =
-              shuffled_grads_in_each_rank_cache[rank][j].to(device, true);
-          cache_per_rank_[rank].index_add_(0, in_rank_keys,
-                                           -clr_ * shuffle_grads_cuda);
-        }
-      }
-    } else {
-      for (int rank = 0; rank < num_gpus_; rank++) {
-        for (int j = 0; j < num_gpus_; j++) {
-          // update per rank cache
-          // CUDA_CHECK(cudaSetDevice(rank));
-          torch::Device device(torch::kCUDA, rank);
-          auto in_rank_keys =
-              shuffled_keys_in_each_rank_cache[rank][j].to(device, true) -
-              cached_range_[rank][0];
-          auto shuffle_grads_cuda =
-              shuffled_grads_in_each_rank_cache[rank][j].to(device, true);
-          cache_per_rank_[rank].index_add_(0, in_rank_keys,
-                                           -clr_ * shuffle_grads_cuda);
-        }
+#pragma omp parallel for num_threads(num_gpus_) if (update_cache_use_omp_)
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      for (int j = 0; j < num_gpus_; j++) {
+        // update per rank cache
+        // CUDA_CHECK(cudaSetDevice(rank));
+        torch::Device device(torch::kCUDA, rank);
+        auto in_rank_keys =
+            shuffled_keys_in_each_rank_cache[rank][j].to(device, true) -
+            cached_range_[rank][0];
+        auto shuffle_grads_cuda =
+            shuffled_grads_in_each_rank_cache[rank][j].to(device, true);
+        cache_per_rank_[rank].index_add_(0, in_rank_keys,
+                                         -clr_ * shuffle_grads_cuda);
       }
     }
     timer_SyncUpdateCache.end();
@@ -403,6 +389,7 @@ class GradProcessingBase {
 
  protected:
   // config
+  nlohmann::json json_config_;
   int num_gpus_;
   int L_;
   std::vector<std::vector<int64_t>> cached_range_;

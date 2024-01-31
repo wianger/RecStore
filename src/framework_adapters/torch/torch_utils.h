@@ -20,18 +20,29 @@ class TensorUtil {
 #ifdef DEBUG
     for (auto each : indices) {
       CHECK(each.dim() == 1);
-      // CHECK(each.dtype() == torch::kInt64);
     }
 #endif
     std::vector<torch::Tensor> ret;
     ret.reserve(indices.size());
     for (int i = 0; i < indices.size(); i++) {
-      // ret.push_back(tensor.index_select(0, indices[i]));
       ret.push_back(at::indexing::get_item(
           tensor, {at::indexing::TensorIndex(indices[i])}));
+    }
+    return ret;
+  }
 
-      // ret.push_back(tensor[indices[i]]);
-      // ret.push_back(torch::index_select(tensor, 0, indices));
+  static std::vector<torch::Tensor> IndexVectorsDebug(
+      const torch::Tensor &tensor, const std::vector<torch::Tensor> &indices) {
+#ifdef DEBUG
+    for (auto each : indices) {
+      CHECK(each.dim() == 1);
+    }
+#endif
+    std::vector<torch::Tensor> ret;
+    ret.reserve(indices.size());
+    for (int i = 0; i < indices.size(); i++) {
+      ret.push_back(at::indexing::get_item(
+          tensor, {at::indexing::TensorIndex(indices[i])}));
     }
     return ret;
   }
