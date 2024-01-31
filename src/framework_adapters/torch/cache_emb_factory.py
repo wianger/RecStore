@@ -13,10 +13,12 @@ class CacheEmbFactory:
 
     @staticmethod
     def SupportedCacheType():
-        return ["KnownShardedCachedEmbedding", 
-                "KnownLocalCachedEmbedding", 
+        return ["KnownShardedCachedEmbedding",
+                "KnownLocalCachedEmbedding",
                 "TorchNativeStdEmb",
-                "KGExternelEmbedding"]
+                "KGExternelEmbedding",
+                # "TorchNativeStdEmbDDP"
+                ]
 
     @staticmethod
     def New(cache_type, emb, args) -> AbsEmb:
@@ -45,7 +47,8 @@ class CacheEmbFactory:
         elif cache_type == "TorchNativeStdEmb":
             # abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
             abs_emb = TorchNativeStdEmb(emb.weight, device='cpu')
-
+        elif cache_type == "TorchNativeStdEmbDDP":
+            abs_emb = TorchNativeStdEmbDDP(emb.weight, device='cpu')
         elif cache_type == "KGExternelEmbedding":
             abs_emb = KGExternelEmbedding(emb.weight)
         else:

@@ -1,3 +1,4 @@
+import numpy as np
 import torch.distributed as dist
 from utils import XLOG
 from PsKvstore import get_kvstore, kvinit
@@ -8,7 +9,9 @@ DIST_TENSOR_ID = 0
 
 def _default_init_data(tensor, shape, dtype):
     # return tensor.zero_()
-    return 
+    tensor.uniform_(-np.sqrt(1/shape[0]),
+                    np.sqrt(1/shape[0]))
+    return
 
 
 class DistTensor:
@@ -81,7 +84,6 @@ class DistTensor:
         # self.kvstore.Put(name=self._name, id_tensor=idx, data_tensor=val)
 
         self._weight[idx] = val
-
 
     def get_shm_tensor(self):
         return self.kvstore.GetRowTensor(self._name)

@@ -45,7 +45,7 @@ np.random.seed(0)
 # torch.use_deterministic_algorithms(True)
 
 
-LR = 1
+LR = 0.01
 # DIFF_TEST = True
 DIFF_TEST = False
 
@@ -148,6 +148,7 @@ def main_routine(args, routine):
     kvinit()
     emb = DistEmbedding(int(args['num_embs']),
                         int(args['emb_dim']), name="full_emb",)
+
     XLOG.warn("After init DistEmbedding")
 
     # dummy LR, only register the tensor state of OSP
@@ -306,10 +307,10 @@ def routine_local_cache_helper(worker_id, args):
     sparse_opt.add_param_group({'params': nn_model.parameters()})
 
     timer_geninput = Timer("GenInput")
-    timer_Forward = Timer("Forward")
-    timer_Backward = Timer("Backward")
-    timer_Optimize = Timer("Optimize")
-    timer_NN = Timer("NN")
+    timer_Forward = GPUTimer("Forward")
+    timer_Backward = GPUTimer("Backward")
+    timer_Optimize = GPUTimer("Optimize")
+    timer_NN = GPUTimer("NN")
     timer_onestep = Timer(f"OneStep")
     timer_start = Timer(f"E2E-{args['log_interval']}")
     timer_start.start()
@@ -377,6 +378,8 @@ def routine_local_cache_helper(worker_id, args):
         timer_Backward.start()
         loss.backward()
         timer_Backward.stop()
+
+        # print("emb.grad=", abs_emb.std_emb.weight.grad)
 
         if DIFF_TEST:
             # diff test begin

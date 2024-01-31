@@ -1,3 +1,4 @@
+from torch.profiler import record_function
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -135,14 +136,20 @@ class GPUTimer:
         self.start()
 
     def start(self):
-        self.tick = torch.cuda.Event(enable_timing=True)
-        self.tick.record()
+        # self.tick = torch.cuda.Event(enable_timing=True)
+        # self.tick.record()
+        self.tick = time.time()
 
     def stop(self):
-        self.tock = torch.cuda.Event(enable_timing=True)
-        self.tock.record()
-        self.tock.synchronize()
-        elapsed_time_ms = self.tick.elapsed_time(self.tock)
+        # self.tock = torch.cuda.Event(enable_timing=True)
+        # self.tock.record()
+        # self.tock.synchronize()
+        # elapsed_time_ms = self.tick.elapsed_time(self.tock)
+        # timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
+
+        torch.cuda.synchronize()
+        self.tock = time.time()
+        elapsed_time_ms = (self.tock - self.tick)*1e3
         timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
 
 
@@ -151,7 +158,6 @@ class PerfCounter:
     def Record(cls, name, value):
         timer_module.PerfCounter.Record(name, value)
 
-from torch.profiler import record_function
 
 @contextmanager
 def xmh_nvtx_range(msg, condition=True):

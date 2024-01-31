@@ -637,7 +637,7 @@ class ExpRecPerf(RecExperiment):
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
             "with_nn": [
-                '512,256',
+                '512,256,1',
             ],
             "binding": [
                 {
@@ -678,7 +678,7 @@ class ExpRecPerf(RecExperiment):
                         "PySync",
                         # "CppSync",
                         "CppAsyncV2",
-                        "CppAsync",
+                        # "CppAsync",
                     ],
                 },
             ],

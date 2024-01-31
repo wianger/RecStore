@@ -75,12 +75,9 @@ class TorchNativeStdEmbDDP(AbsEmb):
 
         if device == 'cuda':
             std_emb = nn.Embedding.from_pretrained(
-                weight, freeze=False).cuda()
+                weight, freeze=False, sparse=True).cuda()
             self.std_emb_ddp = DDP(std_emb, device_ids=[worker_id],)
         elif device == 'cpu':
-            # TODO(NOTE)
-            raise Exception(
-                "发现.cuda()之后和不.cuda的DDP Emb行为不一致，为了diff test暂时不要用cpu")
             std_emb = nn.Embedding.from_pretrained(
                 weight, freeze=False, sparse=True)
             self.std_emb_ddp = DDP(std_emb, device_ids=None,)
@@ -91,7 +88,7 @@ class TorchNativeStdEmbDDP(AbsEmb):
 
     def forward(self, input_keys, ):
         if self.device == 'cpu':
-            return self.std_emb_ddp(input_keys.cpu())
+            return self.std_emb_ddp(input_keys.cpu()).cuda()
         elif self.device == 'cuda':
             return self.std_emb_ddp(input_keys.cuda())
         else:

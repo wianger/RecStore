@@ -178,7 +178,7 @@ def main():
         "L": 10,
         "backgrad_init": "both", 
         "kForwardItersPerStep": 2,
-        "clr": 1,
+        "clr": 0.01,
         "nr_background_threads": 32,
         "backwardMode": "{args.backwardMode}",
         "cache_ratio": {args.cache_ratio},
