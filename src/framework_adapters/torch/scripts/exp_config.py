@@ -637,7 +637,7 @@ class ExpRecPerf(RecExperiment):
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
             "with_nn": [
-                '128,128,128',
+                '512,256',
             ],
             "binding": [
                 {

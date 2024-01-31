@@ -169,15 +169,31 @@ def main_routine(args, routine):
         assert each.exitcode == 0
 
 
-class SimpleModel(nn.Module):
-    def __init__(self, dim_list):
-        super(SimpleModel, self).__init__()
-
-        self.list = nn.Sequential()
-
+class SimpleDLRM(nn.Module):
+    def __init__(self, dim_list, sigmoid_layer=-1):
+        super(SimpleDLRM, self).__init__()
+        layers = nn.ModuleList()
         for i in range(len(dim_list)-1):
-            self.list.append(nn.Linear(dim_list[i], dim_list[i+1]))
-        self.list.append(nn.Linear(dim_list[-1], 1))
+            n = dim_list[i]
+            m = dim_list[i+1]
+            LL = nn.Linear(int(n), int(m), bias=True)
+            mean = 0.0  # std_dev = np.sqrt(variance)
+            std_dev = np.sqrt(2 / (m + n))  # np.sqrt(1 / m) # np.sqrt(1 / n)
+            W = np.random.normal(mean, std_dev, size=(m, n)).astype(np.float32)
+            std_dev = np.sqrt(1 / m)  # np.sqrt(2 / (m + 1))
+            bt = np.random.normal(mean, std_dev, size=m).astype(np.float32)
+            # approach 1
+            LL.weight.data = torch.tensor(W, requires_grad=True)
+            LL.bias.data = torch.tensor(bt, requires_grad=True)
+            layers.append(LL)
+
+            # construct sigmoid or relu operator
+            if i == sigmoid_layer:
+                layers.append(nn.Sigmoid())
+            else:
+                layers.append(nn.ReLU())
+
+        self.list = torch.nn.Sequential(*layers)
 
     def forward(self, x):
         return self.list(x)
@@ -284,7 +300,7 @@ def routine_local_cache_helper(worker_id, args):
     perf_sampler.Prefill()
 
     # define NN
-    nn_model = SimpleModel(args['with_nn'])
+    nn_model = SimpleDLRM(args['with_nn'])
     nn_model = nn_model.cuda()
     nn_model = DDP(nn_model, device_ids=[rank])
     sparse_opt.add_param_group({'params': nn_model.parameters()})
@@ -304,12 +320,16 @@ def routine_local_cache_helper(worker_id, args):
         "start_barrier", dist.get_world_size())
     start_barrier.Wait()
 
+    loss_fn = torch.nn.MSELoss(reduction="mean")
+    device = torch.device(f"cuda:{rank}")
+
     for _ in for_range:
         timer_onestep.start()
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
 
-        print(f"========== Step {_} ========== ", flush=True)
+        if rank == 0:
+            print(f"========== Step {_} ========== ", flush=True)
 
         if with_perf and _ == warmup_iters:
             if rank == 0:
@@ -342,14 +362,16 @@ def routine_local_cache_helper(worker_id, args):
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
 
-        # loss = embed_value.sum(-1).sum(-1)
+        reshaped_emb = embed_value.view(
+            args['batch_size'], -1, args['emb_dim'])
+
+        sum_pooling = reshaped_emb.sum(1)
 
         timer_NN.start()
-        # embed_value = embed_value.unsqueeze(0)
-        embed_value = embed_value.sum(0)
-        loss = nn_model(embed_value)
+        logit = nn_model(sum_pooling)
+        loss = loss_fn(logit, torch.randint(
+            0, 2, logit.shape, dtype=torch.float32, device=device))
         timer_NN.stop()
-
         timer_Forward.stop()
 
         timer_Backward.start()
