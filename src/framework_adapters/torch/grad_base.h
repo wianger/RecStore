@@ -336,7 +336,8 @@ class GradProcessingBase {
       std::vector<torch::Tensor> sharded_keys_in_this_rank =
           TensorUtil::IndexVectors(input_keys[rank], in_each_rank_cache_mask);
       std::vector<torch::Tensor> sharded_grads_in_this_rank =
-          TensorUtil::IndexVectorsDebug(input_grads[rank], in_each_rank_cache_mask);
+          TensorUtil::IndexVectorsDebug(input_grads[rank],
+                                        in_each_rank_cache_mask);
 
       // shuffle keys and grads
       for (int i = 0; i < num_gpus_; i++) {

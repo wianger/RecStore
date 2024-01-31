@@ -419,6 +419,7 @@ def routine_local_cache_helper(worker_id, args):
         timer_onestep.stop()
 
     if rank == 0:
+        print("Successfully xmh", flush=True)
         kg_cache_controller.StopThreads()
 
 
@@ -428,4 +429,3 @@ if __name__ == "__main__":
     args = get_run_config()
     main_routine(args, routine_local_cache_helper)
 
-    print("Successfully xmh")
