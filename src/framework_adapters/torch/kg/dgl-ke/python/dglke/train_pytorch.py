@@ -197,9 +197,12 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     start_barrier.Wait()
 
     print("start train")
+    exp_all_start_time = time.time()
     for step in range(0, args.max_step):
-        # if rank == 0:
-        #     print(f"+++++++++++++++++Step{step}+++++++++++++++++")
+        if rank == 0 and step % 10 == 0:
+            exp_all_now = time.time()
+            if exp_all_now - exp_all_start_time > 150:
+                break
 
         if with_perf and step == warmup_iters:
             if rank == 0:
@@ -313,15 +316,15 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
 
         timer_onestep.stop()
 
+    if rank == 0:
+        print('Successfully xmh. training takes {} seconds'.format(
+            time.time() - all_start), flush=True)
+
     if args.async_update:
         model.finish_async_update()
     if args.strict_rel_part or args.soft_rel_part:
         model.writeback_relation(rank, rel_parts)
 
-    if rank == 0:
-        print('Successfully xmh. training takes {} seconds'.format(
-            time.time() - all_start), flush=True)
-            
     if rank == 0:
         print("before call kg_cache_controller.StopThreads()", flush=True)
         kg_cache_controller.StopThreads()

@@ -58,6 +58,11 @@ if __name__ == "__main__":
         each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
         exp_lists.append(each)
 
+		# # 用这个
+        each = exp_config.ExpMotivationPerfEmb()
+        each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
+        exp_lists.append(each)
+
         each = exp_config.ExpKGPerfDebug()
         each.SetLogDir(f'{LOG_PREFIX}/0128-KG-debugomp{suffix}')
         exp_lists.append(each)
@@ -67,10 +72,7 @@ if __name__ == "__main__":
         # # each.SetLogDir(f'{LOG_PREFIX}/0117-exp1-macro-perf-emb-{suffix}')
         # # exp_lists.append(each)
 
-		# # 用这个
-        each = exp_config.ExpMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0116-exp2-motiv-emb-{suffix}')
-        exp_lists.append(each)
+
 
     for i, each in enumerate(exp_lists):
         # mount NFS

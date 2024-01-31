@@ -324,7 +324,13 @@ def routine_local_cache_helper(worker_id, args):
     loss_fn = torch.nn.MSELoss(reduction="mean")
     device = torch.device(f"cuda:{rank}")
 
+    exp_all_start_time = time.time()
     for _ in for_range:
+        if rank == 0 and _ % 10 == 0:
+            exp_all_now = time.time()
+            if exp_all_now - exp_all_start_time > 120:
+                break
+
         timer_onestep.start()
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
@@ -419,6 +425,7 @@ def routine_local_cache_helper(worker_id, args):
         timer_onestep.stop()
 
     if rank == 0:
+        print("Successfully xmh", flush=True)
         kg_cache_controller.StopThreads()
 
 
@@ -427,5 +434,3 @@ if __name__ == "__main__":
 
     args = get_run_config()
     main_routine(args, routine_local_cache_helper)
-
-    print("Successfully xmh")
