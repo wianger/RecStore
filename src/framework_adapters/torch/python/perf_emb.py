@@ -280,7 +280,13 @@ def routine_local_cache_helper(worker_id, args):
         "start_barrier", dist.get_world_size())
     start_barrier.Wait()
 
+    exp_all_start_time = time.time()
     for _ in for_range:
+        if rank == 0 and _ % 10 == 0:
+            exp_all_now = time.time()
+            if exp_all_now - exp_all_start_time > 120:
+                break
+
         timer_onestep.start()
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
@@ -358,6 +364,7 @@ def routine_local_cache_helper(worker_id, args):
 
         timer_onestep.stop()
 
+    print("Successfully xmh")
 
 if __name__ == "__main__":
     # import debugpy
@@ -370,4 +377,3 @@ if __name__ == "__main__":
     args = get_run_config()
     main_routine(args, routine_local_cache_helper)
 
-    print("Successfully xmh")

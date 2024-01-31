@@ -71,7 +71,6 @@ def MC_Unlock():
         ret = MC_cas("GPU_lock", "locked", "unlocked")
         if ret == True:
             break
-        time.sleep(5)
     print(f"unlock successfully")
 
 
@@ -217,7 +216,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
             "num_workers": [4, 8] if GetHostName() != "node182" else [4],
             "num_embs": [int(100*1e6),],
             "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
-            "run_steps": [300],
+            "run_steps": [200],
             "log_interval": [100],
 
             "cache_ratio": [0.01, 0.05, 0.1,],
@@ -682,7 +681,7 @@ class ExpRecPerf(RecExperiment):
                     ],
                 },
             ],
-            "run_steps": [300],
+            "run_steps": [200],
             "log_interval": [100],
         }
 
