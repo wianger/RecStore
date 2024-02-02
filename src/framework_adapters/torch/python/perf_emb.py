@@ -364,7 +364,7 @@ def routine_local_cache_helper(worker_id, args):
 
         timer_onestep.stop()
 
-    print("Successfully xmh")
+    print("Successfully xmh", flush=True)
 
 if __name__ == "__main__":
     # import debugpy
