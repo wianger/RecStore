@@ -38,6 +38,7 @@ def GswUnlock():
     except:
         pass
 
+
 def MC_cas(key, old_value, new_value):
     mc = Client('localhost:11211')
     mc_old_value, cas_unique = mc.gets(key)
@@ -90,7 +91,6 @@ def GPUUnlock():
         MC_Unlock()
     else:
         assert 0
-
 
 
 class PerfEmbRun(LocalOnlyRun):
@@ -215,7 +215,8 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         COMMON_CONFIGS = {
             "num_workers": [4, 8] if GetHostName() != "node182" else [4],
             "num_embs": [int(100*1e6),],
-            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
+            # "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
+            "batch_size": [128, 256, 512, 1024, 1280, 1536, 1792, 2048,],
             "run_steps": [200],
             "log_interval": [100],
 
@@ -681,7 +682,7 @@ class ExpRecPerf(RecExperiment):
                     ],
                 },
             ],
-            "run_steps": [200],
+            "run_steps": [300],
             "log_interval": [100],
         }
 

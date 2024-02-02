@@ -50,12 +50,8 @@ if __name__ == "__main__":
         exp_lists.append(each)
 
     else:
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0129-KG-scale-{suffix}')
-        exp_lists.append(each)
-
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')  #实质上是0131重跑的
         exp_lists.append(each)
 
 		# # 用这个
@@ -63,9 +59,13 @@ if __name__ == "__main__":
         each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
         exp_lists.append(each)
 
-        each = exp_config.ExpKGPerfDebug()
-        each.SetLogDir(f'{LOG_PREFIX}/0128-KG-debugomp{suffix}')
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
         exp_lists.append(each)
+
+        # each = exp_config.ExpKGPerfDebug()
+        # each.SetLogDir(f'{LOG_PREFIX}/0128-KG-debugomp{suffix}')
+        # exp_lists.append(each)
 
         # # 别用下面的了
         # # each = exp_config.ExpMacroPerfEmb()
