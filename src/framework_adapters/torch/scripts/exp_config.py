@@ -213,14 +213,19 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
-            "num_workers": [4, 8] if GetHostName() != "node182" else [4],
+            "num_workers": [8] if GetHostName() != "node182" else [4],
+
             "num_embs": [int(100*1e6),],
             # "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
-            "batch_size": [128, 256, 512, 1024, 1280, 1536, 1792, 2048,],
+            "batch_size": [128, 512, 1024, 1536, 2048,],
             "run_steps": [200],
             "log_interval": [100],
 
-            "cache_ratio": [0.01, 0.05, 0.1,],
+            "cache_ratio": [
+                0.01,
+                0.05,
+                0.1,
+            ],
             'binding2': [
                 {
                     "distribution": ['uniform'],
@@ -238,7 +243,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
                     "emb_choice": [
                         "KGExternelEmbedding",
                         "KnownShardedCachedEmbedding",
-                        "TorchNativeStdEmb",
+                        # "TorchNativeStdEmb",
                     ]
                 },
                 {
@@ -248,7 +253,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
                         "PySync",
                         # "CppSync",
                         "CppAsyncV2",
-                        # "CppAsync",
+                        "CppAsync",
                     ],
                 },
             ],
@@ -266,7 +271,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         LocalNukeAllPython()
         if previous_run is not None:
             GPUUnlock()
-        time.sleep(5)
+        # time.sleep(5)
         if next_run is not None:
             GPULock()
         return
@@ -414,7 +419,7 @@ class ExpKGScalability(GNNExperiment):
         COMMON_CONFIGS = {
             "model_name": [
                 'TransE',
-                # 'SimplE'
+                'SimplE'
 
                 # 'TransR',  OOM
                 # 'RESCAL',  too slow
@@ -447,7 +452,7 @@ class ExpKGScalability(GNNExperiment):
                     "hidden_dim": [400],
                     "cache_ratio": [0.05,],
                     "batch_size": [2000],
-                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4],
+                    "nr_gpus": [2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [2, 3, 4],
                 }
             ],
             "binding2": [
@@ -480,6 +485,107 @@ class ExpKGScalability(GNNExperiment):
 
         self.name = NAME
         super().__init__(10, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        need_run = []
+        for each in configs:
+            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+                print("pass Freebase")
+                continue
+            print(each)
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+
+class ExpKGSensitive(GNNExperiment):
+    def __init__(self, ) -> None:
+        NAME = "overall-kg-sensitive"
+        COMMON_CONFIGS = {
+            "model_name": [
+                'TransE',
+                # 'SimplE'
+                # 'TransR',  OOM
+                # 'RESCAL',  too slow
+                # 'RotatE',  BUG
+
+                # 'DistMult',
+                # 'ComplEx',
+                # 'SimplE'
+            ],
+            "binding": [
+                {
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [1200],
+                    "nr_gpus": [8]
+                },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05,],
+                #     "batch_size": [2000],
+                #     "nr_gpus": [8]
+                # },
+            ],
+            "binding2": [
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": [
+                        "PySync",
+                    ],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        "CppAsync"],
+                    "L": [2, 6, 10, 14],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        "CppAsync"],
+                    "nr_flush_threads": [8, 16, 24, 32],
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KGExternelEmbedding',
+                                        # "TorchNativeStdEmb",
+                                        'KnownShardedCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
+            ],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        super().__init__(1230, COMMON_CONFIGS,
                          "127.0.0.1")
 
     def _SortConfigs(self, configs):
