@@ -1,0 +1,628 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240204 10:03:47.340253 52477 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/_deprecate/graph.py:1023: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
+  dgl_warning("multigraph will be deprecated." \
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/heterograph.py:72: DGLWarning: Recommend creating graphs by `dgl.graph(data)` instead of `dgl.DGLGraph(data)`.
+  dgl_warning('Recommend creating graphs by `dgl.graph(data)`'
+Reading train triples....
+Finished. Read 483142 train triples.
+Reading valid triples....
+Finished. Read 50000 valid triples.
+Reading test triples....
+Finished. Read 59071 test triples.
+ARGS:  Namespace(model_name='TransE', data_path='/home/xieminhui/dgl-data', dataset='FB15k', format='built_in', data_files=None, delimiter='\t', save_path='/tmp/ckpts/TransE_FB15k_106', no_save_emb=True, max_step=500, batch_size=1200, batch_size_eval=16, neg_sample_size=200, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size_eval=14951, eval_percent=1, no_eval_filter=False, log_interval=100, eval_interval=10000, test=False, num_proc=8, num_thread=1, force_sync_interval=1, hidden_dim=400, lr=0.01, gamma=16.0, double_ent=False, double_rel=False, neg_adversarial_sampling=False, adversarial_temperature=1.0, regularization_coef=0.0, regularization_norm=3, pairwise=False, loss_genre='Logsigmoid', margin=1.0, nr_gpus=8, gpu=[0, 1, 2, 3, 4, 5, 6, 7], mix_cpu_gpu=True, valid=False, rel_part=False, async_update=None, has_edge_importance=False, cached_emb_type='KnownLocalCachedEmbedding', use_my_emb=True, cache_ratio=0.05, shuffle=False, backwardMode='PySync', L=10, nr_background_threads=32, update_cache_use_omp=0, update_pq_use_omp=0, kForwardItersPerStep=2, backgrad_init='both', eval_filter=True, soft_rel_part=False)
+|Train|: 483142
+original graph:  DGLGraph(num_nodes=14951, num_edges=592213,
+         ndata_schemes={}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Loading cached metis
+WARNING [52477 sampler.py:454] Start PreSampling
+WARNING [52477 sampler.py:532] Before construct renumbering_dict
+WARNING [52477 sampler.py:555] PreSampling done
+W20240204 10:03:53.025849 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_0 [1000000]0x100000002000 7.629 MB
+W20240204 10:03:53.026068 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_1 [1000000]0x1000007a5000 7.629 MB
+W20240204 10:03:53.026121 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_2 [1000000]0x100000f48000 7.629 MB
+W20240204 10:03:53.026165 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_3 [1000000]0x1000016eb000 7.629 MB
+W20240204 10:03:53.026212 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_4 [1000000]0x100001e8e000 7.629 MB
+W20240204 10:03:53.026262 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_5 [1000000]0x100002631000 7.629 MB
+W20240204 10:03:53.026310 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_6 [1000000]0x100002dd4000 7.629 MB
+W20240204 10:03:53.026365 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_7 [1000000]0x100003577000 7.629 MB
+W20240204 10:03:53.026417 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_8 [1000000]0x100003d1a000 7.629 MB
+W20240204 10:03:53.026463 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_9 [1000000]0x1000044bd000 7.629 MB
+W20240204 10:03:53.026518 52477 IPCTensor.h:369] NewIPCTensor: step_r0 [10]0x100004c60000 80 B 
+W20240204 10:03:53.026561 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r0 [1]0x100004c62000 8 B 
+W20240204 10:03:53.026607 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100004c64000 8 B 
+W20240204 10:03:53.026747 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_0 [1000000]0x100004c66000 7.629 MB
+W20240204 10:03:53.026799 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_1 [1000000]0x100005409000 7.629 MB
+W20240204 10:03:53.026849 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_2 [1000000]0x100005bac000 7.629 MB
+W20240204 10:03:53.026911 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_3 [1000000]0x10000634f000 7.629 MB
+W20240204 10:03:53.026955 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_4 [1000000]0x100006af2000 7.629 MB
+W20240204 10:03:53.026998 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_5 [1000000]0x100007295000 7.629 MB
+W20240204 10:03:53.027051 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_6 [1000000]0x100007a38000 7.629 MB
+W20240204 10:03:53.027094 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_7 [1000000]0x1000081db000 7.629 MB
+W20240204 10:03:53.027138 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_8 [1000000]0x10000897e000 7.629 MB
+W20240204 10:03:53.027192 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_9 [1000000]0x100009121000 7.629 MB
+W20240204 10:03:53.027242 52477 IPCTensor.h:369] NewIPCTensor: step_r1 [10]0x1000098c4000 80 B 
+W20240204 10:03:53.027280 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r1 [1]0x1000098c6000 8 B 
+W20240204 10:03:53.027318 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1000098c8000 8 B 
+W20240204 10:03:53.027400 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_0 [1000000]0x1000098ca000 7.629 MB
+W20240204 10:03:53.027459 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_1 [1000000]0x10000a06d000 7.629 MB
+W20240204 10:03:53.027510 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_2 [1000000]0x10000a810000 7.629 MB
+W20240204 10:03:53.027554 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_3 [1000000]0x10000afb3000 7.629 MB
+W20240204 10:03:53.027597 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_4 [1000000]0x10000b756000 7.629 MB
+W20240204 10:03:53.027640 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_5 [1000000]0x10000bef9000 7.629 MB
+W20240204 10:03:53.027686 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_6 [1000000]0x10000c69c000 7.629 MB
+W20240204 10:03:53.027737 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_7 [1000000]0x10000ce3f000 7.629 MB
+W20240204 10:03:53.027787 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_8 [1000000]0x10000d5e2000 7.629 MB
+W20240204 10:03:53.027835 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_9 [1000000]0x10000dd85000 7.629 MB
+W20240204 10:03:53.027878 52477 IPCTensor.h:369] NewIPCTensor: step_r2 [10]0x10000e528000 80 B 
+W20240204 10:03:53.027915 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r2 [1]0x10000e52a000 8 B 
+W20240204 10:03:53.027961 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x10000e52c000 8 B 
+W20240204 10:03:53.028038 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_0 [1000000]0x10000e52e000 7.629 MB
+W20240204 10:03:53.028093 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_1 [1000000]0x10000ecd1000 7.629 MB
+W20240204 10:03:53.028141 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_2 [1000000]0x10000f474000 7.629 MB
+W20240204 10:03:53.028195 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_3 [1000000]0x10000fc17000 7.629 MB
+W20240204 10:03:53.028242 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_4 [1000000]0x1000103ba000 7.629 MB
+W20240204 10:03:53.028290 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_5 [1000000]0x100010b5d000 7.629 MB
+W20240204 10:03:53.028333 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_6 [1000000]0x100011300000 7.629 MB
+W20240204 10:03:53.028378 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_7 [1000000]0x100011aa3000 7.629 MB
+W20240204 10:03:53.028426 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_8 [1000000]0x100012246000 7.629 MB
+W20240204 10:03:53.028482 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_9 [1000000]0x1000129e9000 7.629 MB
+W20240204 10:03:53.028527 52477 IPCTensor.h:369] NewIPCTensor: step_r3 [10]0x10001318c000 80 B 
+W20240204 10:03:53.028563 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r3 [1]0x10001318e000 8 B 
+W20240204 10:03:53.028609 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x100013190000 8 B 
+W20240204 10:03:53.028693 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_0 [1000000]0x100013192000 7.629 MB
+W20240204 10:03:53.028756 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_1 [1000000]0x100013935000 7.629 MB
+W20240204 10:03:53.028815 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_2 [1000000]0x1000140d8000 7.629 MB
+W20240204 10:03:53.028859 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_3 [1000000]0x10001487b000 7.629 MB
+W20240204 10:03:53.028910 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_4 [1000000]0x10001501e000 7.629 MB
+W20240204 10:03:53.028959 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_5 [1000000]0x1000157c1000 7.629 MB
+W20240204 10:03:53.029012 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_6 [1000000]0x100015f64000 7.629 MB
+W20240204 10:03:53.029062 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_7 [1000000]0x100016707000 7.629 MB
+W20240204 10:03:53.029106 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_8 [1000000]0x100016eaa000 7.629 MB
+W20240204 10:03:53.029155 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_9 [1000000]0x10001764d000 7.629 MB
+W20240204 10:03:53.029204 52477 IPCTensor.h:369] NewIPCTensor: step_r4 [10]0x100017df0000 80 B 
+W20240204 10:03:53.029243 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r4 [1]0x100017df2000 8 B 
+W20240204 10:03:53.029280 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r4 [1]0x100017df4000 8 B 
+W20240204 10:03:53.029359 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_0 [1000000]0x100017df6000 7.629 MB
+W20240204 10:03:53.029407 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_1 [1000000]0x100018599000 7.629 MB
+W20240204 10:03:53.029451 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_2 [1000000]0x100018d3c000 7.629 MB
+W20240204 10:03:53.029496 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_3 [1000000]0x1000194df000 7.629 MB
+W20240204 10:03:53.029551 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_4 [1000000]0x100019c82000 7.629 MB
+W20240204 10:03:53.029596 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_5 [1000000]0x10001a425000 7.629 MB
+W20240204 10:03:53.029651 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_6 [1000000]0x10001abc8000 7.629 MB
+W20240204 10:03:53.029702 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_7 [1000000]0x10001b36b000 7.629 MB
+W20240204 10:03:53.029747 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_8 [1000000]0x10001bb0e000 7.629 MB
+W20240204 10:03:53.029793 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_9 [1000000]0x10001c2b1000 7.629 MB
+W20240204 10:03:53.029836 52477 IPCTensor.h:369] NewIPCTensor: step_r5 [10]0x10001ca54000 80 B 
+W20240204 10:03:53.029873 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r5 [1]0x10001ca56000 8 B 
+W20240204 10:03:53.029911 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r5 [1]0x10001ca58000 8 B 
+W20240204 10:03:53.030000 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_0 [1000000]0x10001ca5a000 7.629 MB
+W20240204 10:03:53.030056 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_1 [1000000]0x10001d1fd000 7.629 MB
+W20240204 10:03:53.030102 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_2 [1000000]0x10001d9a0000 7.629 MB
+W20240204 10:03:53.030146 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_3 [1000000]0x10001e143000 7.629 MB
+W20240204 10:03:53.030192 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_4 [1000000]0x10001e8e6000 7.629 MB
+W20240204 10:03:53.030251 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_5 [1000000]0x10001f089000 7.629 MB
+W20240204 10:03:53.030311 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_6 [1000000]0x10001f82c000 7.629 MB
+W20240204 10:03:53.030365 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_7 [1000000]0x10001ffcf000 7.629 MB
+W20240204 10:03:53.030421 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_8 [1000000]0x100020772000 7.629 MB
+W20240204 10:03:53.030467 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_9 [1000000]0x100020f15000 7.629 MB
+W20240204 10:03:53.030519 52477 IPCTensor.h:369] NewIPCTensor: step_r6 [10]0x1000216b8000 80 B 
+W20240204 10:03:53.030556 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r6 [1]0x1000216ba000 8 B 
+W20240204 10:03:53.030594 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r6 [1]0x1000216bc000 8 B 
+W20240204 10:03:53.030678 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_0 [1000000]0x1000216be000 7.629 MB
+W20240204 10:03:53.030733 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_1 [1000000]0x100021e61000 7.629 MB
+W20240204 10:03:53.030779 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_2 [1000000]0x100022604000 7.629 MB
+W20240204 10:03:53.030826 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_3 [1000000]0x100022da7000 7.629 MB
+W20240204 10:03:53.030884 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_4 [1000000]0x10002354a000 7.629 MB
+W20240204 10:03:53.030943 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_5 [1000000]0x100023ced000 7.629 MB
+W20240204 10:03:53.030995 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_6 [1000000]0x100024490000 7.629 MB
+W20240204 10:03:53.031049 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_7 [1000000]0x100024c33000 7.629 MB
+W20240204 10:03:53.031107 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_8 [1000000]0x1000253d6000 7.629 MB
+W20240204 10:03:53.031167 52477 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_9 [1000000]0x100025b79000 7.629 MB
+W20240204 10:03:53.031212 52477 IPCTensor.h:369] NewIPCTensor: step_r7 [10]0x10002631c000 80 B 
+W20240204 10:03:53.031251 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r7 [1]0x10002631e000 8 B 
+W20240204 10:03:53.031293 52477 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r7 [1]0x100026320000 8 B 
+W20240204 10:03:53.276219 52477 IPCTensor.h:369] NewIPCTensor: full_emb [14951, 400]0x100026322000 22.81 MB
+W20240204 10:03:53.365902 52477 IPCTensor.h:369] NewIPCTensor: full_emb_SparseRowWiseAdaGrad_sum [14951]0x1000279f4000 58.4 kB
+{0: Graph(num_nodes=8499, num_edges=86694,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 1: Graph(num_nodes=6140, num_edges=88951,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 2: Graph(num_nodes=8646, num_edges=109741,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 3: Graph(num_nodes=8503, num_edges=86907,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 4: Graph(num_nodes=10597, num_edges=122217,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 5: Graph(num_nodes=8255, num_edges=102550,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 6: Graph(num_nodes=7422, num_edges=104094,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 7: Graph(num_nodes=7815, num_edges=137832,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)})}
+MertisPartition: part 0 has 8499 N 86694 E
+MertisPartition: part 1 has 6140 N 88951 E
+MertisPartition: part 2 has 8646 N 109741 E
+MertisPartition: part 3 has 8503 N 86907 E
+MertisPartition: part 4 has 10597 N 122217 E
+MertisPartition: part 5 has 8255 N 102550 E
+MertisPartition: part 6 has 7422 N 104094 E
+MertisPartition: part 7 has 7815 N 137832 E
+Rank0: cached key size 93
+Rank1: cached key size 93
+Rank2: cached key size 93
+Rank3: cached key size 93
+Rank4: cached key size 93
+Rank5: cached key size 93
+Rank6: cached key size 93
+Rank7: cached key size 93
+Before renumbering graph:  {'_ID': tensor([    0,    15,    36,  ..., 11946,  9147, 13282]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 3, 7])}
+After renumbering graph:  {'_ID': tensor([ 744,  943, 1203,  ..., 9332, 9376, 7325]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 3, 7])}
+part_g: DGLGraph(num_nodes=8499, num_edges=86694,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+part_g: DGLGraph(num_nodes=8499, num_edges=86694,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Total initialize time 6.125 seconds
+[Rank1] pid = 53336
+[Rank2] pid = 53381
+[Rank3] pid = 53464
+[Rank4] pid = 53465
+[Rank5] pid = 53514
+[Rank6] pid = 53657
+INFO [52477 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [53336 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [53381 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [53464 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [53465 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 4
+INFO [53514 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 5
+INFO [53657 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 6
+INFO [53728 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 7
+INFO [53728 distributed_c10d.py:476] Rank 7: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [53657 distributed_c10d.py:476] Rank 6: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [53514 distributed_c10d.py:476] Rank 5: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+W20240204 10:03:55.117645 53793 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_7 [747, 400]; dev=7; size=1.14 MB
+W20240204 10:03:55.117734 53594 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_5 [747, 400]; dev=5; size=1.14 MB
+W20240204 10:03:55.117734 53660 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_6 [747, 400]; dev=6; size=1.14 MB
+INFO [52477 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [53336 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [53465 distributed_c10d.py:476] Rank 4: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [53381 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [53464 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+W20240204 10:03:55.123152 53729 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_0 [747, 400]; dev=0; size=1.14 MB
+W20240204 10:03:55.124621 53337 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_1 [747, 400]; dev=1; size=1.14 MB
+W20240204 10:03:55.125025 53485 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_4 [747, 400]; dev=4; size=1.14 MB
+W20240204 10:03:55.125276 53401 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_2 [747, 400]; dev=2; size=1.14 MB
+W20240204 10:03:55.125324 53466 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_3 [747, 400]; dev=3; size=1.14 MB
+W20240204 10:03:55.144289 53793 IPCTensor.h:369] NewIPCTensor: input_keys_7 [1000000]0x100027a08000 7.629 MB
+W20240204 10:03:55.144306 53660 IPCTensor.h:369] NewIPCTensor: input_keys_6 [1000000]0x1000281ab000 7.629 MB
+W20240204 10:03:55.144464 53660 IPCTensor.h:369] NewIPCTensor: input_keys_neg_6 [1000000]0x10002894e000 7.629 MB
+W20240204 10:03:55.144469 53793 IPCTensor.h:369] NewIPCTensor: input_keys_neg_7 [1000000]0x1000290f1000 7.629 MB
+W20240204 10:03:55.144536 53660 IPCTensor.h:369] NewIPCTensor: backward_grads_6 [1000000, 400]0x100029894000 1.49 GB
+W20240204 10:03:55.144555 53793 IPCTensor.h:369] NewIPCTensor: backward_grads_7 [1000000, 400]0x100088e77000 1.49 GB
+W20240204 10:03:55.144595 53660 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_6 [1000000, 400]0x1000e845a000 1.49 GB
+W20240204 10:03:55.144613 53793 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_7 [1000000, 400]0x100147a3d000 1.49 GB
+W20240204 10:03:55.144663 53660 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_6_gpu [1000000, 400]; dev=6; size=1.49 GB
+W20240204 10:03:55.144670 53793 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_7_gpu [1000000, 400]; dev=7; size=1.49 GB
+W20240204 10:03:55.148409 53660 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_6_gpu [1000000, 400]; dev=6; size=1.49 GB
+W20240204 10:03:55.148437 53793 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_7_gpu [1000000, 400]; dev=7; size=1.49 GB
+W20240204 10:03:55.148597 53594 IPCTensor.h:369] NewIPCTensor: input_keys_5 [1000000]0x1001a7026000 7.629 MB
+W20240204 10:03:55.148736 53594 IPCTensor.h:369] NewIPCTensor: input_keys_neg_5 [1000000]0x1001a77c9000 7.629 MB
+W20240204 10:03:55.148806 53594 IPCTensor.h:369] NewIPCTensor: backward_grads_5 [1000000, 400]0x1001a7f6c000 1.49 GB
+W20240204 10:03:55.148859 53594 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_5 [1000000, 400]0x10020754f000 1.49 GB
+W20240204 10:03:55.148926 53594 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_5_gpu [1000000, 400]; dev=5; size=1.49 GB
+W20240204 10:03:55.154671 53594 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_5_gpu [1000000, 400]; dev=5; size=1.49 GB
+W20240204 10:03:55.154728 53729 IPCTensor.h:369] NewIPCTensor: input_keys_0 [1000000]0x100266b42000 7.629 MB
+W20240204 10:03:55.154865 53729 IPCTensor.h:369] NewIPCTensor: input_keys_neg_0 [1000000]0x100267a88000 7.629 MB
+W20240204 10:03:55.154856 53485 IPCTensor.h:369] NewIPCTensor: input_keys_4 [1000000]0x1002672e5000 7.629 MB
+W20240204 10:03:55.154884 53466 IPCTensor.h:369] NewIPCTensor: input_keys_3 [1000000]0x10026822b000 7.629 MB
+W20240204 10:03:55.154913 53729 IPCTensor.h:369] NewIPCTensor: backward_grads_0 [1000000, 400]0x100269914000 1.49 GB
+W20240204 10:03:55.154906 53337 IPCTensor.h:369] NewIPCTensor: input_keys_1 [1000000]0x1002689ce000 7.629 MB
+W20240204 10:03:55.154912 53401 IPCTensor.h:369] NewIPCTensor: input_keys_2 [1000000]0x100269171000 7.629 MB
+W20240204 10:03:55.154953 53729 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_0 [1000000, 400]0x1002c8ef7000 1.49 GB
+W20240204 10:03:55.154999 53729 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240204 10:03:55.155030 53485 IPCTensor.h:369] NewIPCTensor: input_keys_neg_4 [1000000]0x1003284da000 7.629 MB
+W20240204 10:03:55.155045 53466 IPCTensor.h:369] NewIPCTensor: input_keys_neg_3 [1000000]0x100328c7d000 7.629 MB
+W20240204 10:03:55.155071 53401 IPCTensor.h:369] NewIPCTensor: input_keys_neg_2 [1000000]0x100329420000 7.629 MB
+W20240204 10:03:55.155108 53485 IPCTensor.h:369] NewIPCTensor: backward_grads_4 [1000000, 400]0x100329bc3000 1.49 GB
+W20240204 10:03:55.155115 53337 IPCTensor.h:369] NewIPCTensor: input_keys_neg_1 [1000000]0x1003891a6000 7.629 MB
+W20240204 10:03:55.155135 53466 IPCTensor.h:369] NewIPCTensor: backward_grads_3 [1000000, 400]0x100389949000 1.49 GB
+W20240204 10:03:55.155167 53401 IPCTensor.h:369] NewIPCTensor: backward_grads_2 [1000000, 400]0x1003e8f2c000 1.49 GB
+W20240204 10:03:55.155174 53485 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_4 [1000000, 400]0x10044850f000 1.49 GB
+W20240204 10:03:55.155207 53466 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_3 [1000000, 400]0x1004a7af2000 1.49 GB
+W20240204 10:03:55.155230 53337 IPCTensor.h:369] NewIPCTensor: backward_grads_1 [1000000, 400]0x1005070d5000 1.49 GB
+W20240204 10:03:55.155237 53401 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_2 [1000000, 400]0x1005666b8000 1.49 GB
+W20240204 10:03:55.155256 53485 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240204 10:03:55.155277 53466 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240204 10:03:55.155292 53337 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_1 [1000000, 400]0x1005c5c9b000 1.49 GB
+W20240204 10:03:55.155306 53401 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+W20240204 10:03:55.155345 53337 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+W20240204 10:03:55.166144 53729 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240204 10:03:55.166182 53485 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240204 10:03:55.166532 53337 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+W20240204 10:03:55.166536 53466 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240204 10:03:55.166548 53401 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+cudaHostRegister 0x100026322000
+1: KnownLocalCachedEmbedding init done
+cudaHostRegister 0x100026322000
+3: KnownLocalCachedEmbedding init done
+WARNING [53336 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+2: KnownLocalCachedEmbedding init done
+WARNING [53464 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [53381 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+5: KnownLocalCachedEmbedding init done
+WARNING [53514 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+7: KnownLocalCachedEmbedding init done
+WARNING [53728 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+4: KnownLocalCachedEmbedding init done
+WARNING [53465 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100026322000
+6: KnownLocalCachedEmbedding init done
+WARNING [53657 DistTensor.py:59] The tensor name already exists in the kvstore
+[Rank7] pid = 53728
+New CachedEmbedding, name=full_emb, shape=(14951, 400), cache_type=KnownLocalCachedEmbedding
+fixed cache_range is [(0, 747), (747, 1494), (1494, 2241), (2241, 2988), (2988, 3735), (3735, 4482), (4482, 5229), (5229, 5976)]
+cudaHostRegister 0x100026322000
+0: KnownLocalCachedEmbedding init done
+WARNING [52477 DistTensor.py:59] The tensor name already exists in the kvstore
+I20240204 10:03:57.191417 53729 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.191896 53337 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.192224 53594 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.192369 53466 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.192521 53485 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.192656 53793 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.192775 53401 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240204 10:03:57.192919 53660 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+E20240204 10:03:57.997118 53660 recstore.cc:66] init folly done
+E20240204 10:03:57.998368 53729 recstore.cc:66] init folly done
+E20240204 10:03:57.998612 53793 recstore.cc:66] init folly done
+E20240204 10:03:57.998647 53594 recstore.cc:66] init folly done
+E20240204 10:03:57.999003 53485 recstore.cc:66] init folly done
+E20240204 10:03:57.999012 53466 recstore.cc:66] init folly done
+E20240204 10:03:57.999073 53401 recstore.cc:66] init folly done
+E20240204 10:03:57.999069 53337 recstore.cc:66] init folly done
+I20240204 10:03:58.074978 53594 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 8
+I20240204 10:03:58.075966 53485 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240204 10:03:58.076102 53337 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240204 10:03:58.076280 53793 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240204 10:03:58.078598 53466 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240204 10:03:58.078791 53660 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240204 10:03:58.085494 53401 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240204 10:03:58.086119 53729 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 2.041 ms                  | 4.223 ms                  |
+| Forward                   | 6.430 ms                  | 647.711 ms                |
+| Backward                  | 142.564 ms                | 2.735 s                   |
+| Optimize                  | 37.711 ms                 | 48.846 ms                 |
+| BarrierTimeBeforeRank0    | 51.682 us                 | 215.625 us                |
+| BlockToStepN              | 50.147 us                 | 214.338 us                |
+| OneStep                   | 189.221 ms                | 3.434 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.754 ms                  | 20.213 ms                 |
+| Forward                   | 5.171 ms                  | 647.711 ms                |
+| Backward                  | 156.565 ms                | 2.735 s                   |
+| Optimize                  | 37.339 ms                 | 48.846 ms                 |
+| BarrierTimeBeforeRank0    | 58.206 us                 | 215.625 us                |
+| BlockToStepN              | 49.617 us                 | 1.691 ms                  |
+| OneStep                   | 204.910 ms                | 3.434 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.772 ms                  | 20.068 ms                 |
+| Forward                   | 5.214 ms                  | 7.466 ms                  |
+| Backward                  | 149.554 ms                | 208.220 ms                |
+| Optimize                  | 33.088 ms                 | 45.039 ms                 |
+| BarrierTimeBeforeRank0    | 54.542 us                 | 120.562 us                |
+| BlockToStepN              | 49.617 us                 | 1.295 ms                  |
+| OneStep                   | 191.122 ms                | 265.160 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.726 ms                  | 20.068 ms                 |
+| Forward                   | 5.137 ms                  | 18.279 ms                 |
+| Backward                  | 143.326 ms                | 208.220 ms                |
+| Optimize                  | 34.099 ms                 | 45.039 ms                 |
+| BarrierTimeBeforeRank0    | 52.495 us                 | 120.562 us                |
+| BlockToStepN              | 42.814 us                 | 1.295 ms                  |
+| OneStep                   | 188.933 ms                | 265.160 ms                |
++---------------------------+---------------------------+---------------------------+
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 1] 100 steps, total: 22.173, sample: 0.317, forward: 1.048, backward: 13.574, update: 0.245
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 3] 100 steps, total: 22.170, sample: 0.318, forward: 1.024, backward: 13.544, update: 0.297
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 4] 100 steps, total: 22.173, sample: 0.322, forward: 1.043, backward: 13.511, update: 0.287
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 5] 100 steps, total: 22.174, sample: 0.318, forward: 1.037, backward: 13.518, update: 0.264
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 7] 100 steps, total: 22.173, sample: 0.324, forward: 1.054, backward: 13.533, update: 0.253
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 2] 100 steps, total: 22.164, sample: 0.321, forward: 1.020, backward: 13.567, update: 0.324
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 6] 100 steps, total: 22.170, sample: 0.321, forward: 1.025, backward: 13.529, update: 0.337
+train_sampler.Prefill()
+-------Step 0-------
+tensor([ 2070,    89,  3544,  3151, 12167, 12915,  1122,   406, 12998, 11032]) tensor([ 1203,  9670,  6187, 11258, 11754,  1015,   573,  5243,   515, 12711])
+-------Step 1-------
+tensor([ 2070,    89,  3544,  3151, 12167, 12915,  1122,   406, 12998, 11032]) tensor([ 3989, 10511, 14499,  1172,  1003,  7882, 13692, 10231,  4994, 12994])
+-------Step 2-------
+tensor([ 7611, 10287,  5746,  3969,  9535,  8714, 10448,    75, 10863,   921]) tensor([ 2134,  5292,  4052,  5049,  6150,  9000, 13552,  9720, 12749,  9828])
+-------Step 3-------
+tensor([ 7611, 10287,  5746,  3969,  9535,  8714, 10448,    75, 10863,   921]) tensor([ 7983,  7008,  7602, 11102,  7212,   698,  5762,  2166, 12443,  2198])
+-------Step 4-------
+tensor([   89,  5759, 10706,  5804,  3123,  3492,    77,  7332,  7663,  1052]) tensor([ 596, 1210, 4264, 3351, 2033, 2462,  406, 6986, 5970, 1859])
+-------Step 5-------
+tensor([   89,  5759, 10706,  5804,  3123,  3492,    77,  7332,  7663,  1052]) tensor([11321,  4882,  6221,  1877,  3369,   820,   812,  1303,  6402,  6808])
+-------Step 6-------
+tensor([ 1757,  8677,     4,    26,  4172,  3058,  8726, 11577, 14248, 12999]) tensor([10287,  3038,  7758,  4303,  9293,  8731,  4101,  8975, 10446, 12062])
+-------Step 7-------
+tensor([ 1757,  8677,     4,    26,  4172,  3058,  8726, 11577, 14248, 12999]) tensor([12859, 13160,  2778,  6911,  1287,  8877,  7415,  2147,   145, 12851])
+-------Step 8-------
+tensor([ 3718,  7708,  5054, 12497,    29,    83,  9596, 12642,    22,  2141]) tensor([ 6446,  5900,  4859,  7131,  2763, 14050,  8926,  1501,  4724,  3465])
+-------Step 9-------
+tensor([ 3718,  7708,  5054, 12497,    29,    83,  9596, 12642,    22,  2141]) tensor([12299,  4186, 13382,  8264, 14865, 13947, 14027, 10231,   670, 13073])
+before start barrier
+start train
+[proc 0] 100 steps, total: 22.163, sample: 0.360, forward: 1.161, backward: 17.189, update: 3.325
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.675 ms                  | 29.123 ms                 |
+| Forward                   | 5.128 ms                  | 36.785 ms                 |
+| Backward                  | 142.089 ms                | 208.220 ms                |
+| Optimize                  | 34.004 ms                 | 49.236 ms                 |
+| BarrierTimeBeforeRank0    | 52.474 us                 | 215.625 us                |
+| BlockToStepN              | 38.030 us                 | 1.295 ms                  |
+| OneStep                   | 184.996 ms                | 265.160 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.639 ms                  | 29.123 ms                 |
+| Forward                   | 5.007 ms                  | 36.785 ms                 |
+| Backward                  | 141.136 ms                | 208.220 ms                |
+| Optimize                  | 33.211 ms                 | 51.946 ms                 |
+| BarrierTimeBeforeRank0    | 52.727 us                 | 331.608 us                |
+| BlockToStepN              | 33.728 us                 | 1.295 ms                  |
+| OneStep                   | 182.846 ms                | 265.160 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.592 ms                  | 24.697 ms                 |
+| Forward                   | 4.887 ms                  | 18.279 ms                 |
+| Backward                  | 139.928 ms                | 196.707 ms                |
+| Optimize                  | 33.104 ms                 | 50.003 ms                 |
+| BarrierTimeBeforeRank0    | 52.727 us                 | 313.395 us                |
+| BlockToStepN              | 33.005 us                 | 968.881 us                |
+| OneStep                   | 181.474 ms                | 242.317 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.547 ms                  | 24.697 ms                 |
+| Forward                   | 4.851 ms                  | 18.279 ms                 |
+| Backward                  | 139.987 ms                | 196.707 ms                |
+| Optimize                  | 33.161 ms                 | 50.003 ms                 |
+| BarrierTimeBeforeRank0    | 52.435 us                 | 313.395 us                |
+| BlockToStepN              | 32.820 us                 | 968.881 us                |
+| OneStep                   | 182.219 ms                | 242.317 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 7] 200 steps, total: 18.079, sample: 0.347, forward: 0.418, backward: 10.527, update: 0.272
+[proc 5] 200 steps, total: 18.079, sample: 0.342, forward: 0.408, backward: 10.516, update: 0.300
+[proc 4] 200 steps, total: 18.079, sample: 0.343, forward: 0.412, backward: 10.497, update: 0.296
+[proc 3] 200 steps, total: 18.079, sample: 0.374, forward: 0.400, backward: 10.522, update: 0.279
+[proc 1] 200 steps, total: 18.079, sample: 0.333, forward: 0.408, backward: 10.542, update: 0.257
+[proc 6] 200 steps, total: 18.078, sample: 0.359, forward: 0.420, backward: 10.479, update: 0.329
+[proc 2] 200 steps, total: 18.079, sample: 0.344, forward: 0.420, backward: 10.560, update: 0.320
+[proc 0] 200 steps, total: 18.078, sample: 0.442, forward: 0.499, backward: 13.812, update: 3.191
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.568 ms                  | 24.697 ms                 |
+| Forward                   | 4.794 ms                  | 18.279 ms                 |
+| Backward                  | 139.852 ms                | 196.707 ms                |
+| Optimize                  | 32.843 ms                 | 50.003 ms                 |
+| BarrierTimeBeforeRank0    | 52.435 us                 | 313.395 us                |
+| BlockToStepN              | 31.223 us                 | 968.881 us                |
+| OneStep                   | 181.474 ms                | 242.317 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.584 ms                  | 24.697 ms                 |
+| Forward                   | 4.762 ms                  | 18.279 ms                 |
+| Backward                  | 139.985 ms                | 196.707 ms                |
+| Optimize                  | 32.586 ms                 | 50.003 ms                 |
+| BarrierTimeBeforeRank0    | 52.105 us                 | 313.395 us                |
+| BlockToStepN              | 30.640 us                 | 968.881 us                |
+| OneStep                   | 181.047 ms                | 242.317 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.580 ms                  | 23.178 ms                 |
+| Forward                   | 4.715 ms                  | 9.717 ms                  |
+| Backward                  | 139.928 ms                | 191.547 ms                |
+| Optimize                  | 32.438 ms                 | 49.236 ms                 |
+| BarrierTimeBeforeRank0    | 52.435 us                 | 295.236 us                |
+| BlockToStepN              | 28.735 us                 | 955.344 us                |
+| OneStep                   | 181.046 ms                | 240.435 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 5] 300 steps, total: 18.158, sample: 0.321, forward: 0.413, backward: 10.859, update: 0.258
+[proc 3] 300 steps, total: 18.158, sample: 0.328, forward: 0.385, backward: 10.846, update: 0.304
+[proc 1] 300 steps, total: 18.158, sample: 0.326, forward: 0.407, backward: 10.890, update: 0.301
+[proc 7] 300 steps, total: 18.158, sample: 0.340, forward: 0.415, backward: 10.803, update: 0.246
+[proc 6] 300 steps, total: 18.158, sample: 0.301, forward: 0.412, backward: 10.829, update: 0.316
+[proc 0] 300 steps, total: 18.157, sample: 0.375, forward: 0.450, backward: 14.220, update: 2.985
+[proc 2] 300 steps, total: 18.157, sample: 0.313, forward: 0.413, backward: 10.807, update: 0.327
+[proc 4] 300 steps, total: 18.158, sample: 0.320, forward: 0.405, backward: 10.823, update: 0.270
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.580 ms                  | 23.178 ms                 |
+| Forward                   | 4.695 ms                  | 9.717 ms                  |
+| Backward                  | 140.333 ms                | 191.547 ms                |
+| Optimize                  | 32.206 ms                 | 49.236 ms                 |
+| BarrierTimeBeforeRank0    | 52.435 us                 | 313.395 us                |
+| BlockToStepN              | 28.312 us                 | 955.344 us                |
+| OneStep                   | 181.047 ms                | 240.435 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.577 ms                  | 23.178 ms                 |
+| Forward                   | 4.691 ms                  | 9.717 ms                  |
+| Backward                  | 140.410 ms                | 191.547 ms                |
+| Optimize                  | 32.124 ms                 | 49.236 ms                 |
+| BarrierTimeBeforeRank0    | 52.435 us                 | 313.395 us                |
+| BlockToStepN              | 28.332 us                 | 955.344 us                |
+| OneStep                   | 181.047 ms                | 240.435 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.581 ms                  | 22.455 ms                 |
+| Forward                   | 4.687 ms                  | 9.717 ms                  |
+| Backward                  | 140.656 ms                | 187.390 ms                |
+| Optimize                  | 31.950 ms                 | 48.846 ms                 |
+| BarrierTimeBeforeRank0    | 52.042 us                 | 295.236 us                |
+| BlockToStepN              | 28.089 us                 | 951.772 us                |
+| OneStep                   | 181.047 ms                | 234.393 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.584 ms                  | 22.455 ms                 |
+| Forward                   | 4.674 ms                  | 9.717 ms                  |
+| Backward                  | 140.878 ms                | 187.390 ms                |
+| Optimize                  | 31.578 ms                 | 48.846 ms                 |
+| BarrierTimeBeforeRank0    | 51.742 us                 | 295.236 us                |
+| BlockToStepN              | 28.089 us                 | 951.772 us                |
+| OneStep                   | 181.474 ms                | 234.393 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 4] 400 steps, total: 18.346, sample: 0.359, forward: 0.428, backward: 10.940, update: 0.311
+[proc 3] 400 steps, total: 18.346, sample: 0.335, forward: 0.415, backward: 10.974, update: 0.262
+[proc 7] 400 steps, total: 18.346, sample: 0.323, forward: 0.423, backward: 11.035, update: 0.317
+[proc 6] 400 steps, total: 18.346, sample: 0.340, forward: 0.432, backward: 10.914, update: 0.316
+[proc 5] 400 steps, total: 18.346, sample: 0.347, forward: 0.408, backward: 11.080, update: 0.310
+[proc 1] 400 steps, total: 18.346, sample: 0.358, forward: 0.405, backward: 11.016, update: 0.276
+[proc 2] 400 steps, total: 18.346, sample: 0.348, forward: 0.415, backward: 10.911, update: 0.333
+[proc 0] 400 steps, total: 18.346, sample: 0.379, forward: 0.472, backward: 14.436, update: 2.934
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.588 ms                  | 22.455 ms                 |
+| Forward                   | 4.681 ms                  | 9.717 ms                  |
+| Backward                  | 140.693 ms                | 187.390 ms                |
+| Optimize                  | 30.868 ms                 | 48.846 ms                 |
+| BarrierTimeBeforeRank0    | 51.733 us                 | 299.920 us                |
+| BlockToStepN              | 27.831 us                 | 951.772 us                |
+| OneStep                   | 180.646 ms                | 234.393 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.589 ms                  | 22.705 ms                 |
+| Forward                   | 4.674 ms                  | 9.717 ms                  |
+| Backward                  | 140.410 ms                | 187.390 ms                |
+| Optimize                  | 30.868 ms                 | 48.846 ms                 |
+| BarrierTimeBeforeRank0    | 51.733 us                 | 299.920 us                |
+| BlockToStepN              | 27.831 us                 | 951.772 us                |
+| OneStep                   | 180.553 ms                | 234.393 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.581 ms                  | 22.455 ms                 |
+| Forward                   | 4.668 ms                  | 9.228 ms                  |
+| Backward                  | 140.333 ms                | 187.254 ms                |
+| Optimize                  | 31.374 ms                 | 47.432 ms                 |
+| BarrierTimeBeforeRank0    | 50.944 us                 | 295.236 us                |
+| BlockToStepN              | 27.720 us                 | 539.837 us                |
+| OneStep                   | 180.553 ms                | 233.961 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.583 ms                  | 22.455 ms                 |
+| Forward                   | 4.664 ms                  | 9.273 ms                  |
+| Backward                  | 140.410 ms                | 187.254 ms                |
+| Optimize                  | 31.409 ms                 | 47.432 ms                 |
+| BarrierTimeBeforeRank0    | 50.929 us                 | 295.236 us                |
+| BlockToStepN              | 27.536 us                 | 722.170 us                |
+| OneStep                   | 180.468 ms                | 233.961 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 5] 500 steps, total: 18.069, sample: 0.296, forward: 0.411, backward: 10.648, update: 0.313
+[proc 0] 500 steps, total: 18.069, sample: 0.368, forward: 0.458, backward: 13.941, update: 3.173
+[proc 3] 500 steps, total: 18.069, sample: 0.327, forward: 0.387, backward: 10.644, update: 0.310
+[proc 1] 500 steps, total: 18.069, sample: 0.327, forward: 0.405, backward: 10.625, update: 0.279
+[proc 4] 500 steps, total: 18.069, sample: 0.318, forward: 0.413, backward: 10.608, update: 0.300
+[proc 2] 500 steps, total: 18.069, sample: 0.338, forward: 0.408, backward: 10.588, update: 0.329
+Successfully xmh. training takes 94.81480240821838 seconds
+[proc 7] 500 steps, total: 18.069, sample: 0.325, forward: 0.422, backward: 10.624, update: 0.318
+[proc 6] 500 steps, total: 18.069, sample: 0.296, forward: 0.418, backward: 10.608, update: 0.315
+before call kg_cache_controller.StopThreads()
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+INFO [52477 controller_process.py:421] call rank0 to StopThreads
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker6: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker7: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker5: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker4: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.580 ms                  | 22.455 ms                 |
+| Forward                   | 4.658 ms                  | 9.273 ms                  |
+| Backward                  | 140.333 ms                | 187.254 ms                |
+| Optimize                  | 31.409 ms                 | 47.432 ms                 |
+| BarrierTimeBeforeRank0    | 50.944 us                 | 295.236 us                |
+| BlockToStepN              | 27.536 us                 | 722.170 us                |
+| OneStep                   | 180.432 ms                | 233.961 ms                |
++---------------------------+---------------------------+---------------------------+

@@ -208,12 +208,15 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     def backward_py_sync(ctx, grad_output):
         rank = dist.get_rank()
         keys, = ctx.saved_tensors
-
         full_emb = ctx.embedding_weight
         emb_dim = ctx.emb_dim
         emb_cache = ctx.emb_cache
+        
+
+        ctx.timer_bucket_keys= Timer("back: bucket keys")
         in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
             keys, ctx.cached_range)
+        ctx.timer_bucket_keys.stop()
 
         # 下面的1.待优化
         assert keys.shape[0] == grad_output.shape[0]
@@ -222,13 +225,16 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         # 1. update local cache's grad
         XLOG.debug("backward: update local cache's grad")
         # 1.1 all to all keys's grad
+        ctx.timer_a2a= Timer("back: a2a")
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
         sharded_grads = [grad_output[each] for each in in_each_rank_cache_mask]
         keys_in_this_rank, values_in_this_rank = all2all_sparse_tensor(
             sharded_keys, sharded_grads, tag=124)
+        ctx.timer_a2a.stop()
         XLOG.debug("backward: all to all keys's grad done")
 
         # 1.2 update grad of local cache
+        ctx.timer_cache = Timer("back: cache")
         cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
         cached_keys_in_this_rank = [
             each - cached_start_key for each in keys_in_this_rank]
@@ -236,16 +242,20 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             cached_keys_in_this_rank, values_in_this_rank, emb_cache.shape)
         grad = grad.cuda() / dist.get_world_size()
         emb_cache.grad = grad
+        ctx.timer_cache.stop()
 
         # 上面的1.待优化
         # 2 aggregate grad of in-dram keys
+        ctx.timer_aggregate_dram = Timer("back: aggr dram keys")
         reduced_dram_grads = reduce_sparse_kv_tensor(
             keys, grad_output, full_emb.shape, 0)
         XLOG.debug(f"rank{rank}: aggregate grad of in-dram keys done")
+        ctx.timer_aggregate_dram.stop()
 
         mp.Barrier(dist.get_world_size())
 
         if dist.get_rank() == 0:
+            ctx.timer_dram_grad = Timer("back: set dram grad")
             reduced_dram_grads = reduced_dram_grads.coalesce()
             XLOG.debug(
                 f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
@@ -255,6 +265,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             else:
                 full_emb.grad = reduced_dram_grads / dist.get_world_size()
             XLOG.debug("rank0: set DRAM Emb's grad done")
+            ctx.timer_dram_grad.stop()
 
         '''
         # 实际中发现上面的方式2.会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的，只测性能，正确性有问题

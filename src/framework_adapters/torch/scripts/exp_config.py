@@ -213,6 +213,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
+            #"num_workers": [4, 8] if GetHostName() != "node182" else [4],
             "num_workers": [8] if GetHostName() != "node182" else [4],
 
             "num_embs": [int(100*1e6),],
@@ -534,13 +535,13 @@ class ExpKGSensitive(GNNExperiment):
                     "batch_size": [1200],
                     "nr_gpus": [8]
                 },
-                # {
-                #     "dataset": ["Freebase"],
-                #     "hidden_dim": [400],
-                #     "cache_ratio": [0.05,],
-                #     "batch_size": [2000],
-                #     "nr_gpus": [8]
-                # },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [2000],
+                    "nr_gpus": [8]
+                },
             ],
             "binding2": [
                 {
@@ -556,7 +557,7 @@ class ExpKGSensitive(GNNExperiment):
                     "backwardMode": [
                         "CppAsyncV2",
                         "CppAsync"],
-                    "L": [2, 6, 10, 14],
+                    "L": [2, 4, 6, 8, 10, 14],
                 },
                 {
                     "use_my_emb": ["true"],
@@ -564,7 +565,7 @@ class ExpKGSensitive(GNNExperiment):
                     "backwardMode": [
                         "CppAsyncV2",
                         "CppAsync"],
-                    "nr_flush_threads": [8, 16, 24, 32],
+                    "nr_background_threads": [2, 4, 6, 8, 12, 16, 24, 32],
                 },
                 {
                     "use_my_emb": ["false"],

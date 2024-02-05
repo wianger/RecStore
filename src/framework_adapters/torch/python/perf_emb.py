@@ -204,7 +204,7 @@ def routine_local_cache_helper(worker_id, args):
         "kForwardItersPerStep": {kForwardItersPerStep},
         "clr": {lr},
         "backwardMode": "{backwardMode}",
-        "nr_background_threads": {nr_background_threads}, 
+        "nr_background_threads": {nr_background_threads},
         "cache_ratio": {cache_ratio},
         "backgrad_init": "{backgrad_init}"
     }}'''.format(num_workers=args['num_workers'],
@@ -361,6 +361,8 @@ def routine_local_cache_helper(worker_id, args):
             start_step = _
             timer_start.stop()
             timer_start.start()
+            if rank == 0:
+                Timer.Report()
 
         timer_onestep.stop()
 

@@ -139,7 +139,7 @@ class ArgParser(CommonArgParser):
         self.add_argument('--backwardMode', type=str, required=True,
                           choices=['PySync', 'CppSync', 'CppAsync', 'CppAsyncV2'], help='.')
         self.add_argument('--L', type=int, default=10, help='lookahead value')
-        self.add_argument('--nr_flush_threads', type=int, default=32, help='flush threads')
+        self.add_argument('--nr_background_threads', type=int, default=32, help='flush threads')
         self.add_argument('--update_cache_use_omp', type=int,
                           default=0, help='use omp')
         self.add_argument('--update_pq_use_omp', type=int,
@@ -182,7 +182,7 @@ def main():
         "backgrad_init": "both", 
         "kForwardItersPerStep": 2,
         "clr": 0.01,
-        "nr_background_threads": {args.nr_flush_threads},
+        "nr_background_threads": {args.nr_background_threads},
         "backwardMode": "{args.backwardMode}",
         "cache_ratio": {args.cache_ratio},
         "update_cache_use_omp":  {args.update_cache_use_omp},
