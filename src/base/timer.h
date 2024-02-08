@@ -408,7 +408,7 @@ class Timer {
 
   ~Timer() {
     if (!isEnd_) {
-      std::cerr << "timer name is " << timerName_ << std::endl;
+      // std::cerr << "timer name is " << timerName_ << std::endl;
       // assert(isEnd_);
     }
   }

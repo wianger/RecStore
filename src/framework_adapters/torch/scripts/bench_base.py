@@ -277,8 +277,12 @@ class LocalOnlyExperiment(Experiment):
 
         def find_start_run_id():
             import re
-            ids = [int(re.search(r'(\d+)', each)[1])
-                   for each in os.listdir(self.log_dir)]
+            ids = []
+            for each in os.listdir(self.log_dir):
+                re_r = re.search(r'(\d+)', each)
+                if re_r is None:
+                    continue
+                ids.append(int(re_r[1]))
             if len(ids) != 0:
                 max_id = max(ids)
             if len(ids) == 0:

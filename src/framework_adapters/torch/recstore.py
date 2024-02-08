@@ -14,6 +14,7 @@ merge_op = torch.ops.librecstore_pytorch.merge_op
 uva_cache_query_op = torch.ops.librecstore_pytorch.uva_cache_query_op
 init_folly = torch.ops.librecstore_pytorch.init_folly
 construct_renumbering_dict_op = torch.ops.librecstore_pytorch.construct_renumbering_dict_op
+NarrowShapeTensor_op = torch.ops.librecstore_pytorch.NarrowShapeTensor
 
 GpuCache = torch.classes.librecstore_pytorch.GpuCache
 IPCTensorFactory = torch.classes.librecstore_pytorch.IPCTensorFactory

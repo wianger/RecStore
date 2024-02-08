@@ -213,7 +213,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
-            #"num_workers": [4, 8] if GetHostName() != "node182" else [4],
+            # "num_workers": [4, 8] if GetHostName() != "node182" else [4],
             "num_workers": [8] if GetHostName() != "node182" else [4],
 
             "num_embs": [int(100*1e6),],
@@ -244,7 +244,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
                     "emb_choice": [
                         "KGExternelEmbedding",
                         "KnownShardedCachedEmbedding",
-                        # "TorchNativeStdEmb",
+                        "TorchNativeStdEmb",
                     ]
                 },
                 {
@@ -262,6 +262,86 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
 
         self.name = NAME
         super().__init__(3, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+
+    def _RunHook(self, previous_run, next_run):
+        # LocalNuke("perf_emb.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        # time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+    def _PostprocessConfig(self, each_config, ):
+        assert each_config['cache_ratio'] * each_config['num_workers'] <= 1
+        # don't use self
+        pass
+        # client_config['key_space_m'] *= WARM_UP_RATIO
+        # client_config['key_space_m'] = int(client_config['key_space_m'])
+
+    def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
+                          run_config, execute_host)
+
+    def _BeforeStartAllRun(self):
+        print("pnuke perf_emb.py")
+        # LocalNuke("perf_emb.py")
+        LocalNukeAllPython()
+
+
+class ExpMotivationDebug(LocalOnlyExperiment):
+    def __init__(self, ) -> None:
+        NAME = "debug micro benchmark"
+        COMMON_CONFIGS = {
+            "num_workers": [8] if GetHostName() != "node182" else [4],
+            "num_embs": [int(100*1e6),],
+            # "batch_size": [128, 512, 1024, 1536, 2048,],
+            "batch_size": [512, 1024, 1536],
+            "run_steps": [200],
+            "log_interval": [100],
+            "cache_ratio": [
+                0.05,
+            ],
+            'binding2': [
+                # {
+                #     "distribution": ['uniform'],
+                # },
+                {
+                    "distribution": ['zipf'],
+                    "zipf_alpha": [
+                        0.9,
+                        # 0.99
+                    ],
+                },
+            ],
+            "binding": [
+                {
+                    "emb_choice": [
+                        # "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
+                        # "TorchNativeStdEmb",
+                    ]
+                },
+                # {
+
+                #     "emb_choice": ["KnownLocalCachedEmbedding"],
+                #     "backwardMode": [
+                #         "PySync",
+                #         # "CppSync",
+                #         "CppAsyncV2",
+                #         "CppAsync",
+                #     ],
+                # },
+            ],
+        }
+
+        self.name = NAME
+        super().__init__(33333, COMMON_CONFIGS,
                          "127.0.0.1")
 
     def _SortConfigs(self, configs):

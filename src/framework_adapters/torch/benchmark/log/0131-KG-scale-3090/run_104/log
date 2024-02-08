@@ -1,0 +1,987 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240205 20:06:03.710191 43986 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/_deprecate/graph.py:1023: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
+  dgl_warning("multigraph will be deprecated." \
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/heterograph.py:72: DGLWarning: Recommend creating graphs by `dgl.graph(data)` instead of `dgl.DGLGraph(data)`.
+  dgl_warning('Recommend creating graphs by `dgl.graph(data)`'
+Reading train triples....
+Finished. Read 483142 train triples.
+Reading valid triples....
+Finished. Read 50000 valid triples.
+Reading test triples....
+Finished. Read 59071 test triples.
+ARGS:  Namespace(model_name='TransE', data_path='/home/xieminhui/dgl-data', dataset='FB15k', format='built_in', data_files=None, delimiter='\t', save_path='/tmp/ckpts/TransE_FB15k_146', no_save_emb=True, max_step=500, batch_size=2000, batch_size_eval=16, neg_sample_size=200, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size_eval=14951, eval_percent=1, no_eval_filter=False, log_interval=100, eval_interval=10000, test=False, num_proc=5, num_thread=1, force_sync_interval=1, hidden_dim=400, lr=0.01, gamma=16.0, double_ent=False, double_rel=False, neg_adversarial_sampling=False, adversarial_temperature=1.0, regularization_coef=0.0, regularization_norm=3, pairwise=False, loss_genre='Logsigmoid', margin=1.0, nr_gpus=5, gpu=[0, 1, 2, 3, 4], mix_cpu_gpu=True, valid=False, rel_part=False, async_update=None, has_edge_importance=False, cached_emb_type='KnownLocalCachedEmbedding', use_my_emb=True, cache_ratio=0.05, shuffle=False, backwardMode='CppAsync', L=10, nr_background_threads=32, update_cache_use_omp=0, update_pq_use_omp=0, kForwardItersPerStep=2, backgrad_init='both', eval_filter=True, soft_rel_part=False)
+|Train|: 483142
+original graph:  DGLGraph(num_nodes=14951, num_edges=592213,
+         ndata_schemes={}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Loading cached metis
+WARNING [43986 sampler.py:454] Start PreSampling
+WARNING [43986 sampler.py:532] Before construct renumbering_dict
+WARNING [43986 sampler.py:555] PreSampling done
+W20240205 20:06:08.139083 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_0 [1000000]0x100000002000 7.629 MB
+W20240205 20:06:08.139374 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_1 [1000000]0x1000007a5000 7.629 MB
+W20240205 20:06:08.139420 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_2 [1000000]0x100000f48000 7.629 MB
+W20240205 20:06:08.139456 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_3 [1000000]0x1000016eb000 7.629 MB
+W20240205 20:06:08.139497 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_4 [1000000]0x100001e8e000 7.629 MB
+W20240205 20:06:08.139535 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_5 [1000000]0x100002631000 7.629 MB
+W20240205 20:06:08.139560 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_6 [1000000]0x100002dd4000 7.629 MB
+W20240205 20:06:08.139603 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_7 [1000000]0x100003577000 7.629 MB
+W20240205 20:06:08.139629 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_8 [1000000]0x100003d1a000 7.629 MB
+W20240205 20:06:08.139654 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_9 [1000000]0x1000044bd000 7.629 MB
+W20240205 20:06:08.139717 43986 IPCTensor.h:369] NewIPCTensor: step_r0 [10]0x100004c60000 80 B 
+W20240205 20:06:08.139763 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r0 [1]0x100004c62000 8 B 
+W20240205 20:06:08.139789 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100004c64000 8 B 
+W20240205 20:06:08.139891 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_0 [1000000]0x100004c66000 7.629 MB
+W20240205 20:06:08.139973 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_1 [1000000]0x100005409000 7.629 MB
+W20240205 20:06:08.140005 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_2 [1000000]0x100005bac000 7.629 MB
+W20240205 20:06:08.140044 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_3 [1000000]0x10000634f000 7.629 MB
+W20240205 20:06:08.140077 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_4 [1000000]0x100006af2000 7.629 MB
+W20240205 20:06:08.140102 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_5 [1000000]0x100007295000 7.629 MB
+W20240205 20:06:08.140139 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_6 [1000000]0x100007a38000 7.629 MB
+W20240205 20:06:08.140185 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_7 [1000000]0x1000081db000 7.629 MB
+W20240205 20:06:08.140210 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_8 [1000000]0x10000897e000 7.629 MB
+W20240205 20:06:08.140242 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_9 [1000000]0x100009121000 7.629 MB
+W20240205 20:06:08.140267 43986 IPCTensor.h:369] NewIPCTensor: step_r1 [10]0x1000098c4000 80 B 
+W20240205 20:06:08.140288 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r1 [1]0x1000098c6000 8 B 
+W20240205 20:06:08.140316 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1000098c8000 8 B 
+W20240205 20:06:08.140372 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_0 [1000000]0x1000098ca000 7.629 MB
+W20240205 20:06:08.140408 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_1 [1000000]0x10000a06d000 7.629 MB
+W20240205 20:06:08.140435 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_2 [1000000]0x10000a810000 7.629 MB
+W20240205 20:06:08.140468 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_3 [1000000]0x10000afb3000 7.629 MB
+W20240205 20:06:08.140496 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_4 [1000000]0x10000b756000 7.629 MB
+W20240205 20:06:08.140520 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_5 [1000000]0x10000bef9000 7.629 MB
+W20240205 20:06:08.140558 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_6 [1000000]0x10000c69c000 7.629 MB
+W20240205 20:06:08.140600 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_7 [1000000]0x10000ce3f000 7.629 MB
+W20240205 20:06:08.140635 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_8 [1000000]0x10000d5e2000 7.629 MB
+W20240205 20:06:08.140666 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_9 [1000000]0x10000dd85000 7.629 MB
+W20240205 20:06:08.140691 43986 IPCTensor.h:369] NewIPCTensor: step_r2 [10]0x10000e528000 80 B 
+W20240205 20:06:08.140712 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r2 [1]0x10000e52a000 8 B 
+W20240205 20:06:08.140733 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x10000e52c000 8 B 
+W20240205 20:06:08.140797 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_0 [1000000]0x10000e52e000 7.629 MB
+W20240205 20:06:08.140825 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_1 [1000000]0x10000ecd1000 7.629 MB
+W20240205 20:06:08.140854 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_2 [1000000]0x10000f474000 7.629 MB
+W20240205 20:06:08.140884 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_3 [1000000]0x10000fc17000 7.629 MB
+W20240205 20:06:08.140909 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_4 [1000000]0x1000103ba000 7.629 MB
+W20240205 20:06:08.140961 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_5 [1000000]0x100010b5d000 7.629 MB
+W20240205 20:06:08.140986 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_6 [1000000]0x100011300000 7.629 MB
+W20240205 20:06:08.141026 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_7 [1000000]0x100011aa3000 7.629 MB
+W20240205 20:06:08.141050 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_8 [1000000]0x100012246000 7.629 MB
+W20240205 20:06:08.141089 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_9 [1000000]0x1000129e9000 7.629 MB
+W20240205 20:06:08.141113 43986 IPCTensor.h:369] NewIPCTensor: step_r3 [10]0x10001318c000 80 B 
+W20240205 20:06:08.141134 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r3 [1]0x10001318e000 8 B 
+W20240205 20:06:08.141155 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x100013190000 8 B 
+W20240205 20:06:08.141212 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_0 [1000000]0x100013192000 7.629 MB
+W20240205 20:06:08.141256 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_1 [1000000]0x100013935000 7.629 MB
+W20240205 20:06:08.141294 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_2 [1000000]0x1000140d8000 7.629 MB
+W20240205 20:06:08.141319 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_3 [1000000]0x10001487b000 7.629 MB
+W20240205 20:06:08.141359 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_4 [1000000]0x10001501e000 7.629 MB
+W20240205 20:06:08.141398 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_5 [1000000]0x1000157c1000 7.629 MB
+W20240205 20:06:08.141428 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_6 [1000000]0x100015f64000 7.629 MB
+W20240205 20:06:08.141458 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_7 [1000000]0x100016707000 7.629 MB
+W20240205 20:06:08.141487 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_8 [1000000]0x100016eaa000 7.629 MB
+W20240205 20:06:08.141525 43986 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_9 [1000000]0x10001764d000 7.629 MB
+W20240205 20:06:08.141549 43986 IPCTensor.h:369] NewIPCTensor: step_r4 [10]0x100017df0000 80 B 
+W20240205 20:06:08.141571 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r4 [1]0x100017df2000 8 B 
+W20240205 20:06:08.141594 43986 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r4 [1]0x100017df4000 8 B 
+W20240205 20:06:08.431802 43986 IPCTensor.h:369] NewIPCTensor: full_emb [14951, 400]0x100017df6000 22.81 MB
+W20240205 20:06:08.523869 43986 IPCTensor.h:369] NewIPCTensor: full_emb_SparseRowWiseAdaGrad_sum [14951]0x1000194c8000 58.4 kB
+{0: Graph(num_nodes=10222, num_edges=137205,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 1: Graph(num_nodes=7861, num_edges=113516,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 2: Graph(num_nodes=10587, num_edges=145765,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 3: Graph(num_nodes=9264, num_edges=181068,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 4: Graph(num_nodes=10248, num_edges=191956,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)})}
+MertisPartition: part 0 has 10222 N 137205 E
+MertisPartition: part 1 has 7861 N 113516 E
+MertisPartition: part 2 has 10587 N 145765 E
+MertisPartition: part 3 has 9264 N 181068 E
+MertisPartition: part 4 has 10248 N 191956 E
+Rank0: cached key size 149
+Rank1: cached key size 149
+Rank2: cached key size 149
+Rank3: cached key size 149
+Rank4: cached key size 149
+Before renumbering graph:  {'_ID': tensor([    7,    16,    18,  ..., 13890,  3788,  5916]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 1, 4, 2])}
+After renumbering graph:  {'_ID': tensor([  997,  1319,  1375,  ..., 12745,  2452, 12288]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 1, 4, 2])}
+part_g: DGLGraph(num_nodes=10222, num_edges=137205,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+part_g: DGLGraph(num_nodes=10222, num_edges=137205,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Total initialize time 4.914 seconds
+[Rank1] pid = 44189
+[Rank2] pid = 44226
+[Rank3] pid = 44317
+INFO [43986 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [44189 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [44226 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [44318 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 4
+INFO [44317 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [43986 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [44189 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [44226 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [44317 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [44318 distributed_c10d.py:476] Rank 4: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+W20240205 20:06:09.708582 44319 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_0 [747, 400]; dev=0; size=1.14 MB
+W20240205 20:06:09.709363 44413 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_4 [747, 400]; dev=4; size=1.14 MB
+W20240205 20:06:09.709393 44254 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_2 [747, 400]; dev=2; size=1.14 MB
+W20240205 20:06:09.709398 44190 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_1 [747, 400]; dev=1; size=1.14 MB
+W20240205 20:06:09.709407 44384 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_3 [747, 400]; dev=3; size=1.14 MB
+W20240205 20:06:09.737824 44319 IPCTensor.h:369] NewIPCTensor: input_keys_0 [1000000]0x1000194de000 7.629 MB
+W20240205 20:06:09.737835 44384 IPCTensor.h:369] NewIPCTensor: input_keys_3 [1000000]0x100019c81000 7.629 MB
+W20240205 20:06:09.737840 44413 IPCTensor.h:369] NewIPCTensor: input_keys_4 [1000000]0x10001a424000 7.629 MB
+W20240205 20:06:09.738170 44413 IPCTensor.h:369] NewIPCTensor: input_keys_neg_4 [1000000]0x10001abc9000 7.629 MB
+W20240205 20:06:09.738256 44413 IPCTensor.h:369] NewIPCTensor: backward_grads_4 [1000000, 400]0x10001b36c000 1.49 GB
+W20240205 20:06:09.738296 44319 IPCTensor.h:369] NewIPCTensor: input_keys_neg_0 [1000000]0x10007b0f4000 7.629 MB
+W20240205 20:06:09.738296 44254 IPCTensor.h:369] NewIPCTensor: input_keys_2 [1000000]0x10007a951000 7.629 MB
+W20240205 20:06:09.738334 44413 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_4 [1000000, 400]0x10007b897000 1.49 GB
+W20240205 20:06:09.738343 44384 IPCTensor.h:369] NewIPCTensor: input_keys_neg_3 [1000000]0x1000dae7a000 7.629 MB
+W20240205 20:06:09.738371 44319 IPCTensor.h:369] NewIPCTensor: backward_grads_0 [1000000, 400]0x1000db61d000 1.49 GB
+W20240205 20:06:09.738400 44413 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240205 20:06:09.738430 44384 IPCTensor.h:369] NewIPCTensor: backward_grads_3 [1000000, 400]0x10013ac00000 1.49 GB
+W20240205 20:06:09.738435 44319 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_0 [1000000, 400]0x10019a1e3000 1.49 GB
+W20240205 20:06:09.738487 44319 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240205 20:06:09.738500 44384 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_3 [1000000, 400]0x1001f97c6000 1.49 GB
+W20240205 20:06:09.738507 44254 IPCTensor.h:369] NewIPCTensor: input_keys_neg_2 [1000000]0x100258da9000 7.629 MB
+W20240205 20:06:09.738533 44190 IPCTensor.h:369] NewIPCTensor: input_keys_1 [1000000]0x10025954c000 7.629 MB
+W20240205 20:06:09.738567 44384 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240205 20:06:09.738602 44254 IPCTensor.h:369] NewIPCTensor: backward_grads_2 [1000000, 400]0x100259cef000 1.49 GB
+W20240205 20:06:09.738662 44254 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_2 [1000000, 400]0x1002b92d2000 1.49 GB
+W20240205 20:06:09.738711 44254 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+W20240205 20:06:09.738732 44190 IPCTensor.h:369] NewIPCTensor: input_keys_neg_1 [1000000]0x1003188b5000 7.629 MB
+W20240205 20:06:09.738812 44190 IPCTensor.h:369] NewIPCTensor: backward_grads_1 [1000000, 400]0x100319058000 1.49 GB
+W20240205 20:06:09.738888 44190 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_1 [1000000, 400]0x10037863b000 1.49 GB
+W20240205 20:06:09.738942 44190 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+W20240205 20:06:09.745759 44319 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240205 20:06:09.745784 44384 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240205 20:06:09.745805 44413 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240205 20:06:09.747256 44254 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+W20240205 20:06:09.753525 44190 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+cudaHostRegister 0x100017df6000
+4: KnownLocalCachedEmbedding init done
+WARNING [44318 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100017df6000
+2: KnownLocalCachedEmbedding init done
+WARNING [44226 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100017df6000
+1: KnownLocalCachedEmbedding init done
+WARNING [44189 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100017df6000
+3: KnownLocalCachedEmbedding init done
+WARNING [44317 DistTensor.py:59] The tensor name already exists in the kvstore
+[Rank4] pid = 44318
+New CachedEmbedding, name=full_emb, shape=(14951, 400), cache_type=KnownLocalCachedEmbedding
+fixed cache_range is [(0, 747), (747, 1494), (1494, 2241), (2241, 2988), (2988, 3735)]
+cudaHostRegister 0x100017df6000
+0: KnownLocalCachedEmbedding init done
+WARNING [43986 DistTensor.py:59] The tensor name already exists in the kvstore
+I20240205 20:06:11.496325 44319 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 5
+I20240205 20:06:11.496628 44413 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+I20240205 20:06:11.496824 44254 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+I20240205 20:06:11.496918 44190 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+I20240205 20:06:11.497237 44384 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+W20240205 20:06:11.501087 44319 grad_base.h:55] KGCacheController, config={
+        "num_gpus": 5,
+        "L": 10,
+        "backgrad_init": "both", 
+        "kForwardItersPerStep": 2,
+        "clr": 0.01,
+        "nr_background_threads": 32,
+        "backwardMode": "CppAsync",
+        "cache_ratio": 0.05,
+        "update_cache_use_omp":  0,
+        "update_pq_use_omp":  0
+        }
+W20240205 20:06:11.501399 44319 grad_base.h:184] Init GradProcessingBase done
+I20240205 20:06:11.508230 44319 grad_async_v1.h:203] Use main thread to update emb.
+W20240205 20:06:11.508316 44319 kg_controller.h:75] after init GradAsyncProcessing
+I20240205 20:06:11.508340 44319 kg_controller.h:84] Construct KGCacheController done
+E20240205 20:06:13.057358 44413 recstore.cc:66] init folly done
+E20240205 20:06:13.057368 44254 recstore.cc:66] init folly done
+E20240205 20:06:13.058449 44319 recstore.cc:66] init folly done
+E20240205 20:06:13.058511 44384 recstore.cc:66] init folly done
+E20240205 20:06:13.058740 44190 recstore.cc:66] init folly done
+I20240205 20:06:13.060067 44319 grad_base.h:60] GraphEnv RegTensorsPerProcess
+I20240205 20:06:13.589324 44319 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 5
+I20240205 20:06:13.594280 44190 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+I20240205 20:06:13.596367 44384 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+I20240205 20:06:13.600450 44254 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+I20240205 20:06:13.603327 44413 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+W20240205 20:06:15.382397 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=1, pq.top=1
+E20240205 20:06:15.498175 44584 grad_async_v1.h:533] Stalled in ProcessBackward: rank=1, step_no=1, sample_step_cpp_seen_[rank]=0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.273 ms                  | 29.213 ms                 |
+| Forward                   | 5.455 ms                  | 624.836 ms                |
+| Backward                  | 9.492 ms                  | 201.864 ms                |
+| Optimize                  | 2.597 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 98.741 us                 | 4.470 ms                  |
+| AfterBackward             | 19.276 ms                 | 944.840 ms                |
+| BlockToStepN              | 6.171 ms                  | 75.782 ms                 |
+| OneStep                   | 52.262 ms                 | 1.856 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:16.874014 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=16, pq.top=16
+W20240205 20:06:17.873006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=22, pq.top=22
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.788 ms                  | 281.750 ms                |
+| ProcessBack:UpdateCache   | 4.078 ms                  | 528.932 ms                |
+| ProcessBack:UpsertPq      | 10.030 ms                 | 27.614 ms                 |
+| ProcessOneStep            | 19.245 ms                 | 944.302 ms                |
+| BlockToStepN              | 15.060 ms                 | 168.290 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:18.896780 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=28, pq.top=28
+W20240205 20:06:19.928550 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=34, pq.top=34
+W20240205 20:06:20.928006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=39, pq.top=39
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.481 ms                  | 29.213 ms                 |
+| Forward                   | 5.533 ms                  | 624.836 ms                |
+| Backward                  | 9.327 ms                  | 201.864 ms                |
+| Optimize                  | 2.500 ms                  | 7.432 ms                  |
+| BarrierTimeBeforeRank0    | 187.396 us                | 11.054 ms                 |
+| AfterBackward             | 20.134 ms                 | 944.840 ms                |
+| BlockToStepN              | 115.295 ms                | 168.340 ms                |
+| OneStep                   | 170.552 ms                | 1.856 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:21.928010 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=44, pq.top=44
+W20240205 20:06:22.928017 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=50, pq.top=50
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.898 ms                  | 249.123 ms                |
+| ProcessBack:UpdateCache   | 4.178 ms                  | 527.941 ms                |
+| ProcessBack:UpsertPq      | 10.640 ms                 | 27.293 ms                 |
+| ProcessOneStep            | 19.498 ms                 | 944.302 ms                |
+| BlockToStepN              | 122.413 ms                | 168.290 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:23.938915 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=55, pq.top=55
+W20240205 20:06:24.968711 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=60, pq.top=60
+W20240205 20:06:26.004736 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=65, pq.top=65
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.379 ms                  | 28.951 ms                 |
+| Forward                   | 5.612 ms                  | 12.186 ms                 |
+| Backward                  | 9.415 ms                  | 12.287 ms                 |
+| Optimize                  | 2.488 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 78.590 us                 | 8.787 ms                  |
+| AfterBackward             | 19.892 ms                 | 560.158 ms                |
+| BlockToStepN              | 133.055 ms                | 186.115 ms                |
+| OneStep                   | 178.675 ms                | 589.195 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:27.004010 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=69, pq.top=69
+W20240205 20:06:28.004015 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=74, pq.top=74
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.896 ms                  | 249.123 ms                |
+| ProcessBack:UpdateCache   | 4.138 ms                  | 527.941 ms                |
+| ProcessBack:UpsertPq      | 10.635 ms                 | 27.293 ms                 |
+| ProcessOneStep            | 19.498 ms                 | 560.038 ms                |
+| BlockToStepN              | 136.542 ms                | 186.057 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:29.026670 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=81, pq.top=81
+W20240205 20:06:30.040314 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=86, pq.top=86
+W20240205 20:06:31.040019 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=90, pq.top=90
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.331 ms                  | 28.951 ms                 |
+| Forward                   | 5.620 ms                  | 12.186 ms                 |
+| Backward                  | 9.572 ms                  | 12.287 ms                 |
+| Optimize                  | 2.488 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 41.719 us                 | 8.787 ms                  |
+| AfterBackward             | 20.702 ms                 | 560.158 ms                |
+| BlockToStepN              | 142.386 ms                | 186.115 ms                |
+| OneStep                   | 192.587 ms                | 589.195 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:32.040007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=95, pq.top=95
+W20240205 20:06:33.040006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=100, pq.top=100
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.904 ms                  | 9.650 ms                  |
+| ProcessBack:UpdateCache   | 4.238 ms                  | 9.130 ms                  |
+| ProcessBack:UpsertPq      | 11.576 ms                 | 25.640 ms                 |
+| ProcessOneStep            | 20.800 ms                 | 560.038 ms                |
+| BlockToStepN              | 144.940 ms                | 186.057 ms                |
++---------------------------+---------------------------+---------------------------+
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 3] 100 steps, total: 19.506, sample: 0.390, forward: 1.084, backward: 1.113, update: 0.256
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 4] 100 steps, total: 19.499, sample: 0.429, forward: 1.062, backward: 0.993, update: 0.260
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 2] 100 steps, total: 19.502, sample: 0.388, forward: 1.093, backward: 1.140, update: 0.248
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 1] 100 steps, total: 19.508, sample: 0.367, forward: 1.088, backward: 1.066, update: 0.250
+train_sampler.Prefill()
+-------Step 0-------
+tensor([ 8980,    61, 12801,  8189,    27,    62, 11383, 11215,  2542,  9240]) tensor([ 1375,  1992,    82,  4399,  4741, 11736,   451,  2390,  4235, 14672])
+-------Step 1-------
+tensor([ 8980,    61, 12801,  8189,    27,    62, 11383, 11215,  2542,  9240]) tensor([  203, 11581,  3824, 10048, 14063, 10231,  3106,  6443, 11468,  3490])
+-------Step 2-------
+tensor([  138,  8147, 10351, 11283,  6244, 13645, 14007,  8759,  4188,    52]) tensor([ 7348,  6551,  7765, 14335,  4915,  1014,  1868,   682,  8110,  1323])
+-------Step 3-------
+tensor([  138,  8147, 10351, 11283,  6244, 13645, 14007,  8759,  4188,    52]) tensor([14248,  2853,  8587,  8731, 14221,   378,  9515, 13746,   400,  2566])
+-------Step 4-------
+tensor([12101,  7933, 14222,  7148,  1564,  5051,  9538,  5653,  9033,  3013]) tensor([  463,  3333,   912,  8087,  7422,  9511, 10079, 12448,  6470,   489])
+-------Step 5-------
+tensor([12101,  7933, 14222,  7148,  1564,  5051,  9538,  5653,  9033,  3013]) tensor([ 8253, 13657,  5294,  9507,  3170,  1157,  4444,  3911,  5245, 10680])
+-------Step 6-------
+tensor([  956,   329,  7039,  2420,    87, 13540, 11283,   111,   767, 12601]) tensor([14508, 12997, 13972, 11716,  9659,  2024,  3718, 10604,  9605,  5459])
+-------Step 7-------
+tensor([  956,   329,  7039,  2420,    87, 13540, 11283,   111,   767, 12601]) tensor([ 6340, 10052,  2866, 11465,   238, 12752,  9018, 13489,  4428, 11157])
+-------Step 8-------
+tensor([10892, 12208,   801,  8864,  3067,   130, 14245,  8074,  3445,  4280]) tensor([ 1284,  1075,  6756,  7910,  5581, 14259,  7551, 13410, 14725,   909])
+-------Step 9-------
+tensor([10892, 12208,   801,  8864,  3067,   130, 14245,  8074,  3445,  4280]) tensor([ 5766,  2765,  9827,  6695, 13956,  8586,  5648, 14658,  8600,   667])
+before start barrier
+start train
+[proc 0] 100 steps, total: 19.513, sample: 0.453, forward: 1.182, backward: 1.140, update: 0.268
+W20240205 20:06:34.040019 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=104, pq.top=104
+W20240205 20:06:35.040005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=109, pq.top=109
+W20240205 20:06:36.040005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=113, pq.top=113
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.345 ms                  | 28.951 ms                 |
+| Forward                   | 5.633 ms                  | 12.186 ms                 |
+| Backward                  | 9.608 ms                  | 12.287 ms                 |
+| Optimize                  | 2.444 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 39.282 us                 | 8.787 ms                  |
+| AfterBackward             | 21.137 ms                 | 560.158 ms                |
+| BlockToStepN              | 150.996 ms                | 225.886 ms                |
+| OneStep                   | 196.271 ms                | 589.195 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:37.040007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=118, pq.top=118
+W20240205 20:06:38.040010 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=122, pq.top=122
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.897 ms                  | 9.650 ms                  |
+| ProcessBack:UpdateCache   | 4.213 ms                  | 9.130 ms                  |
+| ProcessBack:UpsertPq      | 12.010 ms                 | 25.640 ms                 |
+| ProcessOneStep            | 21.372 ms                 | 560.038 ms                |
+| BlockToStepN              | 153.565 ms                | 225.751 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:39.040011 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=126, pq.top=126
+W20240205 20:06:40.040006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=131, pq.top=131
+W20240205 20:06:41.040012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=135, pq.top=135
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.349 ms                  | 29.261 ms                 |
+| Forward                   | 5.614 ms                  | 12.186 ms                 |
+| Backward                  | 9.563 ms                  | 12.287 ms                 |
+| Optimize                  | 2.460 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 42.384 us                 | 24.359 ms                 |
+| AfterBackward             | 23.173 ms                 | 560.158 ms                |
+| BlockToStepN              | 155.221 ms                | 225.886 ms                |
+| OneStep                   | 201.132 ms                | 589.195 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:42.074793 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=140, pq.top=140
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.924 ms                  | 8.353 ms                  |
+| ProcessBack:UpdateCache   | 4.288 ms                  | 9.130 ms                  |
+| ProcessBack:UpsertPq      | 13.509 ms                 | 26.989 ms                 |
+| ProcessOneStep            | 23.701 ms                 | 560.038 ms                |
+| BlockToStepN              | 156.682 ms                | 225.751 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:43.074007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=144, pq.top=144
+W20240205 20:06:44.074008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=148, pq.top=148
+W20240205 20:06:45.074015 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=153, pq.top=153
+W20240205 20:06:46.074012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=157, pq.top=157
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.390 ms                  | 29.261 ms                 |
+| Forward                   | 5.614 ms                  | 12.186 ms                 |
+| Backward                  | 9.516 ms                  | 11.663 ms                 |
+| Optimize                  | 2.444 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 41.544 us                 | 24.359 ms                 |
+| AfterBackward             | 24.067 ms                 | 90.223 ms                 |
+| BlockToStepN              | 159.337 ms                | 225.886 ms                |
+| OneStep                   | 203.853 ms                | 300.206 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:47.074007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=161, pq.top=161
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.937 ms                  | 8.353 ms                  |
+| ProcessBack:UpdateCache   | 4.310 ms                  | 9.130 ms                  |
+| ProcessBack:UpsertPq      | 13.830 ms                 | 26.989 ms                 |
+| ProcessOneStep            | 24.115 ms                 | 90.161 ms                 |
+| BlockToStepN              | 160.112 ms                | 225.751 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:48.074004 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=165, pq.top=165
+W20240205 20:06:49.074012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=169, pq.top=169
+W20240205 20:06:50.074009 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=172, pq.top=172
+W20240205 20:06:51.074005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=176, pq.top=176
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.402 ms                  | 29.261 ms                 |
+| Forward                   | 5.606 ms                  | 12.186 ms                 |
+| Backward                  | 9.459 ms                  | 11.663 ms                 |
+| Optimize                  | 2.425 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 39.697 us                 | 25.466 ms                 |
+| AfterBackward             | 24.206 ms                 | 90.223 ms                 |
+| BlockToStepN              | 161.768 ms                | 243.881 ms                |
+| OneStep                   | 209.399 ms                | 300.206 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:52.074007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=180, pq.top=180
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.911 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.380 ms                  | 8.752 ms                  |
+| ProcessBack:UpsertPq      | 14.238 ms                 | 25.881 ms                 |
+| ProcessOneStep            | 24.189 ms                 | 90.161 ms                 |
+| BlockToStepN              | 163.209 ms                | 243.767 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:53.074012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=184, pq.top=184
+W20240205 20:06:54.075984 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=188, pq.top=188
+W20240205 20:06:55.075006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=191, pq.top=191
+W20240205 20:06:56.075007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=195, pq.top=195
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.412 ms                  | 29.261 ms                 |
+| Forward                   | 5.592 ms                  | 12.186 ms                 |
+| Backward                  | 9.445 ms                  | 11.663 ms                 |
+| Optimize                  | 2.424 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 39.748 us                 | 25.514 ms                 |
+| AfterBackward             | 24.417 ms                 | 90.223 ms                 |
+| BlockToStepN              | 164.490 ms                | 250.079 ms                |
+| OneStep                   | 213.612 ms                | 310.636 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:57.087992 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=199, pq.top=199
+[proc 3] 200 steps, total: 24.471, sample: 0.412, forward: 0.509, backward: 0.752, update: 0.239
+[proc 4] 200 steps, total: 24.471, sample: 0.438, forward: 0.425, backward: 0.894, update: 0.227
+[proc 2] 200 steps, total: 24.471, sample: 0.437, forward: 0.500, backward: 0.950, update: 0.240
+[proc 0] 200 steps, total: 24.470, sample: 0.507, forward: 0.555, backward: 0.913, update: 0.262
+[proc 1] 200 steps, total: 24.471, sample: 0.427, forward: 0.488, backward: 0.701, update: 0.230
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.908 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.368 ms                  | 8.752 ms                  |
+| ProcessBack:UpsertPq      | 14.378 ms                 | 25.881 ms                 |
+| ProcessOneStep            | 24.285 ms                 | 90.161 ms                 |
+| BlockToStepN              | 166.386 ms                | 250.013 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:06:58.123132 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=203, pq.top=203
+W20240205 20:06:59.123006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=206, pq.top=206
+W20240205 20:07:00.123011 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=210, pq.top=210
+W20240205 20:07:01.123013 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=214, pq.top=214
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.412 ms                  | 29.261 ms                 |
+| Forward                   | 5.571 ms                  | 12.186 ms                 |
+| Backward                  | 9.415 ms                  | 11.663 ms                 |
+| Optimize                  | 2.423 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 39.697 us                 | 26.552 ms                 |
+| AfterBackward             | 24.450 ms                 | 90.223 ms                 |
+| BlockToStepN              | 168.340 ms                | 250.079 ms                |
+| OneStep                   | 220.962 ms                | 310.636 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:02.123006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=217, pq.top=217
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.904 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.390 ms                  | 8.752 ms                  |
+| ProcessBack:UpsertPq      | 14.599 ms                 | 25.881 ms                 |
+| ProcessOneStep            | 24.424 ms                 | 90.161 ms                 |
+| BlockToStepN              | 168.873 ms                | 261.422 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:03.123005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=221, pq.top=221
+W20240205 20:07:04.123013 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=224, pq.top=224
+W20240205 20:07:05.150130 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=228, pq.top=228
+W20240205 20:07:06.150007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=231, pq.top=231
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.416 ms                  | 29.261 ms                 |
+| Forward                   | 5.571 ms                  | 12.186 ms                 |
+| Backward                  | 9.411 ms                  | 11.663 ms                 |
+| Optimize                  | 2.424 ms                  | 7.232 ms                  |
+| BarrierTimeBeforeRank0    | 41.719 us                 | 26.707 ms                 |
+| AfterBackward             | 24.412 ms                 | 90.223 ms                 |
+| BlockToStepN              | 172.552 ms                | 266.417 ms                |
+| OneStep                   | 224.016 ms                | 348.691 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:07.150005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=235, pq.top=235
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.898 ms                  | 7.693 ms                  |
+| ProcessBack:UpdateCache   | 4.352 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.532 ms                 | 25.640 ms                 |
+| ProcessOneStep            | 24.375 ms                 | 90.161 ms                 |
+| BlockToStepN              | 173.140 ms                | 266.350 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:08.150012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=239, pq.top=239
+W20240205 20:07:09.150005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=243, pq.top=243
+W20240205 20:07:10.150007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=246, pq.top=246
+W20240205 20:07:11.157464 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=250, pq.top=250
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.442 ms                  | 29.213 ms                 |
+| Forward                   | 5.570 ms                  | 11.045 ms                 |
+| Backward                  | 9.399 ms                  | 11.534 ms                 |
+| Optimize                  | 2.425 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 42.384 us                 | 26.552 ms                 |
+| AfterBackward             | 24.472 ms                 | 39.430 ms                 |
+| BlockToStepN              | 175.018 ms                | 266.417 ms                |
+| OneStep                   | 226.973 ms                | 348.691 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:12.157011 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=253, pq.top=253
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.905 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.368 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.635 ms                 | 25.640 ms                 |
+| ProcessOneStep            | 24.459 ms                 | 39.402 ms                 |
+| BlockToStepN              | 176.474 ms                | 263.905 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:13.157006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=257, pq.top=257
+W20240205 20:07:14.184396 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=261, pq.top=261
+W20240205 20:07:15.184011 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=264, pq.top=264
+W20240205 20:07:16.184007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=268, pq.top=268
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.448 ms                  | 29.551 ms                 |
+| Forward                   | 5.571 ms                  | 11.045 ms                 |
+| Backward                  | 9.379 ms                  | 11.534 ms                 |
+| Optimize                  | 2.424 ms                  | 6.722 ms                  |
+| BarrierTimeBeforeRank0    | 41.860 us                 | 26.552 ms                 |
+| AfterBackward             | 24.613 ms                 | 47.976 ms                 |
+| BlockToStepN              | 179.337 ms                | 263.983 ms                |
+| OneStep                   | 230.862 ms                | 331.047 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:17.184008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=271, pq.top=271
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.927 ms                  | 8.274 ms                  |
+| ProcessBack:UpdateCache   | 4.390 ms                  | 7.491 ms                  |
+| ProcessBack:UpsertPq      | 14.779 ms                 | 27.293 ms                 |
+| ProcessOneStep            | 24.592 ms                 | 47.945 ms                 |
+| BlockToStepN              | 179.359 ms                | 271.618 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:18.211612 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=275, pq.top=275
+W20240205 20:07:19.211016 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=278, pq.top=278
+W20240205 20:07:20.211006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=282, pq.top=282
+W20240205 20:07:21.211009 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=285, pq.top=285
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.458 ms                  | 29.792 ms                 |
+| Forward                   | 5.577 ms                  | 11.045 ms                 |
+| Backward                  | 9.375 ms                  | 11.534 ms                 |
+| Optimize                  | 2.429 ms                  | 6.722 ms                  |
+| BarrierTimeBeforeRank0    | 42.384 us                 | 26.552 ms                 |
+| AfterBackward             | 24.687 ms                 | 47.976 ms                 |
+| BlockToStepN              | 180.197 ms                | 271.826 ms                |
+| OneStep                   | 234.733 ms                | 348.691 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:22.211019 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=288, pq.top=288
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.941 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.397 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.872 ms                 | 26.989 ms                 |
+| ProcessOneStep            | 24.687 ms                 | 47.945 ms                 |
+| BlockToStepN              | 180.499 ms                | 282.981 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:23.211007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=291, pq.top=291
+W20240205 20:07:24.211609 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=295, pq.top=295
+W20240205 20:07:25.211016 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=298, pq.top=298
+[proc 3] 300 steps, total: 28.411, sample: 0.445, forward: 0.494, backward: 0.877, update: 0.240
+[proc 4] 300 steps, total: 28.411, sample: 0.296, forward: 0.392, backward: 0.900, update: 0.196
+[proc 1] 300 steps, total: 28.411, sample: 0.384, forward: 0.474, backward: 0.913, update: 0.236
+[proc 0] 300 steps, total: 28.411, sample: 0.525, forward: 0.550, backward: 0.911, update: 0.258
+[proc 2] 300 steps, total: 28.411, sample: 0.396, forward: 0.492, backward: 0.890, update: 0.236
+W20240205 20:07:26.211014 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=301, pq.top=301
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.472 ms                  | 29.792 ms                 |
+| Forward                   | 5.577 ms                  | 11.045 ms                 |
+| Backward                  | 9.355 ms                  | 11.534 ms                 |
+| Optimize                  | 2.429 ms                  | 6.722 ms                  |
+| BarrierTimeBeforeRank0    | 41.815 us                 | 26.707 ms                 |
+| AfterBackward             | 24.687 ms                 | 47.976 ms                 |
+| BlockToStepN              | 184.409 ms                | 296.597 ms                |
+| OneStep                   | 238.253 ms                | 359.723 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:27.211007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=305, pq.top=305
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.941 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.357 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.833 ms                 | 26.989 ms                 |
+| ProcessOneStep            | 24.650 ms                 | 47.945 ms                 |
+| BlockToStepN              | 184.826 ms                | 296.536 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:28.211005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=308, pq.top=308
+W20240205 20:07:29.211019 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=312, pq.top=312
+W20240205 20:07:30.211005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=316, pq.top=316
+W20240205 20:07:31.211006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=320, pq.top=320
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.472 ms                  | 29.792 ms                 |
+| Forward                   | 5.566 ms                  | 11.045 ms                 |
+| Backward                  | 9.338 ms                  | 11.534 ms                 |
+| Optimize                  | 2.424 ms                  | 6.722 ms                  |
+| BarrierTimeBeforeRank0    | 47.363 us                 | 26.823 ms                 |
+| AfterBackward             | 24.652 ms                 | 47.976 ms                 |
+| BlockToStepN              | 188.422 ms                | 296.597 ms                |
+| OneStep                   | 242.214 ms                | 359.723 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:32.211014 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=323, pq.top=323
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.941 ms                  | 7.693 ms                  |
+| ProcessBack:UpdateCache   | 4.310 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.859 ms                 | 27.084 ms                 |
+| ProcessOneStep            | 24.592 ms                 | 47.945 ms                 |
+| BlockToStepN              | 190.476 ms                | 296.536 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:33.226284 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=327, pq.top=327
+W20240205 20:07:34.226006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=330, pq.top=330
+W20240205 20:07:35.226011 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=333, pq.top=333
+W20240205 20:07:36.226019 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=337, pq.top=337
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.492 ms                  | 29.792 ms                 |
+| Forward                   | 5.560 ms                  | 11.045 ms                 |
+| Backward                  | 9.326 ms                  | 11.534 ms                 |
+| Optimize                  | 2.420 ms                  | 6.722 ms                  |
+| BarrierTimeBeforeRank0    | 57.288 us                 | 26.823 ms                 |
+| AfterBackward             | 24.681 ms                 | 47.976 ms                 |
+| BlockToStepN              | 192.568 ms                | 296.597 ms                |
+| OneStep                   | 244.892 ms                | 359.723 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:37.233582 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=341, pq.top=341
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.941 ms                  | 7.693 ms                  |
+| ProcessBack:UpdateCache   | 4.320 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.908 ms                 | 27.293 ms                 |
+| ProcessOneStep            | 24.687 ms                 | 47.945 ms                 |
+| BlockToStepN              | 193.809 ms                | 296.536 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:38.239051 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=344, pq.top=344
+W20240205 20:07:39.239027 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=347, pq.top=347
+W20240205 20:07:40.269703 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=351, pq.top=351
+W20240205 20:07:41.269016 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=354, pq.top=354
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.501 ms                  | 29.792 ms                 |
+| Forward                   | 5.570 ms                  | 10.924 ms                 |
+| Backward                  | 9.319 ms                  | 11.468 ms                 |
+| Optimize                  | 2.412 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 78.590 us                 | 26.707 ms                 |
+| AfterBackward             | 24.800 ms                 | 41.175 ms                 |
+| BlockToStepN              | 195.403 ms                | 290.591 ms                |
+| OneStep                   | 249.106 ms                | 356.810 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:42.269009 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=357, pq.top=357
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.943 ms                  | 7.693 ms                  |
+| ProcessBack:UpdateCache   | 4.325 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.908 ms                 | 27.293 ms                 |
+| ProcessOneStep            | 24.688 ms                 | 41.143 ms                 |
+| BlockToStepN              | 196.412 ms                | 296.536 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:43.269008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=361, pq.top=361
+W20240205 20:07:44.269021 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=364, pq.top=364
+W20240205 20:07:45.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=367, pq.top=367
+W20240205 20:07:46.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=371, pq.top=371
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.514 ms                  | 29.792 ms                 |
+| Forward                   | 5.565 ms                  | 10.924 ms                 |
+| Backward                  | 9.319 ms                  | 11.468 ms                 |
+| Optimize                  | 2.412 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 64.865 us                 | 26.707 ms                 |
+| AfterBackward             | 24.687 ms                 | 41.175 ms                 |
+| BlockToStepN              | 199.588 ms                | 306.617 ms                |
+| OneStep                   | 253.356 ms                | 359.723 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:47.269014 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=374, pq.top=374
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.930 ms                  | 7.683 ms                  |
+| ProcessBack:UpdateCache   | 4.286 ms                  | 6.825 ms                  |
+| ProcessBack:UpsertPq      | 14.891 ms                 | 27.084 ms                 |
+| ProcessOneStep            | 24.626 ms                 | 41.143 ms                 |
+| BlockToStepN              | 200.071 ms                | 306.481 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:48.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=377, pq.top=377
+W20240205 20:07:49.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=380, pq.top=380
+W20240205 20:07:50.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=384, pq.top=384
+W20240205 20:07:51.269016 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=387, pq.top=387
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.514 ms                  | 29.792 ms                 |
+| Forward                   | 5.540 ms                  | 10.924 ms                 |
+| Backward                  | 9.319 ms                  | 11.468 ms                 |
+| Optimize                  | 2.403 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 176.376 us                | 26.823 ms                 |
+| AfterBackward             | 24.617 ms                 | 41.175 ms                 |
+| BlockToStepN              | 201.358 ms                | 307.519 ms                |
+| OneStep                   | 256.909 ms                | 361.235 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:52.269011 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=390, pq.top=390
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.915 ms                  | 7.693 ms                  |
+| ProcessBack:UpdateCache   | 4.224 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.880 ms                 | 27.084 ms                 |
+| ProcessOneStep            | 24.586 ms                 | 41.143 ms                 |
+| BlockToStepN              | 201.953 ms                | 307.356 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:53.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=393, pq.top=393
+W20240205 20:07:54.269006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=396, pq.top=396
+W20240205 20:07:55.277047 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=400, pq.top=400
+[proc 0] 400 steps, total: 29.548, sample: 0.450, forward: 0.521, backward: 0.776, update: 0.223
+[proc 3] 400 steps, total: 29.548, sample: 0.404, forward: 0.490, backward: 0.953, update: 0.235
+[proc 4] 400 steps, total: 29.548, sample: 0.399, forward: 0.422, backward: 0.901, update: 0.226
+[proc 2] 400 steps, total: 29.548, sample: 0.377, forward: 0.510, backward: 0.923, update: 0.235
+[proc 1] 400 steps, total: 29.548, sample: 0.383, forward: 0.486, backward: 0.929, update: 0.234
+W20240205 20:07:56.287123 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=403, pq.top=403
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.525 ms                  | 29.792 ms                 |
+| Forward                   | 5.521 ms                  | 10.924 ms                 |
+| Backward                  | 9.322 ms                  | 11.468 ms                 |
+| Optimize                  | 2.399 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 232.732 us                | 26.823 ms                 |
+| AfterBackward             | 24.570 ms                 | 41.175 ms                 |
+| BlockToStepN              | 205.351 ms                | 311.464 ms                |
+| OneStep                   | 259.578 ms                | 366.389 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:57.287006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=406, pq.top=406
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.904 ms                  | 7.693 ms                  |
+| ProcessBack:UpdateCache   | 4.165 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.891 ms                 | 27.084 ms                 |
+| ProcessOneStep            | 24.517 ms                 | 41.143 ms                 |
+| BlockToStepN              | 207.078 ms                | 319.750 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:07:58.287005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=409, pq.top=409
+W20240205 20:07:59.287016 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=412, pq.top=412
+W20240205 20:08:00.287012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=415, pq.top=415
+W20240205 20:08:01.287005 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=418, pq.top=418
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.518 ms                  | 29.792 ms                 |
+| Forward                   | 5.506 ms                  | 10.924 ms                 |
+| Backward                  | 9.323 ms                  | 11.468 ms                 |
+| Optimize                  | 2.388 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 454.256 us                | 27.358 ms                 |
+| AfterBackward             | 24.543 ms                 | 41.175 ms                 |
+| BlockToStepN              | 208.227 ms                | 319.863 ms                |
+| OneStep                   | 262.588 ms                | 372.336 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:02.287007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=422, pq.top=422
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.900 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.117 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.874 ms                 | 27.084 ms                 |
+| ProcessOneStep            | 24.459 ms                 | 41.143 ms                 |
+| BlockToStepN              | 209.016 ms                | 319.750 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:03.287014 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=425, pq.top=425
+W20240205 20:08:04.287014 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=428, pq.top=428
+W20240205 20:08:05.359422 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=432, pq.top=432
+W20240205 20:08:06.359006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=435, pq.top=435
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.518 ms                  | 29.792 ms                 |
+| Forward                   | 5.481 ms                  | 10.924 ms                 |
+| Backward                  | 9.323 ms                  | 11.468 ms                 |
+| Optimize                  | 2.381 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 520.403 us                | 27.534 ms                 |
+| AfterBackward             | 24.485 ms                 | 41.175 ms                 |
+| BlockToStepN              | 210.351 ms                | 320.314 ms                |
+| OneStep                   | 264.593 ms                | 374.813 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:07.359019 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=438, pq.top=438
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.894 ms                  | 8.031 ms                  |
+| ProcessBack:UpdateCache   | 4.065 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.891 ms                 | 27.084 ms                 |
+| ProcessOneStep            | 24.446 ms                 | 41.143 ms                 |
+| BlockToStepN              | 210.637 ms                | 320.262 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:08.359007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=441, pq.top=441
+W20240205 20:08:09.359007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=444, pq.top=444
+W20240205 20:08:10.359006 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=447, pq.top=447
+W20240205 20:08:11.380336 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=451, pq.top=451
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.508 ms                  | 29.551 ms                 |
+| Forward                   | 5.456 ms                  | 10.543 ms                 |
+| Backward                  | 9.325 ms                  | 11.534 ms                 |
+| Optimize                  | 2.370 ms                  | 5.185 ms                  |
+| BarrierTimeBeforeRank0    | 531.113 us                | 27.534 ms                 |
+| AfterBackward             | 24.466 ms                 | 39.909 ms                 |
+| BlockToStepN              | 211.661 ms                | 322.776 ms                |
+| OneStep                   | 265.533 ms                | 386.155 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:12.380008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=454, pq.top=454
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.887 ms                  | 8.274 ms                  |
+| ProcessBack:UpdateCache   | 4.016 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.879 ms                 | 27.614 ms                 |
+| ProcessOneStep            | 24.426 ms                 | 41.143 ms                 |
+| BlockToStepN              | 212.235 ms                | 322.711 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:13.380009 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=457, pq.top=457
+W20240205 20:08:14.380009 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=460, pq.top=460
+W20240205 20:08:15.433624 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=464, pq.top=464
+W20240205 20:08:16.433012 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=467, pq.top=467
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.508 ms                  | 29.551 ms                 |
+| Forward                   | 5.455 ms                  | 10.543 ms                 |
+| Backward                  | 9.326 ms                  | 11.534 ms                 |
+| Optimize                  | 2.366 ms                  | 5.185 ms                  |
+| BarrierTimeBeforeRank0    | 531.113 us                | 27.534 ms                 |
+| AfterBackward             | 24.466 ms                 | 41.175 ms                 |
+| BlockToStepN              | 213.353 ms                | 322.776 ms                |
+| OneStep                   | 266.531 ms                | 386.155 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:17.433008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=470, pq.top=470
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.880 ms                  | 8.274 ms                  |
+| ProcessBack:UpdateCache   | 4.035 ms                  | 7.283 ms                  |
+| ProcessBack:UpsertPq      | 14.901 ms                 | 28.786 ms                 |
+| ProcessOneStep            | 24.432 ms                 | 41.143 ms                 |
+| BlockToStepN              | 213.727 ms                | 323.973 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:18.433008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=473, pq.top=473
+W20240205 20:08:19.433020 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=476, pq.top=476
+W20240205 20:08:20.433007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=479, pq.top=479
+W20240205 20:08:21.433008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=482, pq.top=482
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.518 ms                  | 29.551 ms                 |
+| Forward                   | 5.444 ms                  | 10.924 ms                 |
+| Backward                  | 9.330 ms                  | 11.534 ms                 |
+| Optimize                  | 2.363 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 520.403 us                | 27.534 ms                 |
+| AfterBackward             | 24.511 ms                 | 41.175 ms                 |
+| BlockToStepN              | 215.336 ms                | 327.711 ms                |
+| OneStep                   | 269.296 ms                | 395.247 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:22.433008 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=485, pq.top=485
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.883 ms                  | 8.274 ms                  |
+| ProcessBack:UpdateCache   | 4.077 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.922 ms                 | 28.786 ms                 |
+| ProcessOneStep            | 24.541 ms                 | 41.143 ms                 |
+| BlockToStepN              | 215.710 ms                | 330.501 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:08:23.433020 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=488, pq.top=488
+W20240205 20:08:24.446751 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=492, pq.top=492
+W20240205 20:08:25.446007 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=495, pq.top=495
+W20240205 20:08:26.446017 44319 grad_async_v1.h:429] Sleep in <BlockToStepN>, step_no=498, pq.top=498
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.533 ms                  | 29.551 ms                 |
+| Forward                   | 5.436 ms                  | 10.924 ms                 |
+| Backward                  | 9.332 ms                  | 11.534 ms                 |
+| Optimize                  | 2.370 ms                  | 5.348 ms                  |
+| BarrierTimeBeforeRank0    | 404.996 us                | 27.534 ms                 |
+| AfterBackward             | 24.613 ms                 | 41.175 ms                 |
+| BlockToStepN              | 216.932 ms                | 330.658 ms                |
+| OneStep                   | 270.611 ms                | 399.924 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 3] 500 steps, total: 31.774, sample: 0.375, forward: 0.490, backward: 0.950, update: 0.241
+[proc 2] 500 steps, total: 31.774, sample: 0.402, forward: 0.506, backward: 0.957, update: 0.249
+[proc 4] 500 steps, total: 31.774, sample: 0.426, forward: 0.417, backward: 0.889, update: 0.223
+[proc 1] 500 steps, total: 31.774, sample: 0.382, forward: 0.482, backward: 0.947, update: 0.237
+[proc 0] 500 steps, total: 31.774, sample: 0.425, forward: 0.506, backward: 0.884, update: 0.231
+Successfully xmh. training takes 133.71675395965576 seconds
+before call kg_cache_controller.StopThreads()
+W20240205 20:08:27.306087 44319 grad_async_v1.h:243] call StopThreads. PID = 43986
+W20240205 20:08:27.306126 44319 grad_base.h:212] before processOneStepNegThread_.join();
+W20240205 20:08:27.316491 44319 grad_base.h:214] after processOneStepNegThread_.join();
+W20240205 20:08:27.316509 44319 grad_async_v1.h:245] call GradProcessingBase::StopThreads.
+W20240205 20:08:27.340626 44319 grad_async_v1.h:264] StopThreads done.
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker4: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+On rank0, prepare to call self.controller.StopThreads(), self=<python.controller_process.KGCacheControllerWrapper object at 0x7f09525a1410>
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| ProcessBack:Shuffle       | 3.887 ms                  | 8.274 ms                  |
+| ProcessBack:UpdateCache   | 4.100 ms                  | 7.245 ms                  |
+| ProcessBack:UpsertPq      | 14.935 ms                 | 28.786 ms                 |
+| ProcessOneStep            | 24.578 ms                 | 41.143 ms                 |
+| BlockToStepN              | 217.133 ms                | 330.501 ms                |
++---------------------------+---------------------------+---------------------------+

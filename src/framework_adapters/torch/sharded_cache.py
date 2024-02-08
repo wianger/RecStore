@@ -219,7 +219,10 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         # 1.2 all to all keys with shapes
         ctx.timer_a2akeys = Timer("forward: a2a keys")
         recv_keys = all2all_data_transfer(
-            cached_keys, None, tag=120, dtype=keys.dtype)
+            cached_keys, None,
+            tag=21,
+            dtype=keys.dtype,
+            )
         ctx.timer_a2akeys.stop()
 
         # 2. search local cache
@@ -239,7 +242,11 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         ctx.timer_a2avalues = Timer("forward: a2a values")
         XLOG.debug(f"{rank}: a2a cache_query_values",)
         cache_query_values_in_mine = all2all_data_transfer(
-            cache_query_values, None, tag=121, dtype=cache_query_values[0].dtype)
+            cache_query_values,
+            None,
+            tag=22,
+            dtype=cache_query_values[0].dtype
+            )
         XLOG.debug(f"{rank}: a2a cache_query_values done",)
         ctx.timer_a2avalues.stop()
 

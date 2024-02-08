@@ -98,7 +98,25 @@ class ZipfianTorchFiller : public torch::CustomClassHolder {
 
 void RegisterIPCBarrier(torch::Library &m);
 
+
+torch::optional<torch::Tensor>
+  NarrowShapeTensor(torch::Tensor base, const at::IntArrayRef shape,
+   const at::ScalarType dtype
+               )
+{
+    auto tensor = torch::from_blob(
+        base.data_ptr(),
+        shape,
+        torch::TensorOptions().dtype(dtype).device(base.device()));
+    return tensor;
+}
+
+
+
+
 TORCH_LIBRARY(librecstore_pytorch, m) {
+  m.def("NarrowShapeTensor", &NarrowShapeTensor);
+
   m.class_<CacheQueryResult>("CacheQueryResult")
       .def("__str__", &CacheQueryResult::__repr__)
       .def_property("values", &CacheQueryResult::values)

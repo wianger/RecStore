@@ -1,0 +1,573 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240205 20:02:40.288116 39450 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/_deprecate/graph.py:1023: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
+  dgl_warning("multigraph will be deprecated." \
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/heterograph.py:72: DGLWarning: Recommend creating graphs by `dgl.graph(data)` instead of `dgl.DGLGraph(data)`.
+  dgl_warning('Recommend creating graphs by `dgl.graph(data)`'
+Reading train triples....
+Finished. Read 483142 train triples.
+Reading valid triples....
+Finished. Read 50000 valid triples.
+Reading test triples....
+Finished. Read 59071 test triples.
+ARGS:  Namespace(model_name='TransE', data_path='/home/xieminhui/dgl-data', dataset='FB15k', format='built_in', data_files=None, delimiter='\t', save_path='/tmp/ckpts/TransE_FB15k_144', no_save_emb=True, max_step=500, batch_size=2000, batch_size_eval=16, neg_sample_size=200, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size_eval=14951, eval_percent=1, no_eval_filter=False, log_interval=100, eval_interval=10000, test=False, num_proc=5, num_thread=1, force_sync_interval=1, hidden_dim=400, lr=0.01, gamma=16.0, double_ent=False, double_rel=False, neg_adversarial_sampling=False, adversarial_temperature=1.0, regularization_coef=0.0, regularization_norm=3, pairwise=False, loss_genre='Logsigmoid', margin=1.0, nr_gpus=5, gpu=[0, 1, 2, 3, 4], mix_cpu_gpu=True, valid=False, rel_part=False, async_update=None, has_edge_importance=False, cached_emb_type='KnownLocalCachedEmbedding', use_my_emb=True, cache_ratio=0.05, shuffle=False, backwardMode='CppAsyncV2', L=10, nr_background_threads=32, update_cache_use_omp=0, update_pq_use_omp=0, kForwardItersPerStep=2, backgrad_init='both', eval_filter=True, soft_rel_part=False)
+|Train|: 483142
+original graph:  DGLGraph(num_nodes=14951, num_edges=592213,
+         ndata_schemes={}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Partitoning with metis
+[20:02:41] /home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/src/graph/transform/metis_partition_hetero.cc:87: Partition a graph with 14951 nodes and 771659 edges into 5 parts and get 114217 edge cuts
+WARNING [39450 sampler.py:454] Start PreSampling
+WARNING [39450 sampler.py:532] Before construct renumbering_dict
+WARNING [39450 sampler.py:555] PreSampling done
+W20240205 20:02:44.866266 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_0 [1000000]0x100000002000 7.629 MB
+W20240205 20:02:44.866448 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_1 [1000000]0x1000007a5000 7.629 MB
+W20240205 20:02:44.866483 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_2 [1000000]0x100000f48000 7.629 MB
+W20240205 20:02:44.866516 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_3 [1000000]0x1000016eb000 7.629 MB
+W20240205 20:02:44.866550 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_4 [1000000]0x100001e8e000 7.629 MB
+W20240205 20:02:44.866590 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_5 [1000000]0x100002631000 7.629 MB
+W20240205 20:02:44.866623 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_6 [1000000]0x100002dd4000 7.629 MB
+W20240205 20:02:44.866668 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_7 [1000000]0x100003577000 7.629 MB
+W20240205 20:02:44.866711 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_8 [1000000]0x100003d1a000 7.629 MB
+W20240205 20:02:44.866748 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_9 [1000000]0x1000044bd000 7.629 MB
+W20240205 20:02:44.866792 39450 IPCTensor.h:369] NewIPCTensor: step_r0 [10]0x100004c60000 80 B 
+W20240205 20:02:44.866823 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r0 [1]0x100004c62000 8 B 
+W20240205 20:02:44.866853 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100004c64000 8 B 
+W20240205 20:02:44.866963 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_0 [1000000]0x100004c66000 7.629 MB
+W20240205 20:02:44.867017 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_1 [1000000]0x100005409000 7.629 MB
+W20240205 20:02:44.867053 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_2 [1000000]0x100005bac000 7.629 MB
+W20240205 20:02:44.867089 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_3 [1000000]0x10000634f000 7.629 MB
+W20240205 20:02:44.867125 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_4 [1000000]0x100006af2000 7.629 MB
+W20240205 20:02:44.867170 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_5 [1000000]0x100007295000 7.629 MB
+W20240205 20:02:44.867209 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_6 [1000000]0x100007a38000 7.629 MB
+W20240205 20:02:44.867246 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_7 [1000000]0x1000081db000 7.629 MB
+W20240205 20:02:44.867283 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_8 [1000000]0x10000897e000 7.629 MB
+W20240205 20:02:44.867322 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_9 [1000000]0x100009121000 7.629 MB
+W20240205 20:02:44.867357 39450 IPCTensor.h:369] NewIPCTensor: step_r1 [10]0x1000098c4000 80 B 
+W20240205 20:02:44.867383 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r1 [1]0x1000098c6000 8 B 
+W20240205 20:02:44.867412 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1000098c8000 8 B 
+W20240205 20:02:44.867471 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_0 [1000000]0x1000098ca000 7.629 MB
+W20240205 20:02:44.867516 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_1 [1000000]0x10000a06d000 7.629 MB
+W20240205 20:02:44.867551 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_2 [1000000]0x10000a810000 7.629 MB
+W20240205 20:02:44.867584 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_3 [1000000]0x10000afb3000 7.629 MB
+W20240205 20:02:44.867617 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_4 [1000000]0x10000b756000 7.629 MB
+W20240205 20:02:44.867660 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_5 [1000000]0x10000bef9000 7.629 MB
+W20240205 20:02:44.867691 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_6 [1000000]0x10000c69c000 7.629 MB
+W20240205 20:02:44.867727 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_7 [1000000]0x10000ce3f000 7.629 MB
+W20240205 20:02:44.867758 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_8 [1000000]0x10000d5e2000 7.629 MB
+W20240205 20:02:44.867789 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_9 [1000000]0x10000dd85000 7.629 MB
+W20240205 20:02:44.867820 39450 IPCTensor.h:369] NewIPCTensor: step_r2 [10]0x10000e528000 80 B 
+W20240205 20:02:44.867846 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r2 [1]0x10000e52a000 8 B 
+W20240205 20:02:44.867871 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x10000e52c000 8 B 
+W20240205 20:02:44.867926 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_0 [1000000]0x10000e52e000 7.629 MB
+W20240205 20:02:44.867959 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_1 [1000000]0x10000ecd1000 7.629 MB
+W20240205 20:02:44.867990 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_2 [1000000]0x10000f474000 7.629 MB
+W20240205 20:02:44.868021 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_3 [1000000]0x10000fc17000 7.629 MB
+W20240205 20:02:44.868063 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_4 [1000000]0x1000103ba000 7.629 MB
+W20240205 20:02:44.868096 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_5 [1000000]0x100010b5d000 7.629 MB
+W20240205 20:02:44.868139 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_6 [1000000]0x100011300000 7.629 MB
+W20240205 20:02:44.868173 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_7 [1000000]0x100011aa3000 7.629 MB
+W20240205 20:02:44.868211 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_8 [1000000]0x100012246000 7.629 MB
+W20240205 20:02:44.868245 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_9 [1000000]0x1000129e9000 7.629 MB
+W20240205 20:02:44.868279 39450 IPCTensor.h:369] NewIPCTensor: step_r3 [10]0x10001318c000 80 B 
+W20240205 20:02:44.868310 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r3 [1]0x10001318e000 8 B 
+W20240205 20:02:44.868340 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x100013190000 8 B 
+W20240205 20:02:44.868397 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_0 [1000000]0x100013192000 7.629 MB
+W20240205 20:02:44.868431 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_1 [1000000]0x100013935000 7.629 MB
+W20240205 20:02:44.868463 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_2 [1000000]0x1000140d8000 7.629 MB
+W20240205 20:02:44.868505 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_3 [1000000]0x10001487b000 7.629 MB
+W20240205 20:02:44.868535 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_4 [1000000]0x10001501e000 7.629 MB
+W20240205 20:02:44.868569 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_5 [1000000]0x1000157c1000 7.629 MB
+W20240205 20:02:44.868613 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_6 [1000000]0x100015f64000 7.629 MB
+W20240205 20:02:44.868652 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_7 [1000000]0x100016707000 7.629 MB
+W20240205 20:02:44.868690 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_8 [1000000]0x100016eaa000 7.629 MB
+W20240205 20:02:44.868724 39450 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_9 [1000000]0x10001764d000 7.629 MB
+W20240205 20:02:44.868762 39450 IPCTensor.h:369] NewIPCTensor: step_r4 [10]0x100017df0000 80 B 
+W20240205 20:02:44.868788 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r4 [1]0x100017df2000 8 B 
+W20240205 20:02:44.868822 39450 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r4 [1]0x100017df4000 8 B 
+W20240205 20:02:45.088565 39450 IPCTensor.h:369] NewIPCTensor: full_emb [14951, 400]0x100017df6000 22.81 MB
+W20240205 20:02:45.179899 39450 IPCTensor.h:369] NewIPCTensor: full_emb_SparseRowWiseAdaGrad_sum [14951]0x1000194c8000 58.4 kB
+Convert a graph into a bidirected graph: 0.034 seconds, peak memory: 210.535 GB
+Construct multi-constraint weights: 0.000 seconds, peak memory: 210.535 GB
+Metis partitioning: 0.111 seconds, peak memory: 210.535 GB
+Split the graph: 0.057 seconds
+Construct subgraphs: 0.019 seconds
+MertisPartition: part 0 has 10222 N 137205 E
+MertisPartition: part 1 has 7861 N 113516 E
+MertisPartition: part 2 has 10587 N 145765 E
+MertisPartition: part 3 has 9264 N 181068 E
+MertisPartition: part 4 has 10248 N 191956 E
+Rank0: cached key size 149
+Rank1: cached key size 149
+Rank2: cached key size 149
+Rank3: cached key size 149
+Rank4: cached key size 149
+Before renumbering graph:  {'_ID': tensor([    7,    16,    18,  ..., 13890,  3788,  5916]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 1, 4, 2])}
+After renumbering graph:  {'_ID': tensor([  948,  1197,  1260,  ..., 13549,  2507,  8687]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 1, 4, 2])}
+part_g: DGLGraph(num_nodes=10222, num_edges=137205,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+part_g: DGLGraph(num_nodes=10222, num_edges=137205,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Total initialize time 4.993 seconds
+[Rank1] pid = 39681
+[Rank2] pid = 39709
+[Rank3] pid = 39810
+INFO [39450 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [39681 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [39709 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [39810 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [39874 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 4
+INFO [39810 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [39874 distributed_c10d.py:476] Rank 4: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [39709 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [39450 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+INFO [39681 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 5 nodes.
+W20240205 20:02:47.350961 39811 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_3 [747, 400]; dev=3; size=1.14 MB
+W20240205 20:02:47.351642 39875 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_0 [747, 400]; dev=0; size=1.14 MB
+W20240205 20:02:47.352449 39876 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_4 [747, 400]; dev=4; size=1.14 MB
+W20240205 20:02:47.352615 39746 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_2 [747, 400]; dev=2; size=1.14 MB
+W20240205 20:02:47.352615 39682 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_1 [747, 400]; dev=1; size=1.14 MB
+W20240205 20:02:47.387483 39811 IPCTensor.h:369] NewIPCTensor: input_keys_3 [1000000]0x1000194e2000 7.629 MB
+W20240205 20:02:47.387516 39875 IPCTensor.h:369] NewIPCTensor: input_keys_0 [1000000]0x100019c85000 7.629 MB
+W20240205 20:02:47.387557 39682 IPCTensor.h:369] NewIPCTensor: input_keys_1 [1000000]0x10001a428000 7.629 MB
+W20240205 20:02:47.387751 39746 IPCTensor.h:369] NewIPCTensor: input_keys_2 [1000000]0x10001abcb000 7.629 MB
+W20240205 20:02:47.387758 39876 IPCTensor.h:369] NewIPCTensor: input_keys_4 [1000000]0x10001b36e000 7.629 MB
+W20240205 20:02:47.387926 39682 IPCTensor.h:369] NewIPCTensor: input_keys_neg_1 [1000000]0x10001bb11000 7.629 MB
+W20240205 20:02:47.387951 39875 IPCTensor.h:369] NewIPCTensor: input_keys_neg_0 [1000000]0x10001c2b4000 7.629 MB
+W20240205 20:02:47.387996 39876 IPCTensor.h:369] NewIPCTensor: input_keys_neg_4 [1000000]0x10001ca57000 7.629 MB
+W20240205 20:02:47.388062 39875 IPCTensor.h:369] NewIPCTensor: backward_grads_0 [1000000, 400]0x10007c7dd000 1.49 GB
+W20240205 20:02:47.388058 39682 IPCTensor.h:369] NewIPCTensor: backward_grads_1 [1000000, 400]0x10001d1fa000 1.49 GB
+W20240205 20:02:47.388115 39811 IPCTensor.h:369] NewIPCTensor: input_keys_neg_3 [1000000]0x1000dbdc0000 7.629 MB
+W20240205 20:02:47.388124 39746 IPCTensor.h:369] NewIPCTensor: input_keys_neg_2 [1000000]0x1000dc563000 7.629 MB
+W20240205 20:02:47.388132 39876 IPCTensor.h:369] NewIPCTensor: backward_grads_4 [1000000, 400]0x1000dcd06000 1.49 GB
+W20240205 20:02:47.388135 39875 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_0 [1000000, 400]0x10013c2e9000 1.49 GB
+W20240205 20:02:47.388167 39682 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_1 [1000000, 400]0x10019b8cc000 1.49 GB
+W20240205 20:02:47.388219 39876 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_4 [1000000, 400]0x1001faeaf000 1.49 GB
+W20240205 20:02:47.388227 39811 IPCTensor.h:369] NewIPCTensor: backward_grads_3 [1000000, 400]0x10025a492000 1.49 GB
+W20240205 20:02:47.388226 39875 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240205 20:02:47.388245 39746 IPCTensor.h:369] NewIPCTensor: backward_grads_2 [1000000, 400]0x1002b9a75000 1.49 GB
+W20240205 20:02:47.388293 39746 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_2 [1000000, 400]0x100319058000 1.49 GB
+W20240205 20:02:47.388303 39811 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_3 [1000000, 400]0x10037863b000 1.49 GB
+W20240205 20:02:47.388314 39682 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+W20240205 20:02:47.388351 39876 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240205 20:02:47.393631 39811 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240205 20:02:47.393647 39746 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+W20240205 20:02:47.396921 39875 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_0_gpu [1000000, 400]; dev=0; size=1.49 GB
+W20240205 20:02:47.396932 39682 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_1_gpu [1000000, 400]; dev=1; size=1.49 GB
+W20240205 20:02:47.397043 39876 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_4_gpu [1000000, 400]; dev=4; size=1.49 GB
+W20240205 20:02:47.400018 39811 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_3_gpu [1000000, 400]; dev=3; size=1.49 GB
+W20240205 20:02:47.401463 39746 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_2_gpu [1000000, 400]; dev=2; size=1.49 GB
+cudaHostRegister 0x100017df6000
+4: KnownLocalCachedEmbedding init done
+WARNING [39874 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100017df6000
+2: KnownLocalCachedEmbedding init done
+WARNING [39709 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100017df6000
+1: KnownLocalCachedEmbedding init done
+WARNING [39681 DistTensor.py:59] The tensor name already exists in the kvstore
+cudaHostRegister 0x100017df6000
+3: KnownLocalCachedEmbedding init done
+WARNING [39810 DistTensor.py:59] The tensor name already exists in the kvstore
+[Rank4] pid = 39874
+New CachedEmbedding, name=full_emb, shape=(14951, 400), cache_type=KnownLocalCachedEmbedding
+fixed cache_range is [(0, 747), (747, 1494), (1494, 2241), (2241, 2988), (2988, 3735)]
+cudaHostRegister 0x100017df6000
+0: KnownLocalCachedEmbedding init done
+WARNING [39450 DistTensor.py:59] The tensor name already exists in the kvstore
+I20240205 20:02:49.061029 39682 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 5
+I20240205 20:02:49.061328 39875 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+I20240205 20:02:49.061465 39876 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+I20240205 20:02:49.061599 39746 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+I20240205 20:02:49.061812 39811 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 5
+W20240205 20:02:49.064625 39875 grad_base.h:55] KGCacheController, config={
+        "num_gpus": 5,
+        "L": 10,
+        "backgrad_init": "both", 
+        "kForwardItersPerStep": 2,
+        "clr": 0.01,
+        "nr_background_threads": 32,
+        "backwardMode": "CppAsyncV2",
+        "cache_ratio": 0.05,
+        "update_cache_use_omp":  0,
+        "update_pq_use_omp":  0
+        }
+W20240205 20:02:49.064971 39875 grad_base.h:184] Init GradProcessingBase done
+I20240205 20:02:49.074818 39875 grad_async_v2.h:42] Use main thread to update emb.
+W20240205 20:02:49.074906 39875 kg_controller.h:78] after init GradAsyncProcessingV2
+I20240205 20:02:49.074928 39875 kg_controller.h:84] Construct KGCacheController done
+E20240205 20:02:50.599037 39682 recstore.cc:66] init folly done
+E20240205 20:02:50.599227 39746 recstore.cc:66] init folly done
+E20240205 20:02:50.599229 39876 recstore.cc:66] init folly done
+E20240205 20:02:50.599257 39811 recstore.cc:66] init folly done
+E20240205 20:02:50.599634 39875 recstore.cc:66] init folly done
+I20240205 20:02:50.600764 39875 grad_base.h:60] GraphEnv RegTensorsPerProcess
+W20240205 20:02:51.061893 40304 grad_async_v2.h:137] Detect new sample comes, old_end0, new_end1
+E20240205 20:02:51.062309 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+I20240205 20:02:51.104547 39682 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 5
+I20240205 20:02:51.105895 39875 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+I20240205 20:02:51.108057 39811 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+I20240205 20:02:51.109352 39746 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+I20240205 20:02:51.109453 39876 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 5
+E20240205 20:02:52.683578 39875 parallel_pq_v2.h:79] insert failed, size(hashtable)=0
+W20240205 20:02:52.727320 40304 grad_async_v2.h:137] Detect new sample comes, old_end1, new_end2
+E20240205 20:02:52.760701 40073 grad_async_v2.h:404] Stalled in ProcessBackward: rank=0, step_no=1, sample_step_cpp_seen_[rank]=0
+W20240205 20:02:53.454573 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=14, pq.top=14
+E20240205 20:02:53.683019 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=239
+W20240205 20:02:53.807657 40304 grad_async_v2.h:137] Detect new sample comes, old_end3, new_end0
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.566 ms                  | 27.476 ms                 |
+| Forward                   | 6.199 ms                  | 576.596 ms                |
+| Backward                  | 4.987 ms                  | 231.445 ms                |
+| Optimize                  | 3.028 ms                  | 5.764 ms                  |
+| BarrierTimeBeforeRank0    | 1.017 ms                  | 20.364 ms                 |
+| AfterBackward             | 22.234 ms                 | 777.176 ms                |
+| BlockToStepN              | 69.874 us                 | 5.090 ms                  |
+| OneStep                   | 53.658 ms                 | 1.614 s                   |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:02:54.552544 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=29, pq.top=29
+E20240205 20:02:54.683017 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=75
+W20240205 20:02:54.819955 40304 grad_async_v2.h:137] Detect new sample comes, old_end9, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 293.752 us                | 8.132 ms                  |
+| ProcessBack:Shuffle       | 4.116 ms                  | 177.672 ms                |
+| ProcessBack:UpdateCache   | 4.368 ms                  | 398.625 ms                |
+| ProcessBack:UpsertPq      | 20.447 ms                 | 31.561 ms                 |
+| ProcessOneStep            | 30.628 ms                 | 776.156 ms                |
+| BlockToStepN              | 38.114 us                 | 5.018 ms                  |
++---------------------------+---------------------------+---------------------------+
+E20240205 20:02:55.719972 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=0
+W20240205 20:02:55.827992 40304 grad_async_v2.h:137] Detect new sample comes, old_end5, new_end6
+W20240205 20:02:55.896116 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=47, pq.top=47
+E20240205 20:02:56.719072 40306 parallel_pq_v2.h:79] insert failed, size(hashtable)=9491
+W20240205 20:02:56.843134 40304 grad_async_v2.h:137] Detect new sample comes, old_end1, new_end4
+W20240205 20:02:56.908388 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=65, pq.top=65
+E20240205 20:02:57.724520 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+E20240205 20:02:57.760002 40073 grad_async_v2.h:404] Stalled in ProcessBackward: rank=0, step_no=74, sample_step_cpp_seen_[rank]=73
+W20240205 20:02:57.869861 40304 grad_async_v2.h:137] Detect new sample comes, old_end1, new_end5
+W20240205 20:02:57.999255 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=75, pq.top=75
+E20240205 20:02:58.724007 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=1204
+W20240205 20:02:59.021034 40304 grad_async_v2.h:137] Detect new sample comes, old_end4, new_end1
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.650 ms                  | 32.451 ms                 |
+| Forward                   | 6.292 ms                  | 17.357 ms                 |
+| Backward                  | 4.820 ms                  | 8.587 ms                  |
+| Optimize                  | 2.846 ms                  | 6.255 ms                  |
+| BarrierTimeBeforeRank0    | 1.881 ms                  | 20.364 ms                 |
+| AfterBackward             | 31.901 ms                 | 546.138 ms                |
+| BlockToStepN              | 361.748 us                | 4.997 ms                  |
+| OneStep                   | 52.403 ms                 | 563.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:02:59.284149 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=91, pq.top=91
+E20240205 20:02:59.724007 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=71
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 2] 100 steps, total: 8.656, sample: 0.411, forward: 1.120, backward: 0.762, update: 0.244
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 3] 100 steps, total: 8.658, sample: 0.614, forward: 1.233, backward: 0.783, update: 0.310
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 4] 100 steps, total: 8.656, sample: 0.421, forward: 1.077, backward: 0.668, update: 0.234
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 1] 100 steps, total: 8.661, sample: 0.428, forward: 1.128, backward: 0.778, update: 0.252
+train_sampler.Prefill()
+-------Step 0-------
+tensor([11831,    45, 13637, 11270,   122,    14,  8384, 14157,  4400, 12173]) tensor([ 1260,  1634,   143,  4461,  4047,  9339,   472,  4057,  4914, 14788])
+-------Step 1-------
+tensor([11831,    45, 13637, 11270,   122,    14,  8384, 14157,  4400, 12173]) tensor([  181,  8486,  2983, 13063, 12813, 13051,  3848,  8362, 11134,  4533])
+-------Step 2-------
+tensor([   68, 11211, 10645, 13919,  7903, 12073, 12020, 11460,  4867,   126]) tensor([ 9256,  5115,  6516, 14766,  8254,  1099,  2332,   706, 11055,  1773])
+-------Step 3-------
+tensor([   68, 11211, 10645, 13919,  7903, 12073, 12020, 11460,  4867,   126]) tensor([14887,  2929,  6542,  6354, 11842,   402, 11030, 14608,   400,  2136])
+-------Step 4-------
+tensor([ 8435, 10077, 13386,  8681,  1806,  9439,  7357,  3920,  7207,  2226]) tensor([  466,  3520,  1021,  8007,  5629, 14539, 12745, 13706,  8390,   507])
+-------Step 5-------
+tensor([ 8435, 10077, 13386,  8681,  1806,  9439,  7357,  3920,  7207,  2226]) tensor([14205, 14688,  6828,  7326,  4096,  1056,  4260,  4740,  5608, 13231])
+-------Step 6-------
+tensor([  961,   327,  9122,  2700,    24, 10787, 13919,   125,   782, 10626]) tensor([13730, 10127, 11453,  8537,  9909,  2243,  3584, 13300, 11686,  7036])
+-------Step 7-------
+tensor([  961,   327,  9122,  2700,    24, 10787, 13919,   125,   782, 10626]) tensor([ 4915,  7825,  3730, 14259,   269,  9775, 11165, 12273,  5728,  8701])
+-------Step 8-------
+tensor([10515, 10095,   775,  6437,  3962,    80, 13405,  6307,  4378,  3079]) tensor([ 1342,   919,  4682, 13441,  6436, 12005,  5929, 11163, 13099,   990])
+-------Step 9-------
+tensor([10515, 10095,   775,  6437,  3962,    80, 13405,  6307,  4378,  3079]) tensor([ 9784,  3610, 11969,  5739, 13590, 11344,  4412, 13750,  9255,   629])
+before start barrier
+start train
+[proc 0] 100 steps, total: 8.660, sample: 0.511, forward: 1.224, backward: 0.721, update: 0.333
+W20240205 20:03:00.158804 40304 grad_async_v2.h:137] Detect new sample comes, old_end5, new_end6
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 328.715 us                | 4.842 ms                  |
+| ProcessBack:Shuffle       | 4.232 ms                  | 6.065 ms                  |
+| ProcessBack:UpdateCache   | 4.351 ms                  | 6.045 ms                  |
+| ProcessBack:UpsertPq      | 21.528 ms                 | 31.561 ms                 |
+| ProcessOneStep            | 31.653 ms                 | 546.077 ms                |
+| BlockToStepN              | 322.990 us                | 4.914 ms                  |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:00.608744 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=107, pq.top=107
+E20240205 20:03:00.724012 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=1324
+W20240205 20:03:01.334031 40304 grad_async_v2.h:137] Detect new sample comes, old_end0, new_end1
+E20240205 20:03:01.724164 40332 parallel_pq_v2.h:79] insert failed, size(hashtable)=6
+W20240205 20:03:01.892591 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=123, pq.top=123
+W20240205 20:03:02.416904 40304 grad_async_v2.h:137] Detect new sample comes, old_end5, new_end4
+E20240205 20:03:02.724280 40318 parallel_pq_v2.h:79] insert failed, size(hashtable)=9636
+E20240205 20:03:02.760007 40073 grad_async_v2.h:404] Stalled in ProcessBackward: rank=0, step_no=137, sample_step_cpp_seen_[rank]=136
+W20240205 20:03:03.267347 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=141, pq.top=141
+W20240205 20:03:03.444979 40304 grad_async_v2.h:137] Detect new sample comes, old_end9, new_end4
+E20240205 20:03:03.724012 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=889
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.595 ms                  | 32.660 ms                 |
+| Forward                   | 5.984 ms                  | 15.056 ms                 |
+| Backward                  | 4.902 ms                  | 7.479 ms                  |
+| Optimize                  | 2.893 ms                  | 16.416 ms                 |
+| BarrierTimeBeforeRank0    | 1.575 ms                  | 30.981 ms                 |
+| AfterBackward             | 30.918 ms                 | 448.430 ms                |
+| BlockToStepN              | 462.973 us                | 14.087 ms                 |
+| OneStep                   | 51.966 ms                 | 467.790 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:04.440829 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=154, pq.top=154
+W20240205 20:03:04.465281 40304 grad_async_v2.h:137] Detect new sample comes, old_end4, new_end5
+E20240205 20:03:04.724035 40328 parallel_pq_v2.h:79] insert failed, size(hashtable)=11687
+W20240205 20:03:05.576853 40304 grad_async_v2.h:137] Detect new sample comes, old_end3, new_end8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 260.534 us                | 8.553 ms                  |
+| ProcessBack:Shuffle       | 4.187 ms                  | 6.034 ms                  |
+| ProcessBack:UpdateCache   | 4.348 ms                  | 5.901 ms                  |
+| ProcessBack:UpsertPq      | 20.160 ms                 | 31.561 ms                 |
+| ProcessOneStep            | 30.558 ms                 | 448.316 ms                |
+| BlockToStepN              | 428.562 us                | 14.010 ms                 |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:05.704182 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=168, pq.top=168
+E20240205 20:03:05.724184 40321 parallel_pq_v2.h:79] insert failed, size(hashtable)=6941
+W20240205 20:03:06.671846 40304 grad_async_v2.h:137] Detect new sample comes, old_end5, new_end4
+E20240205 20:03:06.724092 40312 parallel_pq_v2.h:79] insert failed, size(hashtable)=7723
+W20240205 20:03:07.373310 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=186, pq.top=186
+E20240205 20:03:07.724040 40333 parallel_pq_v2.h:79] insert failed, size(hashtable)=5249
+W20240205 20:03:07.751729 40304 grad_async_v2.h:137] Detect new sample comes, old_end8, new_end2
+[proc 2] 200 steps, total: 8.500, sample: 0.451, forward: 0.551, backward: 0.530, update: 0.225
+[proc 1] 200 steps, total: 8.499, sample: 0.489, forward: 0.552, backward: 0.579, update: 0.230
+[proc 4] 200 steps, total: 8.499, sample: 0.497, forward: 0.504, backward: 0.453, update: 0.232
+[proc 3] 200 steps, total: 8.500, sample: 0.448, forward: 0.566, backward: 0.654, update: 0.223
+[proc 0] 200 steps, total: 8.499, sample: 0.526, forward: 0.549, backward: 0.481, update: 0.273
+E20240205 20:03:08.333709 39875 grad_async_v2.h:404] Stalled in ProcessBackward: rank=3, step_no=201, sample_step_cpp_seen_[rank]=200
+E20240205 20:03:08.724023 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+W20240205 20:03:08.757923 40304 grad_async_v2.h:137] Detect new sample comes, old_end8, new_end2
+W20240205 20:03:08.875720 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=202, pq.top=202
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.572 ms                  | 32.974 ms                 |
+| Forward                   | 5.848 ms                  | 15.056 ms                 |
+| Backward                  | 4.895 ms                  | 7.479 ms                  |
+| Optimize                  | 2.900 ms                  | 16.416 ms                 |
+| BarrierTimeBeforeRank0    | 1.657 ms                  | 30.981 ms                 |
+| AfterBackward             | 30.464 ms                 | 589.151 ms                |
+| BlockToStepN              | 590.764 us                | 14.087 ms                 |
+| OneStep                   | 52.154 ms                 | 625.128 ms                |
++---------------------------+---------------------------+---------------------------+
+E20240205 20:03:09.724159 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=6
+W20240205 20:03:09.760774 40304 grad_async_v2.h:137] Detect new sample comes, old_end8, new_end7
+W20240205 20:03:10.338888 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=218, pq.top=218
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 281.943 us                | 6.214 ms                  |
+| ProcessBack:Shuffle       | 4.203 ms                  | 6.065 ms                  |
+| ProcessBack:UpdateCache   | 4.289 ms                  | 5.743 ms                  |
+| ProcessBack:UpsertPq      | 20.209 ms                 | 37.347 ms                 |
+| ProcessOneStep            | 30.424 ms                 | 589.104 ms                |
+| BlockToStepN              | 553.725 us                | 14.010 ms                 |
++---------------------------+---------------------------+---------------------------+
+E20240205 20:03:10.724007 39875 parallel_pq_v2.h:79] insert failed, size(hashtable)=529
+W20240205 20:03:10.767273 40304 grad_async_v2.h:137] Detect new sample comes, old_end1, new_end5
+W20240205 20:03:11.440569 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=235, pq.top=235
+E20240205 20:03:11.724076 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=0
+W20240205 20:03:11.810035 40304 grad_async_v2.h:137] Detect new sample comes, old_end5, new_end6
+W20240205 20:03:12.469946 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=246, pq.top=246
+E20240205 20:03:12.724032 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=885
+W20240205 20:03:12.810957 40304 grad_async_v2.h:137] Detect new sample comes, old_end3, new_end2
+W20240205 20:03:13.546381 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=260, pq.top=260
+E20240205 20:03:13.724145 40304 parallel_pq_v2.h:79] insert failed, size(hashtable)=14
+W20240205 20:03:13.815579 40304 grad_async_v2.h:137] Detect new sample comes, old_end3, new_end4
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.636 ms                  | 35.180 ms                 |
+| Forward                   | 5.812 ms                  | 13.885 ms                 |
+| Backward                  | 4.912 ms                  | 7.296 ms                  |
+| Optimize                  | 2.881 ms                  | 9.134 ms                  |
+| BarrierTimeBeforeRank0    | 1.573 ms                  | 29.895 ms                 |
+| AfterBackward             | 30.797 ms                 | 549.727 ms                |
+| BlockToStepN              | 708.545 us                | 14.087 ms                 |
+| OneStep                   | 52.769 ms                 | 566.282 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:14.576572 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=277, pq.top=277
+E20240205 20:03:14.724007 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=1957
+W20240205 20:03:14.833561 40304 grad_async_v2.h:137] Detect new sample comes, old_end6, new_end1
+E20240205 20:03:15.319597 40073 grad_async_v2.h:404] Stalled in ProcessBackward: rank=4, step_no=289, sample_step_cpp_seen_[rank]=288
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 335.607 us                | 9.944 ms                  |
+| ProcessBack:Shuffle       | 4.254 ms                  | 5.718 ms                  |
+| ProcessBack:UpdateCache   | 4.261 ms                  | 5.634 ms                  |
+| ProcessBack:UpsertPq      | 21.092 ms                 | 37.347 ms                 |
+| ProcessOneStep            | 31.092 ms                 | 549.683 ms                |
+| BlockToStepN              | 651.238 us                | 14.010 ms                 |
++---------------------------+---------------------------+---------------------------+
+E20240205 20:03:15.724009 40328 parallel_pq_v2.h:79] insert failed, size(hashtable)=9062
+W20240205 20:03:15.836136 40304 grad_async_v2.h:137] Detect new sample comes, old_end3, new_end4
+W20240205 20:03:16.271263 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=300, pq.top=300
+[proc 1] 300 steps, total: 8.007, sample: 0.402, forward: 0.525, backward: 0.697, update: 0.225
+[proc 2] 300 steps, total: 8.006, sample: 0.414, forward: 0.539, backward: 0.502, update: 0.212
+[proc 3] 300 steps, total: 8.006, sample: 0.440, forward: 0.537, backward: 0.641, update: 0.212
+[proc 4] 300 steps, total: 8.006, sample: 0.403, forward: 0.489, backward: 0.443, update: 0.221
+[proc 0] 300 steps, total: 8.006, sample: 0.545, forward: 0.574, backward: 0.480, update: 0.284
+E20240205 20:03:16.724025 40306 parallel_pq_v2.h:79] insert failed, size(hashtable)=11369
+W20240205 20:03:16.882117 40304 grad_async_v2.h:137] Detect new sample comes, old_end6, new_end1
+W20240205 20:03:17.277338 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=317, pq.top=317
+E20240205 20:03:17.724007 40333 parallel_pq_v2.h:79] insert failed, size(hashtable)=13147
+W20240205 20:03:17.963696 40304 grad_async_v2.h:137] Detect new sample comes, old_end1, new_end7
+W20240205 20:03:18.348909 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=331, pq.top=331
+E20240205 20:03:18.724041 40307 parallel_pq_v2.h:79] insert failed, size(hashtable)=7045
+W20240205 20:03:19.009296 40304 grad_async_v2.h:137] Detect new sample comes, old_end9, new_end2
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.679 ms                  | 35.180 ms                 |
+| Forward                   | 5.837 ms                  | 13.885 ms                 |
+| Backward                  | 4.902 ms                  | 7.296 ms                  |
+| Optimize                  | 2.919 ms                  | 9.134 ms                  |
+| BarrierTimeBeforeRank0    | 1.337 ms                  | 29.895 ms                 |
+| AfterBackward             | 31.312 ms                 | 549.727 ms                |
+| BlockToStepN              | 789.877 us                | 14.087 ms                 |
+| OneStep                   | 52.727 ms                 | 566.282 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:19.420814 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=349, pq.top=349
+E20240205 20:03:19.724021 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=774
+W20240205 20:03:20.014847 40304 grad_async_v2.h:137] Detect new sample comes, old_end4, new_end8
+W20240205 20:03:20.420192 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=365, pq.top=365
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 346.176 us                | 9.407 ms                  |
+| ProcessBack:Shuffle       | 4.261 ms                  | 5.718 ms                  |
+| ProcessBack:UpdateCache   | 4.236 ms                  | 5.743 ms                  |
+| ProcessBack:UpsertPq      | 21.714 ms                 | 40.672 ms                 |
+| ProcessOneStep            | 31.330 ms                 | 546.077 ms                |
+| BlockToStepN              | 785.324 us                | 5.018 ms                  |
++---------------------------+---------------------------+---------------------------+
+E20240205 20:03:20.724009 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=5968
+W20240205 20:03:21.088194 40304 grad_async_v2.h:137] Detect new sample comes, old_end8, new_end5
+W20240205 20:03:21.450405 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=381, pq.top=381
+E20240205 20:03:21.552405 39875 grad_async_v2.h:404] Stalled in ProcessBackward: rank=4, step_no=382, sample_step_cpp_seen_[rank]=381
+E20240205 20:03:21.728176 39875 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+W20240205 20:03:22.094653 40304 grad_async_v2.h:137] Detect new sample comes, old_end8, new_end9
+W20240205 20:03:22.596870 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=397, pq.top=397
+E20240205 20:03:22.728029 40308 parallel_pq_v2.h:79] insert failed, size(hashtable)=5091
+[proc 1] 400 steps, total: 6.542, sample: 0.388, forward: 0.508, backward: 0.583, update: 0.226
+[proc 3] 400 steps, total: 6.542, sample: 0.421, forward: 0.532, backward: 0.592, update: 0.223
+[proc 4] 400 steps, total: 6.542, sample: 0.421, forward: 0.485, backward: 0.590, update: 0.224
+[proc 2] 400 steps, total: 6.542, sample: 0.389, forward: 0.529, backward: 0.538, update: 0.215
+[proc 0] 400 steps, total: 6.542, sample: 0.563, forward: 0.547, backward: 0.469, update: 0.298
+W20240205 20:03:23.097832 40304 grad_async_v2.h:137] Detect new sample comes, old_end4, new_end5
+W20240205 20:03:23.634213 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=414, pq.top=414
+E20240205 20:03:23.728070 40320 parallel_pq_v2.h:79] insert failed, size(hashtable)=9434
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.767 ms                  | 35.048 ms                 |
+| Forward                   | 5.698 ms                  | 13.337 ms                 |
+| Backward                  | 4.879 ms                  | 7.258 ms                  |
+| Optimize                  | 2.928 ms                  | 6.360 ms                  |
+| BarrierTimeBeforeRank0    | 1.038 ms                  | 30.981 ms                 |
+| AfterBackward             | 31.789 ms                 | 546.138 ms                |
+| BlockToStepN              | 917.818 us                | 5.090 ms                  |
+| OneStep                   | 53.693 ms                 | 563.593 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:24.101809 40304 grad_async_v2.h:137] Detect new sample comes, old_end8, new_end1
+W20240205 20:03:24.666213 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=430, pq.top=430
+E20240205 20:03:24.728013 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=876
+W20240205 20:03:25.111008 40304 grad_async_v2.h:137] Detect new sample comes, old_end6, new_end3
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 350.457 us                | 8.627 ms                  |
+| ProcessBack:Shuffle       | 4.240 ms                  | 5.718 ms                  |
+| ProcessBack:UpdateCache   | 4.200 ms                  | 5.634 ms                  |
+| ProcessBack:UpsertPq      | 22.268 ms                 | 38.583 ms                 |
+| ProcessOneStep            | 31.755 ms                 | 546.077 ms                |
+| BlockToStepN              | 927.222 us                | 5.018 ms                  |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:25.696261 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=439, pq.top=439
+E20240205 20:03:25.728102 40314 parallel_pq_v2.h:79] insert failed, size(hashtable)=9772
+W20240205 20:03:26.136844 40304 grad_async_v2.h:137] Detect new sample comes, old_end0, new_end6
+W20240205 20:03:26.713271 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=455, pq.top=455
+E20240205 20:03:26.728027 40315 parallel_pq_v2.h:79] insert failed, size(hashtable)=8082
+W20240205 20:03:27.194270 40304 grad_async_v2.h:137] Detect new sample comes, old_end6, new_end3
+E20240205 20:03:27.521612 39875 grad_async_v2.h:404] Stalled in ProcessBackward: rank=0, step_no=468, sample_step_cpp_seen_[rank]=467
+E20240205 20:03:27.728009 40333 parallel_pq_v2.h:79] insert failed, size(hashtable)=9324
+W20240205 20:03:27.760722 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=471, pq.top=471
+W20240205 20:03:28.345486 40304 grad_async_v2.h:137] Detect new sample comes, old_end9, new_end0
+E20240205 20:03:28.728016 40073 parallel_pq_v2.h:79] insert failed, size(hashtable)=336
+W20240205 20:03:28.914090 39875 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=488, pq.top=488
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 1.814 ms                  | 33.085 ms                 |
+| Forward                   | 5.632 ms                  | 12.597 ms                 |
+| Backward                  | 4.854 ms                  | 7.157 ms                  |
+| Optimize                  | 2.913 ms                  | 6.255 ms                  |
+| BarrierTimeBeforeRank0    | 1.201 ms                  | 31.374 ms                 |
+| AfterBackward             | 31.876 ms                 | 530.557 ms                |
+| BlockToStepN              | 1.125 ms                  | 4.997 ms                  |
+| OneStep                   | 54.008 ms                 | 548.668 ms                |
++---------------------------+---------------------------+---------------------------+
+W20240205 20:03:29.366990 40304 grad_async_v2.h:137] Detect new sample comes, old_end2, new_end3
+E20240205 20:03:29.728031 40305 parallel_pq_v2.h:79] insert failed, size(hashtable)=12111
+[proc 2] 500 steps, total: 7.017, sample: 0.411, forward: 0.507, backward: 0.531, update: 0.225
+[proc 4] 500 steps, total: 7.017, sample: 0.475, forward: 0.506, backward: 0.629, update: 0.233
+[proc 3] 500 steps, total: 7.017, sample: 0.389, forward: 0.507, backward: 0.496, update: 0.226
+[proc 0] 500 steps, total: 7.017, sample: 0.521, forward: 0.531, backward: 0.480, update: 0.275
+[proc 1] 500 steps, total: 7.018, sample: 0.430, forward: 0.483, backward: 0.559, update: 0.237
+Successfully xmh. training takes 38.72651028633118 seconds
+before call kg_cache_controller.StopThreads()
+W20240205 20:03:29.832393 39875 grad_async_v2.h:84] call StopThreads. PID = 39450
+W20240205 20:03:29.832432 39875 grad_base.h:212] before processOneStepNegThread_.join();
+W20240205 20:03:29.832788 39875 grad_base.h:214] after processOneStepNegThread_.join();
+W20240205 20:03:29.832805 39875 grad_async_v2.h:86] call GradProcessingBase::StopThreads.
+W20240205 20:03:29.909693 39875 grad_async_v2.h:105] StopThreads done.
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker4: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker3: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker1: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+[W tensorpipe_agent.cpp:725] RPC agent for worker0 encountered error when reading incoming request from worker2: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)
+On rank0, prepare to call self.controller.StopThreads(), self=<python.controller_process.KGCacheControllerWrapper object at 0x7ff4cc7785d0>
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 485.178 us                | 15.639 ms                 |
+| ProcessBack:Shuffle       | 4.217 ms                  | 6.023 ms                  |
+| ProcessBack:UpdateCache   | 4.164 ms                  | 5.725 ms                  |
+| ProcessBack:UpsertPq      | 22.292 ms                 | 37.347 ms                 |
+| ProcessOneStep            | 31.837 ms                 | 530.512 ms                |
+| BlockToStepN              | 1.054 ms                  | 4.914 ms                  |
++---------------------------+---------------------------+---------------------------+

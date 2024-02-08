@@ -312,8 +312,6 @@ def routine_local_cache_helper(worker_id, args):
     timer_Optimize = GPUTimer("Optimize")
     timer_NN = GPUTimer("NN")
     timer_onestep = Timer(f"OneStep")
-    timer_start = Timer(f"E2E-{args['log_interval']}")
-    timer_start.start()
 
     print("Before Training", flush=True)
 
@@ -416,8 +414,6 @@ def routine_local_cache_helper(worker_id, args):
                 f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.6f}", flush=True)
             start = time.time()
             start_step = _
-            timer_start.stop()
-            timer_start.start()
 
             if rank == 0:
                 Timer.Report()

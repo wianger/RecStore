@@ -51,6 +51,10 @@ if __name__ == "__main__":
 
     else:
 		# # 用这个
+        # each = exp_config.ExpMotivationDebug()
+        # each.SetLogDir(f'{LOG_PREFIX}/0208-debugmicro-{suffix}')
+        # exp_lists.append(each)
+
         each = exp_config.ExpMotivationPerfEmb()
         each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
         exp_lists.append(each)

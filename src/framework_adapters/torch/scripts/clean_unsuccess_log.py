@@ -14,6 +14,9 @@ for exp_path in tqdm.tqdm(all_exp_dirs):
     for run_path in tqdm.tqdm(log_files):
         run_id = run_path.split("/")[-1]
         logfile = glob.glob(f'{run_path}/log')
+        if len(logfile) != 1:
+            print(run_path)
+            continue
         assert len(logfile) == 1
         logfile = logfile[0]
 

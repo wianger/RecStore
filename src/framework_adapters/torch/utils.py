@@ -9,7 +9,7 @@ import torch.optim as optim
 import logging
 import time
 from contextlib import contextmanager
-from recstore import merge_op
+from recstore import merge_op, NarrowShapeTensor_op
 
 import torch as th
 
@@ -217,8 +217,15 @@ def print_rank0(msg):
         print(msg)
 
 
+_send_message_buffer = []
+_recv_message_buffer = []
+PRE_ALLOCATE_MESSAGE_BUFFER = True
+# PRE_ALLOCATE_MESSAGE_BUFFER = False
+
 @torch.no_grad()
-def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=False):
+def all2all_data_transfer(data, recv_shape, tag,
+                          dtype=torch.float,
+                          verbose=False):
     XLOG.debug("before all2all_data_transfer")
     rank, world_size = dist.get_rank(), dist.get_world_size()
     if verbose:
@@ -247,13 +254,30 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
     for i in range(1, world_size):
         idx = (rank + i) % world_size
         key = 'dst%d_tag%d' % (idx, tag)
-        if True or key not in _recv_cpu:
-            _send_cpu[key] = torch.zeros_like(
-                data[idx], dtype=dtype, device='cpu', pin_memory=True)
-            _recv_cpu[key] = torch.zeros(
-                recv_shape[idx].tolist(), dtype=dtype, pin_memory=True)
-        msg[idx] = _send_cpu[key]
-        res[idx] = _recv_cpu[key]
+
+        if not PRE_ALLOCATE_MESSAGE_BUFFER:
+            if True or key not in _recv_cpu:
+                _send_cpu[key] = torch.zeros_like(
+                    data[idx], dtype=dtype, device='cpu', pin_memory=True)
+                _recv_cpu[key] = torch.zeros(
+                    recv_shape[idx].tolist(), dtype=dtype, pin_memory=True)
+            msg[idx] = _send_cpu[key]
+            res[idx] = _recv_cpu[key]
+        else:
+            if len(_send_message_buffer) == 0:
+                for init_buffer_i in range(8):
+                    _send_message_buffer.append(
+                        torch.zeros(
+                            (int(1e6), 800), dtype=torch.float32, pin_memory=True, requires_grad=False)
+                    )
+                    _recv_message_buffer.append(
+                        torch.zeros(
+                            (int(1e6), 800), dtype=torch.float32, pin_memory=True, requires_grad=False)
+                    )
+            msg[idx] = NarrowShapeTensor_op(
+                _send_message_buffer[idx], data[idx].shape, dtype)
+            res[idx] = NarrowShapeTensor_op(
+                _recv_message_buffer[idx], recv_shape[idx].tolist(), dtype)
 
     for i in range(1, world_size):
         left = (rank - i + world_size) % world_size
@@ -284,69 +308,6 @@ def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=Fals
     return res
 
 
-# def all2all_data_transfer(data, recv_shape, tag, dtype=torch.float, verbose=False):
-#     rank, world_size = dist.get_rank(), dist.get_world_size()
-#     if verbose:
-#         XLOG.debug(f'{rank}, a2a, input={data}')
-
-#     if recv_shape is None:
-#         # first
-#         # shard_keys_sizes: [shard0_size, shard1_size, ...]
-#         shard_data_shapes = [torch.tensor(
-#             [each.shape], device=torch.device("cuda")).long() for each in data]
-
-#         for each in data[1:]:
-#             assert len(data[0].shape) == len(each.shape)
-
-#         per_shard_shapes = list(torch.empty(
-#             [world_size * len(each.shape)], dtype=torch.int64, device=torch.device("cuda")).chunk(world_size))
-
-#         dist.all_to_all(per_shard_shapes, shard_data_shapes,)
-#         # per_shard_size: [rank0_shape_in_mine, rank1_shape_in_mine, ....]
-#         recv_shape = per_shard_shapes
-
-#     if verbose:
-#         XLOG.debug(f'{rank}, recv_shape={recv_shape}')
-
-#     msg, res = [None] * world_size, [None] * world_size
-#     for i in range(1, world_size):
-#         idx = (rank + i) % world_size
-#         key = 'dst%d_tag%d' % (idx, tag)
-#         if True or key not in _recv_cpu:
-#             _send_cpu[key] = torch.zeros_like(
-#                 data[idx], dtype=dtype, device='cpu', pin_memory=True)
-#             _recv_cpu[key] = torch.zeros(
-#                 recv_shape[idx].tolist(), dtype=dtype, pin_memory=True)
-#         msg[idx] = _send_cpu[key]
-#         res[idx] = _recv_cpu[key]
-
-#     for i in range(1, world_size):
-#         left = (rank - i + world_size) % world_size
-#         right = (rank + i) % world_size
-#         msg[right].copy_(data[right])
-#         if verbose:
-#             XLOG.debug(f"{rank}, data[right]={data[right]}")
-#             XLOG.debug(f"{rank}, msg[right]={msg[right]}")
-
-#         if msg[right].nelement() != 0:
-#             req = dist.isend(msg[right], dst=right, tag=tag)
-#             if verbose:
-#                 XLOG.debug(f"{rank}->{right}, dist.isend, {msg[right]}")
-
-#         # XLOG.debug(f"{rank}, {res[left]}")
-#         if res[left].nelement() != 0:
-#             # XLOG.debug(f"{rank}<-{left}, before dist.recv, {res[left]}")
-#             dist.recv(res[left], src=left, tag=tag)
-#             # XLOG.debug(f"{rank}<-{left}, after dist.recv, {res[left]}")
-#         res[left] = res[left].cuda(non_blocking=True)
-
-#         if msg[right].nelement() != 0:
-#             req.wait()
-
-#     res[rank] = data[rank]
-#     return res
-
-
 @torch.no_grad()
 def gather_variable_shape_tensor(tensor, dst_rank=0):
     # assert tensor.ndim in all ranks are same
@@ -369,7 +330,7 @@ def gather_variable_shape_tensor(tensor, dst_rank=0):
     tag = 100
     if rank == dst_rank:
         res = [torch.empty(each.tolist(), dtype=tensor.dtype,
-                           device=torch.device("cuda")) for each in shape_list]
+                        device=torch.device("cuda")) for each in shape_list]
 
         req_list = []
         for i in range(1, world_size):

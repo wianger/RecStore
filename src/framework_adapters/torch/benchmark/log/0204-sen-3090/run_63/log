@@ -1,0 +1,941 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240205 19:12:14.800199 25062 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/_deprecate/graph.py:1023: DGLWarning: multigraph will be deprecated.DGL will treat all graphs as multigraph in the future.
+  dgl_warning("multigraph will be deprecated." \
+/data/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl-0.9.1/python/dgl/heterograph.py:72: DGLWarning: Recommend creating graphs by `dgl.graph(data)` instead of `dgl.DGLGraph(data)`.
+  dgl_warning('Recommend creating graphs by `dgl.graph(data)`'
+Reading train triples....
+Finished. Read 304727650 train triples.
+Reading valid triples....
+Finished. Read 16929318 valid triples.
+Reading test triples....
+Finished. Read 16929308 test triples.
+ARGS:  Namespace(model_name='TransE', data_path='/home/xieminhui/dgl-data', dataset='Freebase', format='built_in', data_files=None, delimiter='\t', save_path='/tmp/ckpts/TransE_Freebase_123', no_save_emb=True, max_step=500, batch_size=2000, batch_size_eval=16, neg_sample_size=200, neg_deg_sample=False, neg_deg_sample_eval=False, neg_sample_size_eval=86054151, eval_percent=1, no_eval_filter=False, log_interval=100, eval_interval=10000, test=False, num_proc=8, num_thread=1, force_sync_interval=1, hidden_dim=400, lr=0.01, gamma=16.0, double_ent=False, double_rel=False, neg_adversarial_sampling=False, adversarial_temperature=1.0, regularization_coef=0.0, regularization_norm=3, pairwise=False, loss_genre='Logsigmoid', margin=1.0, nr_gpus=8, gpu=[0, 1, 2, 3, 4, 5, 6, 7], mix_cpu_gpu=True, valid=False, rel_part=False, async_update=None, has_edge_importance=False, cached_emb_type='KnownShardedCachedEmbedding', use_my_emb=True, cache_ratio=0.05, shuffle=False, backwardMode='PySync', L=10, nr_background_threads=32, update_cache_use_omp=0, update_pq_use_omp=0, kForwardItersPerStep=2, backgrad_init='both', eval_filter=True, soft_rel_part=False)
+|Train|: 304727650
+original graph:  DGLGraph(num_nodes=86054151, num_edges=338586276,
+         ndata_schemes={}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Loading cached metis
+WARNING [25062 sampler.py:454] Start PreSampling
+WARNING [25062 sampler.py:532] Before construct renumbering_dict
+WARNING [25062 sampler.py:555] PreSampling done
+W20240205 19:31:53.800118 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_0 [1000000]0x100000002000 7.629 MB
+W20240205 19:31:53.800580 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_1 [1000000]0x1000007a5000 7.629 MB
+W20240205 19:31:53.800716 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_2 [1000000]0x100000f48000 7.629 MB
+W20240205 19:31:53.800850 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_3 [1000000]0x1000016eb000 7.629 MB
+W20240205 19:31:53.800958 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_4 [1000000]0x100001e8e000 7.629 MB
+W20240205 19:31:53.801064 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_5 [1000000]0x100002631000 7.629 MB
+W20240205 19:31:53.801170 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_6 [1000000]0x100002dd4000 7.629 MB
+W20240205 19:31:53.801317 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_7 [1000000]0x100003577000 7.629 MB
+W20240205 19:31:53.801435 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_8 [1000000]0x100003d1a000 7.629 MB
+W20240205 19:31:53.801534 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_9 [1000000]0x1000044bd000 7.629 MB
+W20240205 19:31:53.801654 25062 IPCTensor.h:369] NewIPCTensor: step_r0 [10]0x100004c60000 80 B 
+W20240205 19:31:53.801753 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r0 [1]0x100004c62000 8 B 
+W20240205 19:31:53.801862 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x100004c64000 8 B 
+W20240205 19:31:53.802263 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_0 [1000000]0x100004c66000 7.629 MB
+W20240205 19:31:53.802374 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_1 [1000000]0x100005409000 7.629 MB
+W20240205 19:31:53.802472 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_2 [1000000]0x100005bac000 7.629 MB
+W20240205 19:31:53.802613 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_3 [1000000]0x10000634f000 7.629 MB
+W20240205 19:31:53.802711 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_4 [1000000]0x100006af2000 7.629 MB
+W20240205 19:31:53.802820 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_5 [1000000]0x100007295000 7.629 MB
+W20240205 19:31:53.802911 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_6 [1000000]0x100007a38000 7.629 MB
+W20240205 19:31:53.803002 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_7 [1000000]0x1000081db000 7.629 MB
+W20240205 19:31:53.803093 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_8 [1000000]0x10000897e000 7.629 MB
+W20240205 19:31:53.803203 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r1_9 [1000000]0x100009121000 7.629 MB
+W20240205 19:31:53.803319 25062 IPCTensor.h:369] NewIPCTensor: step_r1 [10]0x1000098c4000 80 B 
+W20240205 19:31:53.803400 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r1 [1]0x1000098c6000 8 B 
+W20240205 19:31:53.803479 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r1 [1]0x1000098c8000 8 B 
+W20240205 19:31:53.803668 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_0 [1000000]0x1000098ca000 7.629 MB
+W20240205 19:31:53.803778 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_1 [1000000]0x10000a06d000 7.629 MB
+W20240205 19:31:53.803876 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_2 [1000000]0x10000a810000 7.629 MB
+W20240205 19:31:53.803999 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_3 [1000000]0x10000afb3000 7.629 MB
+W20240205 19:31:53.804122 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_4 [1000000]0x10000b756000 7.629 MB
+W20240205 19:31:53.804244 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_5 [1000000]0x10000bef9000 7.629 MB
+W20240205 19:31:53.804356 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_6 [1000000]0x10000c69c000 7.629 MB
+W20240205 19:31:53.804468 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_7 [1000000]0x10000ce3f000 7.629 MB
+W20240205 19:31:53.804567 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_8 [1000000]0x10000d5e2000 7.629 MB
+W20240205 19:31:53.804682 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r2_9 [1000000]0x10000dd85000 7.629 MB
+W20240205 19:31:53.804795 25062 IPCTensor.h:369] NewIPCTensor: step_r2 [10]0x10000e528000 80 B 
+W20240205 19:31:53.804876 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r2 [1]0x10000e52a000 8 B 
+W20240205 19:31:53.804955 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r2 [1]0x10000e52c000 8 B 
+W20240205 19:31:53.805153 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_0 [1000000]0x10000e52e000 7.629 MB
+W20240205 19:31:53.805263 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_1 [1000000]0x10000ecd1000 7.629 MB
+W20240205 19:31:53.805362 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_2 [1000000]0x10000f474000 7.629 MB
+W20240205 19:31:53.805455 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_3 [1000000]0x10000fc17000 7.629 MB
+W20240205 19:31:53.805562 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_4 [1000000]0x1000103ba000 7.629 MB
+W20240205 19:31:53.805656 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_5 [1000000]0x100010b5d000 7.629 MB
+W20240205 19:31:53.805749 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_6 [1000000]0x100011300000 7.629 MB
+W20240205 19:31:53.805842 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_7 [1000000]0x100011aa3000 7.629 MB
+W20240205 19:31:53.805958 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_8 [1000000]0x100012246000 7.629 MB
+W20240205 19:31:53.806074 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r3_9 [1000000]0x1000129e9000 7.629 MB
+W20240205 19:31:53.806185 25062 IPCTensor.h:369] NewIPCTensor: step_r3 [10]0x10001318c000 80 B 
+W20240205 19:31:53.806264 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r3 [1]0x10001318e000 8 B 
+W20240205 19:31:53.806344 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r3 [1]0x100013190000 8 B 
+W20240205 19:31:53.806541 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_0 [1000000]0x100013192000 7.629 MB
+W20240205 19:31:53.806661 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_1 [1000000]0x100013935000 7.629 MB
+W20240205 19:31:53.806779 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_2 [1000000]0x1000140d8000 7.629 MB
+W20240205 19:31:53.806879 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_3 [1000000]0x10001487b000 7.629 MB
+W20240205 19:31:53.806980 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_4 [1000000]0x10001501e000 7.629 MB
+W20240205 19:31:53.807080 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_5 [1000000]0x1000157c1000 7.629 MB
+W20240205 19:31:53.807193 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_6 [1000000]0x100015f64000 7.629 MB
+W20240205 19:31:53.807287 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_7 [1000000]0x100016707000 7.629 MB
+W20240205 19:31:53.807400 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_8 [1000000]0x100016eaa000 7.629 MB
+W20240205 19:31:53.807490 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r4_9 [1000000]0x10001764d000 7.629 MB
+W20240205 19:31:53.807585 25062 IPCTensor.h:369] NewIPCTensor: step_r4 [10]0x100017df0000 80 B 
+W20240205 19:31:53.807658 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r4 [1]0x100017df2000 8 B 
+W20240205 19:31:53.807730 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r4 [1]0x100017df4000 8 B 
+W20240205 19:31:53.807893 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_0 [1000000]0x100017df6000 7.629 MB
+W20240205 19:31:53.807991 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_1 [1000000]0x100018599000 7.629 MB
+W20240205 19:31:53.808096 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_2 [1000000]0x100018d3c000 7.629 MB
+W20240205 19:31:53.808225 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_3 [1000000]0x1000194df000 7.629 MB
+W20240205 19:31:53.808331 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_4 [1000000]0x100019c82000 7.629 MB
+W20240205 19:31:53.808418 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_5 [1000000]0x10001a425000 7.629 MB
+W20240205 19:31:53.808511 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_6 [1000000]0x10001abc8000 7.629 MB
+W20240205 19:31:53.808609 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_7 [1000000]0x10001b36b000 7.629 MB
+W20240205 19:31:53.808702 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_8 [1000000]0x10001bb0e000 7.629 MB
+W20240205 19:31:53.808799 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r5_9 [1000000]0x10001c2b1000 7.629 MB
+W20240205 19:31:53.808902 25062 IPCTensor.h:369] NewIPCTensor: step_r5 [10]0x10001ca54000 80 B 
+W20240205 19:31:53.808977 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r5 [1]0x10001ca56000 8 B 
+W20240205 19:31:53.809062 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r5 [1]0x10001ca58000 8 B 
+W20240205 19:31:53.809229 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_0 [1000000]0x10001ca5a000 7.629 MB
+W20240205 19:31:53.809325 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_1 [1000000]0x10001d1fd000 7.629 MB
+W20240205 19:31:53.809437 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_2 [1000000]0x10001d9a0000 7.629 MB
+W20240205 19:31:53.809526 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_3 [1000000]0x10001e143000 7.629 MB
+W20240205 19:31:53.809629 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_4 [1000000]0x10001e8e6000 7.629 MB
+W20240205 19:31:53.809718 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_5 [1000000]0x10001f089000 7.629 MB
+W20240205 19:31:53.809813 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_6 [1000000]0x10001f82c000 7.629 MB
+W20240205 19:31:53.809908 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_7 [1000000]0x10001ffcf000 7.629 MB
+W20240205 19:31:53.810022 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_8 [1000000]0x100020772000 7.629 MB
+W20240205 19:31:53.810153 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r6_9 [1000000]0x100020f15000 7.629 MB
+W20240205 19:31:53.810262 25062 IPCTensor.h:369] NewIPCTensor: step_r6 [10]0x1000216b8000 80 B 
+W20240205 19:31:53.810338 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r6 [1]0x1000216ba000 8 B 
+W20240205 19:31:53.810410 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r6 [1]0x1000216bc000 8 B 
+W20240205 19:31:53.810567 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_0 [1000000]0x1000216be000 7.629 MB
+W20240205 19:31:53.810675 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_1 [1000000]0x100021e61000 7.629 MB
+W20240205 19:31:53.810766 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_2 [1000000]0x100022604000 7.629 MB
+W20240205 19:31:53.810861 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_3 [1000000]0x100022da7000 7.629 MB
+W20240205 19:31:53.810951 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_4 [1000000]0x10002354a000 7.629 MB
+W20240205 19:31:53.811041 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_5 [1000000]0x100023ced000 7.629 MB
+W20240205 19:31:53.811131 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_6 [1000000]0x100024490000 7.629 MB
+W20240205 19:31:53.811221 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_7 [1000000]0x100024c33000 7.629 MB
+W20240205 19:31:53.811321 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_8 [1000000]0x1000253d6000 7.629 MB
+W20240205 19:31:53.811431 25062 IPCTensor.h:369] NewIPCTensor: cached_sampler_r7_9 [1000000]0x100025b79000 7.629 MB
+W20240205 19:31:53.811529 25062 IPCTensor.h:369] NewIPCTensor: step_r7 [10]0x10002631c000 80 B 
+W20240205 19:31:53.811605 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r7 [1]0x10002631e000 8 B 
+W20240205 19:31:53.811695 25062 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r7 [1]0x100026320000 8 B 
+W20240205 19:31:54.264776 25062 IPCTensor.h:369] NewIPCTensor: full_emb [86054151, 400]0x100026322000 128.2 GB
+W20240205 19:40:32.081533 25062 IPCTensor.h:369] NewIPCTensor: full_emb_SparseRowWiseAdaGrad_sum [86054151]0x102034f5a000 328.3 MB
+{0: Graph(num_nodes=18863774, num_edges=55186826,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 1: Graph(num_nodes=13493829, num_edges=51786811,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 2: Graph(num_nodes=12506959, num_edges=45797296,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 3: Graph(num_nodes=12605014, num_edges=52067933,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 4: Graph(num_nodes=14435508, num_edges=39101576,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 5: Graph(num_nodes=13252778, num_edges=37365728,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 6: Graph(num_nodes=14444909, num_edges=60122064,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)}), 7: Graph(num_nodes=14493336, num_edges=37760331,
+      ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_node': Scheme(shape=(), dtype=torch.int32), 'part_id': Scheme(shape=(), dtype=torch.int64)}
+      edata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64), 'inner_edge': Scheme(shape=(), dtype=torch.int8)})}
+MertisPartition: part 0 has 18863774 N 55186826 E
+MertisPartition: part 1 has 13493829 N 51786811 E
+MertisPartition: part 2 has 12506959 N 45797296 E
+MertisPartition: part 3 has 12605014 N 52067933 E
+MertisPartition: part 4 has 14435508 N 39101576 E
+MertisPartition: part 5 has 13252778 N 37365728 E
+MertisPartition: part 6 has 14444909 N 60122064 E
+MertisPartition: part 7 has 14493336 N 37760331 E
+Rank0: cached key size 537838
+Rank1: cached key size 537838
+Rank2: cached key size 537838
+Rank3: cached key size 537838
+Rank4: cached key size 537838
+Rank5: cached key size 537838
+Rank6: cached key size 537838
+Rank7: cached key size 537838
+Before renumbering graph:  {'_ID': tensor([       0,        1,        2,  ..., 39512110,  9797409, 32293938]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 6, 6])}
+After renumbering graph:  {'_ID': tensor([ 4302720,  4302751,    98538,  ..., 71162891, 49799867,  4925698]), 'inner_node': tensor([1, 1, 1,  ..., 0, 0, 0], dtype=torch.int32), 'part_id': tensor([0, 0, 0,  ..., 6, 6, 6])}
+part_g: DGLGraph(num_nodes=18863774, num_edges=55186826,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+part_g: DGLGraph(num_nodes=18863774, num_edges=55186826,
+         ndata_schemes={'_ID': Scheme(shape=(), dtype=torch.int64)}
+         edata_schemes={'tid': Scheme(shape=(), dtype=torch.int64)})
+Total initialize time 2184.191 seconds
+[Rank1] pid = 26290
+[Rank2] pid = 26395
+[Rank3] pid = 26464
+[Rank4] pid = 26531
+[Rank5] pid = 26598
+[Rank6] pid = 26665
+INFO [25062 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [26290 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 1
+INFO [26395 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 2
+INFO [26598 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 5
+INFO [26464 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 3
+INFO [26665 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 6
+INFO [26531 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 4
+INFO [25062 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26290 distributed_c10d.py:476] Rank 1: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26665 distributed_c10d.py:476] Rank 6: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26598 distributed_c10d.py:476] Rank 5: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26531 distributed_c10d.py:476] Rank 4: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26464 distributed_c10d.py:476] Rank 3: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26734 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 7
+INFO [26395 distributed_c10d.py:476] Rank 2: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+INFO [26734 distributed_c10d.py:476] Rank 7: Completed store-based barrier for key:store_based_barrier_key:1 with 8 nodes.
+WARNING [26665 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [25062 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [26531 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [26290 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [26395 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [26464 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [26598 DistTensor.py:59] The tensor name already exists in the kvstore
+WARNING [26734 DistTensor.py:59] The tensor name already exists in the kvstore
+I20240205 19:48:59.583926 26735 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.584985 26599 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.585186 26465 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.585407 26291 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.585604 26798 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.585776 26532 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.585955 26396 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+I20240205 19:48:59.586123 26666 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: kgcachecontroller, count: 8
+E20240205 19:49:01.329269 26465 recstore.cc:66] init folly done
+E20240205 19:49:01.330160 26735 recstore.cc:66] init folly done
+E20240205 19:49:01.330199 26666 recstore.cc:66] init folly done
+E20240205 19:49:01.330518 26599 recstore.cc:66] init folly done
+E20240205 19:49:01.330531 26532 recstore.cc:66] init folly done
+E20240205 19:49:01.330564 26291 recstore.cc:66] init folly done
+E20240205 19:49:01.330567 26798 recstore.cc:66] init folly done
+E20240205 19:49:01.330574 26396 recstore.cc:66] init folly done
+I20240205 19:49:07.138336 26735 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 8
+I20240205 19:49:07.151973 26532 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240205 19:49:07.206641 26599 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240205 19:49:08.721140 26396 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240205 19:49:09.488895 26798 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240205 19:49:09.564585 26465 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240205 19:49:09.731361 26291 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
+I20240205 19:49:10.185068 26666 IPC_barrier.h:112] CreateBarrier: find existing barrier, name: start_barrier, count: 8
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 6.911 ms                  | 17.441 ms                 |
+| bucket keys               | 2.947 ms                  | 126.041 ms                |
+| forward: a2a keys         | 5.417 ms                  | 1.264 s                   |
+| forward: search cache     | 474.099 us                | 27.180 ms                 |
+| forward: a2a values       | 7.421 ms                  | 47.850 ms                 |
+| forward: join             | 1.842 ms                  | 2.903 ms                  |
+| Forward                   | 55.100 ms                 | 1.966 s                   |
+| back: aggr dram keys      | 23.978 ms                 | 908.245 ms                |
+| back: set dram grad       | 3.215 ms                  | 24.297 ms                 |
+| back: a2a grad            | 12.923 ms                 | 53.339 ms                 |
+| back: grad sum & grad cache  | 4.863 ms                  | 144.371 ms                |
+| Backward                  | 335.087 ms                | 1.331 s                   |
+| Optimize                  | 36.446 ms                 | 39.702 ms                 |
+| BarrierTimeBeforeRank0    | 64.800 us                 | 67.431 us                 |
+| BlockToStepN              | 30.257 us                 | 77.720 us                 |
+| OneStep                   | 429.347 ms                | 3.356 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 7.632 ms                  | 88.116 ms                 |
+| bucket keys               | 3.575 ms                  | 126.041 ms                |
+| forward: a2a keys         | 5.786 ms                  | 1.264 s                   |
+| forward: search cache     | 469.699 us                | 27.180 ms                 |
+| forward: a2a values       | 7.421 ms                  | 47.850 ms                 |
+| forward: join             | 2.001 ms                  | 4.413 ms                  |
+| Forward                   | 59.308 ms                 | 1.966 s                   |
+| back: aggr dram keys      | 38.572 ms                 | 908.245 ms                |
+| back: set dram grad       | 3.215 ms                  | 24.297 ms                 |
+| back: a2a grad            | 21.806 ms                 | 53.339 ms                 |
+| back: grad sum & grad cache  | 6.809 ms                  | 151.400 ms                |
+| Backward                  | 265.662 ms                | 1.331 s                   |
+| Optimize                  | 29.224 ms                 | 39.702 ms                 |
+| BarrierTimeBeforeRank0    | 56.474 us                 | 83.472 us                 |
+| BlockToStepN              | 46.339 us                 | 12.213 ms                 |
+| OneStep                   | 385.037 ms                | 3.356 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 5.729 ms                  | 88.116 ms                 |
+| bucket keys               | 3.457 ms                  | 4.375 ms                  |
+| forward: a2a keys         | 6.152 ms                  | 113.711 ms                |
+| forward: search cache     | 471.369 us                | 749.822 us                |
+| forward: a2a values       | 7.421 ms                  | 39.982 ms                 |
+| forward: join             | 2.001 ms                  | 3.666 ms                  |
+| Forward                   | 58.712 ms                 | 1.966 s                   |
+| back: aggr dram keys      | 38.572 ms                 | 113.599 ms                |
+| back: set dram grad       | 3.215 ms                  | 14.119 ms                 |
+| back: a2a grad            | 23.438 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 6.809 ms                  | 150.395 ms                |
+| Backward                  | 267.219 ms                | 1.331 s                   |
+| Optimize                  | 28.069 ms                 | 51.947 ms                 |
+| BarrierTimeBeforeRank0    | 50.710 us                 | 83.472 us                 |
+| BlockToStepN              | 50.661 us                 | 12.213 ms                 |
+| OneStep                   | 377.500 ms                | 3.356 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 5.729 ms                  | 105.625 ms                |
+| bucket keys               | 3.563 ms                  | 5.573 ms                  |
+| forward: a2a keys         | 6.388 ms                  | 113.711 ms                |
+| forward: search cache     | 471.412 us                | 1.275 ms                  |
+| forward: a2a values       | 16.436 ms                 | 39.982 ms                 |
+| forward: join             | 2.614 ms                  | 3.666 ms                  |
+| Forward                   | 59.780 ms                 | 1.966 s                   |
+| back: aggr dram keys      | 38.572 ms                 | 113.599 ms                |
+| back: set dram grad       | 3.215 ms                  | 14.119 ms                 |
+| back: a2a grad            | 23.383 ms                 | 50.450 ms                 |
+| back: grad sum & grad cache  | 7.279 ms                  | 150.395 ms                |
+| Backward                  | 265.521 ms                | 1.331 s                   |
+| Optimize                  | 27.143 ms                 | 51.947 ms                 |
+| BarrierTimeBeforeRank0    | 50.061 us                 | 83.472 us                 |
+| BlockToStepN              | 55.598 us                 | 12.213 ms                 |
+| OneStep                   | 367.100 ms                | 3.356 s                   |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 6.074 ms                  | 88.116 ms                 |
+| bucket keys               | 3.563 ms                  | 5.573 ms                  |
+| forward: a2a keys         | 6.395 ms                  | 113.711 ms                |
+| forward: search cache     | 471.412 us                | 1.275 ms                  |
+| forward: a2a values       | 9.268 ms                  | 39.982 ms                 |
+| forward: join             | 2.614 ms                  | 3.666 ms                  |
+| Forward                   | 58.783 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 38.572 ms                 | 113.599 ms                |
+| back: set dram grad       | 3.215 ms                  | 14.119 ms                 |
+| back: a2a grad            | 22.539 ms                 | 50.450 ms                 |
+| back: grad sum & grad cache  | 7.279 ms                  | 150.395 ms                |
+| Backward                  | 259.669 ms                | 335.087 ms                |
+| Optimize                  | 26.634 ms                 | 39.702 ms                 |
+| BarrierTimeBeforeRank0    | 48.252 us                 | 77.376 us                 |
+| BlockToStepN              | 55.598 us                 | 8.844 ms                  |
+| OneStep                   | 361.368 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 5.497 ms                  | 88.116 ms                 |
+| bucket keys               | 3.563 ms                  | 5.573 ms                  |
+| forward: a2a keys         | 6.336 ms                  | 113.711 ms                |
+| forward: search cache     | 471.369 us                | 1.275 ms                  |
+| forward: a2a values       | 9.268 ms                  | 39.982 ms                 |
+| forward: join             | 2.614 ms                  | 3.666 ms                  |
+| Forward                   | 58.427 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 38.572 ms                 | 113.599 ms                |
+| back: set dram grad       | 3.215 ms                  | 14.119 ms                 |
+| back: a2a grad            | 22.539 ms                 | 50.450 ms                 |
+| back: grad sum & grad cache  | 7.279 ms                  | 150.395 ms                |
+| Backward                  | 258.094 ms                | 335.087 ms                |
+| Optimize                  | 26.535 ms                 | 39.702 ms                 |
+| BarrierTimeBeforeRank0    | 43.374 us                 | 77.376 us                 |
+| BlockToStepN              | 51.601 us                 | 8.844 ms                  |
+| OneStep                   | 355.008 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.967 ms                  | 88.116 ms                 |
+| bucket keys               | 3.572 ms                  | 5.573 ms                  |
+| forward: a2a keys         | 6.160 ms                  | 68.384 ms                 |
+| forward: search cache     | 471.035 us                | 1.259 ms                  |
+| forward: a2a values       | 9.268 ms                  | 34.013 ms                 |
+| forward: join             | 2.614 ms                  | 3.583 ms                  |
+| Forward                   | 58.427 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 56.598 ms                 | 98.789 ms                 |
+| back: set dram grad       | 3.837 ms                  | 5.883 ms                  |
+| back: a2a grad            | 22.741 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 7.279 ms                  | 144.371 ms                |
+| Backward                  | 259.045 ms                | 335.087 ms                |
+| Optimize                  | 26.646 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 42.612 us                 | 77.376 us                 |
+| BlockToStepN              | 53.731 us                 | 8.844 ms                  |
+| OneStep                   | 355.008 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 5.166 ms                  | 94.916 ms                 |
+| bucket keys               | 3.572 ms                  | 5.573 ms                  |
+| forward: a2a keys         | 6.322 ms                  | 113.711 ms                |
+| forward: search cache     | 471.293 us                | 1.259 ms                  |
+| forward: a2a values       | 10.740 ms                 | 34.013 ms                 |
+| forward: join             | 2.614 ms                  | 3.666 ms                  |
+| Forward                   | 58.712 ms                 | 191.325 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 98.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 5.883 ms                  |
+| back: a2a grad            | 22.768 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 8.041 ms                  | 144.371 ms                |
+| Backward                  | 258.079 ms                | 335.087 ms                |
+| Optimize                  | 26.683 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 43.374 us                 | 77.376 us                 |
+| BlockToStepN              | 55.145 us                 | 16.334 ms                 |
+| OneStep                   | 354.530 ms                | 570.873 ms                |
++---------------------------+---------------------------+---------------------------+
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 5] 100 steps, total: 42.885, sample: 1.412, forward: 8.983, backward: 14.665, update: 0.440
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 7] 100 steps, total: 42.953, sample: 1.879, forward: 8.440, backward: 14.995, update: 0.464
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 1] 100 steps, total: 40.360, sample: 1.240, forward: 9.085, backward: 15.448, update: 0.424
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 3] 100 steps, total: 40.527, sample: 1.247, forward: 9.120, backward: 14.876, update: 0.448
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 2] 100 steps, total: 41.370, sample: 1.051, forward: 9.257, backward: 15.023, update: 0.402
+[Rank7] pid = 26734
+New CachedEmbedding, name=full_emb, shape=(86054151, 400), cache_type=KnownShardedCachedEmbedding
+fixed cache_range is [(0, 4302707), (4302707, 8605414), (8605414, 12908121), (12908121, 17210828), (17210828, 21513535), (21513535, 25816242), (25816242, 30118949), (30118949, 34421656)]
+train_sampler.Prefill()
+-------Step 0-------
+tensor([   38982,    39014,    39039,    39075,  5943579,    85116, 58082350,
+        20558647, 21236087,    39096]) tensor([ 5173140, 17725393, 70337765, 71799383, 23205979, 34438045, 32014825,
+        68349892, 79293166, 33484905])
+-------Step 1-------
+tensor([   38982,    39014,    39039,    39075,  5943579,    85116, 58082350,
+        20558647, 21236087,    39096]) tensor([78088507, 33056972, 12151755, 85025005, 72698107, 36480006, 64010657,
+        56117648, 43230334, 15087582])
+-------Step 2-------
+tensor([   98348,    98378,    98395,    20416,    98423,    98450,    98469,
+        22475046,    98489,    98518]) tensor([59289347, 27409958, 79832541, 57332267, 36042310, 28307461, 78268016,
+        47958212, 15108173, 35721565])
+-------Step 3-------
+tensor([   98348,    98378,    98395,    20416,    98423,    98450,    98469,
+        22475046,    98489,    98518]) tensor([57091356, 73152770, 40219514, 40738875, 72428888, 57515316, 32613083,
+        18948886, 30155053,   735139])
+-------Step 4-------
+tensor([  157868, 51541503,   157895,   107367,   157921,   107383,   157941,
+        42304938,   157972,   157992]) tensor([69720087, 11147311, 74420567, 20596567, 77986747, 37921182, 73287671,
+        40049420, 85504474, 58276364])
+-------Step 5-------
+tensor([  157868, 51541503,   157895,   107367,   157921,   107383,   157941,
+        42304938,   157972,   157992]) tensor([30440330, 82220417,   357296, 82568866, 58991575, 62198359, 15904013,
+        10617768, 79658232, 45453109])
+-------Step 6-------
+tensor([  216520,    43000,   216540,   216561,    43018, 78840831,   216589,
+          216609,   118413, 39016908]) tensor([14839128, 44209187, 30911370, 72646799, 28906948, 32054457, 21760409,
+         6534028, 56056334, 84842590])
+-------Step 7-------
+tensor([  216520,    43000,   216540,   216561,    43018, 78840831,   216589,
+          216609,   118413, 39016908]) tensor([28419501, 46626742, 78152504, 50235982, 71990521, 44086764, 62663191,
+        65604863, 41207268, 37048095])
+-------Step 8-------
+tensor([  274075, 27055771,   274100,   128585,   274123,    53869,   274147,
+          274175,   274196,   274226]) tensor([51649397, 22387071, 39356718,  1870193, 44237997, 58117272, 13417220,
+        78456957,  1472132, 54045225])
+-------Step 9-------
+tensor([  274075, 27055771,   274100,   128585,   274123,    53869,   274147,
+          274175,   274196,   274226]) tensor([58454121, 37823314, 12527375, 60290212, 10114217, 35375388, 31499986,
+        44217867, 85217547, 71866858])
+before start barrier
+start train
+[proc 0] 100 steps, total: 40.603, sample: 1.275, forward: 8.487, backward: 27.144, update: 2.811
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 6] 100 steps, total: 39.906, sample: 1.252, forward: 9.096, backward: 14.714, update: 0.372
+train_sampler.Prefill()
+before start barrier
+start train
+[proc 4] 100 steps, total: 42.939, sample: 1.036, forward: 9.289, backward: 14.707, update: 0.458
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 5.084 ms                  | 94.916 ms                 |
+| bucket keys               | 3.243 ms                  | 5.573 ms                  |
+| forward: a2a keys         | 6.336 ms                  | 113.711 ms                |
+| forward: search cache     | 471.369 us                | 1.259 ms                  |
+| forward: a2a values       | 12.219 ms                 | 34.013 ms                 |
+| forward: join             | 2.641 ms                  | 3.666 ms                  |
+| Forward                   | 58.900 ms                 | 191.325 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 100.352 ms                |
+| back: set dram grad       | 3.215 ms                  | 5.883 ms                  |
+| back: a2a grad            | 22.768 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 144.371 ms                |
+| Backward                  | 255.740 ms                | 335.087 ms                |
+| Optimize                  | 26.646 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 42.867 us                 | 77.376 us                 |
+| BlockToStepN              | 55.801 us                 | 16.334 ms                 |
+| OneStep                   | 355.008 ms                | 570.873 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.728 ms                  | 94.916 ms                 |
+| bucket keys               | 3.243 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.336 ms                  | 111.634 ms                |
+| forward: search cache     | 471.335 us                | 1.257 ms                  |
+| forward: a2a values       | 12.219 ms                 | 32.181 ms                 |
+| forward: join             | 2.641 ms                  | 3.615 ms                  |
+| Forward                   | 58.900 ms                 | 191.325 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 98.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 5.786 ms                  |
+| back: a2a grad            | 22.768 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 144.371 ms                |
+| Backward                  | 254.108 ms                | 335.087 ms                |
+| Optimize                  | 26.634 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 41.804 us                 | 77.376 us                 |
+| BlockToStepN              | 56.416 us                 | 16.334 ms                 |
+| OneStep                   | 355.109 ms                | 570.873 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.549 ms                  | 94.916 ms                 |
+| bucket keys               | 3.438 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.307 ms                  | 111.634 ms                |
+| forward: search cache     | 471.293 us                | 1.257 ms                  |
+| forward: a2a values       | 12.219 ms                 | 34.013 ms                 |
+| forward: join             | 2.641 ms                  | 3.615 ms                  |
+| Forward                   | 58.783 ms                 | 191.325 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 98.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 6.168 ms                  |
+| back: a2a grad            | 22.768 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 147.880 ms                |
+| Backward                  | 252.960 ms                | 335.087 ms                |
+| Optimize                  | 26.646 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 41.416 us                 | 77.376 us                 |
+| BlockToStepN              | 54.778 us                 | 16.334 ms                 |
+| OneStep                   | 353.996 ms                | 570.873 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.663 ms                  | 90.568 ms                 |
+| bucket keys               | 3.457 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.222 ms                  | 111.634 ms                |
+| forward: search cache     | 470.563 us                | 1.259 ms                  |
+| forward: a2a values       | 12.219 ms                 | 34.013 ms                 |
+| forward: join             | 2.614 ms                  | 3.615 ms                  |
+| Forward                   | 58.427 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 98.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 6.168 ms                  |
+| back: a2a grad            | 22.740 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 147.880 ms                |
+| Backward                  | 252.960 ms                | 318.631 ms                |
+| Optimize                  | 26.632 ms                 | 49.832 ms                 |
+| BarrierTimeBeforeRank0    | 41.502 us                 | 76.879 us                 |
+| BlockToStepN              | 55.145 us                 | 12.213 ms                 |
+| OneStep                   | 353.684 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.728 ms                  | 90.568 ms                 |
+| bucket keys               | 3.470 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.274 ms                  | 111.634 ms                |
+| forward: search cache     | 470.185 us                | 1.259 ms                  |
+| forward: a2a values       | 12.219 ms                 | 39.982 ms                 |
+| forward: join             | 2.607 ms                  | 3.615 ms                  |
+| Forward                   | 58.427 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 98.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 6.168 ms                  |
+| back: a2a grad            | 22.740 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 147.880 ms                |
+| Backward                  | 253.196 ms                | 318.631 ms                |
+| Optimize                  | 26.501 ms                 | 49.832 ms                 |
+| BarrierTimeBeforeRank0    | 41.410 us                 | 76.879 us                 |
+| BlockToStepN              | 55.704 us                 | 15.975 ms                 |
+| OneStep                   | 353.035 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.549 ms                  | 90.568 ms                 |
+| bucket keys               | 3.457 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.349 ms                  | 93.046 ms                 |
+| forward: search cache     | 469.450 us                | 1.257 ms                  |
+| forward: a2a values       | 12.219 ms                 | 39.982 ms                 |
+| forward: join             | 2.459 ms                  | 3.583 ms                  |
+| Forward                   | 58.427 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 96.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 5.883 ms                  |
+| back: a2a grad            | 22.740 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 146.958 ms                |
+| Backward                  | 253.191 ms                | 318.631 ms                |
+| Optimize                  | 26.541 ms                 | 49.832 ms                 |
+| BarrierTimeBeforeRank0    | 41.416 us                 | 76.879 us                 |
+| BlockToStepN              | 56.368 us                 | 15.975 ms                 |
+| OneStep                   | 353.035 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.542 ms                  | 90.568 ms                 |
+| bucket keys               | 3.457 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.460 ms                  | 93.046 ms                 |
+| forward: search cache     | 469.038 us                | 1.257 ms                  |
+| forward: a2a values       | 12.219 ms                 | 39.982 ms                 |
+| forward: join             | 2.459 ms                  | 3.583 ms                  |
+| Forward                   | 58.559 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 96.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 5.883 ms                  |
+| back: a2a grad            | 22.387 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 146.958 ms                |
+| Backward                  | 252.299 ms                | 318.631 ms                |
+| Optimize                  | 26.654 ms                 | 49.832 ms                 |
+| BarrierTimeBeforeRank0    | 41.351 us                 | 76.879 us                 |
+| BlockToStepN              | 55.476 us                 | 15.975 ms                 |
+| OneStep                   | 351.545 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 1] 200 steps, total: 35.855, sample: 1.390, forward: 7.081, backward: 14.025, update: 0.345
+[proc 7] 200 steps, total: 35.855, sample: 1.786, forward: 6.758, backward: 13.484, update: 0.441
+[proc 5] 200 steps, total: 35.855, sample: 1.259, forward: 7.221, backward: 13.283, update: 0.467
+[proc 3] 200 steps, total: 35.855, sample: 1.262, forward: 7.242, backward: 13.468, update: 0.328
+[proc 4] 200 steps, total: 35.855, sample: 1.089, forward: 7.374, backward: 13.289, update: 0.461
+[proc 6] 200 steps, total: 35.855, sample: 1.226, forward: 7.289, backward: 13.233, update: 0.442
+[proc 0] 200 steps, total: 35.855, sample: 1.248, forward: 6.787, backward: 24.957, update: 2.733
+[proc 2] 200 steps, total: 35.855, sample: 1.606, forward: 6.831, backward: 13.647, update: 0.439
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.542 ms                  | 94.916 ms                 |
+| bucket keys               | 3.457 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.395 ms                  | 93.046 ms                 |
+| forward: search cache     | 468.966 us                | 1.257 ms                  |
+| forward: a2a values       | 12.219 ms                 | 39.982 ms                 |
+| forward: join             | 2.459 ms                  | 3.615 ms                  |
+| Forward                   | 58.320 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 43.818 ms                 | 96.789 ms                 |
+| back: set dram grad       | 3.215 ms                  | 5.883 ms                  |
+| back: a2a grad            | 21.343 ms                 | 47.398 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 146.958 ms                |
+| Backward                  | 251.011 ms                | 318.631 ms                |
+| Optimize                  | 26.784 ms                 | 49.832 ms                 |
+| BarrierTimeBeforeRank0    | 41.351 us                 | 76.879 us                 |
+| BlockToStepN              | 54.733 us                 | 15.975 ms                 |
+| OneStep                   | 350.261 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.523 ms                  | 94.916 ms                 |
+| bucket keys               | 3.272 ms                  | 4.770 ms                  |
+| forward: a2a keys         | 6.385 ms                  | 92.557 ms                 |
+| forward: search cache     | 469.250 us                | 845.785 us                |
+| forward: a2a values       | 12.806 ms                 | 34.593 ms                 |
+| forward: join             | 2.607 ms                  | 3.615 ms                  |
+| Forward                   | 57.512 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 53.462 ms                 | 96.193 ms                 |
+| back: set dram grad       | 3.637 ms                  | 5.786 ms                  |
+| back: a2a grad            | 20.041 ms                 | 44.989 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 145.963 ms                |
+| Backward                  | 249.607 ms                | 318.631 ms                |
+| Optimize                  | 27.019 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 41.211 us                 | 76.879 us                 |
+| BlockToStepN              | 53.816 us                 | 15.975 ms                 |
+| OneStep                   | 346.148 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.435 ms                  | 101.092 ms                |
+| bucket keys               | 3.243 ms                  | 4.770 ms                  |
+| forward: a2a keys         | 6.324 ms                  | 92.557 ms                 |
+| forward: search cache     | 469.280 us                | 845.785 us                |
+| forward: a2a values       | 12.056 ms                 | 34.593 ms                 |
+| forward: join             | 2.660 ms                  | 4.224 ms                  |
+| Forward                   | 57.182 ms                 | 170.979 ms                |
+| back: aggr dram keys      | 54.457 ms                 | 96.193 ms                 |
+| back: set dram grad       | 4.007 ms                  | 5.786 ms                  |
+| back: a2a grad            | 19.224 ms                 | 44.989 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 145.963 ms                |
+| Backward                  | 247.565 ms                | 318.631 ms                |
+| Optimize                  | 26.865 ms                 | 51.947 ms                 |
+| BarrierTimeBeforeRank0    | 41.030 us                 | 76.879 us                 |
+| BlockToStepN              | 53.731 us                 | 15.975 ms                 |
+| OneStep                   | 344.918 ms                | 542.134 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.361 ms                  | 94.916 ms                 |
+| bucket keys               | 3.272 ms                  | 4.770 ms                  |
+| forward: a2a keys         | 6.370 ms                  | 92.557 ms                 |
+| forward: search cache     | 469.559 us                | 845.785 us                |
+| forward: a2a values       | 10.783 ms                 | 34.593 ms                 |
+| forward: join             | 2.705 ms                  | 4.395 ms                  |
+| Forward                   | 57.502 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 55.320 ms                 | 96.193 ms                 |
+| back: set dram grad       | 4.344 ms                  | 10.951 ms                 |
+| back: a2a grad            | 17.817 ms                 | 44.989 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 145.963 ms                |
+| Backward                  | 246.732 ms                | 316.821 ms                |
+| Optimize                  | 27.141 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 40.686 us                 | 75.508 us                 |
+| BlockToStepN              | 52.811 us                 | 14.466 ms                 |
+| OneStep                   | 343.835 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.361 ms                  | 99.026 ms                 |
+| bucket keys               | 3.243 ms                  | 4.576 ms                  |
+| forward: a2a keys         | 6.283 ms                  | 79.708 ms                 |
+| forward: search cache     | 469.699 us                | 789.000 us                |
+| forward: a2a values       | 8.906 ms                  | 34.474 ms                 |
+| forward: join             | 2.750 ms                  | 4.288 ms                  |
+| Forward                   | 56.913 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 55.520 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.453 ms                  | 11.701 ms                 |
+| back: a2a grad            | 15.507 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 144.371 ms                |
+| Backward                  | 245.152 ms                | 316.821 ms                |
+| Optimize                  | 27.279 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 40.811 us                 | 75.508 us                 |
+| BlockToStepN              | 52.491 us                 | 14.466 ms                 |
+| OneStep                   | 340.744 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.310 ms                  | 99.026 ms                 |
+| bucket keys               | 3.230 ms                  | 4.770 ms                  |
+| forward: a2a keys         | 6.349 ms                  | 79.708 ms                 |
+| forward: search cache     | 470.116 us                | 1.257 ms                  |
+| forward: a2a values       | 8.488 ms                  | 34.474 ms                 |
+| forward: join             | 2.763 ms                  | 4.658 ms                  |
+| Forward                   | 56.503 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 55.575 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.496 ms                  | 11.701 ms                 |
+| back: a2a grad            | 14.584 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 17.045 ms                 | 144.371 ms                |
+| Backward                  | 242.642 ms                | 316.821 ms                |
+| Optimize                  | 27.415 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 40.621 us                 | 75.508 us                 |
+| BlockToStepN              | 52.008 us                 | 15.975 ms                 |
+| OneStep                   | 338.142 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 7] 300 steps, total: 30.197, sample: 1.141, forward: 5.921, backward: 15.272, update: 0.476
+[proc 1] 300 steps, total: 30.197, sample: 1.137, forward: 5.842, backward: 15.652, update: 0.392
+[proc 4] 300 steps, total: 30.197, sample: 0.915, forward: 6.059, backward: 15.240, update: 0.454
+[proc 2] 300 steps, total: 30.197, sample: 1.089, forward: 5.863, backward: 15.425, update: 0.386
+[proc 6] 300 steps, total: 30.197, sample: 1.065, forward: 5.954, backward: 15.154, update: 0.448
+[proc 3] 300 steps, total: 30.197, sample: 0.993, forward: 5.994, backward: 15.294, update: 0.392
+[proc 5] 300 steps, total: 30.197, sample: 0.907, forward: 6.097, backward: 15.189, update: 0.444
+[proc 0] 300 steps, total: 30.197, sample: 1.070, forward: 5.571, backward: 19.961, update: 3.390
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.102 ms                  | 99.026 ms                 |
+| bucket keys               | 3.272 ms                  | 5.204 ms                  |
+| forward: a2a keys         | 6.274 ms                  | 79.708 ms                 |
+| forward: search cache     | 470.280 us                | 1.259 ms                  |
+| forward: a2a values       | 8.442 ms                  | 34.474 ms                 |
+| forward: join             | 2.778 ms                  | 4.666 ms                  |
+| Forward                   | 56.149 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 55.587 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.516 ms                  | 13.510 ms                 |
+| back: a2a grad            | 13.566 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 25.567 ms                 | 144.371 ms                |
+| Backward                  | 240.772 ms                | 316.821 ms                |
+| Optimize                  | 27.686 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 40.301 us                 | 75.508 us                 |
+| BlockToStepN              | 53.731 us                 | 15.975 ms                 |
+| OneStep                   | 335.588 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.045 ms                  | 99.026 ms                 |
+| bucket keys               | 3.162 ms                  | 5.074 ms                  |
+| forward: a2a keys         | 6.212 ms                  | 68.384 ms                 |
+| forward: search cache     | 470.339 us                | 1.257 ms                  |
+| forward: a2a values       | 8.333 ms                  | 34.013 ms                 |
+| forward: join             | 2.792 ms                  | 4.658 ms                  |
+| Forward                   | 55.381 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 55.736 ms                 | 90.535 ms                 |
+| back: set dram grad       | 4.530 ms                  | 13.614 ms                 |
+| back: a2a grad            | 13.183 ms                 | 42.399 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 142.220 ms                |
+| Backward                  | 237.553 ms                | 316.821 ms                |
+| Optimize                  | 28.575 ms                 | 51.947 ms                 |
+| BarrierTimeBeforeRank0    | 40.263 us                 | 75.508 us                 |
+| BlockToStepN              | 52.646 us                 | 15.975 ms                 |
+| OneStep                   | 332.509 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.096 ms                  | 99.026 ms                 |
+| bucket keys               | 3.272 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 6.101 ms                  | 68.384 ms                 |
+| forward: search cache     | 470.321 us                | 1.259 ms                  |
+| forward: a2a values       | 8.339 ms                  | 34.013 ms                 |
+| forward: join             | 2.799 ms                  | 5.084 ms                  |
+| Forward                   | 55.025 ms                 | 163.398 ms                |
+| back: aggr dram keys      | 55.773 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.548 ms                  | 13.614 ms                 |
+| back: a2a grad            | 12.911 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 142.220 ms                |
+| Backward                  | 234.631 ms                | 316.821 ms                |
+| Optimize                  | 28.958 ms                 | 51.947 ms                 |
+| BarrierTimeBeforeRank0    | 40.249 us                 | 75.508 us                 |
+| BlockToStepN              | 52.008 us                 | 15.975 ms                 |
+| OneStep                   | 331.525 ms                | 537.578 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 4.071 ms                  | 99.026 ms                 |
+| bucket keys               | 3.399 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 5.920 ms                  | 68.384 ms                 |
+| forward: search cache     | 470.459 us                | 1.260 ms                  |
+| forward: a2a values       | 8.339 ms                  | 34.013 ms                 |
+| forward: join             | 2.804 ms                  | 5.239 ms                  |
+| Forward                   | 54.635 ms                 | 152.387 ms                |
+| back: aggr dram keys      | 55.736 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.567 ms                  | 13.614 ms                 |
+| back: a2a grad            | 12.790 ms                 | 43.952 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 142.220 ms                |
+| Backward                  | 232.503 ms                | 316.305 ms                |
+| Optimize                  | 29.416 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 40.059 us                 | 75.085 us                 |
+| BlockToStepN              | 51.083 us                 | 15.437 ms                 |
+| OneStep                   | 329.403 ms                | 536.254 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 3.991 ms                  | 99.026 ms                 |
+| bucket keys               | 3.399 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 5.934 ms                  | 68.104 ms                 |
+| forward: search cache     | 470.459 us                | 1.259 ms                  |
+| forward: a2a values       | 8.353 ms                  | 32.934 ms                 |
+| forward: join             | 2.809 ms                  | 5.280 ms                  |
+| Forward                   | 54.562 ms                 | 152.387 ms                |
+| back: aggr dram keys      | 55.831 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.585 ms                  | 13.510 ms                 |
+| back: a2a grad            | 12.790 ms                 | 42.399 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 138.676 ms                |
+| Backward                  | 231.069 ms                | 316.305 ms                |
+| Optimize                  | 29.903 ms                 | 51.663 ms                 |
+| BarrierTimeBeforeRank0    | 40.029 us                 | 75.085 us                 |
+| BlockToStepN              | 50.881 us                 | 15.437 ms                 |
+| OneStep                   | 328.182 ms                | 536.254 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 3.976 ms                  | 99.026 ms                 |
+| bucket keys               | 3.153 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 5.873 ms                  | 68.104 ms                 |
+| forward: search cache     | 470.392 us                | 1.259 ms                  |
+| forward: a2a values       | 8.282 ms                  | 32.934 ms                 |
+| forward: join             | 2.810 ms                  | 5.280 ms                  |
+| Forward                   | 54.279 ms                 | 152.387 ms                |
+| back: aggr dram keys      | 55.882 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.595 ms                  | 13.510 ms                 |
+| back: a2a grad            | 12.674 ms                 | 42.399 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 138.676 ms                |
+| Backward                  | 224.085 ms                | 316.305 ms                |
+| Optimize                  | 30.432 ms                 | 53.242 ms                 |
+| BarrierTimeBeforeRank0    | 39.937 us                 | 75.085 us                 |
+| BlockToStepN              | 50.325 us                 | 16.334 ms                 |
+| OneStep                   | 325.526 ms                | 536.254 ms                |
++---------------------------+---------------------------+---------------------------+
+[proc 7] 400 steps, total: 28.881, sample: 0.992, forward: 5.372, backward: 15.983, update: 0.479
+[proc 6] 400 steps, total: 28.881, sample: 0.978, forward: 5.397, backward: 15.809, update: 0.380
+[proc 4] 400 steps, total: 28.881, sample: 0.892, forward: 5.478, backward: 15.858, update: 0.467
+[proc 1] 400 steps, total: 28.881, sample: 1.015, forward: 5.328, backward: 16.278, update: 0.408
+[proc 3] 400 steps, total: 28.881, sample: 0.956, forward: 5.375, backward: 15.976, update: 0.430
+[proc 2] 400 steps, total: 28.881, sample: 0.996, forward: 5.343, backward: 16.024, update: 0.402
+[proc 5] 400 steps, total: 28.881, sample: 0.874, forward: 5.492, backward: 15.835, update: 0.419
+[proc 0] 400 steps, total: 28.881, sample: 1.008, forward: 5.043, backward: 18.706, update: 3.938
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 3.979 ms                  | 99.026 ms                 |
+| bucket keys               | 3.153 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 5.759 ms                  | 68.104 ms                 |
+| forward: search cache     | 470.470 us                | 1.259 ms                  |
+| forward: a2a values       | 8.282 ms                  | 32.934 ms                 |
+| forward: join             | 2.815 ms                  | 5.280 ms                  |
+| Forward                   | 53.516 ms                 | 152.387 ms                |
+| back: aggr dram keys      | 55.818 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.602 ms                  | 13.521 ms                 |
+| back: a2a grad            | 12.592 ms                 | 42.399 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 138.676 ms                |
+| Backward                  | 220.353 ms                | 316.305 ms                |
+| Optimize                  | 30.953 ms                 | 53.242 ms                 |
+| BarrierTimeBeforeRank0    | 39.909 us                 | 75.085 us                 |
+| BlockToStepN              | 49.137 us                 | 16.334 ms                 |
+| OneStep                   | 323.017 ms                | 536.254 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 3.979 ms                  | 99.026 ms                 |
+| bucket keys               | 3.153 ms                  | 5.204 ms                  |
+| forward: a2a keys         | 5.676 ms                  | 58.854 ms                 |
+| forward: search cache     | 470.542 us                | 1.259 ms                  |
+| forward: a2a values       | 8.328 ms                  | 32.181 ms                 |
+| forward: join             | 2.819 ms                  | 5.280 ms                  |
+| Forward                   | 53.445 ms                 | 152.387 ms                |
+| back: aggr dram keys      | 55.885 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.608 ms                  | 13.521 ms                 |
+| back: a2a grad            | 12.588 ms                 | 42.399 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 137.824 ms                |
+| Backward                  | 217.859 ms                | 316.305 ms                |
+| Optimize                  | 31.321 ms                 | 53.242 ms                 |
+| BarrierTimeBeforeRank0    | 39.748 us                 | 75.085 us                 |
+| BlockToStepN              | 48.535 us                 | 16.334 ms                 |
+| OneStep                   | 322.132 ms                | 536.254 ms                |
++---------------------------+---------------------------+---------------------------+
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput                  | 3.931 ms                  | 94.916 ms                 |
+| bucket keys               | 3.153 ms                  | 5.426 ms                  |
+| forward: a2a keys         | 5.626 ms                  | 58.854 ms                 |
+| forward: search cache     | 470.518 us                | 1.259 ms                  |
+| forward: a2a values       | 8.305 ms                  | 32.181 ms                 |
+| forward: join             | 2.821 ms                  | 5.280 ms                  |
+| Forward                   | 53.265 ms                 | 150.722 ms                |
+| back: aggr dram keys      | 55.831 ms                 | 92.597 ms                 |
+| back: set dram grad       | 4.624 ms                  | 13.696 ms                 |
+| back: a2a grad            | 12.574 ms                 | 42.399 ms                 |
+| back: grad sum & grad cache  | 25.196 ms                 | 137.824 ms                |
+| Backward                  | 215.942 ms                | 316.305 ms                |
+| Optimize                  | 31.962 ms                 | 58.155 ms                 |
+| BarrierTimeBeforeRank0    | 39.595 us                 | 75.085 us                 |
+| BlockToStepN              | 48.369 us                 | 16.334 ms                 |
+| OneStep                   | 320.234 ms                | 536.254 ms                |
++---------------------------+---------------------------+---------------------------+
+Successfully xmh. training takes 152.92311644554138 seconds
+before call kg_cache_controller.StopThreads()
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
+INFO [25062 controller_process.py:421] call rank0 to StopThreads
