@@ -8,7 +8,7 @@ from utils import XLOG
 
 from DistEmb import DistEmbedding
 from PsKvstore import get_kvstore, ShmKVStore
-from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor, PerfCounter, Timer
+from utils import all2all_data_transfer, merge_op, kv_to_sparse_tensor, reduce_sparse_kv_tensor, all2all_sparse_tensor, sum_sparse_tensor, PerfCounter, Timer, GPUTimer
 from cache_common import AbsEmb, NVGPUCache
 
 import recstore
@@ -107,6 +107,8 @@ class LocalCachedEmbedding(AbsEmb):
         if dist.get_rank() == 0:
             opt.add_param_group({"params": self.emb})
 
+
+XMH_TIMER = GPUTimer
 
 class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
     class CacheConfig:
@@ -213,7 +215,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         emb_cache = ctx.emb_cache
         
 
-        ctx.timer_bucket_keys= Timer("back: bucket keys")
+        ctx.timer_bucket_keys= XMH_TIMER("back: bucket keys")
         in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
             keys, ctx.cached_range)
         ctx.timer_bucket_keys.stop()
@@ -225,7 +227,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         # 1. update local cache's grad
         XLOG.debug("backward: update local cache's grad")
         # 1.1 all to all keys's grad
-        ctx.timer_a2a= Timer("back: a2a")
+        ctx.timer_a2a= XMH_TIMER("back: a2a")
         sharded_keys = [keys[each] for each in in_each_rank_cache_mask]
         sharded_grads = [grad_output[each] for each in in_each_rank_cache_mask]
         keys_in_this_rank, values_in_this_rank = all2all_sparse_tensor(
@@ -234,7 +236,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         XLOG.debug("backward: all to all keys's grad done")
 
         # 1.2 update grad of local cache
-        ctx.timer_cache = Timer("back: cache")
+        ctx.timer_cache = XMH_TIMER("back: cache")
         cached_start_key, cached_end_key = ctx.cached_start_key, ctx.cached_end_key
         cached_keys_in_this_rank = [
             each - cached_start_key for each in keys_in_this_rank]
@@ -246,7 +248,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
         # 上面的1.待优化
         # 2 aggregate grad of in-dram keys
-        ctx.timer_aggregate_dram = Timer("back: aggr dram keys")
+        ctx.timer_aggregate_dram = XMH_TIMER("back: aggr dram keys")
         reduced_dram_grads = reduce_sparse_kv_tensor(
             keys, grad_output, full_emb.shape, 0)
         XLOG.debug(f"rank{rank}: aggregate grad of in-dram keys done")
@@ -255,7 +257,7 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
         mp.Barrier(dist.get_world_size())
 
         if dist.get_rank() == 0:
-            ctx.timer_dram_grad = Timer("back: set dram grad")
+            ctx.timer_dram_grad = XMH_TIMER("back: set dram grad")
             reduced_dram_grads = reduced_dram_grads.coalesce()
             XLOG.debug(
                 f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")

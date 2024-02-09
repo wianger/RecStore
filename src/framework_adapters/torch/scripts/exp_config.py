@@ -223,7 +223,7 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
             "log_interval": [100],
 
             "cache_ratio": [
-                0.01,
+                # 0.01,
                 0.05,
                 0.1,
             ],

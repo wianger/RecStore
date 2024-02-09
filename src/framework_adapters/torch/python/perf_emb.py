@@ -230,7 +230,8 @@ def routine_local_cache_helper(worker_id, args):
         for_range = range(args['run_steps'])
         with_perf = False
 
-    with_pyinstrucment = False
+    # with_pyinstrucment = False
+    with_pyinstrucment = True
     with_cudaPerf = False
     with_torchPerf = False
 
@@ -268,11 +269,10 @@ def routine_local_cache_helper(worker_id, args):
 
     timer_geninput = Timer("GenInput")
     timer_Forward = Timer("Forward")
+    timer_ForwardNN = Timer("forward: NN")
     timer_Backward = Timer("Backward")
     timer_Optimize = Timer("Optimize")
     timer_onestep = Timer(f"OneStep")
-    timer_start = Timer(f"E2E-{args['log_interval']}")
-    timer_start.start()
 
     print("Before Training", flush=True)
 
@@ -323,7 +323,9 @@ def routine_local_cache_helper(worker_id, args):
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
-        loss = embed_value.sum(-1).sum(-1)
+            timer_ForwardNN.start()
+            loss = embed_value.sum(-1).sum(-1)
+            timer_ForwardNN.stop()
         timer_Forward.stop()
 
         timer_Backward.start()
@@ -359,8 +361,6 @@ def routine_local_cache_helper(worker_id, args):
                 f"Step{_}:rank{rank}, time: {end-start:.3f}, per_step: {(end-start)/(_-start_step+1):.6f}", flush=True)
             start = time.time()
             start_step = _
-            timer_start.stop()
-            timer_start.start()
             if rank == 0:
                 Timer.Report()
 

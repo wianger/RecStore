@@ -64,14 +64,16 @@ if __name__ == "__main__":
         exp_lists.append(each)
 
 
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
+        exp_lists.append(each)
+
         each = exp_config.ExpKGSensitive()
         each.SetLogDir(f'{LOG_PREFIX}/0204-sen-{suffix}')
         exp_lists.append(each)
   
   
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
-        exp_lists.append(each)
+
 
 
         # each = exp_config.ExpKGPerfDebug()
