@@ -17,6 +17,7 @@ class CacheEmbFactory:
                 "KnownLocalCachedEmbedding",
                 "TorchNativeStdEmb",
                 "KGExternelEmbedding",
+                "KnownLocalCachedEmbeddingSoftware",
                 # "TorchNativeStdEmbDDP"
                 ]
 
@@ -41,6 +42,16 @@ class CacheEmbFactory:
             abs_emb = KnownLocalCachedEmbedding(emb,
                                                 cached_range=cached_range,
                                                 kForwardItersPerStep=args['kForwardItersPerStep'],
+                                                forward_mode="UVA",
+                                                backward_mode=args['backwardMode'],
+                                                backgrad_init=args['backgrad_init'],
+                                                )
+
+        elif cache_type == "KnownLocalCachedEmbeddingSoftware":
+            abs_emb = KnownLocalCachedEmbedding(emb,
+                                                cached_range=cached_range,
+                                                kForwardItersPerStep=args['kForwardItersPerStep'],
+                                                forward_mode="Software",
                                                 backward_mode=args['backwardMode'],
                                                 backgrad_init=args['backgrad_init'],
                                                 )

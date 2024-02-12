@@ -171,6 +171,7 @@ class KGExternelEmbeddingFn(torch.autograd.Function):
         return value
 
     @staticmethod
+    @torch.no_grad()
     def backward(ctx, grad_output):
         keys, = ctx.saved_tensors
         embedding_weight = ctx.embedding_weight

@@ -309,6 +309,54 @@ class GradProcessingBase {
 
   virtual void BlockToStepN(int step_no) = 0;
 
+/*
+  std::pair<std::vector<std::vector<torch::Tensor>>,
+            std::vector<std::vector<torch::Tensor>>>
+  ShuffleKeysAndGradsXMH(
+      const std::vector<base::ConstArray<int64_t>> &input_keys,
+      const std::vector<torch::Tensor> &input_grads) {
+    int num_gpus = input_keys.size();
+
+    std::vector<std::vector<std::vector<int64_t>>>
+        shuffled_keys_in_each_rank_cache(num_gpus);
+    std::vector<std::vector<std::vector<int>>> shuffled_idx_in_each_rank_cache(
+        num_gpus);
+
+    for (int rank = 0; rank < num_gpus; rank++) {
+      shuffled_keys_in_each_rank_cache[rank].resize(num_gpus);
+      shuffled_idx_in_each_rank_cache[rank].resize(num_gpus);
+
+      for (int i = 0; i < num_gpus; i++) {
+        shuffled_keys_in_each_rank_cache[rank][i].resize(1e6);
+        shuffled_idx_in_each_rank_cache[rank][i].resize(1e6);
+      }
+    }
+
+    for (int rank = 0; rank < num_gpus; rank++) {
+      base::ConstArray<int64_t> key_array = input_keys[rank];
+
+      for (int i = 0; i < key_array.Size(); i++) {
+        int64_t key = key_array[i];
+
+        // find shard for this key
+        int64_t shard_no = -1;
+        for (int j = 0; j < cached_range_.size(); j++) {
+          if (key >= cached_range_[j][0] && key < cached_range_[j][1]) {
+            shard_no = j;
+            break;
+          }
+        }
+        if (shard_no == -1) continue;
+
+        // put key to shuffled_keys_in_each_rank_cache[shard_no]
+        // record i in shuffled_idx_in_each_rank_cache[shard_no]
+        shuffled_keys_in_each_rank_cache[shard_no][rank].push_back(key);
+        shuffled_idx_in_each_rank_cache[shard_no][rank].push_back(i);
+      }
+    }
+  }
+*/
+
   //  cached_range:
   //        [ (start, end ),  # rank0
   //         (start, end),    # rank1
@@ -326,6 +374,7 @@ class GradProcessingBase {
     shuffled_keys_in_each_rank_cache.resize(num_gpus_);
     shuffled_grads_in_each_rank_cache.resize(num_gpus_);
 
+#pragma parallel for thread_num(num_gpus_)
     for (int rank = 0; rank < num_gpus_; rank++) {
       // CHECK(!input_keys[rank].is_cuda());
       // CHECK(input_grads[rank].is_cuda());
@@ -339,12 +388,15 @@ class GradProcessingBase {
           TensorUtil::IndexVectorsDebug(input_grads[rank],
                                         in_each_rank_cache_mask);
 
-      // shuffle keys and grads
-      for (int i = 0; i < num_gpus_; i++) {
-        shuffled_keys_in_each_rank_cache[i].push_back(
-            sharded_keys_in_this_rank[i]);
-        shuffled_grads_in_each_rank_cache[i].push_back(
-            sharded_grads_in_this_rank[i]);
+// shuffle keys and grads
+#pragma omp critical
+      {
+        for (int i = 0; i < num_gpus_; i++) {
+          shuffled_keys_in_each_rank_cache[i].push_back(
+              sharded_keys_in_this_rank[i]);
+          shuffled_grads_in_each_rank_cache[i].push_back(
+              sharded_grads_in_this_rank[i]);
+        }
       }
     }
     // shuffle done

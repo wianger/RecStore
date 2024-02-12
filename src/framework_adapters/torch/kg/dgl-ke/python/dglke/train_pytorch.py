@@ -201,7 +201,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     for step in range(0, args.max_step):
         if rank == 0 and step % 10 == 0:
             exp_all_now = time.time()
-            if exp_all_now - exp_all_start_time > 150:
+            if exp_all_now - exp_all_start_time > 90:
                 break
 
         if with_perf and step == warmup_iters:

@@ -266,7 +266,7 @@ def routine_local_cache_helper(worker_id, args):
         for_range = range(args['run_steps'])
         with_perf = False
 
-    with_pyinstrucment = False
+    with_pyinstrucment = True
     with_cudaPerf = False
     with_torchPerf = False
 
@@ -307,10 +307,14 @@ def routine_local_cache_helper(worker_id, args):
     sparse_opt.add_param_group({'params': nn_model.parameters()})
 
     timer_geninput = Timer("GenInput")
-    timer_Forward = GPUTimer("Forward")
-    timer_Backward = GPUTimer("Backward")
-    timer_Optimize = GPUTimer("Optimize")
-    timer_NN = GPUTimer("NN")
+    # timer_Forward = GPUTimer("Forward")
+    # timer_Backward = GPUTimer("Backward")
+    # timer_Optimize = GPUTimer("Optimize")
+    # timer_NN = GPUTimer("NN")
+    timer_Forward = Timer("Forward")
+    timer_Backward = Timer("Backward")
+    timer_Optimize = Timer("Optimize")
+    timer_NN = Timer("NN")
     timer_onestep = Timer(f"OneStep")
 
     print("Before Training", flush=True)
@@ -326,7 +330,7 @@ def routine_local_cache_helper(worker_id, args):
     for _ in for_range:
         if rank == 0 and _ % 10 == 0:
             exp_all_now = time.time()
-            if exp_all_now - exp_all_start_time > 120:
+            if exp_all_now - exp_all_start_time > 60:
                 break
 
         timer_onestep.start()
@@ -367,12 +371,12 @@ def routine_local_cache_helper(worker_id, args):
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
             embed_value = abs_emb.forward(input_keys)
 
+        timer_NN.start()
         reshaped_emb = embed_value.view(
             args['batch_size'], -1, args['emb_dim'])
 
         sum_pooling = reshaped_emb.sum(1)
 
-        timer_NN.start()
         logit = nn_model(sum_pooling)
         loss = loss_fn(logit, torch.randint(
             0, 2, logit.shape, dtype=torch.float32, device=device))

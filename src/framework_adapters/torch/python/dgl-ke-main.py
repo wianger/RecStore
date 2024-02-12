@@ -141,9 +141,9 @@ class ArgParser(CommonArgParser):
         self.add_argument('--L', type=int, default=10, help='lookahead value')
         self.add_argument('--nr_background_threads', type=int, default=32, help='flush threads')
         self.add_argument('--update_cache_use_omp', type=int,
-                          default=0, help='use omp')
+                          default=1, help='use omp')
         self.add_argument('--update_pq_use_omp', type=int,
-                          default=0, help='use omp')
+                          default=2, help='use omp')
 
 
 def prepare_save_path(args):

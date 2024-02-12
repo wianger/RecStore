@@ -230,10 +230,10 @@ def routine_local_cache_helper(worker_id, args):
         for_range = range(args['run_steps'])
         with_perf = False
 
-    # with_pyinstrucment = False
-    with_pyinstrucment = True
+    with_pyinstrucment = False
+    # with_pyinstrucment = True
     with_cudaPerf = False
-    with_torchPerf = False
+    with_torchPerf = True
 
     if with_perf and with_pyinstrucment:
         pyinstruct_profiler = Profiler()
@@ -241,7 +241,6 @@ def routine_local_cache_helper(worker_id, args):
     if with_perf and with_torchPerf:
         torch_profiler = profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True)
-        torch_profiler.start()
 
     perf_sampler = PerfSampler(rank=rank,
                                L=args['L'],
@@ -284,7 +283,7 @@ def routine_local_cache_helper(worker_id, args):
     for _ in for_range:
         if rank == 0 and _ % 10 == 0:
             exp_all_now = time.time()
-            if exp_all_now - exp_all_start_time > 120:
+            if exp_all_now - exp_all_start_time > 90:
                 break
 
         timer_onestep.start()
@@ -302,7 +301,10 @@ def routine_local_cache_helper(worker_id, args):
                     print("cudaProfilerStart")
                     th.cuda.cudart().cudaProfilerStart()
 
-        if with_perf and _ == warmup_iters + 3:
+                if with_torchPerf:
+                    torch_profiler.start()
+
+        if with_perf and _ == warmup_iters + 2:
             if rank == 0:
                 if with_pyinstrucment:
                     pyinstruct_profiler.stop()

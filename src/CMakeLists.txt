@@ -11,3 +11,5 @@ add_subdirectory(framework_adapters/torch)
 add_subdirectory(test)
 
 add_subdirectory(small_tests)
+
+add_subdirectory(perf_uva)

@@ -25,7 +25,8 @@ class Experiment:
         if exp_id not in self.registered_id:
             self.registered_id.append(exp_id)
         else:
-            raise Exception("repeated exp ID")
+            # raise Exception("repeated exp ID")
+            pass
 
         self.exp_id = exp_id
         self.log_dir = None

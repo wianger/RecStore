@@ -132,7 +132,86 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             return in_each_rank_cache_mask
 
     @staticmethod
+    def forwardSoftware(ctx, keys, full_emb, emb_cache,
+                fake_tensor, cached_range, ret_value,
+                backward_grads, backward_grads_2
+                ):
+        rank, world_size = dist.get_rank(), dist.get_world_size()
+
+        emb_dim = full_emb.shape[1]
+        # keys 并不保序
+        cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
+        ctx.cached_start_key = cached_start_key
+        ctx.cached_end_key = cached_end_key
+
+        # 1.1 split keys into shards
+        ctx.timer_BarrierTimeBeforeRank0 = XMH_TIMER("bucket keys")
+        in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
+            keys, cached_range)
+        in_this_rank_cache_mask = in_each_rank_cache_mask[rank]
+        not_in_this_rank_cache_mask = in_this_rank_cache_mask.logical_not()
+        ctx.timer_BarrierTimeBeforeRank0.stop()
+
+        missing_keys = keys[not_in_this_rank_cache_mask]
+
+        ctx.timer_searchcache = XMH_TIMER("forward: search cache")
+        # 2. search local cache
+        XLOG.debug("search local cache")
+        cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
+        ctx.cached_start_key = cached_start_key
+        ctx.cached_end_key = cached_end_key
+        ctx.timer_searchcache = XMH_TIMER("forward: search cache")
+
+        # 3. merge into final result
+
+        # 3.1 join missing keys
+        ctx.timer_join = XMH_TIMER("forward: join")
+        XLOG.debug("join missing keys")
+        if type(full_emb) is DistEmbedding:
+            XLOG.debug(f'rank{rank}, before full_emb(missing_keys.cpu()')
+            missing_value = full_emb(missing_keys.cpu(), record_trace=False)
+            XLOG.debug(f'rank{rank}, after full_emb(missing_keys.cpu()')
+        else:
+            missing_value = F.embedding(missing_keys.cpu(
+            ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
+
+        ret_value[not_in_this_rank_cache_mask] = missing_value.cuda()
+
+        # 3.2 join hit keys
+        ret_value[in_this_rank_cache_mask] = emb_cache[keys[in_this_rank_cache_mask] - cached_start_key]
+        ctx.timer_join.stop()
+
+        
+        ctx.save_for_backward(keys, )
+        ctx.emb_dim = emb_dim
+        ctx.embedding_weight = full_emb
+        ctx.emb_cache = emb_cache
+        ctx.cached_range = cached_range
+
+        ctx.backward_grads = backward_grads
+        ctx.backward_grads_2 = backward_grads_2
+        return ret_value
+	
+ 
+ 
+    @staticmethod
     def forward(ctx, keys, full_emb, emb_cache,
+                fake_tensor, cached_range, ret_value,
+                backward_grads, backward_grads_2
+                ):
+        if KnownLocalCachedEmbeddingFn.forward_mode == "Software":
+            return KnownLocalCachedEmbeddingFn.forwardSoftware(ctx, keys, full_emb, emb_cache,
+                fake_tensor, cached_range, ret_value,
+                backward_grads, backward_grads_2)
+        elif KnownLocalCachedEmbeddingFn.forward_mode == "UVA":
+            return KnownLocalCachedEmbeddingFn.forwardUVA(ctx, keys, full_emb, emb_cache,
+                fake_tensor, cached_range, ret_value,
+                backward_grads, backward_grads_2)
+        else:
+            assert False
+ 
+    @staticmethod
+    def forwardUVA(ctx, keys, full_emb, emb_cache,
                 fake_tensor, cached_range, ret_value,
                 backward_grads, backward_grads_2
                 ):
@@ -161,40 +240,6 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
                            full_emb.get_shm_tensor(),
                            cached_start_key,
                            cached_end_key)
-
-        '''
-        # 1.1 split keys into shards
-        in_each_rank_cache_mask = KnownLocalCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
-            keys, cached_range)
-        in_this_rank_cache_mask = in_each_rank_cache_mask[rank]
-        not_in_this_rank_cache_mask = in_this_rank_cache_mask.logical_not()
-
-        missing_keys = keys[not_in_this_rank_cache_mask]
-
-        # 2. search local cache
-        XLOG.debug("search local cache")
-        cached_start_key, cached_end_key = cached_range[rank][0], cached_range[rank][1]
-        ctx.cached_start_key = cached_start_key
-        ctx.cached_end_key = cached_end_key
-
-        # 3. merge into final result
-
-        # 3.1 join missing keys
-        XLOG.debug("join missing keys")
-
-        if type(full_emb) is DistEmbedding:
-            XLOG.debug(f'rank{rank}, before full_emb(missing_keys.cpu()')
-            missing_value = full_emb(missing_keys.cpu(), record_trace=False)
-            XLOG.debug(f'rank{rank}, after full_emb(missing_keys.cpu()')
-        else:
-            missing_value = F.embedding(missing_keys.cpu(
-            ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
-
-        ret_value[not_in_this_rank_cache_mask] = missing_value.cuda()
-
-        # 3.2 join hit keys
-        ret_value[in_this_rank_cache_mask] = emb_cache[keys[in_this_rank_cache_mask] - cached_start_key]
-        '''
         ctx.save_for_backward(keys, )
         ctx.emb_dim = emb_dim
         ctx.embedding_weight = full_emb
@@ -311,9 +356,10 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
 
 class KnownLocalCachedEmbedding(AbsEmb):
-    def __init__(self, full_emb, cached_range, kForwardItersPerStep, backward_mode, backgrad_init) -> None:
+    def __init__(self, full_emb, cached_range, kForwardItersPerStep, forward_mode, backward_mode, backgrad_init) -> None:
         self.kForwardItersPerStep = kForwardItersPerStep
 
+        KnownLocalCachedEmbeddingFn.forward_mode = forward_mode 
         KnownLocalCachedEmbeddingFn.backward_mode = backward_mode
         KnownLocalCachedEmbeddingFn.backgrad_init = backgrad_init
 

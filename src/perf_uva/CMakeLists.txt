@@ -1,0 +1,6 @@
+add_executable(perf_uva perf_uva.cu) 
+target_compile_options(perf_uva PUBLIC -Wno-unused-function -Wno-aligned-new -Wno-format)
+target_link_libraries(perf_uva PUBLIC Folly::folly)
+set_target_properties(perf_uva PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+set_target_properties(perf_uva PROPERTIES CUDA_ARCHITECTURES OFF)
+set_property(TARGET perf_uva PROPERTY CUDA_STANDARD 17)

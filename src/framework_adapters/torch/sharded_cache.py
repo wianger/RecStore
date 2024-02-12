@@ -359,9 +359,8 @@ class KnownShardedCachedEmbedding(AbsEmb):
         self.ret_value = torch.zeros((int(1e6), self.emb_dim)).cuda()
 
     def forward(self, input_keys, trace=True):
-        ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
-        # ret_value = torch.zeros((input_keys.shape[0], self.emb_dim)).cuda()
-
+        # ret_value = torch.narrow(self.ret_value, 0, 0, input_keys.shape[0])
+        ret_value = torch.zeros((input_keys.shape[0], self.emb_dim), device=torch.device('cuda'))
         assert input_keys.is_cuda
         embed_value = KnownShardedCachedEmbeddingFn.apply(
             input_keys, self.emb, self.emb_cache, self.fake_tensor, self.cached_range, ret_value)

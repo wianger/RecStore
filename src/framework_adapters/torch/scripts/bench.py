@@ -50,31 +50,41 @@ if __name__ == "__main__":
         exp_lists.append(each)
 
     else:
-		# # 用这个
+        # # 用这个
         # each = exp_config.ExpMotivationDebug()
         # each.SetLogDir(f'{LOG_PREFIX}/0208-debugmicro-{suffix}')
         # exp_lists.append(each)
 
+        
+        each = exp_config.ExpRealMotivationPerfEmb()
+        each.SetLogDir(f'{LOG_PREFIX}/0212-real-motiv-{suffix}')
+        exp_lists.append(each)
+
         each = exp_config.ExpMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
+        # each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/0211-motiv-{suffix}')
         exp_lists.append(each)
 
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')  #实质上是0131重跑的
+        # each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')  #实质上是0131重跑的
+        each.SetLogDir(f'{LOG_PREFIX}/0210-Rec-{suffix}')
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f'{LOG_PREFIX}/0210-KG-scale-{suffix}')
+        each.SetFilter(lambda config: config['dataset'] == 'FB15k')
         exp_lists.append(each)
 
 
         each = exp_config.ExpKGScalability()
+        
         each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
         exp_lists.append(each)
+
 
         each = exp_config.ExpKGSensitive()
         each.SetLogDir(f'{LOG_PREFIX}/0204-sen-{suffix}')
         exp_lists.append(each)
-  
-  
-
-
 
         # each = exp_config.ExpKGPerfDebug()
         # each.SetLogDir(f'{LOG_PREFIX}/0128-KG-debugomp{suffix}')
@@ -84,8 +94,6 @@ if __name__ == "__main__":
         # # each = exp_config.ExpMacroPerfEmb()
         # # each.SetLogDir(f'{LOG_PREFIX}/0117-exp1-macro-perf-emb-{suffix}')
         # # exp_lists.append(each)
-
-
 
     for i, each in enumerate(exp_lists):
         # mount NFS
