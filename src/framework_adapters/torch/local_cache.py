@@ -175,7 +175,10 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
             missing_value = F.embedding(missing_keys.cpu(
             ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
 
+        ctx.timer_software= XMH_TIMER("forward: software")
         ret_value[not_in_this_rank_cache_mask] = missing_value.cuda()
+        ctx.timer_software.stop()
+
 
         # 3.2 join hit keys
         ret_value[in_this_rank_cache_mask] = emb_cache[keys[in_this_rank_cache_mask] - cached_start_key]

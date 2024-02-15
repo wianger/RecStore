@@ -226,14 +226,14 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
             "log_interval": [100],
 
             "cache_ratio": [
-                # 0.01,
+                0.01,
                 # 0.05,
                 0.1,
             ],
             'binding2': [
-                # {
-                #     "distribution": ['uniform'],
-                # },
+                {
+                    "distribution": ['uniform'],
+                },
                 {
                     "distribution": ['zipf'],
                     "zipf_alpha": [
@@ -245,9 +245,9 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
             "binding": [
                 {
                     "emb_choice": [
-                        "KGExternelEmbedding",
+                        # "KGExternelEmbedding",
                         "KnownShardedCachedEmbedding",
-                        "TorchNativeStdEmb",
+                        # "TorchNativeStdEmb",
                         # "KnownLocalCachedEmbeddingSoftware",
                     ]
                 },

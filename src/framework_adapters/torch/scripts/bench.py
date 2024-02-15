@@ -33,24 +33,23 @@ if __name__ == "__main__":
     exp_lists = []
 
     if suffix == 'A30':
+        each = exp_config.ExpRealMotivationPerfEmb()
+        each.SetLogDir(f'{LOG_PREFIX}/0212-real-motiv-{suffix}')
+        exp_lists.append(each)
+        
         each = exp_config.ExpRecPerf()
         each.SetLogDir(f'{LOG_PREFIX}/fastpq0131-Rec-{suffix}')
-        exp_lists.append(each)
-
-        each = exp_config.ExpKGPerfA30()
-        each.SetLogDir(f'{LOG_PREFIX}/fastpq0131-KG-perfA30-{suffix}')
         exp_lists.append(each)
 
         each = exp_config.ExpKGScalability()
         each.SetLogDir(f'{LOG_PREFIX}/fastpq0131-KG-scale-{suffix}')
         exp_lists.append(each)
 
-        each = exp_config.ExpMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/fastpq0131-exp2-motiv-emb-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpMotivationPerfEmb()
+        # each.SetLogDir(f'{LOG_PREFIX}/fastpq0131-exp2-motiv-emb-{suffix}')
+        # exp_lists.append(each)
 
     else:
-        # # 用这个
         # each = exp_config.ExpMotivationDebug()
         # each.SetLogDir(f'{LOG_PREFIX}/0208-debugmicro-{suffix}')
         # exp_lists.append(each)
@@ -60,6 +59,7 @@ if __name__ == "__main__":
         each.SetLogDir(f'{LOG_PREFIX}/0212-real-motiv-{suffix}')
         exp_lists.append(each)
 
+        # # 用这个
         each = exp_config.ExpMotivationPerfEmb()
         # each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
         each.SetLogDir(f'{LOG_PREFIX}/0211-motiv-{suffix}')
@@ -77,7 +77,6 @@ if __name__ == "__main__":
 
 
         each = exp_config.ExpKGScalability()
-        
         each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
         exp_lists.append(each)
 

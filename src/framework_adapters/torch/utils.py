@@ -125,32 +125,32 @@ class Timer:
     def stop(self):
         self._c_timer.End()
 
-GPUTimer = Timer
-# class GPUTimer:
-#     @classmethod
-#     def StartReportThread(cls):
-#         timer_module.Reporter.StartReportThread(5000)
+# GPUTimer = Timer
+class GPUTimer:
+    @classmethod
+    def StartReportThread(cls):
+        timer_module.Reporter.StartReportThread(5000)
 
-#     def __init__(self, name):
-#         self.name = name
-#         self.start()
+    def __init__(self, name):
+        self.name = name
+        self.start()
 
-#     def start(self):
-#         # self.tick = torch.cuda.Event(enable_timing=True)
-#         # self.tick.record()
-#         self.tick = time.time()
+    def start(self):
+        # self.tick = torch.cuda.Event(enable_timing=True)
+        # self.tick.record()
+        self.tick = time.time()
 
-#     def stop(self):
-#         # self.tock = torch.cuda.Event(enable_timing=True)
-#         # self.tock.record()
-#         # self.tock.synchronize()
-#         # elapsed_time_ms = self.tick.elapsed_time(self.tock)
-#         # timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
+    def stop(self):
+        # self.tock = torch.cuda.Event(enable_timing=True)
+        # self.tock.record()
+        # self.tock.synchronize()
+        # elapsed_time_ms = self.tick.elapsed_time(self.tock)
+        # timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
 
-#         torch.cuda.synchronize()
-#         self.tock = time.time()
-#         elapsed_time_ms = (self.tock - self.tick)*1e3
-#         timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
+        torch.cuda.synchronize()
+        self.tock = time.time()
+        elapsed_time_ms = (self.tock - self.tick)*1e3
+        timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
 
 
 class PerfCounter:

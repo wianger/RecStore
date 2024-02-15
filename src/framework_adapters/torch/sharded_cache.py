@@ -269,7 +269,9 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
                 missing_value = F.embedding(missing_keys.cpu(
                 ),  full_emb, sparse=True, padding_idx=None, scale_grad_by_freq=False,)
 
+            ctx.timer_software= XMH_TIMER("forward: software")
             ret_value[in_cache_mask.logical_not()] = missing_value.cuda()
+            ctx.timer_software.stop()
         else:
             pass
 
