@@ -220,8 +220,8 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
         COMMON_CONFIGS = {
             "num_workers": [4] if GetHostName() != "node182" else [4],
             "num_embs": [int(10*1e6),],
-            # "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
-            "batch_size": [128, 256, 512, 1024, 1536, 2048,],
+            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
+            # "batch_size": [128, 256, 512, 1024, 1536, 2048,],
             "run_steps": [200],
             "log_interval": [100],
 
@@ -308,8 +308,8 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
             # "num_workers": [8] if GetHostName() != "node182" else [4],
 
             "num_embs": [int(10*1e6),],
-            # "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
-            "batch_size": [128, 512, 1024, 1536, 2048,],
+            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
+            # "batch_size": [128, 512, 1024, 1536, 2048,],
             "run_steps": [200],
             "log_interval": [100],
 

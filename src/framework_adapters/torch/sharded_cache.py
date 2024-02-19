@@ -36,7 +36,6 @@ class ShardedCachedEmbeddingFn(torch.autograd.Function):
         # 1.2 all to all keys with shapes
         recv_keys = all2all_data_transfer(
             sharded_keys, None, tag=120, dtype=keys.dtype)
-        # print(f"Rank{rank}: keys after a2a", recv_keys, flush=True)
 
         # 2. search local cache
         query_values = []
@@ -214,6 +213,7 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
         # 1. all to all keys
         # 1.1 split keys into shards
 
+        # print(f"rank{rank} bucket keys", flush=True)
         ctx.timer_BarrierTimeBeforeRank0 = XMH_TIMER("bucket keys")
         cached_keys, missing_keys, in_cache_mask, in_each_rank_cache_mask = KnownShardedCachedEmbeddingFn.CacheConfig.split_keys_to_shards(
             keys, cached_range)
@@ -225,6 +225,7 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
             cached_keys, None,
             tag=21,
             dtype=keys.dtype,
+            # verbose=True,
         )
         ctx.timer_a2akeys.stop()
 
@@ -276,8 +277,10 @@ class KnownShardedCachedEmbeddingFn(torch.autograd.Function):
             pass
 
         # 5.2 join in-cache keys
+        ctx.timer_software= XMH_TIMER("forward: software2")
         for cache_query_value, mask in zip(cache_query_values_in_mine, in_each_rank_cache_mask):
             ret_value[mask] = cache_query_value
+        ctx.timer_software.stop()
 
         ctx.timer_join.stop()
 

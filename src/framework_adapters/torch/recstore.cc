@@ -4,6 +4,7 @@
 #include <torch/extension.h>
 #include <torch/torch.h>
 
+#include "torch_utils.h"
 #include "IPCTensor.h"
 #include "base/timer.h"
 #include "base/zipf.h"
@@ -98,21 +99,17 @@ class ZipfianTorchFiller : public torch::CustomClassHolder {
 
 void RegisterIPCBarrier(torch::Library &m);
 
-
-torch::optional<torch::Tensor>
-  NarrowShapeTensor(torch::Tensor base, const at::IntArrayRef shape,
-   const at::ScalarType dtype
-               )
-{
-    auto tensor = torch::from_blob(
-        base.data_ptr(),
-        shape,
-        torch::TensorOptions().dtype(dtype).device(base.device()));
-    return tensor;
+torch::optional<torch::Tensor> NarrowShapeTensor(torch::Tensor base,
+                                                 const at::IntArrayRef shape,
+                                                 const at::ScalarType dtype) {
+  int64_t total_bytes = base.numel() * base.element_size();
+  int64_t required_bytes = at::elementSize(dtype) * TensorUtil::numel(shape);
+  CHECK_GE(total_bytes, required_bytes);
+  auto tensor = torch::from_blob(
+      base.data_ptr(), shape,
+      torch::TensorOptions().dtype(dtype).device(base.device()));
+  return tensor;
 }
-
-
-
 
 TORCH_LIBRARY(librecstore_pytorch, m) {
   m.def("NarrowShapeTensor", &NarrowShapeTensor);

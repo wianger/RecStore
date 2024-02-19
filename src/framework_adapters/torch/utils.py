@@ -265,14 +265,14 @@ def all2all_data_transfer(data, recv_shape, tag,
             res[idx] = _recv_cpu[key]
         else:
             if len(_send_message_buffer) == 0:
-                for init_buffer_i in range(8):
+                for init_buffer_i in range(world_size):
                     _send_message_buffer.append(
                         torch.zeros(
-                            (int(1e6), 800), dtype=torch.float32, pin_memory=True, requires_grad=False)
+                            (int(1e6), 100), dtype=torch.float32, pin_memory=True, requires_grad=False)
                     )
                     _recv_message_buffer.append(
                         torch.zeros(
-                            (int(1e6), 800), dtype=torch.float32, pin_memory=True, requires_grad=False)
+                            (int(1e6), 100), dtype=torch.float32, pin_memory=True, requires_grad=False)
                     )
             msg[idx] = NarrowShapeTensor_op(
                 _send_message_buffer[idx], data[idx].shape, dtype)

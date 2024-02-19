@@ -15,6 +15,14 @@ std::string toString(const SubGradTensor &tensor, bool simplified = true);
 
 class TensorUtil {
  public:
+  static int64_t numel(const at::IntArrayRef shape) {
+    int64_t ret = 1;
+    for (auto i : shape) {
+      ret *= i;
+    }
+    return ret;
+  }
+
   static std::vector<torch::Tensor> IndexVectors(
       const torch::Tensor &tensor, const std::vector<torch::Tensor> &indices) {
 #ifdef DEBUG
