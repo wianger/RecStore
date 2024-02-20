@@ -55,34 +55,36 @@ if __name__ == "__main__":
         # exp_lists.append(each)
 
 
-        each = exp_config.ExpRealMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0212-real-motiv-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpRealMotivationPerfEmb()
+        # each.SetLogDir(f'{LOG_PREFIX}/0219-real-motiv-{suffix}')
+        # exp_lists.append(each)
 
         # # 用这个
-        each = exp_config.ExpMotivationPerfEmb()
-        # each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
-        each.SetLogDir(f'{LOG_PREFIX}/0211-motiv-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpMotivationPerfEmb()
+        # # each.SetLogDir(f'{LOG_PREFIX}/0131-motiv-{suffix}')
+        # each.SetLogDir(f'{LOG_PREFIX}/0211-motiv-{suffix}')
+        # exp_lists.append(each)
 
         each = exp_config.ExpRecPerf()
         # each.SetLogDir(f'{LOG_PREFIX}/0128-Rec-{suffix}')  #实质上是0131重跑的
-        each.SetLogDir(f'{LOG_PREFIX}/0210-Rec-{suffix}')
+        # each.SetLogDir(f'{LOG_PREFIX}/0210-Rec-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/0220-Rec-{suffix}')
         exp_lists.append(each)
 
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0210-KG-scale-{suffix}')
-        each.SetFilter(lambda config: config['dataset'] == 'FB15k')
+        # each.SetLogDir(f'{LOG_PREFIX}/0210-KG-scale-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/0220-KG-scale-{suffix}')
+        # each.SetFilter(lambda config: config['dataset'] == 'FB15k')
         exp_lists.append(each)
 
 
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpKGScalability()
+        # each.SetLogDir(f'{LOG_PREFIX}/0131-KG-scale-{suffix}')
+        # exp_lists.append(each)
 
 
         each = exp_config.ExpKGSensitive()
-        each.SetLogDir(f'{LOG_PREFIX}/0204-sen-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/0220-sen-{suffix}')
         exp_lists.append(each)
 
         # each = exp_config.ExpKGPerfDebug()

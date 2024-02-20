@@ -209,11 +209,7 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         LocalNukeAllPython()
 
 
-
-
-
-
-#这个是motivation，下面的改成microbenchmark了
+# 这个是motivation，下面的改成microbenchmark了
 class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "MotivationPerfEmb"
@@ -296,8 +292,6 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
         print("pnuke perf_emb.py")
         # LocalNuke("perf_emb.py")
         LocalNukeAllPython()
-
-
 
 
 class ExpMotivationPerfEmb(LocalOnlyExperiment):
@@ -592,7 +586,7 @@ class ExpKGScalability(GNNExperiment):
         COMMON_CONFIGS = {
             "model_name": [
                 'TransE',
-                'SimplE'
+                # 'SimplE'
 
                 # 'TransR',  OOM
                 # 'RESCAL',  too slow
@@ -616,6 +610,20 @@ class ExpKGScalability(GNNExperiment):
                     "cache_ratio": [0.05, 0.1],
                     "batch_size": [2000],
                     "nr_gpus": [8] if GetHostName() != "node182" else [4],
+                },
+                {
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [400, 800, 1200, 1600, 2000],
+                    "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
+                },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [400, 800, 1200, 1600, 2000],
+                    "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
                 },
                 # for scalability
                 {
@@ -669,8 +677,7 @@ class ExpKGScalability(GNNExperiment):
 
     def SetFilter(self, fn):
         self.filter_fn = fn
- 
- 
+
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
@@ -679,8 +686,8 @@ class ExpKGScalability(GNNExperiment):
                 continue
             if self.filter_fn is not None and (not self.filter_fn(each)):
                 print("pass filter")
-                continue 
-            
+                continue
+
             print(each)
             need_run.append(each)
 
@@ -937,25 +944,26 @@ class ExpRecPerf(RecExperiment):
                 # for different batch_size
                 {
                     "dataset": ["avazu", "criteo",],
-                    # "dataset": ["avazu", ],
-                    "cache_ratio": [0.01, 0.05, 0.1],
-                    "batch_size": [32, 64, 128, 192, 256],
+                    # "cache_ratio": [0.01, 0.05, 0.1],
+                    # "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024, 1536, 2048],
+                    "cache_ratio": [0.01, 0.05,],
+                    "batch_size": [128, 256, 512, 768, 1024,],
                     "num_workers": [8] if GetHostName() != "node182" else [4],
                 },
                 # for different cache_size
-                {
-                    "dataset": ["avazu", "criteo",],
-                    # "dataset": ["avazu", ],
-                    "cache_ratio": [0.01, 0.05, 0.1],
-                    "batch_size": [256],
-                    "num_workers": [8] if GetHostName() != "node182" else [4],
-                },
-
+                # {
+                #     "dataset": ["avazu", "criteo",],
+                #     # "cache_ratio": [0.01, 0.05, 0.1],
+                #     # "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024, 1536, 2048],
+                #     "cache_ratio": [0.01, 0.05,],
+                #     "batch_size": [128, 256, 512, 768, 1024,],
+                #     "num_workers": [8] if GetHostName() != "node182" else [4],
+                # },
                 # for scalability
                 {
                     "dataset": ["avazu"],
                     "cache_ratio": [0.05],
-                    "batch_size": [256],
+                    "batch_size": [1024,],
                     "num_workers": [2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
                 }
             ],

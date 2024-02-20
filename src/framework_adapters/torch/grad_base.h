@@ -309,53 +309,97 @@ class GradProcessingBase {
 
   virtual void BlockToStepN(int step_no) = 0;
 
-/*
+  /*
+    std::pair<std::vector<std::vector<torch::Tensor>>,
+              std::vector<std::vector<torch::Tensor>>>
+    ShuffleKeysAndGradsXMH(
+        const std::vector<base::ConstArray<int64_t>> &input_keys,
+        const std::vector<torch::Tensor> &input_grads) {
+      int num_gpus = input_keys.size();
+
+      std::vector<std::vector<std::vector<int64_t>>>
+          shuffled_keys_in_each_rank_cache(num_gpus);
+      std::vector<std::vector<std::vector<int>>>
+    shuffled_idx_in_each_rank_cache( num_gpus);
+
+      for (int rank = 0; rank < num_gpus; rank++) {
+        shuffled_keys_in_each_rank_cache[rank].resize(num_gpus);
+        shuffled_idx_in_each_rank_cache[rank].resize(num_gpus);
+
+        for (int i = 0; i < num_gpus; i++) {
+          shuffled_keys_in_each_rank_cache[rank][i].resize(1e6);
+          shuffled_idx_in_each_rank_cache[rank][i].resize(1e6);
+        }
+      }
+
+      for (int rank = 0; rank < num_gpus; rank++) {
+        base::ConstArray<int64_t> key_array = input_keys[rank];
+
+        for (int i = 0; i < key_array.Size(); i++) {
+          int64_t key = key_array[i];
+
+          // find shard for this key
+          int64_t shard_no = -1;
+          for (int j = 0; j < cached_range_.size(); j++) {
+            if (key >= cached_range_[j][0] && key < cached_range_[j][1]) {
+              shard_no = j;
+              break;
+            }
+          }
+          if (shard_no == -1) continue;
+
+          // put key to shuffled_keys_in_each_rank_cache[shard_no]
+          // record i in shuffled_idx_in_each_rank_cache[shard_no]
+          shuffled_keys_in_each_rank_cache[shard_no][rank].push_back(key);
+          shuffled_idx_in_each_rank_cache[shard_no][rank].push_back(i);
+        }
+      }
+    }
+  */
+
+  /*-------- BOOST SHUFFLE VERSION ---------*/
   std::pair<std::vector<std::vector<torch::Tensor>>,
             std::vector<std::vector<torch::Tensor>>>
-  ShuffleKeysAndGradsXMH(
-      const std::vector<base::ConstArray<int64_t>> &input_keys,
-      const std::vector<torch::Tensor> &input_grads) {
-    int num_gpus = input_keys.size();
+  Boost_ShuffleKeysAndGrads(const std::vector<torch::Tensor> &input_keys,
+                            const std::vector<torch::Tensor> &input_grads) {
+    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
+    int num_gpus_ = input_keys.size();
+    // auto _start = std::chrono::high_resolution_clock::now();
 
-    std::vector<std::vector<std::vector<int64_t>>>
-        shuffled_keys_in_each_rank_cache(num_gpus);
-    std::vector<std::vector<std::vector<int>>> shuffled_idx_in_each_rank_cache(
-        num_gpus);
-
-    for (int rank = 0; rank < num_gpus; rank++) {
-      shuffled_keys_in_each_rank_cache[rank].resize(num_gpus);
-      shuffled_idx_in_each_rank_cache[rank].resize(num_gpus);
-
-      for (int i = 0; i < num_gpus; i++) {
-        shuffled_keys_in_each_rank_cache[rank][i].resize(1e6);
-        shuffled_idx_in_each_rank_cache[rank][i].resize(1e6);
-      }
+    std::vector<std::vector<torch::Tensor>> shuffled_keys_in_each_rank_cache;
+    std::vector<std::vector<torch::Tensor>> shuffled_grads_in_each_rank_cache;
+    shuffled_keys_in_each_rank_cache.resize(num_gpus_);
+    shuffled_grads_in_each_rank_cache.resize(num_gpus_);
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      shuffled_keys_in_each_rank_cache[rank].resize(num_gpus_);
+      shuffled_grads_in_each_rank_cache[rank].resize(num_gpus_);
     }
 
-    for (int rank = 0; rank < num_gpus; rank++) {
-      base::ConstArray<int64_t> key_array = input_keys[rank];
-
-      for (int i = 0; i < key_array.Size(); i++) {
-        int64_t key = key_array[i];
-
-        // find shard for this key
-        int64_t shard_no = -1;
-        for (int j = 0; j < cached_range_.size(); j++) {
-          if (key >= cached_range_[j][0] && key < cached_range_[j][1]) {
-            shard_no = j;
-            break;
-          }
-        }
-        if (shard_no == -1) continue;
-
-        // put key to shuffled_keys_in_each_rank_cache[shard_no]
-        // record i in shuffled_idx_in_each_rank_cache[shard_no]
-        shuffled_keys_in_each_rank_cache[shard_no][rank].push_back(key);
-        shuffled_idx_in_each_rank_cache[shard_no][rank].push_back(i);
+#pragma omp parallel for num_threads(8)
+    for (int rank = 0; rank < num_gpus_; rank++) {
+      for (int shard_no = 0; shard_no < num_gpus_; shard_no++) {
+        torch::Tensor in_this_rank =
+            input_keys[rank]
+                .greater_equal(cached_range_[shard_no][0])
+                .logical_and(input_keys[rank].less(cached_range_[shard_no][1]));
+        shuffled_keys_in_each_rank_cache[shard_no][rank] =
+            std::move(at::indexing::get_item(
+                input_keys[rank], {at::indexing::TensorIndex(in_this_rank)}));
+        shuffled_grads_in_each_rank_cache[shard_no][rank] =
+            std::move(at::indexing::get_item(
+                input_grads[rank], {at::indexing::TensorIndex(in_this_rank)}));
       }
     }
+    // auto _end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> duration = _end - _start;
+    // std::cout << "[BOOST] num_workers= " << num_gpus_
+    //           << " Execution time: " << duration.count() << " seconds."
+    //           << std::endl;
+
+    timer_ShuffleKeysAndGrads.end();
+    return std::make_pair(shuffled_keys_in_each_rank_cache,
+                          shuffled_grads_in_each_rank_cache);
   }
-*/
 
   //  cached_range:
   //        [ (start, end ),  # rank0
@@ -368,6 +412,8 @@ class GradProcessingBase {
             std::vector<std::vector<torch::Tensor>>>
   ShuffleKeysAndGrads(const std::vector<torch::Tensor> &input_keys,
                       const std::vector<torch::Tensor> &input_grads) {
+    return Boost_ShuffleKeysAndGrads(input_keys, input_grads);
+
     xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
     std::vector<std::vector<torch::Tensor>> shuffled_keys_in_each_rank_cache;
     std::vector<std::vector<torch::Tensor>> shuffled_grads_in_each_rank_cache;
