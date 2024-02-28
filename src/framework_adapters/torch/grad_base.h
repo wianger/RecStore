@@ -18,7 +18,8 @@
 // #define GRAD_ASYNC_V1_DEBUG
 #define USE_SUB_GRAD_TENSOR
 // #define XMH_DEBUG_KG
-#define USE_NEG_THREAD
+// #define USE_NEG_THREAD
+#define USE_BOOST_SHUFFLE
 
 namespace recstore {
 
@@ -277,7 +278,7 @@ class GradProcessingBase {
 #ifdef USE_NEG_THREAD
     if (kForwardItersPerStep_ > 1) {
       while (processOneStepNegThread_ping_.load() == true)
-        ;
+        FB_LOG_EVERY_MS(ERROR, 5000) << "waiting for processOneStepNegThread_";
       return;
     }
 #else
@@ -412,7 +413,9 @@ class GradProcessingBase {
             std::vector<std::vector<torch::Tensor>>>
   ShuffleKeysAndGrads(const std::vector<torch::Tensor> &input_keys,
                       const std::vector<torch::Tensor> &input_grads) {
+#ifdef USE_BOOST_SHUFFLE
     return Boost_ShuffleKeysAndGrads(input_keys, input_grads);
+#endif
 
     xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
     std::vector<std::vector<torch::Tensor>> shuffled_keys_in_each_rank_cache;

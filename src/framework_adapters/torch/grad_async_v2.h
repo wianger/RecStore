@@ -254,7 +254,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
       base::LockGuard _(large_lock_);
 
       if (pq_.empty()) {
-        LOG(WARNING) << "pq is empty";
+        // LOG(WARNING) << "pq is empty";
         break;
       }
 
@@ -304,7 +304,7 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
         p->RecaculatePriority();
 #ifdef XMH_DEBUG_KG
         LOG(INFO) << folly::sformat("Push pq_ | id={}, step_no={}, grad={}", id,
-                                    step_no, toString(grad_tensor, false));
+                                    step_no, toString(grad_tensor));
 #endif
         pq_.PushOrUpdate(p);
       }

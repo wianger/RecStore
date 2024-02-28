@@ -33,17 +33,22 @@ if __name__ == "__main__":
     exp_lists = []
 
     if suffix == 'A30':
-        each = exp_config.ExpRealMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0215-real-motiv-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpRealMotivationPerfEmb()
+        # each.SetLogDir(f'{LOG_PREFIX}/0215-real-motiv-{suffix}')
+        # exp_lists.append(each)
 
         each = exp_config.ExpRecPerf()
         each.SetLogDir(f'{LOG_PREFIX}/0215-Rec-{suffix}')
         exp_lists.append(each)
 
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0215-KG-scale-{suffix}')
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f'{LOG_PREFIX}/0220-Rec-{suffix}')
         exp_lists.append(each)
+
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f'{LOG_PREFIX}/0220-KG-scale-{suffix}')
+        exp_lists.append(each)
+
 
         # each = exp_config.ExpMotivationPerfEmb()
         # each.SetLogDir(f'{LOG_PREFIX}/fastpq0131-exp2-motiv-emb-{suffix}')

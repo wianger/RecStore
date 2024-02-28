@@ -1,0 +1,513 @@
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+I20240221 03:14:33.347470 652163 IPC_barrier.h:128] MultiProcessBarrierFactory->ClearIPCMemory()
+W20240221 03:14:33.349083 652163 IPCTensor.h:369] NewIPCTensor: full_emb [9449206, 32]0x100000002000 1.126 GB
+/home/xieminhui/RecStore/src/framework_adapters/torch/python/perf_rec_model.py:152: DeprecationWarning: The 'warn' function is deprecated, use 'warning' instead
+  XLOG.warn("After init DistEmbedding")
+WARNING [652163 perf_rec_model.py:152] After init DistEmbedding
+INFO [652163 distributed_c10d.py:442] Added key: store_based_barrier_key:1 to store for rank: 0
+INFO [652163 distributed_c10d.py:476] Rank 0: Completed store-based barrier for key:store_based_barrier_key:1 with 1 nodes.
+E20240221 03:14:35.424746 652163 IPCTensor.h:348] IPCTensor full_emb already exists
+W20240221 03:14:36.729692 652163 IPCTensor.h:409] NewIPCGPUTensor: embedding_cache_0 [472460, 32]; dev=0; size=57.67 MB
+W20240221 03:14:36.730216 652163 IPCTensor.h:369] NewIPCTensor: input_keys_0 [1000000]0x10004817d000 7.629 MB
+W20240221 03:14:36.730295 652163 IPCTensor.h:369] NewIPCTensor: input_keys_neg_0 [1000000]0x100048920000 7.629 MB
+W20240221 03:14:36.730314 652163 IPCTensor.h:369] NewIPCTensor: backward_grads_0 [1000000, 32]0x1000490c3000 122.1 MB
+W20240221 03:14:36.730329 652163 IPCTensor.h:369] NewIPCTensor: backward_grads_neg_0 [1000000, 32]0x100050ad7000 122.1 MB
+W20240221 03:14:36.730348 652163 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_0_gpu [1000000, 32]; dev=0; size=122.1 MB
+W20240221 03:14:36.730576 652163 IPCTensor.h:409] NewIPCGPUTensor: backward_grads_neg_0_gpu [1000000, 32]; dev=0; size=122.1 MB
+========== Running Perf with routine <function routine_local_cache_helper at 0x7f323e2e5f80>==========
+New CachedEmbedding, name=full_emb, shape=(9449206, 32), cache_type=KnownLocalCachedEmbedding
+fixed cache_range is [(0, 472460)]
+cudaHostRegister 0x100000002000
+0: KnownLocalCachedEmbedding init done
+W20240221 03:14:40.060848 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_0 [1000000]0x1000584ef000 7.629 MB
+W20240221 03:14:40.061012 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_1 [1000000]0x100058c92000 7.629 MB
+W20240221 03:14:40.061034 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_2 [1000000]0x100059435000 7.629 MB
+W20240221 03:14:40.061051 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_3 [1000000]0x100059bd8000 7.629 MB
+W20240221 03:14:40.061069 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_4 [1000000]0x10005a37b000 7.629 MB
+W20240221 03:14:40.061101 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_5 [1000000]0x10005ab1e000 7.629 MB
+W20240221 03:14:40.061121 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_6 [1000000]0x10005b2c1000 7.629 MB
+W20240221 03:14:40.061148 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_7 [1000000]0x10005ba64000 7.629 MB
+W20240221 03:14:40.061172 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_8 [1000000]0x10005c207000 7.629 MB
+W20240221 03:14:40.061190 652163 IPCTensor.h:369] NewIPCTensor: cached_sampler_r0_9 [1000000]0x10005c9aa000 7.629 MB
+W20240221 03:14:40.061216 652163 IPCTensor.h:369] NewIPCTensor: step_r0 [10]0x10005d14d000 80 B 
+W20240221 03:14:40.061237 652163 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_r0 [1]0x10005d14f000 8 B 
+W20240221 03:14:40.061252 652163 IPCTensor.h:369] NewIPCTensor: circle_buffer_end_cppseen_r0 [1]0x10005d151000 8 B 
+Dataset:  /home/xieminhui/RecStoreDataset/avazu_binary
+Dataset loaded
+np.max =  9449205
+np.min=  1
+Construct RecModelSampler done
+I20240221 03:14:40.061553 652163 IPC_barrier.h:118] CreateBarrier: new barrier, name: kgcachecontroller, count: 1
+W20240221 03:14:40.062080 652163 grad_base.h:55] KGCacheController, config={
+        "num_gpus": 1,
+        "L": 10,
+        "kForwardItersPerStep": 1,
+        "clr": 0.01,
+        "backwardMode": "CppAsyncV2",
+        "nr_background_threads": 16, 
+        "cache_ratio": 0.05,
+        "backgrad_init": "both",
+        "update_pq_use_omp": 2,
+        "kUpdatePqWorkerNum": 8
+    }
+W20240221 03:14:40.062263 652163 grad_base.h:184] Init GradProcessingBase done
+I20240221 03:14:40.629169 652163 grad_async_v2.h:42] Use main thread to update emb.
+W20240221 03:14:40.629390 652163 kg_controller.h:78] after init GradAsyncProcessingV2
+I20240221 03:14:40.629396 652163 kg_controller.h:84] Construct KGCacheController done
+E20240221 03:14:40.701882 652163 recstore.cc:67] init folly done
+Construct KGCacheControllerWrapper done
+I20240221 03:14:40.702026 652163 grad_base.h:60] GraphEnv RegTensorsPerProcess
+W20240221 03:14:40.702996 652442 grad_async_v2.h:137] Detect new sample comes, old_end0, new_end1
+E20240221 03:14:40.703172 652442 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+Before Training
+I20240221 03:14:41.923903 652163 IPC_barrier.h:118] CreateBarrier: new barrier, name: start_barrier, count: 1
+========== Step 0 ========== 
+W20240221 03:14:41.926513 652442 grad_async_v2.h:137] Detect new sample comes, old_end0, new_end1
+E20240221 03:14:41.926599 652442 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+W20240221 03:14:42.804328 652163 grad_async_v2.h:270] Sleep in <BlockToStepN>, step_no=1, pq.top=1
+========== Step 1 ========== 
+INFO [652163 distributed.py:1140] Reducer buckets have been rebuilt in this iteration.
+========== Step 2 ========== 
+========== Step 3 ========== 
+W20240221 03:14:42.859014 652163 grad_async_v2.h:257] pq is empty
+========== Step 4 ========== 
+W20240221 03:14:42.862393 652163 grad_async_v2.h:257] pq is empty
+========== Step 5 ========== 
+========== Step 6 ========== 
+========== Step 7 ========== 
+W20240221 03:14:42.872830 652163 grad_async_v2.h:257] pq is empty
+========== Step 8 ========== 
+========== Step 9 ========== 
+========== Step 10 ========== 
+========== Step 11 ========== 
+E20240221 03:14:42.885895 652163 grad_async_v2.h:404] Stalled in ProcessBackward: rank=0, step_no=11, sample_step_cpp_seen_[rank]=10
+W20240221 03:14:42.900506 652163 grad_async_v2.h:257] pq is empty
+========== Step 12 ========== 
+E20240221 03:14:42.926097 652442 parallel_pq_v2.h:79] insert failed, size(hashtable)=0
+========== Step 13 ========== 
+W20240221 03:14:42.955454 652442 grad_async_v2.h:137] Detect new sample comes, old_end3, new_end4
+W20240221 03:14:42.958472 652163 grad_async_v2.h:257] pq is empty
+========== Step 14 ========== 
+========== Step 15 ========== 
+========== Step 16 ========== 
+========== Step 17 ========== 
+========== Step 18 ========== 
+========== Step 19 ========== 
+========== Step 20 ========== 
+========== Step 21 ========== 
+========== Step 22 ========== 
+========== Step 23 ========== 
+W20240221 03:14:43.010314 652163 grad_async_v2.h:257] pq is empty
+========== Step 24 ========== 
+========== Step 25 ========== 
+========== Step 26 ========== 
+========== Step 27 ========== 
+========== Step 28 ========== 
+========== Step 29 ========== 
+========== Step 30 ========== 
+========== Step 31 ========== 
+========== Step 32 ========== 
+========== Step 33 ========== 
+========== Step 34 ========== 
+========== Step 35 ========== 
+========== Step 36 ========== 
+W20240221 03:14:43.175107 652163 grad_async_v2.h:257] pq is empty
+========== Step 37 ========== 
+W20240221 03:14:43.178514 652163 grad_async_v2.h:257] pq is empty
+========== Step 38 ========== 
+========== Step 39 ========== 
+========== Step 40 ========== 
+W20240221 03:14:43.188019 652163 grad_async_v2.h:257] pq is empty
+========== Step 41 ========== 
+========== Step 42 ========== 
+W20240221 03:14:43.194257 652163 grad_async_v2.h:257] pq is empty
+========== Step 43 ========== 
+W20240221 03:14:43.197367 652163 grad_async_v2.h:257] pq is empty
+========== Step 44 ========== 
+W20240221 03:14:43.200477 652163 grad_async_v2.h:257] pq is empty
+========== Step 45 ========== 
+========== Step 46 ========== 
+W20240221 03:14:43.206799 652163 grad_async_v2.h:257] pq is empty
+========== Step 47 ========== 
+W20240221 03:14:43.229741 652163 grad_async_v2.h:257] pq is empty
+========== Step 48 ========== 
+W20240221 03:14:43.283792 652163 grad_async_v2.h:257] pq is empty
+========== Step 49 ========== 
+========== Step 50 ========== 
+========== Step 51 ========== 
+========== Step 52 ========== 
+========== Step 53 ========== 
+W20240221 03:14:43.299862 652163 grad_async_v2.h:257] pq is empty
+========== Step 54 ========== 
+========== Step 55 ========== 
+========== Step 56 ========== 
+========== Step 57 ========== 
+========== Step 58 ========== 
+========== Step 59 ========== 
+W20240221 03:14:43.337595 652163 grad_async_v2.h:257] pq is empty
+========== Step 60 ========== 
+W20240221 03:14:43.393435 652163 grad_async_v2.h:257] pq is empty
+========== Step 61 ========== 
+W20240221 03:14:43.396813 652163 grad_async_v2.h:257] pq is empty
+========== Step 62 ========== 
+W20240221 03:14:43.400031 652163 grad_async_v2.h:257] pq is empty
+========== Step 63 ========== 
+========== Step 64 ========== 
+========== Step 65 ========== 
+========== Step 66 ========== 
+W20240221 03:14:43.412705 652163 grad_async_v2.h:257] pq is empty
+========== Step 67 ========== 
+========== Step 68 ========== 
+========== Step 69 ========== 
+========== Step 70 ========== 
+========== Step 71 ========== 
+W20240221 03:14:43.438865 652163 grad_async_v2.h:257] pq is empty
+========== Step 72 ========== 
+W20240221 03:14:43.483793 652163 grad_async_v2.h:257] pq is empty
+========== Step 73 ========== 
+========== Step 74 ========== 
+========== Step 75 ========== 
+W20240221 03:14:43.492789 652163 grad_async_v2.h:257] pq is empty
+========== Step 76 ========== 
+========== Step 77 ========== 
+========== Step 78 ========== 
+========== Step 79 ========== 
+W20240221 03:14:43.504298 652163 grad_async_v2.h:257] pq is empty
+========== Step 80 ========== 
+========== Step 81 ========== 
+========== Step 82 ========== 
+========== Step 83 ========== 
+W20240221 03:14:43.528903 652163 grad_async_v2.h:257] pq is empty
+========== Step 84 ========== 
+W20240221 03:14:43.573760 652163 grad_async_v2.h:257] pq is empty
+========== Step 85 ========== 
+========== Step 86 ========== 
+W20240221 03:14:43.579806 652163 grad_async_v2.h:257] pq is empty
+========== Step 87 ========== 
+========== Step 88 ========== 
+========== Step 89 ========== 
+========== Step 90 ========== 
+========== Step 91 ========== 
+========== Step 92 ========== 
+========== Step 93 ========== 
+W20240221 03:14:43.604089 652163 grad_async_v2.h:257] pq is empty
+========== Step 94 ========== 
+========== Step 95 ========== 
+W20240221 03:14:43.618506 652163 grad_async_v2.h:257] pq is empty
+========== Step 96 ========== 
+W20240221 03:14:43.662787 652163 grad_async_v2.h:257] pq is empty
+========== Step 97 ========== 
+========== Step 98 ========== 
+========== Step 99 ========== 
+W20240221 03:14:43.672641 652163 grad_async_v2.h:257] pq is empty
+Step99:rank0, time: 6.836, per_step: 0.068363
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 102.279 us                | 230.540 us                |
+| GenInput                  | 246.474 us                | 593.182 us                |
+| NN                        | 505.073 us                | 1.931 ms                  |
+| Forward                   | 677.102 us                | 2.274 ms                  |
+| Backward                  | 1.378 ms                  | 2.397 ms                  |
+| Optimize                  | 160.200 us                | 503.860 us                |
+| BarrierTimeBeforeRank0    | 14.164 us                 | 24.883 us                 |
+| AfterBackward             | 533.471 us                | 53.156 ms                 |
+| BlockToStepN              | 69.892 us                 | 312.481 us                |
+| OneStep                   | 3.170 ms                  | 55.841 ms                 |
++---------------------------+---------------------------+---------------------------+
+========== Step 100 ========== 
+========== Step 101 ========== 
+========== Step 102 ========== 
+========== Step 103 ========== 
+========== Step 104 ========== 
+W20240221 03:14:43.688853 652163 grad_async_v2.h:257] pq is empty
+========== Step 105 ========== 
+========== Step 106 ========== 
+========== Step 107 ========== 
+========== Step 108 ========== 
+========== Step 109 ========== 
+========== Step 110 ========== 
+========== Step 111 ========== 
+========== Step 112 ========== 
+========== Step 113 ========== 
+========== Step 114 ========== 
+========== Step 115 ========== 
+========== Step 116 ========== 
+========== Step 117 ========== 
+========== Step 118 ========== 
+========== Step 119 ========== 
+W20240221 03:14:43.797619 652163 grad_async_v2.h:257] pq is empty
+========== Step 120 ========== 
+W20240221 03:14:43.842325 652163 grad_async_v2.h:257] pq is empty
+========== Step 121 ========== 
+========== Step 122 ========== 
+W20240221 03:14:43.848951 652163 grad_async_v2.h:257] pq is empty
+========== Step 123 ========== 
+========== Step 124 ========== 
+========== Step 125 ========== 
+========== Step 126 ========== 
+========== Step 127 ========== 
+========== Step 128 ========== 
+========== Step 129 ========== 
+========== Step 130 ========== 
+========== Step 131 ========== 
+W20240221 03:14:43.887320 652163 grad_async_v2.h:257] pq is empty
+========== Step 132 ========== 
+E20240221 03:14:43.926013 652442 parallel_pq_v2.h:79] insert failed, size(hashtable)=1
+W20240221 03:14:43.931938 652163 grad_async_v2.h:257] pq is empty
+========== Step 133 ========== 
+========== Step 134 ========== 
+========== Step 135 ========== 
+========== Step 136 ========== 
+========== Step 137 ========== 
+========== Step 138 ========== 
+========== Step 139 ========== 
+========== Step 140 ========== 
+========== Step 141 ========== 
+========== Step 142 ========== 
+W20240221 03:14:43.964546 652163 grad_async_v2.h:257] pq is empty
+========== Step 143 ========== 
+W20240221 03:14:43.978928 652163 grad_async_v2.h:257] pq is empty
+========== Step 144 ========== 
+W20240221 03:14:43.979260 652442 grad_async_v2.h:137] Detect new sample comes, old_end4, new_end5
+W20240221 03:14:44.019858 652163 grad_async_v2.h:257] pq is empty
+========== Step 145 ========== 
+========== Step 146 ========== 
+========== Step 147 ========== 
+========== Step 148 ========== 
+========== Step 149 ========== 
+========== Step 150 ========== 
+========== Step 151 ========== 
+========== Step 152 ========== 
+========== Step 153 ========== 
+========== Step 154 ========== 
+========== Step 155 ========== 
+========== Step 156 ========== 
+W20240221 03:14:44.108299 652163 grad_async_v2.h:257] pq is empty
+========== Step 157 ========== 
+========== Step 158 ========== 
+W20240221 03:14:44.115013 652163 grad_async_v2.h:257] pq is empty
+========== Step 159 ========== 
+========== Step 160 ========== 
+========== Step 161 ========== 
+========== Step 162 ========== 
+========== Step 163 ========== 
+========== Step 164 ========== 
+========== Step 165 ========== 
+========== Step 166 ========== 
+========== Step 167 ========== 
+========== Step 168 ========== 
+W20240221 03:14:44.196174 652163 grad_async_v2.h:257] pq is empty
+========== Step 169 ========== 
+========== Step 170 ========== 
+========== Step 171 ========== 
+W20240221 03:14:44.206171 652163 grad_async_v2.h:257] pq is empty
+========== Step 172 ========== 
+========== Step 173 ========== 
+========== Step 174 ========== 
+========== Step 175 ========== 
+========== Step 176 ========== 
+========== Step 177 ========== 
+========== Step 178 ========== 
+W20240221 03:14:44.229038 652163 grad_async_v2.h:257] pq is empty
+========== Step 179 ========== 
+========== Step 180 ========== 
+W20240221 03:14:44.284628 652163 grad_async_v2.h:257] pq is empty
+========== Step 181 ========== 
+========== Step 182 ========== 
+========== Step 183 ========== 
+========== Step 184 ========== 
+========== Step 185 ========== 
+========== Step 186 ========== 
+W20240221 03:14:44.304124 652163 grad_async_v2.h:257] pq is empty
+========== Step 187 ========== 
+========== Step 188 ========== 
+========== Step 189 ========== 
+========== Step 190 ========== 
+========== Step 191 ========== 
+W20240221 03:14:44.333472 652163 grad_async_v2.h:257] pq is empty
+========== Step 192 ========== 
+W20240221 03:14:44.371974 652163 grad_async_v2.h:257] pq is empty
+========== Step 193 ========== 
+W20240221 03:14:44.375419 652163 grad_async_v2.h:257] pq is empty
+========== Step 194 ========== 
+========== Step 195 ========== 
+========== Step 196 ========== 
+========== Step 197 ========== 
+========== Step 198 ========== 
+========== Step 199 ========== 
+Step199:rank0, time: 0.722, per_step: 0.007149
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 103.336 us                | 170.932 us                |
+| GenInput                  | 250.066 us                | 570.947 us                |
+| NN                        | 508.454 us                | 1.456 ms                  |
+| Forward                   | 681.520 us                | 1.903 ms                  |
+| Backward                  | 1.375 ms                  | 1.697 ms                  |
+| Optimize                  | 160.392 us                | 296.366 us                |
+| BarrierTimeBeforeRank0    | 14.350 us                 | 24.883 us                 |
+| AfterBackward             | 539.079 us                | 52.375 ms                 |
+| BlockToStepN              | 83.227 us                 | 188.279 us                |
+| OneStep                   | 3.209 ms                  | 55.116 ms                 |
++---------------------------+---------------------------+---------------------------+
+========== Step 200 ========== 
+W20240221 03:14:44.398466 652163 grad_async_v2.h:257] pq is empty
+========== Step 201 ========== 
+========== Step 202 ========== 
+W20240221 03:14:44.404851 652163 grad_async_v2.h:257] pq is empty
+========== Step 203 ========== 
+========== Step 204 ========== 
+W20240221 03:14:44.459776 652163 grad_async_v2.h:257] pq is empty
+========== Step 205 ========== 
+========== Step 206 ========== 
+========== Step 207 ========== 
+========== Step 208 ========== 
+W20240221 03:14:44.473608 652163 grad_async_v2.h:257] pq is empty
+========== Step 209 ========== 
+========== Step 210 ========== 
+========== Step 211 ========== 
+========== Step 212 ========== 
+========== Step 213 ========== 
+========== Step 214 ========== 
+========== Step 215 ========== 
+========== Step 216 ========== 
+========== Step 217 ========== 
+========== Step 218 ========== 
+========== Step 219 ========== 
+========== Step 220 ========== 
+========== Step 221 ========== 
+========== Step 222 ========== 
+========== Step 223 ========== 
+========== Step 224 ========== 
+========== Step 225 ========== 
+W20240221 03:14:44.577457 652163 grad_async_v2.h:257] pq is empty
+========== Step 226 ========== 
+========== Step 227 ========== 
+W20240221 03:14:44.597286 652163 grad_async_v2.h:257] pq is empty
+========== Step 228 ========== 
+========== Step 229 ========== 
+========== Step 230 ========== 
+========== Step 231 ========== 
+========== Step 232 ========== 
+========== Step 233 ========== 
+========== Step 234 ========== 
+========== Step 235 ========== 
+========== Step 236 ========== 
+W20240221 03:14:44.661855 652163 grad_async_v2.h:257] pq is empty
+========== Step 237 ========== 
+========== Step 238 ========== 
+========== Step 239 ========== 
+W20240221 03:14:44.684706 652163 grad_async_v2.h:257] pq is empty
+========== Step 240 ========== 
+========== Step 241 ========== 
+========== Step 242 ========== 
+========== Step 243 ========== 
+========== Step 244 ========== 
+========== Step 245 ========== 
+========== Step 246 ========== 
+========== Step 247 ========== 
+========== Step 248 ========== 
+========== Step 249 ========== 
+========== Step 250 ========== 
+========== Step 251 ========== 
+========== Step 252 ========== 
+========== Step 253 ========== 
+========== Step 254 ========== 
+========== Step 255 ========== 
+========== Step 256 ========== 
+========== Step 257 ========== 
+========== Step 258 ========== 
+========== Step 259 ========== 
+========== Step 260 ========== 
+========== Step 261 ========== 
+========== Step 262 ========== 
+========== Step 263 ========== 
+W20240221 03:14:44.862555 652163 grad_async_v2.h:257] pq is empty
+========== Step 264 ========== 
+========== Step 265 ========== 
+========== Step 266 ========== 
+========== Step 267 ========== 
+========== Step 268 ========== 
+========== Step 269 ========== 
+========== Step 270 ========== 
+========== Step 271 ========== 
+========== Step 272 ========== 
+E20240221 03:14:44.926033 652442 parallel_pq_v2.h:79] insert failed, size(hashtable)=2
+========== Step 273 ========== 
+W20240221 03:14:44.931216 652163 grad_async_v2.h:257] pq is empty
+========== Step 274 ========== 
+========== Step 275 ========== 
+========== Step 276 ========== 
+========== Step 277 ========== 
+W20240221 03:14:44.989861 652442 grad_async_v2.h:137] Detect new sample comes, old_end7, new_end8
+========== Step 278 ========== 
+========== Step 279 ========== 
+========== Step 280 ========== 
+========== Step 281 ========== 
+========== Step 282 ========== 
+========== Step 283 ========== 
+========== Step 284 ========== 
+========== Step 285 ========== 
+========== Step 286 ========== 
+========== Step 287 ========== 
+========== Step 288 ========== 
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 103.336 us                | 170.932 us                |
+| GenInput                  | 250.876 us                | 570.947 us                |
+| NN                        | 508.489 us                | 1.456 ms                  |
+| Forward                   | 681.274 us                | 1.903 ms                  |
+| Backward                  | 1.372 ms                  | 1.693 ms                  |
+| Optimize                  | 160.175 us                | 295.778 us                |
+| BarrierTimeBeforeRank0    | 14.407 us                 | 29.311 us                 |
+| AfterBackward             | 542.026 us                | 52.204 ms                 |
+| BlockToStepN              | 92.619 us                 | 139.953 us                |
+| OneStep                   | 3.223 ms                  | 54.950 ms                 |
++---------------------------+---------------------------+---------------------------+
+========== Step 289 ========== 
+========== Step 290 ========== 
+========== Step 291 ========== 
+========== Step 292 ========== 
+========== Step 293 ========== 
+========== Step 294 ========== 
+========== Step 295 ========== 
+========== Step 296 ========== 
+========== Step 297 ========== 
+========== Step 298 ========== 
+========== Step 299 ========== 
+Step299:rank0, time: 0.733, per_step: 0.007260
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| GenInput:CircleBuffer     | 103.261 us                | 170.932 us                |
+| GenInput                  | 250.876 us                | 570.947 us                |
+| NN                        | 508.760 us                | 1.456 ms                  |
+| Forward                   | 681.431 us                | 1.903 ms                  |
+| Backward                  | 1.372 ms                  | 1.693 ms                  |
+| Optimize                  | 160.125 us                | 295.778 us                |
+| BarrierTimeBeforeRank0    | 14.407 us                 | 29.311 us                 |
+| AfterBackward             | 542.195 us                | 52.204 ms                 |
+| BlockToStepN              | 94.557 us                 | 152.264 us                |
+| OneStep                   | 3.225 ms                  | 54.950 ms                 |
++---------------------------+---------------------------+---------------------------+
+Successfully xmh
+W20240221 03:14:45.128240 652163 grad_async_v2.h:84] call StopThreads. PID = 652163
+W20240221 03:14:45.128253 652163 grad_base.h:212] before processOneStepNegThread_.join();
+W20240221 03:14:45.128291 652163 grad_base.h:214] after processOneStepNegThread_.join();
+W20240221 03:14:45.128296 652163 grad_async_v2.h:86] call GradProcessingBase::StopThreads.
+W20240221 03:14:45.128468 652163 grad_async_v2.h:105] StopThreads done.
+ERROR [652163 PsKvstore.py:89] Delete tensor failed, not found
+On rank0, prepare to call self.controller.StopThreads(), self=<controller_process.KGCacheControllerWrapper object at 0x7f32e4662650>
+Successfully xmh
++---------------------------+---------------------------+---------------------------+
+| Name                      | P50                       | P99                       |
++---------------------------+---------------------------+---------------------------+
+| clean                     | 83.214 us                 | 192.892 us                |
+| ProcessBack:Shuffle       | 377.022 us                | 447.762 us                |
+| ProcessBack:UpdateCache   | 91.932 us                 | 114.159 us                |
+| ProcessBack:UpsertPq      | 23.444 us                 | 36.716 us                 |
+| ProcessOneStep            | 527.579 us                | 52.188 ms                 |
+| BlockToStepN              | 65.958 us                 | 115.566 us                |
++---------------------------+---------------------------+---------------------------+

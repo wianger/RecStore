@@ -424,15 +424,15 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
             XLOG.info("call rank0 to StopThreads done")
 
     def AfterBackward(self,):
-        # print(f"rank{self.rank}: reached AfterBackward, {time.time()}")
-
         self.timer_BarrierTimeBeforeRank0.start()
         self.barrier.Wait()
         self.timer_BarrierTimeBeforeRank0.stop()
 
         if self.use_cpp_controller and self.rank == 0:
             self.timer_AfterBackward.start()
+            # print(f"rank{self.rank}: before ProcessOneStep, {time.time()}")
             self.controller.ProcessOneStep(self.step)
+            # print(f"rank{self.rank}: after ProcessOneStep, {time.time()}")
             self.timer_AfterBackward.stop()
 
         # self.barrier.Wait()
@@ -440,8 +440,11 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.step += 1
 
         self.timer_BlockToStepN.start()
+
+        # print(f"rank{self.rank}: before BlockToStepN, {time.time()}")
         if self.use_cpp_controller and self.rank == 0:
             self.controller.BlockToStepN(self.step)
+        # print(f"rank{self.rank}: after BlockToStepN, {time.time()}")
 
         self.barrier.Wait()
         self.timer_BlockToStepN.stop()
