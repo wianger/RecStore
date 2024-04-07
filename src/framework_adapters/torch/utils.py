@@ -139,6 +139,7 @@ class GPUTimer:
         # self.tick = torch.cuda.Event(enable_timing=True)
         # self.tick.record()
         self.tick = time.time()
+        th.cuda.nvtx.range_push(self.name)
 
     def stop(self):
         # self.tock = torch.cuda.Event(enable_timing=True)
@@ -146,8 +147,8 @@ class GPUTimer:
         # self.tock.synchronize()
         # elapsed_time_ms = self.tick.elapsed_time(self.tock)
         # timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
-
         torch.cuda.synchronize()
+        th.cuda.nvtx.range_pop()
         self.tock = time.time()
         elapsed_time_ms = (self.tock - self.tick)*1e3
         timer_module.Timer.ManualRecordNs(self.name, elapsed_time_ms*1e3*1e3)
@@ -394,7 +395,10 @@ def reduce_sparse_kv_tensor(keys, values, shape, dst_rank=0):
     if keys.dim() != 2:
         temp = keys.unsqueeze(0)
         assert temp.dim() == 2
-    return reduce_sparse_tensor(torch.sparse_coo_tensor(temp, values, size=shape), dst_rank)
+    
+    with xmh_nvtx_range("sparse_coo_tensor"):
+        sparse_coo_tensor = torch.sparse_coo_tensor(temp, values, size=shape)
+    return reduce_sparse_tensor(sparse_coo_tensor, dst_rank)
 
 
 def all2all_sparse_tensor(keys, values, tag, verbose=False):
