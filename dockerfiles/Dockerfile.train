@@ -12,29 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG IMAGE_VERSION=21.06-tf2-py3
+ARG IMAGE_VERSION=23.06-tf2-py3
 FROM nvcr.io/nvidia/tensorflow:${IMAGE_VERSION} AS devel
 
+ARG username=xieminhui
+ARG uid=1000
+
 ARG UBUNTU_VERSION
-ARG CMAKE_VERSION=3.19.6
-ARG PYTHON_VERSION=3.8
-ARG RAPIDS_VERSION=21.06
-ARG HWLOC_VERSION=2.4.1
-ARG MPI_VERSION=4.1.0
-ARG MPI4PY_VERSION=3.0.3
 
 ARG RELEASE=false
 ARG SM="60;61;70;75;80"
 ARG VAL_MODE=OFF
 ARG ENABLE_MULTINODES=ON
-ARG username
-ARG uid
 
 RUN apt-get remove --auto-remove -y python3 cmake && \
     rm -rfv /usr/local/mpi /usr/local/ucx
 
-ENV http_proxy=http:///10.0.3.8:7890
-ENV https_proxy=http://10.0.3.8:7890
+ENV http_proxy=http://127.0.0.1:7890
+ENV https_proxy=http://127.0.0.1:7890
+
+# ENV http_proxy=http://10.0.2.180:7890
+# ENV https_proxy=http://10.0.2.180:7890
+
 # ENV http_proxy=http://192.168.1.30:7890
 # ENV https_proxy=http://192.168.1.30:7890
 
@@ -42,17 +41,33 @@ ENV no_proxy=localhost,127.0.0.1,kwaidc.com
 ENV CC=/usr/bin/gcc
 ENV CXX=/usr/bin/g++
 
+
+COPY ubuntu20.04.apt.ustc /etc/apt/sources.list
+
+
+
+
+
 RUN apt-get update -y && \
       DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       vim gdb git wget tar unzip curl clang-format libboost-all-dev && \
       rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /var/tmp && wget -q -nc --no-check-certificate -P /var/tmp https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh && \
-bash /var/tmp/Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/conda && \
+
+COPY Miniforge3-Linux-x86_64.sh /var/tmp/
+
+RUN mkdir -p /var/tmp && cd /var/tmp && bash Miniforge3-$(uname)-$(uname -m).sh -b -p /opt/conda && \
 /opt/conda/bin/conda init && \
 ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
 /opt/conda/bin/conda clean -afy && \
 rm -rf /var/tmp/Miniconda3-py38_4.10.3-Linux-x86_64.sh
+
+# RUN mkdir -p /var/tmp && wget -q -nc --no-check-certificate -P /var/tmp https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py38_4.10.3-Linux-x86_64.sh && \
+# bash /var/tmp/Miniconda3-py38_4.10.3-Linux-x86_64.sh -b -p /opt/conda && \
+# /opt/conda/bin/conda init && \
+# ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+# /opt/conda/bin/conda clean -afy && \
+# rm -rf /var/tmp/Miniconda3-py38_4.10.3-Linux-x86_64.sh
 
 ENV CPATH=/opt/conda/include:$CPATH \
 LD_LIBRARY_PATH=/opt/conda/lib:$LD_LIBRARY_PATH \
@@ -63,12 +78,16 @@ NCCL_LAUNCH_MODE=PARALLEL
 
 # remove cudf since it introduces an elder version of PB
 RUN conda update -n base -c defaults conda
-RUN conda update -n base -c defaults conda && \
-conda install -c rapidsai -c nvidia -c numba -c conda-forge python=3.8 cudatoolkit=11.2 && \
-conda install -c conda-forge cmake=3.19.6 pip ucx libhwloc=2.4.0 openmpi=4.1.0 openmpi-mpicc=4.1.0 mpi4py=3.0.3 && \
+RUN conda install -y nvidia/label/cuda-12.3.2::cuda-toolkit
+RUN conda install -c rapidsai -c nvidia -c numba -c conda-forge python=3.8 && \
+conda install -c conda-forge pip ucx libhwloc=2.4.0 openmpi=4.1.0 openmpi-mpicc=4.1.0 mpi4py=3.0.3 && \
 conda install -c rapidsai -c nvidia -c numba -c conda-forge cudf=0.19 && \
 conda clean -afy && \
 rm -rfv /opt/conda/include/nccl.h /opt/conda/lib/libnccl* /opt/conda/include/google /opt/conda/include/*cudnn* /opt/conda/lib/*cudnn* /opt/conda/lib/libcudart*
+
+
+RUN pip install "cmake<3.25.0"
+
 # RUN conda update -n base -c defaults conda && \
 # conda install -c rapidsai -c nvidia -c numba -c conda-forge cudf=0.19 python=3.8 cudatoolkit=11.2 && \
 # conda install -c conda-forge cmake=3.19.6 pip ucx libhwloc=2.4.0 openmpi=4.1.0 openmpi-mpicc=4.1.0 mpi4py=3.0.3 && \
@@ -180,14 +199,11 @@ USER ${uid}:${uid}
 WORKDIR /home/${username}
 
 RUN mkdir .ssh
-RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC5mtDaegM/dEFR1oD57lgvXxJp0NWWx1fmMXs+aycrbFcT+fgxMeou0uJSCBx4nugOwy2iu1KqX6v0UrdRVbQ9cY5b6z4wD/+xCqePzXbecU1HrsodBW8FY3xBDCB9DkncyXzJDtM5u+PviKG7bBpD4pCegthvtsYxbbh2Cp3hb9Bo4CW6S8mDpZJeNO1oEbJAj5dF2gULTQonK4HTB+jeRCU5FH2TGPvsjVnS2ITZxoQn2atJBGyPtjjNRvAUOaC2+fo4lvuWLk7h00KrSMaFUVTu6iBdRJWZP9AVLSORqmOYIow4vh+nHxTzx6h9NKCRV6sV1YIWD8o2Rk5GaxIgTaKEKrGCpXGSXx5vWNIuzQ9+hj672LY2kXERhZ9obuht43u/sKpSOUZ0Rc6hM+FZIMKGR4NKpKFKP2TVKMHRT5236U9kh4grz6BAOl9FmSbTN9ZPmSSC8fon5xCxPaQPgCfr2oHvfWCy2fjKWjeGI2Z1nDIFo/GSEw9WJtAwd70= xieminhui@xieminhuis-iMac.local' >>.ssh/authorized_keys
-RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCUrm/S6w7VH1p7UVItSXDSTwOe1gy8/mV+utHvRh6gwgjJuW6FfhuIM9w/wgFdZM8eK3WNu3tiTHX7YKVaGcbWVY65SxwnIve2MKCkKN5SR+9pLTRnacg7OGPpjhVHgZ39vGAptY8rqZ7FTz9jseb1BLI8X/65iYRoGPszbvEW/4kefGSRtEMGiIrybh4yVIPcPVagdqQc3Fp4iOE6YXhTNkKHjHPFs7xJKc/ZEN3hA8Nq8rrSGjF/qT1sILc2EfxYmyQSOtZ/xRbfyqPJI5mXbXljdqgDeeMol8bQkbvOzHU18MiIfVkAZhI6s/0JWuK7DvBPa0f4ml4G+qjHhciihi++rldu7qImXXCrFEMJFBgfdmt4yuroSNfdm8Kbem0xx86KCvAv7brt690SDzfuPFDFdMsT1e9U/EHDsRJ/yDnNADIEgoK6PFmA7UaVdjwNYnwArsdbTb/q2TrXPqQQyaxSlirTw42FX0wkmDGoqGgZdbpzCJlKGmryZLi+xK8= xieminhui@node182' >>.ssh/authorized_keys
-RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCpFZXx7uzombxnfCBy+oCLpTGyfOI5TJjm9tOQzu+87AW5OcKCFEHWHH7nuARE95+aZoX5+Vt9nP4ZifO9jVt59w4OxKxUuvQjGhpcAsnayDgtvmad/wNJeAdtakm5ZlP1W00qZBxIsN0SI+cX+kJaTXSPFm23dXsQV1urACb3sg2AhewjYkHnOY1Elfx7eF4wKgPNX/2f3CgmYYH1N55ODwrOlFIXq0p054EvLFxCX3pVv1h1Vfg/AQiUMxp8PvYR0MWQFgUB1JqCHEgkR9clUSjzoE0cPs3ckng8O3baVK3DnCYkmxzRSoKeD91q32vd4yfjzWYSM3hrlCjf267wiTER8Ch7NpI76y4vPkC46L47Kei6r+6PJO7TTLjtpCXZvbA26/sVV+vlDRNrplkyiC4KuTJ8h724eheSZ23sxcQc9w2ma668NuJy400twaK0IN/gh2nbc/ILZkNh8kTvwIzu7uXDTbAb5FE+X7YVRAP7JOuQu9rc/dcyJcZem2M= frw@node182' >> .ssh/authorized_keys
-RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCpJSdU5zqBoKM1ykGSMVJwJmg97ZXa79hkOfYBJxwxO8cwSVf8NbjMcI2fDeW2a/sZGxDQGibFl9oy+FET650Ao/QCNXPJGQRTQZYA1FjHlK4cnHOMQAXbAdpi3c/puctHCtnuAmg2+jTNW//gzKxr+t8z1YhUMAjzbL8DhiGGBLkPA9mXsS/5eS3J+A17nj83faxOR+NYxjQtX9yKinuyvM+0hhhEJM37mGGIgkJFO0L0iueGbdWRU/ThCfjjdssalVdeuk9hhsjgqXpqzf8PlvuENTbNbQU69VJWC7NwaC14mcIxWETQjNT6mM4z78ftxtsN/MFxT8F176YRndQt 62364@DESKTOP-VQ01I9A' >> .ssh/authorized_keys
+RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCiMP0T//ukA8H5xY+l6yxvC/gc77RoREKX5LKhoYjosswCM9pGDHLH0f2DkS2y4sTX219VBz0bX3xiFcczOca0jH1ABEm0oB46y1zmUxyDDNPoCtaACo0toQaSSjeORIvQWYdwpKwZAAJqrGAAxvNDSoT8RsSXhSMu5ETxitJHknCP1kuApM/KGt48Qeu6UCrETb7q7bRZYxo0Vcs6bDs331eRzo4PDRP2/3YUefE/Ae/pSU2G/8GaFgHq8Vj15TKGqZn5Zesykk1mlYL7CLczGhyEQqf1/HytfaHMQdsMgnrdUvlVjeiTI4h5G/y4wfDTLFi50zjJogFrA8FDEPsyTq56tO6q2zX3vck1V/1aPgrAJ6JRX0mgQUrRC2uBFw4f0n/RzVhOO1aztiq6bHiUXMRXMwRQZ/XQ26AoOEh+cabI46pPKqsa+9WLwFH+7A4eLzNx6Hox0K2oikQpyVUJSUpeQDm81fVcRd2oFwKJGUK2U45ZGoSBdiHFUim4DeE= xieminhui@xieminhuideMac-mini.local' >>.ssh/authorized_keys
 RUN chmod 600 .ssh/authorized_keys
 
 RUN alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
-ENV PYTHONPATH=/data/project/HugeCTR/build/lib
+# ENV PYTHONPATH=/data/project/HugeCTR/build/lib
 
 RUN sudo rm /opt/conda/lib/libtinfo*
 RUN sudo rm -rf /opt/conda/include/grpc*

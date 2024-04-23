@@ -154,6 +154,60 @@ class Barrier {
   std::atomic_int passed_ = 0;
 };
 
+// class BitLockTable {
+//  public:
+//   BitLockTable(int64_t num_locks) : lockTable((num_locks + 63) / 64) {
+//     for (int i = 0; i < lockTable.size(); i++) {
+//       lockTable[i].store(0, std::memory_order_relaxed);
+//     }
+//   }
+
+//   void lock(int index) {
+//     uint64_t bitIndex = index % 64;
+//     uint64_t arrayIndex = index / 64;
+//     uint64_t bit = 1 << bitIndex;
+//     uint64_t expected =
+//     lockTable[arrayIndex].load(std::memory_order_relaxed);
+
+//     while (true) {
+//       if ((expected & bit) == 0) {  // Check if the bit is not set
+//         // Attempt to set the bit
+//         if (lockTable[arrayIndex].compare_exchange_weak(
+//                 expected, expected | bit, std::memory_order_acquire,
+//                 std::memory_order_relaxed)) {
+//           break;  // Successfully acquired the lock
+//         }
+//       } else {
+//         // The bit is already set, wait and then read the current value again
+//         expected = lockTable[arrayIndex].load(std::memory_order_relaxed);
+//       }
+//     }
+//   }
+
+//   void unlock(int index) {
+//     uint64_t bitIndex = index % 64;
+//     uint64_t arrayIndex = index / 64;
+//     uint64_t bit = 1 << bitIndex;
+//     // Clear the bit to unlock
+//     lockTable[arrayIndex].fetch_and(~bit, std::memory_order_release);
+//   }
+
+//  private:
+//   std::vector<std::atomic<uint64_t>> lockTable;
+// };
+
+class BitLockTable {
+ public:
+  BitLockTable(int64_t num_locks) : lockTable(num_locks) {}
+
+  void lock(int index) { lockTable[index].Lock(); }
+
+  void unlock(int index) { lockTable[index].Unlock(); }
+
+ private:
+  std::vector<base::SpinLock> lockTable;
+};
+
 // class ReaderFriendlyLock {
 //   std::vector<uint64_t[8]> lock_vec_;
 

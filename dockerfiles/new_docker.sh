@@ -1,0 +1,1 @@
+sudo docker run --cap-add=SYS_ADMIN --privileged --security-opt seccomp=unconfined --runtime=nvidia --name hugectr --net=host -v /home/xieminhui/RecStore:/home/xieminhui/RecStore  -v /dev/shm:/dev/shm -v /dev/hugepages:/dev/hugepages -v /dev:/dev -v /nas:/nas -w /home/xieminhui/RecStore --rm -it --gpus all -d hugectr
