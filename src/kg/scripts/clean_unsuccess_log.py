@@ -2,7 +2,7 @@ import shutil
 import glob
 import os
 import tqdm
-all_dir = "/home/xieminhui/RecStore/src/framework_adapters/torch/benchmark/log"
+all_dir = "/home/xieminhui/RecStore/log"
 
 all_exp_dirs = glob.glob(f"{all_dir}/*")
 

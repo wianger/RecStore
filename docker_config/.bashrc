@@ -116,12 +116,12 @@ if ! shopt -oq posix; then
   fi
 fi
 
-export PATH=$PATH:/usr/local/cuda/bin
+export PATH=/opt/hpcx/ompi/bin/:$PATH:/usr/local/cuda/bin
+export LD_LIBRARY_PATH=/opt/hpcx/ompi/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
-export http_proxy=http://10.0.3.8:7890
-export https_proxy=http://10.0.3.8:7890
-
-export all_proxy=socks5://10.0.3.8:7890
+# export http_proxy=http://10.0.3.8:7890
+# export https_proxy=http://10.0.3.8:7890
+# export all_proxy=socks5://10.0.3.8:7890
 
 alias sudo="sudo env PATH=$PATH"
 

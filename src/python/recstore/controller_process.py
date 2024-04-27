@@ -116,9 +116,11 @@ class BasePerfSampler:
             (self.sampler_iter_num, entity_id))
 
         timer_CircleBuffer = Timer("GenInput:CircleBuffer")
-        # self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=True)
-        self.ids_circle_buffer.push(
-            self.sampler_iter_num, entity_id, sync=False)
+        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=True)
+        
+        # BUG may occur if we don't sync here
+        # self.ids_circle_buffer.push(
+        #     self.sampler_iter_num, entity_id, sync=False)
         timer_CircleBuffer.stop()
 
         self.sampler_iter_num += 1
@@ -135,15 +137,15 @@ class TestPerfSampler(BasePerfSampler):
         from test_emb import XMH_DEBUG
         if XMH_DEBUG:
             # if self.rank == 0:
-            #     # input_keys = th.tensor([0, 1,],).long().cuda()
+            #     input_keys = th.tensor([0, 1,],).long().cuda()
             #     # input_keys = th.tensor([0, 1, 2],).long().cuda()
             # else:
-            #     # input_keys = th.tensor([1, 2,],).long().cuda()
-            #     input_keys = th.tensor([3, 4, 5],).long().cuda()
+            #     input_keys = th.tensor([1, 2,],).long().cuda()
+            #     # input_keys = th.tensor([3, 4, 5],).long().cuda()
             # return input_keys
 
             entity_id = th.randint(self.full_emb_capacity, size=(
-                100,)).long().cuda()
+                self.num_ids_per_step,)).long().cuda()
             return entity_id
         else:
             entity_id = th.randint(self.full_emb_capacity, size=(

@@ -17,18 +17,15 @@
 # limitations under the License.
 #
 
-from cache_common import CacheShardingPolicy
-from python.controller_process import KGCacheControllerWrapper, KGCacheControllerWrapperDummy
 import recstore
-from recstore import KGCacheController
-from recstore import utils
-from utils import xmh_nvtx_range
+from recstore.cache import CacheShardingPolicy
+from recstore import KGCacheController,KGCacheControllerWrapper, KGCacheControllerWrapperDummy, KGCacheControllerWrapperBase
+from recstore.utils import xmh_nvtx_range, Timer
 
 
 from pyinstrument import Profiler
 from torch.profiler import profile, record_function, ProfilerActivity
 
-from utils import Timer
 from .dataloader import get_dataset
 from .dataloader import EvalDataset
 import dgl.backend as F
@@ -146,11 +143,20 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     barrier.wait()
 
     if args.use_my_emb:
-        kg_cache_controller = KGCacheControllerWrapper(
-            json_str, model.n_entities,
-        )
+        # kg_cache_controller = KGCacheControllerWrapper(
+        #     json_str, model.n_entities,
+        # )
+        
+        import json
+        json_dict = json.loads(json_str)
+        json_dict['full_emb_capacity'] = model.n_entities
+        json_str = json.dumps(json_dict)
+        kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(
+            "RecStore", json_str)
     else:
-        kg_cache_controller = KGCacheControllerWrapperDummy()
+        # kg_cache_controller = KGCacheControllerWrapperDummy()
+        kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(
+            "Dummy", "")
 
     kg_cache_controller.init()
     print("train_sampler.Prefill()")

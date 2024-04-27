@@ -19,25 +19,25 @@ import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.profiler import profile, record_function, ProfilerActivity
 
+
 import sys
-sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
+
 import recstore
 from recstore import Mfence
 
 from rec_dataloader import RecDatasetCapacity
-from cache_common import TorchNativeStdEmbDDP
-from controller_process import KGCacheControllerWrapperBase, KGCacheControllerWrapperDummy, RecModelSampler, TestPerfSampler
-from cache_emb_factory import CacheEmbFactory
-from controller_process import KGCacheControllerWrapper
-from sharded_cache import KnownShardedCachedEmbedding, ShardedCachedEmbedding
-from local_cache import KnownLocalCachedEmbedding, LocalCachedEmbedding
-from DistEmb import DistEmbedding
-from PsKvstore import ShmKVStore, kvinit
-from utils import XLOG, Timer, GPUTimer, xmh_nvtx_range
+
+
+from recstore import KGCacheControllerWrapperBase, KGCacheControllerWrapper, KGCacheControllerWrapperDummy
+from recstore.cache import CacheEmbFactory, TorchNativeStdEmbDDP
+from recstore.PsKvstore import ShmKVStore, kvinit
+from recstore import DistEmbedding, BasePerfSampler, Mfence
+from recstore.utils import XLOG, Timer, GPUTimer, xmh_nvtx_range
+import recstore.DistOpt as DistOpt
+
+
 import time
-import DistOpt
-
-
 import random
 random.seed(0)
 np.random.seed(0)

@@ -65,8 +65,7 @@ else:
 
 EMB_INIT_EPS = 2.0
 
-from recstore import utils  # nopep8
-from utils import xmh_nvtx_range # nopep8
+from recstore.utils import xmh_nvtx_range # nopep8
 
 
 class InferModel(object):

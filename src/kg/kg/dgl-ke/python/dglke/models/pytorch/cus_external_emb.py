@@ -1,7 +1,7 @@
 import dgl.backend as F
-from DistOpt import SparseSGD, SparseAdagrad, SparseRowWiseAdaGrad
-from cache_emb_factory import CacheEmbFactory
-from DistEmb import DistEmbedding
+from recstore.DistOpt import SparseSGD, SparseAdagrad, SparseRowWiseAdaGrad
+from recstore.cache import CacheEmbFactory
+from recstore import DistEmbedding
 from .tensor_models import ExternalEmbedding
 import torch as th
 import torch.nn as nn
@@ -10,9 +10,6 @@ import torch.nn.init as INIT
 
 
 import sys
-
-sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")
-
 
 is_custom_external_emb_initialized = False
 

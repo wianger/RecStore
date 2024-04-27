@@ -13,8 +13,7 @@ dglke_train --model_name TransE_l2
 
 
 from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
-from controller_process import GraphCachedSampler, KGCacheControllerWrapperBase
-import test_utils
+# import test_utils
 import pickle
 from dglke.utils import get_compatible_batch_size, save_model, CommonArgParser
 from dglke.dataloader import get_dataset
@@ -38,11 +37,12 @@ import torch as th
 import numpy as np
 
 import sys
-sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
+
 import recstore
+from recstore.cache import CacheShardingPolicy # nopep8
 
-from cache_common import CacheShardingPolicy  # nopep8
-
+from recstore import GraphCachedSampler, KGCacheControllerWrapperBase
 
 random.seed(0)
 np.random.seed(0)
@@ -196,7 +196,7 @@ def main():
     args.kForwardItersPerStep = json_config['kForwardItersPerStep']
     args.backgrad_init = json_config['backgrad_init']
 
-    from PsKvstore import kvinit
+    from recstore.PsKvstore import ShmKVStore, kvinit
     kvinit()
 
     recstore.IPCTensorFactory.ClearIPCMemory()

@@ -38,9 +38,9 @@ from functools import wraps
 from .. import *
 
 
-import sys
-sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")
-from utils import XLOG
+# import sys
+# sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")
+from recstore.utils import XLOG
 
 
 logsigmoid = functional.logsigmoid

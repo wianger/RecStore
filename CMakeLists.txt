@@ -84,6 +84,15 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_LIST_DIR}/third_party/grpc-instal
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/FindGRPC.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake")
 
+
+
+list(APPEND CMAKE_PREFIX_PATH "/home/xieminhui/.local/share/cmake/")
+
+list(APPEND CMAKE_PREFIX_PATH "/home/xieminhui/.local/lib/python3.10/site-packages/torch/share/cmake/Torch/")
+
+# /Torch
+
+
 set(folly_DIR "${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/lib/cmake/folly")
 set(FOLLY_ROOT_DIR "${folly_DIR}")
 

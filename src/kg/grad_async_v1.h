@@ -27,6 +27,8 @@ class AsyncGradElement {
   AsyncGradElement(int64_t id) : id_(id) { RecaculatePriority(); }
 
   void MarkReadInStepN(int stepN) {
+    // LOG(INFO) << "MarkReadInStepN: id=" << id_ << ", step=" << stepN;
+
     // read_step_.push_back(stepN);
 
 #ifdef GRAD_ASYNC_V1_DEBUG
@@ -86,8 +88,8 @@ class AsyncGradElement {
     return min_step;
   }
 
-  std::string ToString() const {
-    base::LockGuard _(lock_);
+  std::string ToString(bool withLock = true) const {
+    if (withLock) lock_.Lock();
     std::stringstream ss;
     ss << folly::sformat("id={}, read_step=[", id_);
     for (auto each : read_step_) {
@@ -102,6 +104,7 @@ class AsyncGradElement {
       ss << toString(each, false) << ",";
     }
     ss << "], priority=" << Priority();
+    if (withLock) lock_.Unlock();
     return ss.str();
   }
 
@@ -131,6 +134,10 @@ class AsyncGradElement {
 #endif
 
   void RemoveReadStep(int step_no) {
+    // LOG(INFO) << "RemoveReadStep: id=" << id_ << ", step=" << step_no;
+
+
+    
     // auto newEnd =
     //     std::remove_if(read_step_.begin(), read_step_.end(),
     //                    [step_no](int value) { return value == step_no; });
@@ -138,7 +145,7 @@ class AsyncGradElement {
 
 #ifdef GRAD_ASYNC_V1_DEBUG
     lock_.AssertLockHold();
-    CHECK_NE(read_step_.size(), 0) << "id is " << id_;
+    CHECK_NE(read_step_.size(), 0) << ToString(false);
     CHECK_EQ(*read_step_.begin(), step_no) << "id is " << id_;
 #endif
     if (read_step_.size() != 0) read_step_.erase(read_step_.begin());

@@ -50,11 +50,9 @@ cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo mak
 
 # cd ${PROJECT_PATH}/third_party/rocksdb/ && rm -rf _build && mkdir _build && cd _build && cmake .. && make -j20 && sudo make install
 
-#############################SPDK#############################
+"#############################SPDK#############################
 cd ${PROJECT_PATH}/
-
 sudo apt install -y ca-certificates
-
 # sudo cp docker_config/ubuntu20.04.apt.ustc /etc/apt/sources.list
 sudo sed -i "s@http://.*archive.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
 sudo sed -i "s@http://.*security.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
@@ -74,7 +72,9 @@ make -j20
 sudo make install
 # make clean
 #############################SPDK#############################
+
 sudo rm /opt/conda/lib/libtinfo.so.6
+"
 
 
 # GRPC

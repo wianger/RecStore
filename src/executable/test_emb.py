@@ -44,8 +44,8 @@ USE_SGD = True
 # USE_SGD = False
 LR = 2
 
-# XMH_DEBUG = True
-XMH_DEBUG = False
+XMH_DEBUG = True
+# XMH_DEBUG = False
 
 CHECK = True
 # CHECK = False
@@ -76,9 +76,10 @@ def worker_main(routine, worker_id, num_workers, emb_context, args):
 class TestShardedCache:
 
     if XMH_DEBUG:
-        num_workers = 2
+        num_workers = 4
         EMB_DIM = 3
-        EMB_LEN = 20
+        # EMB_LEN = 100
+        EMB_LEN = 2000000
         BATCH_SIZE = 1024
     else:
         num_workers = 4
@@ -318,7 +319,7 @@ class TestShardedCache:
             "backwardMode": ["CppAsyncV2",],
 
             # 0没问题，1、2的时候会有bug，应该也是多线程的Upsert时候的问题，但目前来看不影响性能
-            "update_pq_use_omp": [1],
+            "update_pq_use_omp": [0],
 
             "kUseParallelClean": [0],
             # "kUseParallelClean": [0],
@@ -351,7 +352,7 @@ class TestShardedCache:
             args = {
                 "kForwardItersPerStep": 1,
                 "L": 10,
-                "nr_background_threads": 32,
+                "nr_background_threads": 4,
                 "log_interval": 100,
                 **each,
             }

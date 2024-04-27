@@ -33,9 +33,10 @@ from dgl.base import NID, EID
 
 
 import sys
-sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
+sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
+# sys.path.append("/home/xieminhui/RecStore/src/framework_adapters/torch")  # nopep8
 import recstore
-from python.test_utils import diff_objs, diff_presampling
+# from python.test_utils import diff_objs, diff_presampling
 
 
 def SoftRelationPartition(edges, n, has_importance=False, threshold=0.05):

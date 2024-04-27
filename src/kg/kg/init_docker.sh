@@ -25,13 +25,13 @@ make -j
 cd ..
 cd python
 pip install scipy==1.12.0rc1 
-python setup.py develop
+python setup.py develop --user
 
 
 cd ..
 cd dgl-ke
 cd python
-python setup.py develop
+python setup.py develop --user
 cd -
 
 pip install paramiko ogb pyinstrument gpustat debugpy pytest

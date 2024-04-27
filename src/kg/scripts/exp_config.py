@@ -15,7 +15,8 @@ def ConvertHostNumaList2Host(host_numa_lists):
     return list(set([each[0] for each in host_numa_lists]))
 
 
-DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
+# DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
+DIR_PATH = "/home/xieminhui/RecStore/src/executable"
 
 
 def GswLock():
@@ -76,6 +77,7 @@ def MC_Unlock():
 
 
 def GPULock():
+    return
     if GetHostName() == "node182":
         GswLock()
     elif GetHostName() == "3090-server":
@@ -85,6 +87,7 @@ def GPULock():
 
 
 def GPUUnlock():
+    return
     if GetHostName() == "node182":
         GswUnlock()
     elif GetHostName() == "3090-server":
@@ -468,7 +471,7 @@ class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 dgl-ke-main.py", DIR_PATH, execute_host)
+                         log_dir, config,  "python3 dgl-ke-main.py", DIR_PATH+'/kg', execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -516,7 +519,7 @@ class RecRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_rec_model.py", DIR_PATH, execute_host)
+                         log_dir, config,  "python3 perf_rec_model.py", DIR_PATH +'/dlrm', execute_host)
 
     def check_config(self,):
         super().check_config()

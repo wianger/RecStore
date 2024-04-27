@@ -4,7 +4,8 @@ from .controller_process import (
     KGCacheControllerWrapperDummy,
     KGCacheControllerWrapper,
     TestPerfSampler,
-    BasePerfSampler
+    BasePerfSampler,
+    GraphCachedSampler
 )
 
 from .torch_op import *
