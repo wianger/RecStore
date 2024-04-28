@@ -44,8 +44,8 @@ USE_SGD = True
 # USE_SGD = False
 LR = 2
 
-XMH_DEBUG = True
-# XMH_DEBUG = False
+# XMH_DEBUG = True
+XMH_DEBUG = False
 
 CHECK = True
 # CHECK = False
@@ -319,9 +319,9 @@ class TestShardedCache:
             "backwardMode": ["CppAsyncV2",],
 
             # 0没问题，1、2的时候会有bug，应该也是多线程的Upsert时候的问题，但目前来看不影响性能
-            "update_pq_use_omp": [0],
+            "update_pq_use_omp": [1],
 
-            "kUseParallelClean": [0],
+            "kUseParallelClean": [1],
             # "kUseParallelClean": [0],
 
             # V1: 11 OK

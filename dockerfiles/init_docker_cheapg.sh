@@ -50,31 +50,31 @@ cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo mak
 
 # cd ${PROJECT_PATH}/third_party/rocksdb/ && rm -rf _build && mkdir _build && cd _build && cmake .. && make -j20 && sudo make install
 
-"#############################SPDK#############################
-cd ${PROJECT_PATH}/
-sudo apt install -y ca-certificates
-# sudo cp docker_config/ubuntu20.04.apt.ustc /etc/apt/sources.list
-sudo sed -i "s@http://.*archive.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
-sudo sed -i "s@http://.*security.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
-sudo -E apt-get update
+# "#############################SPDK#############################
+# cd ${PROJECT_PATH}/
+# sudo apt install -y ca-certificates
+# # sudo cp docker_config/ubuntu20.04.apt.ustc /etc/apt/sources.list
+# sudo sed -i "s@http://.*archive.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
+# sudo sed -i "s@http://.*security.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
+# sudo -E apt-get update
 
-cd third_party/spdk
-sudo PATH=$PATH which pip3
+# cd third_party/spdk
+# sudo PATH=$PATH which pip3
 
-# if failed, sudo su, and execute in root;
-# the key is that which pip3 == /opt/bin/pip3
-sudo -E PATH=$PATH scripts/pkgdep.sh --all
-# exit sudo su
+# # if failed, sudo su, and execute in root;
+# # the key is that which pip3 == /opt/bin/pip3
+# sudo -E PATH=$PATH scripts/pkgdep.sh --all
+# # exit sudo su
 
-./configure
-sudo make clean
-make -j20
-sudo make install
-# make clean
-#############################SPDK#############################
+# ./configure
+# sudo make clean
+# make -j20
+# sudo make install
+# # make clean
+# #############################SPDK#############################
 
-sudo rm /opt/conda/lib/libtinfo.so.6
-"
+# sudo rm /opt/conda/lib/libtinfo.so.6
+# "
 
 
 # GRPC
@@ -107,3 +107,18 @@ echo "distributed:
       spill: 0.70  # fraction at which we spill to disk
       pause: 0.80  # fraction at which we pause worker threads
       terminate: False  # fraction at which we terminate the worker" >~/.config/dask/distributed.yaml
+
+
+
+cd ${PROJECT_PATH}/dockerfiles
+source start_core.sh
+
+
+cd ${PROJECT_PATH}/src/kg/kg
+bash install_dgl.sh
+
+
+cd ${PROJECT_PATH}/binary
+pip3 install torch-2.0.0a0+gitunknown-cp310-cp310-linux_x86_64.whl
+
+pip3 install pymemcache

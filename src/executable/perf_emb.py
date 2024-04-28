@@ -246,7 +246,7 @@ def routine_local_cache_helper(worker_id, args):
                  nr_background_threads=args['nr_background_threads'],
                  cache_ratio=args['cache_ratio'],
                  backgrad_init=args['backgrad_init'],
-                 full_emb_capacity= emb.shape[0]
+                 full_emb_capacity=emb.shape[0]
                  )
 
     # forward
@@ -301,7 +301,8 @@ def routine_local_cache_helper(worker_id, args):
     timer_Forward = Timer("Forward")
     timer_ForwardNN = Timer("forward: NN")
     timer_Backward = Timer("Backward")
-    timer_Optimize = Timer("Optimize")
+    timer_Optimize_HBM = Timer("Optimize:HBM")
+    timer_Optimize_DRAM = Timer("Optimize:DRAM")
     timer_onestep = Timer(f"OneStep")
 
     print("Before Training", flush=True)
@@ -381,10 +382,13 @@ def routine_local_cache_helper(worker_id, args):
             assert torch.allclose(loss, std_loss)
             # diff done
 
-        timer_Optimize.start()
+        timer_Optimize_HBM.start()
         sparse_opt.step()
+        timer_Optimize_HBM.stop()
+
+        timer_Optimize_DRAM.start()
         dist_opt.step()
-        timer_Optimize.stop()
+        timer_Optimize_DRAM.stop()
 
         kg_cache_controller.AfterBackward()
 
