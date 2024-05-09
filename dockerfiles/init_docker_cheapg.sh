@@ -76,6 +76,8 @@ cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo mak
 # sudo rm /opt/conda/lib/libtinfo.so.6
 # "
 
+cd ${PROJECT_PATH}/binary
+pip3 install  -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+gitunknown-cp310-cp310-linux_x86_64.whl
 
 # GRPC
 cd ${PROJECT_PATH}/
@@ -94,7 +96,7 @@ popd
 
 sudo apt install -y sshpass
 ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
-sshpass  -p 1234 ssh-copy-id 10.0.2.182
+#sshpass  -p 1234 ssh-copy-id 10.0.2.182
 
 
 mkdir -p ~/.config/dask
@@ -118,7 +120,5 @@ cd ${PROJECT_PATH}/src/kg/kg
 bash install_dgl.sh
 
 
-cd ${PROJECT_PATH}/binary
-pip3 install torch-2.0.0a0+gitunknown-cp310-cp310-linux_x86_64.whl
 
 pip3 install pymemcache

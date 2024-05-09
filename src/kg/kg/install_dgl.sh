@@ -1,5 +1,6 @@
 # pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cu118
 set -e
+set -x
 
 # sudo apt-get install libboost-all-dev
 
@@ -20,11 +21,11 @@ cd ${temp_dir}
 
 # export CC=`which gcc-7`
 # export CXX=`which g++-7`
-cmake -DUSE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda  ..
+cmake -DUSE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda ..
 make -j
 cd ..
 cd python
-pip install scipy==1.12.0rc1 
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple scipy==1.12.0rc1 
 python setup.py develop --user
 
 
@@ -34,8 +35,8 @@ cd python
 python setup.py develop --user
 cd -
 
-pip install paramiko ogb pyinstrument gpustat debugpy pytest
-pip install "pybind11[global]"
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple paramiko ogb pyinstrument gpustat debugpy pytest
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple "pybind11[global]"
 
 
 # conda install fmt
