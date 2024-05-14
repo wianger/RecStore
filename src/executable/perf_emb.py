@@ -237,7 +237,7 @@ def routine_local_cache_helper(worker_id, args):
         "nr_background_threads": {nr_background_threads},
         "cache_ratio": {cache_ratio},
         "backgrad_init": "{backgrad_init}",
-        "full_emb_capacity": "{full_emb_capacity}"
+        "full_emb_capacity": {full_emb_capacity}
     }}'''.format(num_workers=args['num_workers'],
                  kForwardItersPerStep=args['kForwardItersPerStep'],
                  L=args['L'],
@@ -385,6 +385,18 @@ def routine_local_cache_helper(worker_id, args):
         timer_Optimize_HBM.start()
         sparse_opt.step()
         timer_Optimize_HBM.stop()
+        # assert len(sparse_opt.param_groups[1]['params']) == 1
+        # with xmh_nvtx_range(f"Step{_}:xmhdebug", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
+        #     debug_emb = sparse_opt.param_groups[1]['params'][0]
+        #     with torch.no_grad():
+        #         debug_emb_grad = debug_emb.grad
+        #         assert debug_emb_grad.is_sparse
+
+        #         timer_debug = Timer("timer_debug")
+        #         while True:
+        #             timer_debug.start()
+        #             debug_emb.add_(debug_emb_grad)
+        #             timer_debug.stop()
 
         timer_Optimize_DRAM.start()
         dist_opt.step()

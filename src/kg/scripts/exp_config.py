@@ -297,7 +297,7 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
         LocalNukeAllPython()
 
 
-class ExpMotivationPerfEmb(LocalOnlyExperiment):
+class ExpMicroPerfEmb(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
@@ -383,25 +383,18 @@ class ExpMotivationPerfEmb(LocalOnlyExperiment):
         LocalNukeAllPython()
 
 
-
-
-
 class ExpMicroDebug(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
-            "num_workers": [8] if GetHostName() != "node182" else [4],
-            # "num_workers": [8] if GetHostName() != "node182" else [4],
-
+            "num_workers": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [4],
             "num_embs": [int(10*1e6),],
-            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
-            # "batch_size": [128, 512, 1024, 1536, 2048,],
+            "batch_size": [1024],
             "run_steps": [200],
             "log_interval": [100],
 
             "cache_ratio": [
-                0.01,
-                # 0.05,
+                0.05,
                 # 0.1,
             ],
             'binding2': [
@@ -472,15 +465,16 @@ class ExpMicroDebug(LocalOnlyExperiment):
         LocalNukeAllPython()
 
 
-
 class ExpMotivationDebug(LocalOnlyExperiment):
     def __init__(self, ) -> None:
         NAME = "debug micro benchmark"
         COMMON_CONFIGS = {
             "num_workers": [8] if GetHostName() != "node182" else [4],
-            "num_embs": [int(100*1e6),],
+            "num_embs": [int(10*1e6),],
             # "batch_size": [128, 512, 1024, 1536, 2048,],
+            # "batch_size": [512, 1024, 1536],
             "batch_size": [512, 1024, 1536],
+
             "run_steps": [200],
             "log_interval": [100],
             "cache_ratio": [
@@ -609,7 +603,7 @@ class RecRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
         super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_rec_model.py", DIR_PATH +'/dlrm', execute_host)
+                         log_dir, config,  "python3 perf_rec_model.py", DIR_PATH + '/dlrm', execute_host)
 
     def check_config(self,):
         super().check_config()
@@ -704,20 +698,20 @@ class ExpKGScalability(GNNExperiment):
                     "batch_size": [2000],
                     "nr_gpus": [8] if GetHostName() != "node182" else [4],
                 },
-                {
-                    "dataset": ["FB15k",],
-                    "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
-                    "batch_size": [400, 800, 1200, 1600, 2000],
-                    "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
-                },
-                {
-                    "dataset": ["Freebase"],
-                    "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
-                    "batch_size": [400, 800, 1200, 1600, 2000],
-                    "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
-                },
+                # {
+                #     "dataset": ["FB15k",],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05,],
+                #     "batch_size": [400, 800, 1200, 1600, 2000],
+                #     "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
+                # },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05,],
+                #     "batch_size": [400, 800, 1200, 1600, 2000],
+                #     "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
+                # },
                 # for scalability
                 {
                     "dataset": ["FB15k"],
@@ -754,6 +748,96 @@ class ExpKGScalability(GNNExperiment):
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KGExternelEmbedding',
                                         # "TorchNativeStdEmb",
+                                        "TorchNativeStdEmbDDP",
+                                        'KnownShardedCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
+            ],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        self.filter_fn = None
+        super().__init__(10, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def SetFilter(self, fn):
+        self.filter_fn = fn
+
+    def _SortConfigs(self, configs):
+        need_run = []
+        for each in configs:
+            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+                print("pass Freebase")
+                continue
+            if self.filter_fn is not None and (not self.filter_fn(each)):
+                print("pass filter")
+                continue
+
+            print(each)
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+
+class ExpKGScalabilityDecoupled(GNNExperiment):
+    def __init__(self,) -> None:
+        NAME = "overall-kg-scalability"
+        COMMON_CONFIGS = {
+            "model_name": [
+                'TransE',
+            ],
+            "binding": [
+                {
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [1200],
+                    # "nr_gpus": [2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [2, 3, 4],
+                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4],
+                },
+                # {
+                #     "dataset": ["Freebase"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05],
+                #     "batch_size": [2000],
+                #     "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4],
+                # },
+            ],
+            "binding2": [
+                # for debug performance
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        "PySync",
+                        # "CppAsync"
+                    ],
+                },
+                # {
+                #     "use_my_emb": ["false"],
+                #     "cached_emb_type": ['None'],
+                #     "backwardMode": ["CppSync"],
+                # },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KGExternelEmbedding',
+                                        "TorchNativeStdEmb",
                                         'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
@@ -1037,12 +1121,14 @@ class ExpRecPerf(RecExperiment):
                 # for different batch_size
                 {
                     "dataset": ["avazu", "criteo",],
-                    # "cache_ratio": [0.01, 0.05, 0.1],
-                    # "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024, 1536, 2048],
                     "cache_ratio": [0.01, 0.05,],
-                    "batch_size": [128, 256, 512, 768, 1024,],
+
+                    # "batch_size": [128, 256, 512, 768, 1024,],
+                    "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024],
                     "num_workers": [8] if GetHostName() != "node182" else [4],
                 },
+
+
                 # for different cache_size
                 # {
                 #     "dataset": ["avazu", "criteo",],
@@ -1052,21 +1138,25 @@ class ExpRecPerf(RecExperiment):
                 #     "batch_size": [128, 256, 512, 768, 1024,],
                 #     "num_workers": [8] if GetHostName() != "node182" else [4],
                 # },
+
                 # for scalability
                 {
-                    "dataset": ["avazu"],
-                    "cache_ratio": [0.05],
-                    "batch_size": [1024,],
-                    "num_workers": [2, 4, 6, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
+                    # "dataset": ["avazu"],
+                    "dataset": ["avazu", 'criteo'],
+                    "cache_ratio": [0.01],
+                    # "batch_size": [1024,],
+                    "batch_size": [128, 1024],
+                    "num_workers": [2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
                 }
             ],
             "binding2": [
                 {
                     "emb_choice": [
                         "TorchNativeStdEmb",
-                        "KGExternelEmbedding",
+                        "TorchNativeStdEmbDDP",
+                        # "KGExternelEmbedding",
                         "KnownShardedCachedEmbedding",
-                        "KnownLocalCachedEmbeddingSoftware"
+                        # "KnownLocalCachedEmbeddingSoftware"
                     ]
                 },
                 {
@@ -1075,7 +1165,70 @@ class ExpRecPerf(RecExperiment):
                     "backwardMode": [
                         "PySync",
                         # "CppSync",
-                        "CppAsync",
+                        # "CppAsync",
+                        "CppAsyncV2",
+                    ],
+                },
+            ],
+            "run_steps": [300],
+            "log_interval": [100],
+        }
+
+        self.name = NAME
+        super().__init__(12, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        for each in configs:
+            print(each)
+        return list(sorted(configs, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke perf_rec_model.py")
+        LocalNuke("perf_rec_model.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+
+class ExpRecPerfDebug(RecExperiment):
+    def __init__(self, ) -> None:
+        NAME = "rec perf a30"
+        COMMON_CONFIGS = {
+            "with_nn": [
+                '512,256,1',
+            ],
+            "binding": [
+                # for different batch_size
+                {
+                    "dataset": ["avazu",],
+                    "cache_ratio": [0.01,],
+                    "batch_size": [128,],
+                    "num_workers": [8] if GetHostName() != "node182" else [4],
+                },
+            ],
+            "binding2": [
+                {
+                    "emb_choice": [
+                        "TorchNativeStdEmb",
+                        "TorchNativeStdEmbDDP",
+                        # "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
+                        # "KnownLocalCachedEmbeddingSoftware"
+                    ]
+                },
+                {
+
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        "PySync",
+                        # "CppSync",
+                        # "CppAsync",
                         "CppAsyncV2",
                     ],
                 },

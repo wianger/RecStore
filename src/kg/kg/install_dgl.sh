@@ -29,7 +29,7 @@ pip install -i https://pypi.tuna.tsinghua.edu.cn/simple scipy==1.12.0rc1
 python setup.py develop --user
 
 
-cd ..
+cd ../..
 cd dgl-ke
 cd python
 python setup.py develop --user

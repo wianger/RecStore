@@ -22,6 +22,7 @@ source /home/${USER}/.bashrc
 sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
 
 cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
+sudo make install
 
 
 # git submodule add https://github.com/fmtlib/fmt third_party/fmt
@@ -122,3 +123,8 @@ bash install_dgl.sh
 
 
 pip3 install pymemcache
+
+
+cd /usr/lib/x86_64-linux-gnu
+sudo unlink libibverbs.so
+sudo cp -f libibverbs.so.1.14.39.0  libibverbs.so

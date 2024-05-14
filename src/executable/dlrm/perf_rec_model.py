@@ -22,10 +22,10 @@ from torch.profiler import profile, record_function, ProfilerActivity
 
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
-
 import recstore
+from recstore import BasePerfSampler
+from rec_dataloader import RecDatasetLoader
 from recstore import Mfence
-
 from rec_dataloader import RecDatasetCapacity
 
 
@@ -48,8 +48,6 @@ LR = 0.01
 # DIFF_TEST = True
 DIFF_TEST = False
 
-from rec_dataloader import RecDatasetLoader
-from recstore import BasePerfSampler
 
 class RecModelSampler(BasePerfSampler):
     def __init__(self, rank, L, batch_size, dataset_name, backmode,
@@ -78,7 +76,6 @@ class RecModelSampler(BasePerfSampler):
         assert sample.shape[0] < 1e6
         sample = sample.cuda()
         return sample
-
 
 
 def get_run_config():
@@ -273,7 +270,8 @@ def routine_local_cache_helper(worker_id, args):
         "cache_ratio": {cache_ratio},
         "backgrad_init": "{backgrad_init}",
         "update_pq_use_omp": 2,
-        "kUpdatePqWorkerNum": 8
+        "kUpdatePqWorkerNum": 8,
+        "full_emb_capacity": {full_emb_capacity}
     }}'''.format(num_workers=args['num_workers'],
                  kForwardItersPerStep=args['kForwardItersPerStep'],
                  L=args['L'],
@@ -282,6 +280,7 @@ def routine_local_cache_helper(worker_id, args):
                  nr_background_threads=args['nr_background_threads'],
                  cache_ratio=args['cache_ratio'],
                  backgrad_init=args['backgrad_init'],
+                 full_emb_capacity=int(args['num_embs']),
                  )
 
     # forward
@@ -297,9 +296,9 @@ def routine_local_cache_helper(worker_id, args):
         for_range = range(args['run_steps'])
         with_perf = False
 
-    with_pyinstrucment = True
+    with_pyinstrucment = False
     with_cudaPerf = False
-    with_torchPerf = False
+    with_torchPerf = True
 
     if with_perf and with_pyinstrucment:
         pyinstruct_profiler = Profiler()
@@ -318,12 +317,14 @@ def routine_local_cache_helper(worker_id, args):
     print("Construct RecModelSampler done", flush=True)
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
-        kg_cache_controller = KGCacheControllerWrapper(
-            json_str, emb.shape[0],
-        )
+        # kg_cache_controller = KGCacheControllerWrapper(
+        #     json_str, emb.shape[0],
+        # )
+        kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(
+            "RecStore", json_str)
     else:
-        kg_cache_controller = KGCacheControllerWrapperDummy(
-        )
+        kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(
+            "Dummy", "")
 
     print("Construct KGCacheControllerWrapper done", flush=True)
 

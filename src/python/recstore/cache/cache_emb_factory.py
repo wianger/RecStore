@@ -18,7 +18,7 @@ class CacheEmbFactory:
                 "TorchNativeStdEmb",
                 "KGExternelEmbedding",
                 "KnownLocalCachedEmbeddingSoftware",
-                # "TorchNativeStdEmbDDP"
+                "TorchNativeStdEmbDDP"
                 ]
 
     @staticmethod

@@ -116,11 +116,14 @@ class BasePerfSampler:
             (self.sampler_iter_num, entity_id))
 
         timer_CircleBuffer = Timer("GenInput:CircleBuffer")
-        self.ids_circle_buffer.push(self.sampler_iter_num, entity_id, sync=True)
-        
-        # BUG may occur if we don't sync here
+
         # self.ids_circle_buffer.push(
-        #     self.sampler_iter_num, entity_id, sync=False)
+        #     self.sampler_iter_num, entity_id, sync=True)
+
+        # BUG may occur if we don't sync here
+        self.ids_circle_buffer.push(
+            self.sampler_iter_num, entity_id, sync=False)
+
         timer_CircleBuffer.stop()
 
         self.sampler_iter_num += 1
@@ -246,6 +249,7 @@ def GetKGCacheControllerWrapper():
 class KGCacheControllerWrapperBase:
     @classmethod
     def BeforeDDPInit(cls):
+        th.set_num_threads(8)
         recstore.IPCTensorFactory.ClearIPCMemory()
         recstore.MultiProcessBarrierFactory.ClearIPCMemory()
 
@@ -303,6 +307,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.rank = dist.get_rank()
         self.json_config = json.loads(json_str)
         full_emb_capacity = self.json_config['full_emb_capacity']
+        print("full_emb_capacity  is ", type(full_emb_capacity))
 
         if self.rank == 0:
             Timer.StartReportThread()
