@@ -56,11 +56,11 @@ class RecModelSampler(BasePerfSampler):
         if dataset_name == "criteo":
             nr_ids_one_sample = 26
             self.dataset = RecDatasetLoader(
-                "/home/xieminhui/RecStoreDataset/criteo_binary", dist.get_world_size(), rank)
+                "/home/xieminhui/RecStoreDataset/criteo_binary", dist.get_world_size(), rank, batch_size)
         elif dataset_name == "avazu":
             nr_ids_one_sample = 21
             self.dataset = RecDatasetLoader(
-                "/home/xieminhui/RecStoreDataset/avazu_binary", dist.get_world_size(), rank)
+                "/home/xieminhui/RecStoreDataset/avazu_binary", dist.get_world_size(), rank, batch_size)
         else:
             assert False
 
