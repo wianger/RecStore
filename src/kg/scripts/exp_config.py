@@ -647,6 +647,55 @@ class RecExperiment(LocalOnlyExperiment):
         LocalNuke("perf_rec_model.py")
 
 
+
+class HugeCTRSOKRecRun(LocalOnlyRun):
+    def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
+        self.execute_host = execute_host
+        super().__init__(exp_id, run_id,
+                         log_dir, config,  "python3 perf_rec_model.py",
+                         '/home/xieminhui/RecStore/third_party/HugeCTR/sparse_operation_kit/sparse_operation_kit/benchmark/xmh_dlrm_bench/',
+                         execute_host)
+
+    def check_config(self,):
+        super().check_config()
+
+    def run(self):
+        super().run()
+        sleep_seconds = 0
+        while True:
+            ret = subprocess.run(
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+            if ret == 0:
+                break
+            time.sleep(5)
+            sleep_seconds += 5
+
+            if sleep_seconds > 60*60:
+                for _ in range(100):
+                    print("DEADLOCK in wait client finish")
+                break
+
+        print("tail down")
+        LocalNuke("perf_rec_model.py")
+
+
+class RecExperiment(LocalOnlyExperiment):
+    def __init__(self, exp_id, common_config, execute_host) -> None:
+        super().__init__(exp_id, common_config, execute_host)
+
+    def _PostprocessConfig(self, each_config, ):
+        pass
+
+    def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
+        return HugeCTRSOKRecRun(self.exp_id, run_id, run_log_dir,
+                      run_config, execute_host)
+
+    def _BeforeStartAllRun(self):
+        print("lnuke perf_rec_model.py")
+        LocalNuke("perf_rec_model.py")
+
+
+
 COMMON_CLIENT_CONFIGS = {
     "no_save_emb": ['true'],
     "neg_sample_size": [200],
@@ -829,11 +878,11 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
                         # "CppAsync"
                     ],
                 },
-                # {
-                #     "use_my_emb": ["false"],
-                #     "cached_emb_type": ['None'],
-                #     "backwardMode": ["CppSync"],
-                # },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
+                },
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": ['KGExternelEmbedding',

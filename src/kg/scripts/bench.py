@@ -34,9 +34,9 @@ else:
 def main():
     exp_lists = []
     if suffix == 'A30':
-        # each = exp_config.ExpRealMotivationPerfEmb()
-        # each.SetLogDir(f'{LOG_PREFIX}/0425-real-motiv-{suffix}')
-        # exp_lists.append(each)
+        each = exp_config.ExpRealMotivationPerfEmb()
+        each.SetLogDir(f'{LOG_PREFIX}/0614-real-motiv-{suffix}')
+        exp_lists.append(each)
 
         # each = exp_config.ExpRecPerf()
         # each.SetLogDir(f'{LOG_PREFIX}/0425-Rec-{suffix}')
@@ -46,9 +46,9 @@ def main():
         # each.SetLogDir(f'{LOG_PREFIX}/0425-KG-scale-{suffix}')
         # exp_lists.append(each)
 
-        each = exp_config.ExpMicroPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0425-motiv-emb-{suffix}')
-        exp_lists.append(each)
+        # each = exp_config.ExpMicroPerfEmb()
+        # each.SetLogDir(f'{LOG_PREFIX}/0425-motiv-emb-{suffix}')
+        # exp_lists.append(each)
 
     else:
         # each = exp_config.ExpRecPerfDebug()
@@ -75,9 +75,9 @@ def main():
         each.SetLogDir(f'{LOG_PREFIX}/0511-micro-{suffix}')
         exp_lists.append(each)
 
-        # each = exp_config.ExpRealMotivationPerfEmb()
-        # each.SetLogDir(f'{LOG_PREFIX}/0509-real-motiv-{suffix}')
-        # exp_lists.append(each)
+        each = exp_config.ExpRealMotivationPerfEmb()
+        each.SetLogDir(f'{LOG_PREFIX}/0614-real-motiv-{suffix}')
+        exp_lists.append(each)
 
 
         each = exp_config.ExpKGScalability()
