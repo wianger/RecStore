@@ -34,16 +34,26 @@ else:
 def main():
     exp_lists = []
     if suffix == 'A30':
-        each = exp_config.ExpRealMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0614-real-motiv-{suffix}')
-        exp_lists.append(each)
-
-        # each = exp_config.ExpRecPerf()
-        # each.SetLogDir(f'{LOG_PREFIX}/0425-Rec-{suffix}')
+        # each = exp_config.ExpRealMotivationPerfEmb()
+        # each.SetLogDir(f'{LOG_PREFIX}/0624-real-motiv-{suffix}')
         # exp_lists.append(each)
 
+        # each = exp_config.ExpRecPerf()
+        # each.SetLogDir(f'{LOG_PREFIX}/0625-Rec-{suffix}')
+        # exp_lists.append(each)
+
+        each = exp_config.ExpRecPerfvsA30()
+        each.SetLogDir(f'{LOG_PREFIX}/0625-RecvsA30-{suffix}')
+        each.SetFilter(lambda config: config['emb_choice'] != 'KnownLocalCachedEmbedding')
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGvsA30()
+        each.SetLogDir(f'{LOG_PREFIX}/0625-KGvsA30-{suffix}')
+        each.SetFilter(lambda config: config['emb_choice'] != 'KnownLocalCachedEmbedding')
+        exp_lists.append(each)
+
         # each = exp_config.ExpKGScalability()
-        # each.SetLogDir(f'{LOG_PREFIX}/0425-KG-scale-{suffix}')
+        # each.SetLogDir(f'{LOG_PREFIX}/0625-KG-scale-{suffix}')
         # exp_lists.append(each)
 
         # each = exp_config.ExpMicroPerfEmb()
@@ -51,6 +61,17 @@ def main():
         # exp_lists.append(each)
 
     else:
+        # RTX 3090
+        each = exp_config.ExpRecPerfvsA30()
+        each.SetLogDir(f'{LOG_PREFIX}/0625-RecVSA30-{suffix}')
+        each.SetFilter(lambda config: config['emb_choice'] == 'KnownLocalCachedEmbedding')
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGvsA30()
+        each.SetLogDir(f'{LOG_PREFIX}/0625-KGvsA30-{suffix}')
+        each.SetFilter(lambda config: config['emb_choice'] == 'KnownLocalCachedEmbedding')
+        exp_lists.append(each)
+
         # each = exp_config.ExpRecPerfDebug()
         # each.SetLogDir(f'{LOG_PREFIX}/0510-debugrec-{suffix}')
 

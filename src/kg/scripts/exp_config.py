@@ -647,7 +647,6 @@ class RecExperiment(LocalOnlyExperiment):
         LocalNuke("perf_rec_model.py")
 
 
-
 class HugeCTRSOKRecRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
@@ -679,7 +678,7 @@ class HugeCTRSOKRecRun(LocalOnlyRun):
         LocalNuke("perf_rec_model.py")
 
 
-class RecExperiment(LocalOnlyExperiment):
+class HugeCTRSOKExperiment(LocalOnlyExperiment):
     def __init__(self, exp_id, common_config, execute_host) -> None:
         super().__init__(exp_id, common_config, execute_host)
 
@@ -688,12 +687,11 @@ class RecExperiment(LocalOnlyExperiment):
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
         return HugeCTRSOKRecRun(self.exp_id, run_id, run_log_dir,
-                      run_config, execute_host)
+                                run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("lnuke perf_rec_model.py")
         LocalNuke("perf_rec_model.py")
-
 
 
 COMMON_CLIENT_CONFIGS = {
@@ -798,6 +796,109 @@ class ExpKGScalability(GNNExperiment):
                     "cached_emb_type": ['KGExternelEmbedding',
                                         # "TorchNativeStdEmb",
                                         "TorchNativeStdEmbDDP",
+                                        'KnownShardedCachedEmbedding'],
+                    "backwardMode": ["PySync"],
+                },
+            ],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        self.filter_fn = None
+        super().__init__(10, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    def SetFilter(self, fn):
+        self.filter_fn = fn
+
+    def _SortConfigs(self, configs):
+        need_run = []
+        for each in configs:
+            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+                print("pass Freebase")
+                continue
+            if self.filter_fn is not None and (not self.filter_fn(each)):
+                print("pass filter")
+                continue
+
+            print(each)
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+
+class ExpKGvsA30(GNNExperiment):
+    def __init__(self,) -> None:
+        NAME = "overall-kg-scalability"
+        COMMON_CONFIGS = {
+            "model_name": [
+                'TransE',
+            ],
+            "binding": [
+                {
+                    "dataset": ["FB15k",],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [1200],
+                    "nr_gpus": [4] 
+                },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [2000],
+                    "nr_gpus": [4] 
+                },
+                # for scalability
+                {
+                    "dataset": ["FB15k"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [1200],
+                    "nr_gpus": [1, 2, 3, 4],
+                },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.05,],
+                    "batch_size": [2000],
+                    "nr_gpus": [1, 2, 3, 4],
+                }
+            ],
+            "binding2": [
+                # for debug performance
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        'CppSync',
+                    ],
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ['None'],
+                    "backwardMode": ["CppSync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ['KGExternelEmbedding',
+                                        "TorchNativeStdEmb",
+                                        # "TorchNativeStdEmbDDP",
                                         'KnownShardedCachedEmbedding'],
                     "backwardMode": ["PySync"],
                 },
@@ -1231,6 +1332,96 @@ class ExpRecPerf(RecExperiment):
         for each in configs:
             print(each)
         return list(sorted(configs, key=lambda each: each['dataset']))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        print("lnuke perf_rec_model.py")
+        LocalNuke("perf_rec_model.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+
+class ExpRecPerfvsA30(RecExperiment):
+    def __init__(self, ) -> None:
+        NAME = "rec perf a30"
+        COMMON_CONFIGS = {
+            "with_nn": [
+                '512,256,1',
+            ],
+            "binding": [
+                # for different batch_size
+                {
+                    "dataset": ["avazu", "criteo",],
+                    "cache_ratio": [0.05,],
+
+                    "batch_size": [128, 256, 512, 768, 1024,],
+                    # "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024],
+                    "num_workers": [4]
+                },
+
+                # for scalability
+                {
+                    "dataset": ["avazu", 'criteo'],
+                    "cache_ratio": [0.05],
+                    "batch_size": [128, 1024],
+                    "num_workers": [1, 2, 3, 4],
+                }
+            ],
+            "binding2": [
+                {
+                    "emb_choice": [
+                        "TorchNativeStdEmb",
+                        "TorchNativeStdEmbDDP",
+                        # "KGExternelEmbedding",
+                        "KnownShardedCachedEmbedding",
+                        # "KnownLocalCachedEmbeddingSoftware"
+                    ]
+                },
+                {
+
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        # "PySync",
+                        "CppSync",
+                        # "CppAsync",
+                        "CppAsyncV2",
+                    ],
+                },
+            ],
+            "run_steps": [300],
+            "log_interval": [100],
+        }
+
+        self.name = NAME
+        self.filter_fn = None
+        super().__init__(12, COMMON_CONFIGS,
+                         "127.0.0.1")
+
+    # def _SortConfigs(self, configs):
+    #     for each in configs:
+    #         print(each)
+    #     return list(sorted(configs, key=lambda each: each['dataset']))
+
+        
+    def SetFilter(self, fn):
+        self.filter_fn = fn
+
+    def _SortConfigs(self, configs):
+        need_run = []
+        for each in configs:
+            if self.filter_fn is not None and (not self.filter_fn(each)):
+                print("pass filter")
+                continue
+
+            print(each)
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each['dataset']))
 
     def _RunHook(self, previous_run, next_run):
         LocalExecute('rm -rf /tmp/cached_tensor_*', '')

@@ -71,7 +71,7 @@ class RecModelSampler(BasePerfSampler):
         self.batch_size = batch_size
 
     def gen_next_sample(self):
-        sample = self.dataset.get(self.batch_size)
+        sample = self.dataset.get()
         assert sample.ndim == 1
         assert sample.shape[0] < 1e6
         sample = sample.cuda()
