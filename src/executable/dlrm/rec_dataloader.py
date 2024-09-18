@@ -1,7 +1,7 @@
 import gzip
 import torch
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
 
 
 class RecDatasetCapacity:

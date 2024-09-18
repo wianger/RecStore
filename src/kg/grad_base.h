@@ -19,7 +19,7 @@
 // #define GRAD_ASYNC_V1_DEBUG
 #define USE_SUB_GRAD_TENSOR
 // #define XMH_DEBUG_KG
-// #define USE_NEG_THREAD
+#define USE_NEG_THREAD
 #define USE_BOOST_SHUFFLE
 
 namespace recstore {
@@ -370,7 +370,6 @@ class GradProcessingBase {
             std::vector<std::vector<torch::Tensor>>>
   Boost_ShuffleKeysAndGrads(const std::vector<torch::Tensor> &input_keys,
                             const std::vector<torch::Tensor> &input_grads) {
-    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
     int num_gpus_ = input_keys.size();
     // auto _start = std::chrono::high_resolution_clock::now();
 
@@ -404,7 +403,6 @@ class GradProcessingBase {
     //           << " Execution time: " << duration.count() << " seconds."
     //           << std::endl;
 
-    timer_ShuffleKeysAndGrads.end();
     return std::make_pair(shuffled_keys_in_each_rank_cache,
                           shuffled_grads_in_each_rank_cache);
   }
@@ -423,8 +421,7 @@ class GradProcessingBase {
 #ifdef USE_BOOST_SHUFFLE
     return Boost_ShuffleKeysAndGrads(input_keys, input_grads);
 #endif
-
-    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
+    // xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
     std::vector<std::vector<torch::Tensor>> shuffled_keys_in_each_rank_cache;
     std::vector<std::vector<torch::Tensor>> shuffled_grads_in_each_rank_cache;
     shuffled_keys_in_each_rank_cache.resize(num_gpus_);
@@ -456,7 +453,6 @@ class GradProcessingBase {
       }
     }
     // shuffle done
-    timer_ShuffleKeysAndGrads.end();
     return std::make_pair(shuffled_keys_in_each_rank_cache,
                           shuffled_grads_in_each_rank_cache);
   }
@@ -465,9 +461,11 @@ class GradProcessingBase {
   virtual void UpdateCache(
       const std::vector<torch::Tensor> &input_keys_per_rank_tensors,
       const std::vector<torch::Tensor> &backward_grads_per_rank_tensors) {
+    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:CacheShuffle");
     auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
         ShuffleKeysAndGrads(input_keys_per_rank_tensors,
                             backward_grads_per_rank_tensors);
+    timer_ShuffleKeysAndGrads.end();
 
     SyncUpdateCache(shuffled_keys_in_each_rank_cache,
                     shuffled_grads_in_each_rank_cache);
@@ -507,7 +505,7 @@ class GradProcessingBase {
 
   // state tensor
   // torch::Tensor &full_emb_;
-  CPUEmbedding& full_emb_;
+  CPUEmbedding &full_emb_;
 
   std::vector<torch::Tensor> &cache_per_rank_;
   bool isInitialized_ = false;
@@ -550,11 +548,13 @@ class GradSyncProcessing : public GradProcessingBase {
   void ProcessBackward(const std::vector<torch::Tensor> &input_keys,
                        const std::vector<torch::Tensor> &input_grads,
                        int step_no) override {
-    auto [shuffled_keys_in_each_rank_cache, shuffled_grads_in_each_rank_cache] =
+    xmh::Timer timer_ShuffleKeysAndGrads("ProcessBack:Shuffle");
+    auto [shuffled_keys_in_each_rank, shuffled_grads_in_each_rank] =
         ShuffleKeysAndGrads(input_keys, input_grads);
+    timer_ShuffleKeysAndGrads.end();
 
-    SGDGradUpdate(shuffled_keys_in_each_rank_cache,
-                  shuffled_grads_in_each_rank_cache, input_keys, input_grads);
+    SGDGradUpdate(shuffled_keys_in_each_rank, shuffled_grads_in_each_rank,
+                  input_keys, input_grads);
   }
 
   void BlockToStepN(int step_no) {}

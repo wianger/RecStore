@@ -736,6 +736,23 @@ class KGDatasetUDD(KGDataset):
         return self.rmap_file
 
 def get_dataset(data_path, data_name, format_str, delimiter='\t', files=None, has_edge_importance=False):
+    import pickle
+    import os
+
+    def load_or_initialize_cache(cache_path,):
+        if os.path.exists(cache_path):
+            with open(cache_path, 'rb') as f:
+                cache = pickle.load(f)
+            return cache
+        else:
+            return None
+    
+    cache_path = "/dev/shm/cached_dataset_{}.pkl".format(data_name)
+    dataset = load_or_initialize_cache(cache_path)
+    if dataset:
+        print("use pickled dataset in ", cache_path)
+        return dataset
+    
     if format_str == 'built_in':
         if data_name == 'Freebase':
             dataset = KGDatasetFreebase(data_path)
@@ -767,6 +784,9 @@ def get_dataset(data_path, data_name, format_str, delimiter='\t', files=None, ha
         dataset = KGDatasetUDD(data_path, data_name, delimiter, files, format, has_edge_importance)
     else:
         assert False, "Unknown format {}".format(format_str)
+
+    with open(cache_path, 'wb') as f:
+        pickle.dump(dataset, f)
 
     return dataset
 

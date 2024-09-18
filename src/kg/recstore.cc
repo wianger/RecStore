@@ -64,7 +64,6 @@ void init_folly() {
   // folly::init(&argc, (char ***)&argv, false);
   putenv("GLOG_logtostderr=1");
   xmh::Reporter::StartReportThread();
-  LOG(ERROR) << "init folly done";
 }
 
 class ZipfianTorchFiller : public torch::CustomClassHolder {

@@ -291,38 +291,39 @@ class KnownLocalCachedEmbeddingFn(torch.autograd.Function):
 
         # 上面的1.待优化
         # 2 aggregate grad of in-dram keys
-        ctx.timer_aggregate_dram = XMH_TIMER("back: aggr dram keys")
-        reduced_dram_grads = reduce_sparse_kv_tensor(
-            keys, grad_output, full_emb.shape, 0)
-        XLOG.debug(f"rank{rank}: aggregate grad of in-dram keys done")
-        ctx.timer_aggregate_dram.stop()
 
-        mp.Barrier(dist.get_world_size())
+        AGGRATE_DRAM_GRAD_METHOD = 0
+        if AGGRATE_DRAM_GRAD_METHOD  == 0:
+            ctx.timer_aggregate_dram = XMH_TIMER("back: aggr dram keys")
+            reduced_dram_grads = reduce_sparse_kv_tensor(
+                keys, grad_output, full_emb.shape, 0)
+            XLOG.debug(f"rank{rank}: aggregate grad of in-dram keys done")
+            ctx.timer_aggregate_dram.stop()
 
-        if dist.get_rank() == 0:
-            ctx.timer_dram_grad = XMH_TIMER("back: set dram grad")
-            reduced_dram_grads = reduced_dram_grads.coalesce()
-            XLOG.debug(
-                f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
+            mp.Barrier(dist.get_world_size())
+
+            if dist.get_rank() == 0:
+                ctx.timer_dram_grad = XMH_TIMER("back: set dram grad")
+                reduced_dram_grads = reduced_dram_grads.coalesce()
+                XLOG.debug(
+                    f"rank0: reduced_dram_grads {reduced_dram_grads._nnz()}")
+                if type(full_emb) is DistEmbedding:
+                    full_emb.record_grad(
+                        reduced_dram_grads.indices().squeeze(0), reduced_dram_grads.values())
+                else:
+                    full_emb.grad = reduced_dram_grads / dist.get_world_size()
+                XLOG.debug("rank0: set DRAM Emb's grad done")
+                ctx.timer_dram_grad.stop()
+        else:
+            # 实际中发现上面的方式2.会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的，只测性能，正确性对重复key有问题
             if type(full_emb) is DistEmbedding:
                 full_emb.record_grad(
-                    reduced_dram_grads.indices().squeeze(0), reduced_dram_grads.values())
+                keys, grad_output)
+                # if rank == 0:
+                #     XLOG.warn(f"in local cache's back {keys.shape}, {grad_output}")
             else:
-                full_emb.grad = reduced_dram_grads / dist.get_world_size()
-            XLOG.debug("rank0: set DRAM Emb's grad done")
-            ctx.timer_dram_grad.stop()
-
-        '''
-        # 实际中发现上面的方式2.会使得rank0成为瓶颈，这里试一下直接每个rank自己设自己的，只测性能，正确性有问题
-        if type(full_emb) is DistEmbedding:
-            full_emb.record_grad(
-               keys, grad_output)
-            # if rank == 0:
-            #     XLOG.warn(f"in local cache's back {keys.shape}, {grad_output}")
-        else:
-            dram_grads = kv_to_sparse_tensor(keys, grad_output, full_emb.shape)
-            full_emb.grad = dram_grads / dist.get_world_size()
-        '''
+                dram_grads = kv_to_sparse_tensor(keys, grad_output, full_emb.shape)
+                full_emb.grad = dram_grads / dist.get_world_size()
         return None, None, None, torch.randn(1, 1), None, None, None, None
 
     @staticmethod

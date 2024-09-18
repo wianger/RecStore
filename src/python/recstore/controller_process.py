@@ -307,7 +307,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.rank = dist.get_rank()
         self.json_config = json.loads(json_str)
         full_emb_capacity = self.json_config['full_emb_capacity']
-        print("full_emb_capacity  is ", type(full_emb_capacity))
+        print("full_emb_capacity  is ", full_emb_capacity)
 
         if self.rank == 0:
             Timer.StartReportThread()

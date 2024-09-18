@@ -1,15 +1,6 @@
-'''
-dglke_train --model_name TransE_l2
---dataset FB15k 
---batch_size 1000 
---neg_sample_size 200 
---hidden_dim 400 
---gamma 19.9 
---lr 0.25 
---max_step 500 
---log_interval 100 
---batch_size_eval 16 -adv --regularization_coef 1.00E-09 --test --num_thread 1 --num_proc 1
-'''
+import logging
+logging.basicConfig(format='%(levelname)-2s [%(process)d %(filename)s:%(lineno)d %(asctime)s] %(message)s',
+datefmt='%H:%M:%S', level=logging.INFO)
 
 
 from dglke.dataloader import KGDataset, TrainDataset, NewBidirectionalOneShotIterator
@@ -24,6 +15,7 @@ import gc
 import time
 import json
 import os
+import datetime
 
 # if os.path.exists("/usr/bin/docker"):
 #     os.environ['LD_LIBRARY_PATH'] = f'/home/xieminhui/RecStore/src/framework_adapters/torch/kg/dgl/build-host:{os.environ["LD_LIBRARY_PATH"]}'
@@ -47,6 +39,12 @@ from recstore import GraphCachedSampler, KGCacheControllerWrapperBase
 random.seed(0)
 np.random.seed(0)
 # torch.use_deterministic_algorithms(True)
+
+
+
+
+
+
 
 
 backend = os.environ.get('DGLBACKEND', 'pytorch')
@@ -210,12 +208,14 @@ def main():
 
     init_time_start = time.time()
     # load dataset and samplers
+    print(f"{datetime.datetime.now()}: get_dataset, {args.data_path}")
     dataset = get_dataset(args.data_path,
                           args.dataset,
                           args.format,
                           args.delimiter,
                           args.data_files,
                           args.has_edge_importance)
+    print(f"{datetime.datetime.now()}: get_dataset done, {args.data_path}")
 
     if args.neg_sample_size_eval < 0:
         args.neg_sample_size_eval = dataset.n_entities
@@ -246,14 +246,21 @@ def main():
     args.soft_rel_part = args.mix_cpu_gpu and args.rel_part
 
     print("ARGS: ", args)
+
+    logging.warning(f"ConstructGraph")
     g = ConstructGraph(dataset, args)
+    logging.warning(f"ConstructGraph done")
+
+    logging.warning(f"Construct TrainDataset")
     train_data = TrainDataset(
         g, dataset, args, ranks=args.num_proc, has_importance=args.has_edge_importance)
+    logging.warning(f"Construct TrainDataset done")
     # if there is no cross partition relaiton, we fall back to strict_rel_part
     args.strict_rel_part = args.mix_cpu_gpu and (
         train_data.cross_part == False)
     args.num_workers = 8  # fix num_worker to 8
 
+    logging.warning(f"train_data.PreSampling")
     renumbering_dict, cache_sizes_all_rank = train_data.PreSampling(args.batch_size,
                                                                     args.cache_ratio,
                                                                     args.neg_sample_size,
@@ -264,19 +271,22 @@ def main():
                                                                     exclude_positive=False,
                                                                     has_edge_importance=False,
                                                                     )
-    # test_utils.diff_tensor(renumbering_dict, "renumbering_dict")
+    logging.warning(f"train_data.PreSampling done")
 
+    logging.warning(f"CacheShardingPolicy.set_presampling")
     CacheShardingPolicy.set_presampling(cache_sizes_all_rank)
+    logging.warning(f"train_data.RenumberingGraph")
     train_data.RenumberingGraph(renumbering_dict)
+    logging.warning(f"train_data.RenumberingGraph done")
 
-    # controller = ControllerServer(args, None)
-    # controller.StartControlProcess()
-
+    logging.warning(f"CreateSamplers")
     train_samplers = CreateSamplers(
         args, kg_dataset=dataset, train_data=train_data)
-
+    logging.warning(f"CreateSamplers done")
+    logging.warning(f"BatchCreateSamplers")
     train_samplers = GraphCachedSampler.BatchCreateCachedSamplers(
         args.L, train_samplers, backmode=json_config['backwardMode'])
+    logging.warning(f"BatchCreateSamplers done")
 
     # grad_clients = controller.CreateGradClients()
     grad_clients = [None for _ in range(args.num_proc)]
@@ -406,9 +416,11 @@ def main():
     dataset = None
     gc.collect()
 
+    print(f"{datetime.datetime.now()}:load_model")
     model = load_model(args, n_entities, n_relations)
     if args.num_proc > 1 or args.async_update:
         model.share_memory()
+    print(f"{datetime.datetime.now()}:load_model done")
 
     print('Total initialize time {:.3f} seconds'.format(
         time.time() - init_time_start), flush=True)

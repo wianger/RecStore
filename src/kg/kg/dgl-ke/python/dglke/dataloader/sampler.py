@@ -30,7 +30,7 @@ import pickle
 import time
 import torch as th
 from dgl.base import NID, EID
-
+import datetime
 
 import sys
 sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
@@ -423,6 +423,7 @@ class TrainDataset(object):
         num_train = len(triples[0])
         print('|Train|:', num_train)
 
+        self.nr_world = ranks
         if ranks > 1 and args.rel_part:
             self.edge_parts, self.rel_parts, self.cross_part, self.cross_rels = \
                 SoftRelationPartition(
@@ -433,7 +434,6 @@ class TrainDataset(object):
             # self.cross_part = True
 
             self.PartitionGraph(g, args, ranks)
-            self.nr_world = ranks
             self.dataset_name = dataset.name
             self.cross_part = True
 
@@ -452,7 +452,6 @@ class TrainDataset(object):
                     exclude_positive=False,
                     has_edge_importance=False
                     ):
-        logging.warn("Start PreSampling")
         dgl.random.xmh_seed(0)
 
         cache_sizes_all_rank = []
@@ -504,7 +503,9 @@ class TrainDataset(object):
                 if key in each_set:
                     return True
             return False
+        logging.warn(f"Stop PreSampling")
 
+        logging.warn(f"Start finding hottest IDs")
         all_rank_keys_sets = [set(keys_ordered_all_rank[i])
                               for i in range(self.nr_world)]
         all_rank_hotsets = []
@@ -526,13 +527,18 @@ class TrainDataset(object):
             print(f"Rank{rank}: cached key size {j}")
             cache_sizes_all_rank.append(j)
             all_rank_hotsets.append(cached_keys)
+            
+        logging.warn(f"Stop finding hottest IDs")
+
+
+
+
+
 
         # a map, <original ID> -> <new ID>
         # with hottest IDs first, then the rest IDs
-
-        logging.warn("Before construct renumbering_dict")
+        logging.warn(f"Start construct renumbering_dict")
         renumbering_dict = th.full((n_entities,), -1, dtype=th.int64)
-
         # start_id = 0
         # for rank in range(self.nr_world):
         #     for each in all_rank_hotsets[rank]:
@@ -552,8 +558,8 @@ class TrainDataset(object):
             self.nr_world,
             all_rank_hotsets,
         )
+        logging.warn(f"Stop construct renumbering_dict")
 
-        logging.warn("PreSampling done")
         return renumbering_dict, cache_sizes_all_rank
 
     def RenumberingGraph(self, renumbering_dict):
