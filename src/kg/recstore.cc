@@ -30,7 +30,7 @@ void ConstructRenumberingDict(torch::Tensor renumbering_dict, int64_t nr_world,
     torch::Tensor rank_hotset = all_rank_hotsets[rank];
     int64_t *rank_hotset_data_ptr = rank_hotset.data_ptr<int64_t>();
     int64_t numel = rank_hotset.numel();
-#pragma omp parallel for
+#pragma omp parallel for num_threads(48) 
     for (int64_t i = 0; i < numel; i++) {
       int64_t each = rank_hotset_data_ptr[i];
       CHECK_EQ(-1, renumbering_dict[each].item<int64_t>());
@@ -42,7 +42,7 @@ void ConstructRenumberingDict(torch::Tensor renumbering_dict, int64_t nr_world,
 
   int64_t n_entities = renumbering_dict.size(0);
 
-#pragma omp parallel for
+#pragma omp parallel for num_threads(48) 
   for (int64_t i = 0; i < n_entities; i++) {
     if (renumbering_dict[i].item<int64_t>() == -1) {
       int64_t old_start_id = start_id.fetch_add(1);

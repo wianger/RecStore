@@ -9,7 +9,7 @@ DIST_TENSOR_ID = 0
 
 
 def _default_init_data(tensor, shape, dtype):
-    # return tensor.zero_()
+    return tensor.zero_()
     tensor.uniform_(-np.sqrt(1/shape[0]),
                     np.sqrt(1/shape[0]))
     return

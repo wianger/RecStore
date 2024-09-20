@@ -362,6 +362,8 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
             print(
                 f"On rank0, prepare to call self.controller.StopThreads(), self={self}")
             self.controller.StopThreads()
+        elif self.rank == 0:
+            pass
         else:
             XLOG.info("call rank0 to StopThreads")
             rpc.rpc_sync(

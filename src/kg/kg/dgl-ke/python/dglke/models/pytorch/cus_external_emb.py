@@ -14,6 +14,9 @@ import sys
 is_custom_external_emb_initialized = False
 
 
+xmh_pass_custom_external_emb_initialized = True
+
+
 class CustomExternalEmbedding:
     """Sparse Embedding for Knowledge Graph
     It is used to store both entity embeddings and relation embeddings.
@@ -70,7 +73,11 @@ class CustomExternalEmbedding:
             The intial embedding range should be [-emb_init, emb_init].
         """
         shm_tensor = self.emb.weight
-        INIT.uniform_(shm_tensor, -emb_init, emb_init)
+        if not xmh_pass_custom_external_emb_initialized:
+            INIT.uniform_(shm_tensor, -emb_init, emb_init)
+        else:
+            shm_tensor.zero_()
+
 
     def setup_cross_rels(self, cross_rels, global_relation_emb):
         cpu_bitmap = th.zeros((self.num,), dtype=th.bool)
