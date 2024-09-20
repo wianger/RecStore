@@ -177,7 +177,7 @@ class GraphCachedSampler:
     def Prefill(self):
         # Prefill L samples
         for _ in range(self.L):
-            pos_g, neg_g = next(self.sampler)
+            pos_g, neg_g, not_used = next(self.sampler)
             self.graph_samples_queue.append(
                 (self.sampler_iter_num, pos_g, neg_g))
             self.CopyID(self.sampler_iter_num, pos_g, neg_g)
@@ -211,7 +211,7 @@ class GraphCachedSampler:
 
     def __next__(self):
         try:
-            pos_g, neg_g = next(self.sampler)
+            pos_g, neg_g, is_first_loop = next(self.sampler)
             self.graph_samples_queue.append(
                 (self.sampler_iter_num, pos_g, neg_g))
             self.CopyID(self.sampler_iter_num, pos_g, neg_g)
@@ -219,7 +219,7 @@ class GraphCachedSampler:
         except StopIteration as e:
             pass
         _, pos_g, neg_g = self.graph_samples_queue.pop(0)
-        return pos_g, neg_g
+        return pos_g, neg_g, None
 
         # while True:
         #     try:

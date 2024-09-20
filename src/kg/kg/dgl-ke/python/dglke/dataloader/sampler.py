@@ -511,6 +511,7 @@ class TrainDataset(object):
 
     def PreSampling(
         self,
+        samplers,
         batch_size,
         cached_ratio,
         neg_sample_size=2,
@@ -528,18 +529,18 @@ class TrainDataset(object):
         cache_size_per_rank = int(cached_ratio * n_entities // self.nr_world)
         # cache_size_per_rank = int(cached_ratio * n_entities)
 
-        samplers = self.CreateSamplers(
-            num_nodes = n_entities,
-            is_chunked = True,
-            batch_size = batch_size,
-            neg_sample_size = neg_sample_size,
-            neg_chunk_size = neg_chunk_size,
-            num_workers = num_workers,
-            shuffle = shuffle,
-            exclude_positive = exclude_positive,
-            has_edge_importance = has_edge_importance, 
-            renumbering_dict = None,
-            real_train = False)
+        # samplers = self.CreateSamplers(
+        #     num_nodes = n_entities,
+        #     is_chunked = True,
+        #     batch_size = batch_size,
+        #     neg_sample_size = neg_sample_size,
+        #     neg_chunk_size = neg_chunk_size,
+        #     num_workers = num_workers,
+        #     shuffle = shuffle,
+        #     exclude_positive = exclude_positive,
+        #     has_edge_importance = has_edge_importance, 
+        #     renumbering_dict = None,
+        #     real_train = False)
             
   
         # PreSampling
@@ -549,10 +550,9 @@ class TrainDataset(object):
             logging.warn(f"Start PreSampling rank{rank}: sampling")
             step = 0
             while step <= 1000:
-                try:
-                    pos_g, neg_g = next(sampler)
-                    step += 1
-                except StopIteration:
+                pos_g, neg_g, is_first_loop = next(sampler)
+                step += 1
+                if not is_first_loop:
                     break
 
                 nids = pos_g.ndata["id"]
@@ -612,20 +612,6 @@ class TrainDataset(object):
         # with hottest IDs first, then the rest IDs
         logging.warn(f"Start construct renumbering_dict")
         renumbering_dict = th.full((n_entities,), -1, dtype=th.int64)
-        # start_id = 0
-        # for rank in range(self.nr_world):
-        #     for each in all_rank_hotsets[rank]:
-        #         assert -1 == renumbering_dict[each]
-        #         renumbering_dict[each] = start_id
-        #         start_id += 1
-
-        # for id in range(n_entities):
-        #     if -1 == renumbering_dict[id]:
-        #         renumbering_dict[id] = start_id
-        #         start_id += 1
-        # logging.warn("Construct renumbering_dict done")
-        # assert start_id == n_entities
-
         recstore.construct_renumbering_dict_op(
             renumbering_dict,
             self.nr_world,
@@ -1257,10 +1243,10 @@ class NewBidirectionalOneShotIterator:
     def __next__(self):
         self.step += 1
         if self.step % 2 == 0:
-            pos_g, neg_g = next(self.iterator_head)
+            pos_g, neg_g, is_first_loop = next(self.iterator_head)
         else:
-            pos_g, neg_g = next(self.iterator_tail)
-        return pos_g, neg_g
+            pos_g, neg_g, is_first_loop = next(self.iterator_tail)
+        return pos_g, neg_g, is_first_loop
 
     @staticmethod
     def one_shot_iterator(
@@ -1274,6 +1260,7 @@ class NewBidirectionalOneShotIterator:
         renumbering_dict=None,
         real_train=False,
     ):
+        is_first_loop = False
         while True:
             for pos_g, neg_g in dataloader:
                 neg_g = create_neg_subgraph(
@@ -1308,7 +1295,8 @@ class NewBidirectionalOneShotIterator:
                     pos_g.edata["impts"] = pos_g._parent.edata["impts"][
                         pos_g.parent_eid
                     ]
-                yield pos_g, neg_g
+                yield pos_g, neg_g, is_first_loop
 
+            is_first_loop = True
             if not real_train:
                 break

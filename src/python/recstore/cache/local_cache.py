@@ -420,8 +420,8 @@ class KnownLocalCachedEmbedding(AbsEmb):
         # self.ret_value = recstore.IPCTensorFactory.NewIPCGPUTensor(
         #     f"ret_value{rank}", [int(1e6), self.emb_dim], torch.float, rank)
         self.iter = 0
-        XLOG.debug(f"{rank}: KnownLocalCachedEmbedding init done")
-        print(f"{rank}: KnownLocalCachedEmbedding init done", flush=True)
+        XLOG.warning(f"rank{rank}: KnownLocalCachedEmbedding init done")
+        print(f"rank{rank}: KnownLocalCachedEmbedding init done", flush=True)
 
     def GetCache(self):
         return self.emb_cache

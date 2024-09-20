@@ -23,34 +23,70 @@ void uva_cache_query_op(at::Tensor merge_dst, const at::Tensor id_tensor,
                         const at::Tensor dram_tensor,
                         const long cached_start_key, const long cached_end_key);
 
+// renumbering all_rank_hotsets from 0 to sum len(all_rank_hotsets)
+
 void ConstructRenumberingDict(torch::Tensor renumbering_dict, int64_t nr_world,
                               std::vector<torch::Tensor> all_rank_hotsets) {
-  std::atomic<int64_t> start_id = 0;
+//   std::atomic<int64_t> start_id = 0;
+//   for (int rank = 0; rank < nr_world; rank++) {
+//     torch::Tensor rank_hotset = all_rank_hotsets[rank];
+//     int64_t *rank_hotset_data_ptr = rank_hotset.data_ptr<int64_t>();
+//     int64_t numel = rank_hotset.numel();
+// #pragma omp parallel for num_threads(48) 
+//     for (int64_t i = 0; i < numel; i++) {
+//       int64_t each = rank_hotset_data_ptr[i];
+//       CHECK_EQ(-1, renumbering_dict[each].item<int64_t>());
+
+//       int64_t old_start_id = start_id.fetch_add(1);
+//       renumbering_dict[each] = old_start_id;
+//     }
+//   }
+
+//   int64_t n_entities = renumbering_dict.size(0);
+
+// #pragma omp parallel for num_threads(48) 
+//   for (int64_t i = 0; i < n_entities; i++) {
+//     if (renumbering_dict[i].item<int64_t>() == -1) {
+//       int64_t old_start_id = start_id.fetch_add(1);
+//       renumbering_dict[i] = old_start_id;
+//     }
+//   }
+
+//   CHECK_EQ(start_id.load(), n_entities);
+
+  int64_t n_entities = renumbering_dict.size(0);
+  auto renumbering_dict_accessor = renumbering_dict.accessor<int64_t, 1>();
+  std::vector<int64_t> start_ids(nr_world + 1, 0);
+
+  // 计算每个 rank 的起始 ID
+  for (int rank = 0; rank < nr_world; rank++) {
+    start_ids[rank + 1] = start_ids[rank] + all_rank_hotsets[rank].numel();
+  }
+
+  // 并行处理每个 rank 的 hotset
+  #pragma omp parallel for num_threads(48) schedule(dynamic)
   for (int rank = 0; rank < nr_world; rank++) {
     torch::Tensor rank_hotset = all_rank_hotsets[rank];
     int64_t *rank_hotset_data_ptr = rank_hotset.data_ptr<int64_t>();
     int64_t numel = rank_hotset.numel();
-#pragma omp parallel for num_threads(48) 
+    int64_t start_id = start_ids[rank];
+
     for (int64_t i = 0; i < numel; i++) {
       int64_t each = rank_hotset_data_ptr[i];
-      CHECK_EQ(-1, renumbering_dict[each].item<int64_t>());
-
-      int64_t old_start_id = start_id.fetch_add(1);
-      renumbering_dict[each] = old_start_id;
+      renumbering_dict_accessor[each] = start_id + i;
     }
   }
 
-  int64_t n_entities = renumbering_dict.size(0);
-
-#pragma omp parallel for num_threads(48) 
+  // 处理剩余的实体
+  int64_t remaining_start_id = start_ids[nr_world];
+  #pragma omp parallel for num_threads(48) schedule(dynamic)
   for (int64_t i = 0; i < n_entities; i++) {
-    if (renumbering_dict[i].item<int64_t>() == -1) {
-      int64_t old_start_id = start_id.fetch_add(1);
-      renumbering_dict[i] = old_start_id;
+    if (renumbering_dict_accessor[i] == -1) {
+      renumbering_dict_accessor[i] = __sync_fetch_and_add(&remaining_start_id, 1);
     }
   }
 
-  CHECK_EQ(start_id.load(), n_entities);
+  CHECK_EQ(remaining_start_id, n_entities);
 }
 
 void init_folly() {

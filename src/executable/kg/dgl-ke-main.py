@@ -279,8 +279,14 @@ def main():
     profiler = pyinstrument.Profiler()
     profiler.start()
 
+    logging.warning(f"CreateSamplers")
+    train_samplers = CreateSamplers(args, kg_dataset=dataset, train_data=train_data)
+    logging.warning(f"CreateSamplers done")
+
+
     logging.warning(f"train_data.PreSampling")
     renumbering_dict, cache_sizes_all_rank = train_data.PreSampling(
+        train_samplers,
         args.batch_size,
         args.cache_ratio,
         args.neg_sample_size,
@@ -299,9 +305,6 @@ def main():
     train_data.RenumberingGraph(renumbering_dict)
     logging.warning(f"train_data.RenumberingGraph done")
 
-    logging.warning(f"CreateSamplers")
-    train_samplers = CreateSamplers(args, kg_dataset=dataset, train_data=train_data)
-    logging.warning(f"CreateSamplers done")
     logging.warning(f"BatchCreateSamplers")
     train_samplers = GraphCachedSampler.BatchCreateCachedSamplers(
         args.L, train_samplers, backmode=json_config["backwardMode"]

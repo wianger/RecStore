@@ -202,12 +202,14 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
         "start_barrier",  args.num_proc)
     start_barrier.Wait()
 
-    print("start train")
+    print(f"rank{rank} start train")
     exp_all_start_time = time.time()
     for step in range(0, args.max_step):
+        # if rank == 0:
+        #     print(f"Step{step}")
         if rank == 0 and step % 10 == 0:
             exp_all_now = time.time()
-            if exp_all_now - exp_all_start_time > 90:
+            if exp_all_now - exp_all_start_time > 900:
                 break
 
         if with_perf and step == warmup_iters:
@@ -236,7 +238,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
         timer_geninput.start()
         start1 = time.time()
         try:
-            pos_g, neg_g = next(train_sampler)
+            pos_g, neg_g, _ = next(train_sampler)
         except StopIteration as e:
             break
         sample_time += time.time() - start1
