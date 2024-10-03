@@ -25,9 +25,8 @@ def GswLock():
 
     while os.path.exists(lock_file):
         time.sleep(1)
-    with open(lock_file, 'w') as file:
-        file.write(
-            'Hello, this is a new file!\nYou can add more content here.')
+    with open(lock_file, "w") as file:
+        file.write("Hello, this is a new file!\nYou can add more content here.")
     print(f"Escape the lock")
 
 
@@ -41,19 +40,21 @@ def GswUnlock():
 
 
 def MC_cas(key, old_value, new_value):
-    mc = Client('localhost:11211')
+    mc = Client("localhost:11211")
     mc_old_value, cas_unique = mc.gets(key)
     if mc_old_value is None:
         ret = mc.set(key, new_value)
         assert ret
         return True
-    mc_old_value = mc_old_value.decode('utf-8')
+    mc_old_value = mc_old_value.decode("utf-8")
     if mc_old_value == old_value:
         ret = mc.cas(key, new_value, cas_unique)
         if ret == True:
             return True
     else:
-        print(f"old value({old_value}) != readed_value({mc_old_value})",)
+        print(
+            f"old value({old_value}) != readed_value({mc_old_value})",
+        )
     return False
 
 
@@ -99,10 +100,19 @@ def GPUUnlock():
 class PerfEmbRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
-        super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_emb.py",  DIR_PATH, execute_host)
+        super().__init__(
+            exp_id,
+            run_id,
+            log_dir,
+            config,
+            "python3 perf_emb.py",
+            DIR_PATH,
+            execute_host,
+        )
 
-    def check_config(self,):
+    def check_config(
+        self,
+    ):
         super().check_config()
 
     def run(self):
@@ -110,13 +120,15 @@ class PerfEmbRun(LocalOnlyRun):
         sleep_seconds = 0
         while True:
             ret = subprocess.run(
-                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1",
+                shell=True,
+            ).returncode
             if ret == 0:
                 break
             time.sleep(5)
             sleep_seconds += 5
 
-            if sleep_seconds > 60*60:
+            if sleep_seconds > 60 * 60:
                 for _ in range(100):
                     print("DEADLOCK in wait client finish")
                 break
@@ -126,34 +138,37 @@ class PerfEmbRun(LocalOnlyRun):
 
 
 class ExpMacroPerfEmb(LocalOnlyExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "PerfEmbRun"
         COMMON_CONFIGS = {
             "num_workers": [4, 8] if GetHostName() != "node182" else [4],
-
-            "num_embs": [int(100*1e6),],
-            "batch_size": [512, 1024, 2048, 3072, 4096,],
+            "num_embs": [
+                int(100 * 1e6),
+            ],
+            "batch_size": [
+                512,
+                1024,
+                2048,
+                3072,
+                4096,
+            ],
             "run_steps": [300],
             "log_interval": [100],
-
             # "batch_size": [2048,],
             # "num_embs": [int(100*1e6),],
             # "run_steps": [300],
             # "log_interval": [100],
-
-            'binding2': [
+            "binding2": [
                 {
-                    "distribution": ['uniform'],
+                    "distribution": ["uniform"],
                 },
                 {
-                    "distribution": ['zipf'],
-                    "zipf_alpha": [
-                        0.9,
-                        0.99
-                    ],
+                    "distribution": ["zipf"],
+                    "zipf_alpha": [0.9, 0.99],
                 },
             ],
-
             "binding": [
                 {
                     "emb_choice": [
@@ -163,7 +178,6 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
                     ]
                 },
                 {
-
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "PySync",
@@ -179,11 +193,14 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
         }
 
         self.name = NAME
-        super().__init__(0, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(0, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
-        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+        return list(
+            sorted(
+                configs, key=lambda config: (config["num_embs"], config["batch_size"])
+            )
+        )
 
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
@@ -196,15 +213,17 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
             GPULock()
         return
 
-    def _PostprocessConfig(self, each_config, ):
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
-                          run_config, execute_host)
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
@@ -214,27 +233,37 @@ class ExpMacroPerfEmb(LocalOnlyExperiment):
 
 # 这个是motivation，下面的改成microbenchmark了
 class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
             "num_workers": [4] if GetHostName() != "node182" else [4],
-            "num_embs": [int(10*1e6),],
-            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
+            "num_embs": [
+                int(10 * 1e6),
+            ],
+            "batch_size": [
+                512,
+                1024,
+                2048,
+                4096,
+                6144,
+                8192,
+            ],
             # "batch_size": [128, 256, 512, 1024, 1536, 2048,],
             "run_steps": [200],
             "log_interval": [100],
-
             "cache_ratio": [
                 0.01,
                 # 0.05,
                 0.1,
             ],
-            'binding2': [
+            "binding2": [
                 {
-                    "distribution": ['uniform'],
+                    "distribution": ["uniform"],
                 },
                 {
-                    "distribution": ['zipf'],
+                    "distribution": ["zipf"],
                     "zipf_alpha": [
                         0.9,
                         # 0.99
@@ -251,7 +280,6 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
                     ]
                 },
                 # {
-
                 #     "emb_choice": ["KnownLocalCachedEmbedding"],
                 #     "backwardMode": [
                 #         "PySync",
@@ -264,11 +292,14 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
         }
 
         self.name = NAME
-        super().__init__(3, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(3, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
-        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+        return list(
+            sorted(
+                configs, key=lambda config: (config["num_embs"], config["batch_size"])
+            )
+        )
 
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
@@ -280,16 +311,18 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
             GPULock()
         return
 
-    def _PostprocessConfig(self, each_config, ):
-        assert each_config['cache_ratio'] * each_config['num_workers'] <= 1
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
+        assert each_config["cache_ratio"] * each_config["num_workers"] <= 1
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
-                          run_config, execute_host)
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
@@ -298,33 +331,39 @@ class ExpRealMotivationPerfEmb(LocalOnlyExperiment):
 
 
 class ExpMicroPerfEmb(LocalOnlyExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
             "num_workers": [8] if GetHostName() != "node182" else [4],
             # "num_workers": [8] if GetHostName() != "node182" else [4],
-
-            "num_embs": [int(10*1e6),],
-            "batch_size": [512, 1024, 2048, 4096, 6144, 8192,],
+            "num_embs": [
+                int(10 * 1e6),
+            ],
+            "batch_size": [
+                512,
+                1024,
+                2048,
+                4096,
+                6144,
+                8192,
+            ],
             # "batch_size": [128, 512, 1024, 1536, 2048,],
             "run_steps": [200],
             "log_interval": [100],
-
             "cache_ratio": [
                 0.01,
                 0.05,
                 0.1,
             ],
-            'binding2': [
+            "binding2": [
                 {
-                    "distribution": ['uniform'],
+                    "distribution": ["uniform"],
                 },
                 {
-                    "distribution": ['zipf'],
-                    "zipf_alpha": [
-                        0.9,
-                        0.99
-                    ],
+                    "distribution": ["zipf"],
+                    "zipf_alpha": [0.9, 0.99],
                 },
             ],
             "binding": [
@@ -337,7 +376,6 @@ class ExpMicroPerfEmb(LocalOnlyExperiment):
                     ]
                 },
                 {
-
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "PySync",
@@ -350,11 +388,14 @@ class ExpMicroPerfEmb(LocalOnlyExperiment):
         }
 
         self.name = NAME
-        super().__init__(3, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(3, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
-        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+        return list(
+            sorted(
+                configs, key=lambda config: (config["num_embs"], config["batch_size"])
+            )
+        )
 
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
@@ -366,16 +407,18 @@ class ExpMicroPerfEmb(LocalOnlyExperiment):
             GPULock()
         return
 
-    def _PostprocessConfig(self, each_config, ):
-        assert each_config['cache_ratio'] * each_config['num_workers'] <= 1
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
+        assert each_config["cache_ratio"] * each_config["num_workers"] <= 1
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
-                          run_config, execute_host)
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
@@ -384,25 +427,30 @@ class ExpMicroPerfEmb(LocalOnlyExperiment):
 
 
 class ExpMicroDebug(LocalOnlyExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "MotivationPerfEmb"
         COMMON_CONFIGS = {
-            "num_workers": [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [4],
-            "num_embs": [int(10*1e6),],
+            "num_workers": (
+                [1, 2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [4]
+            ),
+            "num_embs": [
+                int(10 * 1e6),
+            ],
             "batch_size": [1024],
             "run_steps": [200],
             "log_interval": [100],
-
             "cache_ratio": [
                 0.05,
                 # 0.1,
             ],
-            'binding2': [
+            "binding2": [
                 {
-                    "distribution": ['uniform'],
+                    "distribution": ["uniform"],
                 },
                 {
-                    "distribution": ['zipf'],
+                    "distribution": ["zipf"],
                     "zipf_alpha": [
                         0.9,
                         # 0.99
@@ -419,7 +467,6 @@ class ExpMicroDebug(LocalOnlyExperiment):
                     ]
                 },
                 # {
-
                 #     "emb_choice": ["KnownLocalCachedEmbedding"],
                 #     "backwardMode": [
                 #         "PySync",
@@ -432,11 +479,14 @@ class ExpMicroDebug(LocalOnlyExperiment):
         }
 
         self.name = NAME
-        super().__init__(3, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(3, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
-        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+        return list(
+            sorted(
+                configs, key=lambda config: (config["num_embs"], config["batch_size"])
+            )
+        )
 
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
@@ -448,16 +498,18 @@ class ExpMicroDebug(LocalOnlyExperiment):
             GPULock()
         return
 
-    def _PostprocessConfig(self, each_config, ):
-        assert each_config['cache_ratio'] * each_config['num_workers'] <= 1
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
+        assert each_config["cache_ratio"] * each_config["num_workers"] <= 1
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
-                          run_config, execute_host)
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
@@ -466,26 +518,29 @@ class ExpMicroDebug(LocalOnlyExperiment):
 
 
 class ExpMotivationDebug(LocalOnlyExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "debug micro benchmark"
         COMMON_CONFIGS = {
             "num_workers": [8] if GetHostName() != "node182" else [4],
-            "num_embs": [int(10*1e6),],
+            "num_embs": [
+                int(10 * 1e6),
+            ],
             # "batch_size": [128, 512, 1024, 1536, 2048,],
             # "batch_size": [512, 1024, 1536],
             "batch_size": [512, 1024, 1536],
-
             "run_steps": [200],
             "log_interval": [100],
             "cache_ratio": [
                 0.05,
             ],
-            'binding2': [
+            "binding2": [
                 # {
                 #     "distribution": ['uniform'],
                 # },
                 {
-                    "distribution": ['zipf'],
+                    "distribution": ["zipf"],
                     "zipf_alpha": [
                         0.9,
                         # 0.99
@@ -501,7 +556,6 @@ class ExpMotivationDebug(LocalOnlyExperiment):
                     ]
                 },
                 # {
-
                 #     "emb_choice": ["KnownLocalCachedEmbedding"],
                 #     "backwardMode": [
                 #         "PySync",
@@ -514,11 +568,14 @@ class ExpMotivationDebug(LocalOnlyExperiment):
         }
 
         self.name = NAME
-        super().__init__(33333, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(33333, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
-        return list(sorted(configs, key=lambda config: (config['num_embs'], config['batch_size'])))
+        return list(
+            sorted(
+                configs, key=lambda config: (config["num_embs"], config["batch_size"])
+            )
+        )
 
     def _RunHook(self, previous_run, next_run):
         # LocalNuke("perf_emb.py")
@@ -530,16 +587,18 @@ class ExpMotivationDebug(LocalOnlyExperiment):
             GPULock()
         return
 
-    def _PostprocessConfig(self, each_config, ):
-        assert each_config['cache_ratio'] * each_config['num_workers'] <= 1
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
+        assert each_config["cache_ratio"] * each_config["num_workers"] <= 1
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return PerfEmbRun(self.exp_id, run_id, run_log_dir,
-                          run_config, execute_host)
+        return PerfEmbRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("pnuke perf_emb.py")
@@ -554,10 +613,19 @@ class ExpMotivationDebug(LocalOnlyExperiment):
 class GNNRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
-        super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 dgl-ke-main.py", DIR_PATH+'/kg', execute_host)
+        super().__init__(
+            exp_id,
+            run_id,
+            log_dir,
+            config,
+            "python3 dgl-ke-main.py",
+            DIR_PATH + "/kg",
+            execute_host,
+        )
 
-    def check_config(self,):
+    def check_config(
+        self,
+    ):
         super().check_config()
 
     def run(self):
@@ -565,13 +633,15 @@ class GNNRun(LocalOnlyRun):
         sleep_seconds = 0
         while True:
             ret = subprocess.run(
-                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1",
+                shell=True,
+            ).returncode
             if ret == 0:
                 break
             time.sleep(5)
             sleep_seconds += 5
 
-            if sleep_seconds > 60*60:
+            if sleep_seconds > 60 * 60:
                 for _ in range(100):
                     print("DEADLOCK in wait client finish")
                 break
@@ -584,15 +654,17 @@ class GNNExperiment(LocalOnlyExperiment):
     def __init__(self, exp_id, common_config, execute_host) -> None:
         super().__init__(exp_id, common_config, execute_host)
 
-    def _PostprocessConfig(self, each_config, ):
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return GNNRun(self.exp_id, run_id, run_log_dir,
-                      run_config, execute_host)
+        return GNNRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("lnuke dgl-ke-main.py")
@@ -602,10 +674,19 @@ class GNNExperiment(LocalOnlyExperiment):
 class RecRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
-        super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_rec_model.py", DIR_PATH + '/dlrm', execute_host)
+        super().__init__(
+            exp_id,
+            run_id,
+            log_dir,
+            config,
+            "python3 perf_rec_model.py",
+            DIR_PATH + "/dlrm",
+            execute_host,
+        )
 
-    def check_config(self,):
+    def check_config(
+        self,
+    ):
         super().check_config()
 
     def run(self):
@@ -613,13 +694,15 @@ class RecRun(LocalOnlyRun):
         sleep_seconds = 0
         while True:
             ret = subprocess.run(
-                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1",
+                shell=True,
+            ).returncode
             if ret == 0:
                 break
             time.sleep(5)
             sleep_seconds += 5
 
-            if sleep_seconds > 60*60:
+            if sleep_seconds > 60 * 60:
                 for _ in range(100):
                     print("DEADLOCK in wait client finish")
                 break
@@ -632,15 +715,17 @@ class RecExperiment(LocalOnlyExperiment):
     def __init__(self, exp_id, common_config, execute_host) -> None:
         super().__init__(exp_id, common_config, execute_host)
 
-    def _PostprocessConfig(self, each_config, ):
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
         # don't use self
         pass
         # client_config['key_space_m'] *= WARM_UP_RATIO
         # client_config['key_space_m'] = int(client_config['key_space_m'])
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return RecRun(self.exp_id, run_id, run_log_dir,
-                      run_config, execute_host)
+        return RecRun(self.exp_id, run_id, run_log_dir, run_config, execute_host)
 
     def _BeforeStartAllRun(self):
         print("lnuke perf_rec_model.py")
@@ -650,12 +735,19 @@ class RecExperiment(LocalOnlyExperiment):
 class HugeCTRSOKRecRun(LocalOnlyRun):
     def __init__(self, exp_id, run_id, log_dir, config, execute_host) -> None:
         self.execute_host = execute_host
-        super().__init__(exp_id, run_id,
-                         log_dir, config,  "python3 perf_rec_model.py",
-                         '/home/xieminhui/RecStore/third_party/HugeCTR/sparse_operation_kit/sparse_operation_kit/benchmark/xmh_dlrm_bench/',
-                         execute_host)
+        super().__init__(
+            exp_id,
+            run_id,
+            log_dir,
+            config,
+            "python3 perf_rec_model.py",
+            "/home/xieminhui/RecStore/third_party/HugeCTR/sparse_operation_kit/sparse_operation_kit/benchmark/xmh_dlrm_bench/",
+            execute_host,
+        )
 
-    def check_config(self,):
+    def check_config(
+        self,
+    ):
         super().check_config()
 
     def run(self):
@@ -663,13 +755,15 @@ class HugeCTRSOKRecRun(LocalOnlyRun):
         sleep_seconds = 0
         while True:
             ret = subprocess.run(
-                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1", shell=True).returncode
+                f"grep 'Successfully xmh' {self.log_dir}/log >/dev/null 2>&1",
+                shell=True,
+            ).returncode
             if ret == 0:
                 break
             time.sleep(5)
             sleep_seconds += 5
 
-            if sleep_seconds > 60*60:
+            if sleep_seconds > 60 * 60:
                 for _ in range(100):
                     print("DEADLOCK in wait client finish")
                 break
@@ -682,12 +776,16 @@ class HugeCTRSOKExperiment(LocalOnlyExperiment):
     def __init__(self, exp_id, common_config, execute_host) -> None:
         super().__init__(exp_id, common_config, execute_host)
 
-    def _PostprocessConfig(self, each_config, ):
+    def _PostprocessConfig(
+        self,
+        each_config,
+    ):
         pass
 
     def _CreateRun(self, run_id, run_log_dir, run_config, execute_host):
-        return HugeCTRSOKRecRun(self.exp_id, run_id, run_log_dir,
-                                run_config, execute_host)
+        return HugeCTRSOKRecRun(
+            self.exp_id, run_id, run_log_dir, run_config, execute_host
+        )
 
     def _BeforeStartAllRun(self):
         print("lnuke perf_rec_model.py")
@@ -695,7 +793,7 @@ class HugeCTRSOKExperiment(LocalOnlyExperiment):
 
 
 COMMON_CLIENT_CONFIGS = {
-    "no_save_emb": ['true'],
+    "no_save_emb": ["true"],
     "neg_sample_size": [200],
     # "regularization_coef": [1e-07],
     "regularization_coef": [0],
@@ -706,33 +804,42 @@ COMMON_CLIENT_CONFIGS = {
     "mix_cpu_gpu": ["true"],
 }
 
-['Freebase', 'FB15k', 'FB15k-237', 'wn18',
-    'wn18rr', 'wikikg2', 'biokg', 'wikikg90M']
+["Freebase", "FB15k", "FB15k-237", "wn18", "wn18rr", "wikikg2", "biokg", "wikikg90M"]
 
-['TransE', 'TransE_l1', 'TransE_l2', 'TransR',
- 'RESCAL', 'DistMult', 'ComplEx', 'RotatE',
- 'SimplE'],
+[
+    "TransE",
+    "TransE_l1",
+    "TransE_l2",
+    "TransR",
+    "RESCAL",
+    "DistMult",
+    "ComplEx",
+    "RotatE",
+    "SimplE",
+],
 
 
 class ExpKGScalability(GNNExperiment):
-    def __init__(self,) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "overall-kg-scalability"
         COMMON_CONFIGS = {
             "model_name": [
-                'TransE',
+                "TransE",
                 # 'SimplE'
-
                 # 'TransR',  OOM
                 # 'RESCAL',  too slow
                 # 'RotatE',  BUG
-
                 # 'DistMult',
                 # 'ComplEx',
                 # 'SimplE'
             ],
             "binding": [
                 {
-                    "dataset": ["FB15k",],
+                    "dataset": [
+                        "FB15k",
+                    ],
                     "hidden_dim": [400],
                     "cache_ratio": [0.01, 0.05, 0.1],
                     "batch_size": [1200],
@@ -763,40 +870,54 @@ class ExpKGScalability(GNNExperiment):
                 {
                     "dataset": ["FB15k"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [1200],
-                    "nr_gpus": [2,3, 4,5, 6, 7, 8] if GetHostName() != "node182" else [2, 3, 4],
+                    "nr_gpus": (
+                        [2, 3, 4, 5, 6, 7, 8]
+                        if GetHostName() != "node182"
+                        else [2, 3, 4]
+                    ),
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [2000],
-                    "nr_gpus": [2,3, 4,5, 6, 7, 8] if GetHostName() != "node182" else [2, 3, 4],
-                }
+                    "nr_gpus": (
+                        [2, 3, 4, 5, 6, 7, 8]
+                        if GetHostName() != "node182"
+                        else [2, 3, 4]
+                    ),
+                },
             ],
             "binding2": [
                 # for debug performance
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "CppAsyncV2",
-                        # "PySync",
+                        "PySync",
                         # "CppAsync"
                     ],
                 },
-                # {
-                #     "use_my_emb": ["false"],
-                #     "cached_emb_type": ['None'],
-                #     "backwardMode": ["CppSync"],
-                # },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ["None"],
+                    "backwardMode": ["CppSync"],
+                },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        # "TorchNativeStdEmb",
-                                        # "TorchNativeStdEmbDDP",
-                                        'KnownShardedCachedEmbedding'],
+                    "cached_emb_type": [
+                        "KGExternelEmbedding",
+                        # "TorchNativeStdEmb",
+                        # "TorchNativeStdEmbDDP",
+                        "KnownShardedCachedEmbedding",
+                    ],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -807,8 +928,7 @@ class ExpKGScalability(GNNExperiment):
 
         self.name = NAME
         self.filter_fn = None
-        super().__init__(10, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(10, COMMON_CONFIGS, "127.0.0.1")
 
     def SetFilter(self, fn):
         self.filter_fn = fn
@@ -816,7 +936,7 @@ class ExpKGScalability(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+            if GetHostName() == "node182" and each["dataset"] == "Freebase":
                 print("pass Freebase")
                 continue
             if self.filter_fn is not None and (not self.filter_fn(each)):
@@ -826,10 +946,10 @@ class ExpKGScalability(GNNExperiment):
             print(each)
             need_run.append(each)
 
-        return list(sorted(need_run, key=lambda each: each['dataset']))
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
@@ -842,50 +962,58 @@ class ExpKGScalability(GNNExperiment):
 
 
 class ExpKGvsA30(GNNExperiment):
-    def __init__(self,) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "overall-kg-scalability"
         COMMON_CONFIGS = {
             "model_name": [
-                'TransE',
+                "TransE",
             ],
             "binding": [
                 # for scalability
                 {
                     "dataset": ["FB15k"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [1200],
                     "nr_gpus": [2, 3, 4],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [2000],
                     "nr_gpus": [2, 3, 4],
-                }
+                },
             ],
             "binding2": [
                 # for debug performance
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "CppAsyncV2",
-                        'CppSync',
+                        "CppSync",
                     ],
                 },
                 {
                     "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
+                    "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",
-                                        # "TorchNativeStdEmbDDP",
-                                        'KnownShardedCachedEmbedding'],
+                    "cached_emb_type": [
+                        "KGExternelEmbedding",
+                        "TorchNativeStdEmb",
+                        # "TorchNativeStdEmbDDP",
+                        "KnownShardedCachedEmbedding",
+                    ],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -896,8 +1024,7 @@ class ExpKGvsA30(GNNExperiment):
 
         self.name = NAME
         self.filter_fn = None
-        super().__init__(10, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(10, COMMON_CONFIGS, "127.0.0.1")
 
     def SetFilter(self, fn):
         self.filter_fn = fn
@@ -905,7 +1032,7 @@ class ExpKGvsA30(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+            if GetHostName() == "node182" and each["dataset"] == "Freebase":
                 print("pass Freebase")
                 continue
             if self.filter_fn is not None and (not self.filter_fn(each)):
@@ -915,10 +1042,10 @@ class ExpKGvsA30(GNNExperiment):
             print(each)
             need_run.append(each)
 
-        return list(sorted(need_run, key=lambda each: each['dataset']))
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
@@ -931,20 +1058,28 @@ class ExpKGvsA30(GNNExperiment):
 
 
 class ExpKGScalabilityDecoupled(GNNExperiment):
-    def __init__(self,) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "overall-kg-scalability"
         COMMON_CONFIGS = {
             "model_name": [
-                'TransE',
+                "TransE",
             ],
             "binding": [
                 {
-                    "dataset": ["FB15k",],
+                    "dataset": [
+                        "FB15k",
+                    ],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [1200],
                     # "nr_gpus": [2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [2, 3, 4],
-                    "nr_gpus": [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4],
+                    "nr_gpus": (
+                        [2, 4, 6, 8] if GetHostName() != "node182" else [2, 3, 4]
+                    ),
                 },
                 # {
                 #     "dataset": ["Freebase"],
@@ -958,7 +1093,7 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
                 # for debug performance
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "CppAsyncV2",
                         "PySync",
@@ -967,14 +1102,16 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
                 },
                 {
                     "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
+                    "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",
-                                        'KnownShardedCachedEmbedding'],
+                    "cached_emb_type": [
+                        "KGExternelEmbedding",
+                        "TorchNativeStdEmb",
+                        "KnownShardedCachedEmbedding",
+                    ],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -985,8 +1122,7 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
 
         self.name = NAME
         self.filter_fn = None
-        super().__init__(10, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(10, COMMON_CONFIGS, "127.0.0.1")
 
     def SetFilter(self, fn):
         self.filter_fn = fn
@@ -994,7 +1130,7 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+            if GetHostName() == "node182" and each["dataset"] == "Freebase":
                 print("pass Freebase")
                 continue
             if self.filter_fn is not None and (not self.filter_fn(each)):
@@ -1004,10 +1140,10 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
             print(each)
             need_run.append(each)
 
-        return list(sorted(need_run, key=lambda each: each['dataset']))
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
@@ -1020,70 +1156,75 @@ class ExpKGScalabilityDecoupled(GNNExperiment):
 
 
 class ExpKGSensitive(GNNExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "overall-kg-sensitive"
         COMMON_CONFIGS = {
             "model_name": [
-                'TransE',
+                "TransE",
                 # 'SimplE'
                 # 'TransR',  OOM
                 # 'RESCAL',  too slow
                 # 'RotatE',  BUG
-
                 # 'DistMult',
                 # 'ComplEx',
                 # 'SimplE'
             ],
             "binding": [
                 {
-                    "dataset": ["FB15k",],
+                    "dataset": [
+                        "FB15k",
+                    ],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [1200],
-                    "nr_gpus": [8]
+                    "nr_gpus": [8],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05,],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [2000],
-                    "nr_gpus": [8]
+                    "nr_gpus": [8],
                 },
             ],
             "binding2": [
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "PySync",
                     ],
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": [
-                        "CppAsyncV2",
-                        "CppAsync"],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": ["CppAsyncV2", "CppAsync"],
                     "L": [2, 4, 6, 8, 10, 14],
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": [
-                        "CppAsyncV2",
-                        "CppAsync"],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": ["CppAsyncV2", "CppAsync"],
                     "nr_background_threads": [2, 4, 6, 8, 12, 16, 24, 32],
                 },
                 {
                     "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
+                    "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        # "TorchNativeStdEmb",
-                                        'KnownShardedCachedEmbedding'],
+                    "cached_emb_type": [
+                        "KGExternelEmbedding",
+                        # "TorchNativeStdEmb",
+                        "KnownShardedCachedEmbedding",
+                    ],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -1093,22 +1234,21 @@ class ExpKGSensitive(GNNExperiment):
         }
 
         self.name = NAME
-        super().__init__(1230, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(1230, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if GetHostName() == 'node182' and each['dataset'] == 'Freebase':
+            if GetHostName() == "node182" and each["dataset"] == "Freebase":
                 print("pass Freebase")
                 continue
             print(each)
             need_run.append(each)
 
-        return list(sorted(need_run, key=lambda each: each['dataset']))
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
@@ -1121,17 +1261,23 @@ class ExpKGSensitive(GNNExperiment):
 
 
 class ExpKGPerfDebug(GNNExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "debug-kg"
         COMMON_CONFIGS = {
             "model_name": [
-                'TransE',
+                "TransE",
             ],
             "binding": [
                 {
-                    "dataset": ["FB15k",],
+                    "dataset": [
+                        "FB15k",
+                    ],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.05, ],
+                    "cache_ratio": [
+                        0.05,
+                    ],
                     "batch_size": [1200],
                 },
                 # {
@@ -1145,7 +1291,7 @@ class ExpKGPerfDebug(GNNExperiment):
                 # for debug performance
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
                     "backwardMode": ["CppAsyncV2"],
                     # "update_cache_use_omp": [0, 1],
                     # "update_pq_use_omp": [0, 1],
@@ -1154,7 +1300,7 @@ class ExpKGPerfDebug(GNNExperiment):
                 },
                 {
                     "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
+                    "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
             ],
@@ -1165,16 +1311,15 @@ class ExpKGPerfDebug(GNNExperiment):
         }
 
         self.name = NAME
-        super().__init__(11, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(11, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
         for each in configs:
             print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
+        return list(sorted(configs, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
@@ -1187,16 +1332,17 @@ class ExpKGPerfDebug(GNNExperiment):
 
 
 class ExpKGPerfA30(GNNExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "kg a30"
         COMMON_CONFIGS = {
-            "model_name": [
-                'TransE',
-                'SimplE'
-            ],
+            "model_name": ["TransE", "SimplE"],
             "binding": [
                 {
-                    "dataset": ["FB15k",],
+                    "dataset": [
+                        "FB15k",
+                    ],
                     "hidden_dim": [400],
                     "cache_ratio": [0.05, 0.1],
                     "batch_size": [1200],
@@ -1207,22 +1353,21 @@ class ExpKGPerfA30(GNNExperiment):
                 # for debug performance
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KnownLocalCachedEmbedding'],
-                    "backwardMode": [
-                        "CppAsyncV2",
-                        "PySync",
-                        "CppAsync"],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": ["CppAsyncV2", "PySync", "CppAsync"],
                 },
                 {
                     "use_my_emb": ["false"],
-                    "cached_emb_type": ['None'],
+                    "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
                 {
                     "use_my_emb": ["true"],
-                    "cached_emb_type": ['KGExternelEmbedding',
-                                        "TorchNativeStdEmb",
-                                        'KnownShardedCachedEmbedding'],
+                    "cached_emb_type": [
+                        "KGExternelEmbedding",
+                        "TorchNativeStdEmb",
+                        "KnownShardedCachedEmbedding",
+                    ],
                     "backwardMode": ["PySync"],
                 },
             ],
@@ -1232,16 +1377,15 @@ class ExpKGPerfA30(GNNExperiment):
         }
 
         self.name = NAME
-        super().__init__(13, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(13, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
         for each in configs:
             print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
+        return list(sorted(configs, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke dgl-ke-main.py")
         LocalNuke("dgl-ke-main.py")
         LocalNukeAllPython()
@@ -1254,41 +1398,51 @@ class ExpKGPerfA30(GNNExperiment):
 
 
 class ExpRecPerf(RecExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
             "with_nn": [
-                '512,256,1',
+                "512,256,1",
             ],
             "binding": [
                 # for different batch_size
                 # {
                 #     "dataset": ["avazu", "criteo",],
                 #     "cache_ratio": [0.01, 0.05, 0.1],
-
                 #     # "batch_size": [128, 256, 512, 768, 1024,],
                 #     "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024],
                 #     "num_workers": [8] if GetHostName() != "node182" else [4],
                 # },
-
-
                 # for different cache_size
                 {
-                    "dataset": ["avazu", "criteo",],
+                    "dataset": [
+                        "avazu",
+                        "criteo",
+                    ],
                     "cache_ratio": [0.005, 0.01, 0.05, 0.1],
-                    "batch_size": [128, 1024,],
+                    "batch_size": [
+                        128,
+                        1024,
+                    ],
                     "num_workers": [8] if GetHostName() != "node182" else [4],
                 },
-
                 # for scalability
                 {
                     # "dataset": ["avazu"],
-                    "dataset": ["avazu", 'criteo'],
-                    "cache_ratio": [0.01,],
+                    "dataset": ["avazu", "criteo"],
+                    "cache_ratio": [
+                        0.01,
+                    ],
                     # "batch_size": [1024,],
                     "batch_size": [128, 1024],
-                    "num_workers": [2, 3, 4, 5, 6, 7, 8] if GetHostName() != "node182" else [1, 2, 3, 4],
-                }
+                    "num_workers": (
+                        [2, 3, 4, 5, 6, 7, 8]
+                        if GetHostName() != "node182"
+                        else [1, 2, 3, 4]
+                    ),
+                },
             ],
             "binding2": [
                 {
@@ -1301,7 +1455,6 @@ class ExpRecPerf(RecExperiment):
                     ]
                 },
                 {
-
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "PySync",
@@ -1316,16 +1469,15 @@ class ExpRecPerf(RecExperiment):
         }
 
         self.name = NAME
-        super().__init__(12, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(12, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
         for each in configs:
             print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
+        return list(sorted(configs, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke perf_rec_model.py")
         LocalNuke("perf_rec_model.py")
         LocalNukeAllPython()
@@ -1337,21 +1489,27 @@ class ExpRecPerf(RecExperiment):
         return
 
 
-
 class ExpRecMotivation(RecExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
             "with_nn": [
-                '512,256,1',
+                "512,256,1",
             ],
             "binding": [
                 {
-                    "dataset": ["avazu",],
-                    "cache_ratio": [0.01, 0.05,],
+                    "dataset": [
+                        "avazu",
+                    ],
+                    "cache_ratio": [
+                        0.01,
+                        0.05,
+                    ],
                     "batch_size": [32, 64, 128, 256, 512, 768, 1024, 1536, 2048, 4096],
                     # "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024],
-                    "num_workers": [4] 
+                    "num_workers": [4],
                 },
             ],
             "binding2": [
@@ -1370,16 +1528,15 @@ class ExpRecMotivation(RecExperiment):
         }
 
         self.name = NAME
-        super().__init__(12, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(12, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
         for each in configs:
             print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
+        return list(sorted(configs, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke perf_rec_model.py")
         LocalNuke("perf_rec_model.py")
         LocalNukeAllPython()
@@ -1391,32 +1548,42 @@ class ExpRecMotivation(RecExperiment):
         return
 
 
-
 class ExpRecPerfvsA30(RecExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
             "with_nn": [
-                '512,256,1',
+                "512,256,1",
             ],
             "binding": [
                 # for different batch_size
                 {
-                    "dataset": ["avazu", "criteo",],
-                    "cache_ratio": [0.05,],
-
-                    "batch_size": [128, 256, 512, 768, 1024,],
+                    "dataset": [
+                        "avazu",
+                        "criteo",
+                    ],
+                    "cache_ratio": [
+                        0.05,
+                    ],
+                    "batch_size": [
+                        128,
+                        256,
+                        512,
+                        768,
+                        1024,
+                    ],
                     # "batch_size": [32, 64, 128, 192, 256, 512, 768, 1024],
-                    "num_workers": [4]
+                    "num_workers": [4],
                 },
-
                 # for scalability
                 {
-                    "dataset": ["avazu", 'criteo'],
+                    "dataset": ["avazu", "criteo"],
                     "cache_ratio": [0.05],
                     "batch_size": [128, 1024],
                     "num_workers": [1, 2, 3, 4],
-                }
+                },
             ],
             "binding2": [
                 {
@@ -1429,7 +1596,6 @@ class ExpRecPerfvsA30(RecExperiment):
                     ]
                 },
                 {
-
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         # "PySync",
@@ -1445,15 +1611,13 @@ class ExpRecPerfvsA30(RecExperiment):
 
         self.name = NAME
         self.filter_fn = None
-        super().__init__(12, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(12, COMMON_CONFIGS, "127.0.0.1")
 
     # def _SortConfigs(self, configs):
     #     for each in configs:
     #         print(each)
     #     return list(sorted(configs, key=lambda each: each['dataset']))
 
-        
     def SetFilter(self, fn):
         self.filter_fn = fn
 
@@ -1467,10 +1631,10 @@ class ExpRecPerfvsA30(RecExperiment):
             print(each)
             need_run.append(each)
 
-        return list(sorted(need_run, key=lambda each: each['dataset']))
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke perf_rec_model.py")
         LocalNuke("perf_rec_model.py")
         LocalNukeAllPython()
@@ -1483,18 +1647,26 @@ class ExpRecPerfvsA30(RecExperiment):
 
 
 class ExpRecPerfDebug(RecExperiment):
-    def __init__(self, ) -> None:
+    def __init__(
+        self,
+    ) -> None:
         NAME = "rec perf a30"
         COMMON_CONFIGS = {
             "with_nn": [
-                '512,256,1',
+                "512,256,1",
             ],
             "binding": [
                 # for different batch_size
                 {
-                    "dataset": ["avazu",],
-                    "cache_ratio": [0.01,],
-                    "batch_size": [128,],
+                    "dataset": [
+                        "avazu",
+                    ],
+                    "cache_ratio": [
+                        0.01,
+                    ],
+                    "batch_size": [
+                        128,
+                    ],
                     "num_workers": [8] if GetHostName() != "node182" else [4],
                 },
             ],
@@ -1509,7 +1681,6 @@ class ExpRecPerfDebug(RecExperiment):
                     ]
                 },
                 {
-
                     "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "PySync",
@@ -1524,16 +1695,15 @@ class ExpRecPerfDebug(RecExperiment):
         }
 
         self.name = NAME
-        super().__init__(12, COMMON_CONFIGS,
-                         "127.0.0.1")
+        super().__init__(12, COMMON_CONFIGS, "127.0.0.1")
 
     def _SortConfigs(self, configs):
         for each in configs:
             print(each)
-        return list(sorted(configs, key=lambda each: each['dataset']))
+        return list(sorted(configs, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
-        LocalExecute('rm -rf /tmp/cached_tensor_*', '')
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
         print("lnuke perf_rec_model.py")
         LocalNuke("perf_rec_model.py")
         LocalNukeAllPython()

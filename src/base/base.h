@@ -32,8 +32,12 @@ namespace fs = boost::filesystem;
 #define UNLIKELY(x) (x)
 #endif
 
+#include <limits.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <mutex>
 
 using uint8 = uint8_t;
@@ -69,6 +73,8 @@ inline void bind_core(int n) {
     std::cout << "Could not set CPU affinity" << std::endl;
   }
 }
+
+inline pid_t GetThreadId() { return syscall(SYS_gettid); }
 
 class Lock {
  public:
@@ -207,9 +213,6 @@ class ScopedTempDir {
  private:
   FilePath path_;
 };
-
-#include <limits.h>
-#include <unistd.h>
 
 class HostName {
  public:

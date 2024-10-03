@@ -19,7 +19,7 @@
 // #define GRAD_ASYNC_V1_DEBUG
 #define USE_SUB_GRAD_TENSOR
 // #define XMH_DEBUG_KG
-#define USE_NEG_THREAD
+// #define USE_NEG_THREAD
 #define USE_BOOST_SHUFFLE
 
 namespace recstore {
@@ -170,6 +170,10 @@ class GradProcessingBase {
             GraphEnv::GetInstance()->cached_id_circle_buffer_),
         processOneStepNegThread_(&GradProcessingBase::ProcessOneStepNegThread,
                                  this) {
+#ifndef USE_NEG_THREAD
+    processOneStepNegThread_.join();
+#endif
+    pthread_setname_np(pthread_self(), "ProcessBackward");
     cached_range_ = cached_range;
     num_gpus_ = json_config_.at("num_gpus");
     L_ = json_config_.at("L");
@@ -223,6 +227,12 @@ class GradProcessingBase {
   virtual void StartThreads() {}
 
   virtual void ProcessOneStepNegThread() {
+#ifdef USE_NEG_THREAD
+    pthread_setname_np(pthread_self(), "ProcessBackward NegThread");
+    LOG(WARNING) << "TID of ProcessBackward NegThread is "<< base::GetThreadId();
+#else
+    return;
+#endif
     torch::AutoGradMode guard_false(false);
     if (kForwardItersPerStep_ == 1) {
       return;
@@ -231,6 +241,7 @@ class GradProcessingBase {
       while (processOneStepNegThread_ping_.load() == false)
         ;
       if (stop_processOneStepNegThread_flag_.load() == true) return;
+
       auto input_keys_neg_per_rank_tensors =
           SlicedTensor::BatchConvertToTensors(input_keys_neg_per_rank_);
       auto backward_grads_neg_per_rank_tensors =
@@ -316,54 +327,6 @@ class GradProcessingBase {
                                int step_no) = 0;
 
   virtual void BlockToStepN(int step_no) = 0;
-
-  /*
-    std::pair<std::vector<std::vector<torch::Tensor>>,
-              std::vector<std::vector<torch::Tensor>>>
-    ShuffleKeysAndGradsXMH(
-        const std::vector<base::ConstArray<int64_t>> &input_keys,
-        const std::vector<torch::Tensor> &input_grads) {
-      int num_gpus = input_keys.size();
-
-      std::vector<std::vector<std::vector<int64_t>>>
-          shuffled_keys_in_each_rank_cache(num_gpus);
-      std::vector<std::vector<std::vector<int>>>
-    shuffled_idx_in_each_rank_cache( num_gpus);
-
-      for (int rank = 0; rank < num_gpus; rank++) {
-        shuffled_keys_in_each_rank_cache[rank].resize(num_gpus);
-        shuffled_idx_in_each_rank_cache[rank].resize(num_gpus);
-
-        for (int i = 0; i < num_gpus; i++) {
-          shuffled_keys_in_each_rank_cache[rank][i].resize(1e6);
-          shuffled_idx_in_each_rank_cache[rank][i].resize(1e6);
-        }
-      }
-
-      for (int rank = 0; rank < num_gpus; rank++) {
-        base::ConstArray<int64_t> key_array = input_keys[rank];
-
-        for (int i = 0; i < key_array.Size(); i++) {
-          int64_t key = key_array[i];
-
-          // find shard for this key
-          int64_t shard_no = -1;
-          for (int j = 0; j < cached_range_.size(); j++) {
-            if (key >= cached_range_[j][0] && key < cached_range_[j][1]) {
-              shard_no = j;
-              break;
-            }
-          }
-          if (shard_no == -1) continue;
-
-          // put key to shuffled_keys_in_each_rank_cache[shard_no]
-          // record i in shuffled_idx_in_each_rank_cache[shard_no]
-          shuffled_keys_in_each_rank_cache[shard_no][rank].push_back(key);
-          shuffled_idx_in_each_rank_cache[shard_no][rank].push_back(i);
-        }
-      }
-    }
-  */
 
   /*-------- BOOST SHUFFLE VERSION ---------*/
   std::pair<std::vector<std::vector<torch::Tensor>>,

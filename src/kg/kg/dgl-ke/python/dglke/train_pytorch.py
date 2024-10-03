@@ -205,11 +205,11 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     print(f"rank{rank} start train")
     exp_all_start_time = time.time()
     for step in range(0, args.max_step):
-        # if rank == 0:
-        #     print(f"Step{step}")
+        # print(f"Step{step}:Rank{rank} start {time.time()}")
+
         if rank == 0 and step % 10 == 0:
             exp_all_now = time.time()
-            if exp_all_now - exp_all_start_time > 900:
+            if exp_all_now - exp_all_start_time > 120:
                 break
 
         if with_perf and step == warmup_iters:
@@ -247,6 +247,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
         if client is not None:
             model.pull_model(client, pos_g, neg_g)
 
+        # logging.warning(f"Step{step}:Rank{rank} Forward start {time.time()}")
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{step}:forward", condition=rank == 0 and step >= warmup_iters):
             start1 = time.time()
@@ -255,7 +256,9 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             forward_time += time.time() - start1
         th.cuda.synchronize()
         timer_Forward.stop()
+        # logging.warning(f"Step{step}:Rank{rank} Forward done {time.time()}")
 
+        # logging.warning(f"Step{step}:Rank{rank} Backward start {time.time()}")
         timer_Backward.start()
         with xmh_nvtx_range(f"Step{step}:backward", condition=rank == 0 and step >= warmup_iters):
             start1 = time.time()
@@ -263,7 +266,9 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             backward_time += time.time() - start1
         th.cuda.synchronize()
         timer_Backward.stop()
+        # logging.warning(f"Step{step}:Rank{rank} Backward done {time.time()}")
 
+        # logging.warning(f"Step{step}:Rank{rank} Update start {time.time()}")
         timer_Optimize.start()
         with xmh_nvtx_range(f"Step{step}:update", condition=rank == 0 and step >= warmup_iters):
             start1 = time.time()
@@ -278,6 +283,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
             logs.append(log)
         th.cuda.synchronize()
         timer_Optimize.stop()
+        # logging.warning(f"Step{step}:Rank{rank} Update done {time.time()}")
 
         kg_cache_controller.AfterBackward()
 

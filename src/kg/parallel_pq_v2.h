@@ -93,7 +93,6 @@ class PriorityHashTable {
   }
 
   index_type *Clean(index_type *new_index, std::function<void(T *)> drain_fn) {
-    xmh::Timer clean_timer("clean");
     // base::NamedLockGuard _(lock_, "clean");
     isCleaning_ = true;
     auto old_index = base::Atomic::load(&index_);
@@ -138,7 +137,6 @@ class PriorityHashTable {
 
     old_index->clear();
     isCleaning_ = false;
-    clean_timer.end();
     return old_index;
   }
 
@@ -256,6 +254,7 @@ class ParallelPqV2 : public AbstractParallelPq<T> {
   }
 
   void ChunkClean(std::function<void(T *)> drain_fn) override {
+    xmh::RAIITimer clean_timer("ChunkClean");
 #if defined(PPQ_ALL_SCAN)
     for (int i = 0; i < kMaxPriority; i++) {
       if (qs_[i]->empty()) continue;

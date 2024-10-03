@@ -87,11 +87,6 @@ class MultiProcessBarrierFactory : public torch::CustomClassHolder {
     return c10::make_intrusive<MultiProcessBarrierHolder>(p);
   }
 
-  //   static MultiProcessBarrier *CreateStatic(const std::string &name,
-  //                                            int64_t count) {
-  //     return MultiProcessBarrierFactory::GetInstance()->Create(name, count);
-  //   }
-
   static void ClearIPCMemoryStatic() {
     return MultiProcessBarrierFactory::GetInstance()->ClearIPCMemory();
   }

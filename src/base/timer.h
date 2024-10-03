@@ -515,7 +515,8 @@ class Timer {
     for (auto key = orderedKeyList.begin(); key != orderedKeyList.end();
          ++key) {
       vec.push_back(
-          // {*key, beautifyNs(map[*key]->mean()), beautifyNs(map[*key]->p(99))});
+          // {*key, beautifyNs(map[*key]->mean()),
+          // beautifyNs(map[*key]->p(99))});
           {*key, beautifyNs(map[*key]->p(50)), beautifyNs(map[*key]->p(99))});
     }
     spin_lock.Unlock();
@@ -531,6 +532,13 @@ class Timer {
   double cum_count_ = 0;
   const int sampling_times_ = 1;
   int cum_sampling_times_ = 0;
+};
+
+class RAIITimer : public Timer {
+ public:
+  RAIITimer(std::string timerName, int sampling_times = 1)
+      : Timer(timerName, sampling_times) {}
+  ~RAIITimer() { end(); }
 };
 
 class GPUTimer : public Timer {

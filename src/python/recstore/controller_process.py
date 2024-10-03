@@ -5,6 +5,7 @@ from threading import Thread
 import json
 import time
 
+import logging
 
 import torch as th
 import torch.multiprocessing as mp
@@ -307,7 +308,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.rank = dist.get_rank()
         self.json_config = json.loads(json_str)
         full_emb_capacity = self.json_config['full_emb_capacity']
-        print("full_emb_capacity  is ", full_emb_capacity)
+        logging.warning(f"Rank{self.rank}, PID={os.getpid()}")
 
         if self.rank == 0:
             Timer.StartReportThread()
@@ -329,7 +330,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         KGCacheControllerWrapper.instance = self
 
         self.timer_BlockToStepN = Timer("BlockToStepN")
-        self.timer_AfterBackward = Timer("AfterBackward")
+        self.timer_AfterBackward = Timer("ProcessBack")
         self.timer_BarrierTimeBeforeRank0 = Timer("BarrierTimeBeforeRank0")
 
         self.__init_rpc()
@@ -372,14 +373,16 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
     def AfterBackward(self,):
         self.timer_BarrierTimeBeforeRank0.start()
+        logging.debug(f"Rank{self.rank} has reached AfterBackward, {time.time()}")
         self.barrier.Wait()
         self.timer_BarrierTimeBeforeRank0.stop()
 
         if self.use_cpp_controller and self.rank == 0:
             self.timer_AfterBackward.start()
-            # print(f"rank{self.rank}: before ProcessOneStep, {time.time()}")
+            logging.debug(f"rank{self.rank}: before ProcessOneStep, {time.time()}")
+            # TODO: 现在卡在这个里面
             self.controller.ProcessOneStep(self.step)
-            # print(f"rank{self.rank}: after ProcessOneStep, {time.time()}")
+            logging.debug(f"rank{self.rank}: after ProcessOneStep, {time.time()}")
             self.timer_AfterBackward.stop()
 
         # self.barrier.Wait()
@@ -388,10 +391,10 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
         self.timer_BlockToStepN.start()
 
-        # print(f"rank{self.rank}: before BlockToStepN, {time.time()}")
+        logging.debug(f"rank{self.rank}: before BlockToStepN, {time.time()}")
         if self.use_cpp_controller and self.rank == 0:
             self.controller.BlockToStepN(self.step)
-        # print(f"rank{self.rank}: after BlockToStepN, {time.time()}")
+        logging.debug(f"rank{self.rank}: after BlockToStepN, {time.time()}")
 
         self.barrier.Wait()
         self.timer_BlockToStepN.stop()

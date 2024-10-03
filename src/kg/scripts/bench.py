@@ -68,42 +68,41 @@ def main():
 
 
     else: # 3090
-        each = exp_config.ExpKGPerfDebug()
-        each.SetLogDir(f'{LOG_PREFIX}/0918-KG-debug-{suffix}')
-        exp_lists.append(each)
-        return exp_lists
+        # each = exp_config.ExpKGPerfDebug()
+        # each.SetLogDir(f'{LOG_PREFIX}/0918-KG-debug-{suffix}')
+        # exp_lists.append(each)
+        # return exp_lists
      
      
      
      
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0918-KG-scale-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-KG-scale-{suffix}')
         each.SetFilter(lambda config: config['dataset'] == 'FB15k')
         exp_lists.append(each)
      
-     
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-Rec-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-Rec-{suffix}')
         exp_lists.append(each)
     
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-KG-scale-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-KG-scale-{suffix}')
         each.SetFilter(lambda config: config['dataset'] == 'Freebase')
         exp_lists.append(each)
         
         
         each = exp_config.ExpRecMotivation()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-real-motiv-rec-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-real-motiv-rec-{suffix}')
         exp_lists.append(each)
 
         # RTX 3090
         each = exp_config.ExpRecPerfvsA30()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-RecVSA30-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-RecVSA30-{suffix}')
         # each.SetFilter(lambda config: config['emb_choice'] == 'KnownLocalCachedEmbedding')
         exp_lists.append(each)
 
         each = exp_config.ExpKGvsA30()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-KGvsA30-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-KGvsA30-{suffix}')
         # each.SetFilter(lambda config: config['cached_emb_type'] == 'KnownLocalCachedEmbedding')
         exp_lists.append(each)
 
@@ -125,11 +124,11 @@ def main():
 
         # # 用这个
         each = exp_config.ExpMicroPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0511-micro-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-micro-{suffix}')
         exp_lists.append(each)
 
         each = exp_config.ExpRealMotivationPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0614-real-motiv-{suffix}')
+        each.SetLogDir(f'{LOG_PREFIX}/1003-real-motiv-{suffix}')
         exp_lists.append(each)
 
 

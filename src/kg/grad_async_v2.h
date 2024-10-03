@@ -88,7 +88,7 @@ class GradAsyncProcessingV2 : public GradAsyncProcessing {
     int64_t id = p->GetID();
 
     p->Lock();
-    auto [not_used, vec_grads] = p->DrainWrites();
+    auto [no_used, vec_grads] = p->DrainWrites();
     p->Unlock();
 
 #ifdef USE_SUB_GRAD_TENSOR
@@ -131,6 +131,8 @@ class GradAsyncProcessingV2 : public GradAsyncProcessing {
   }
 
   void DetectThread() {
+    pthread_setname_np(pthread_self(), "DetectThread");
+
     torch::AutoGradMode guard_false(false);
     CHECK(isInitialized_);
     while (!detect_thread_stop_flag_.load()) {
@@ -140,6 +142,8 @@ class GradAsyncProcessingV2 : public GradAsyncProcessing {
   }
 
   void DispatchThread() {
+    pthread_setname_np(pthread_self(), "DispatchThread");
+
     torch::AutoGradMode guard_false(false);
     CHECK(isInitialized_);
     while (!dispatch_thread_stop_flag_.load()) {
@@ -159,6 +163,9 @@ class GradAsyncProcessingV2 : public GradAsyncProcessing {
   }
 
   void GradWorkThread(int thread_id) {
+    std::string thread_name = "GradWorkThread" + std::to_string(thread_id);
+    pthread_setname_np(pthread_self(), thread_name.c_str());
+
     torch::AutoGradMode guard_false(false);
     auto *queue = backthread_work_queues_[thread_id].get();
     CHECK(queue != nullptr);
@@ -180,7 +187,7 @@ class GradAsyncProcessingV2 : public GradAsyncProcessing {
 
   // 等到可以让step_no开始训练
   void BlockToStepN(int step_no) override {
-    // 等待堆头的元素大于step_no号
+    // wait until the top element of heap > step_no
     while (true) {
       base::LockGuard _(large_lock_);
 
@@ -312,7 +319,6 @@ class GradAsyncProcessingV2 : public GradAsyncProcessing {
   }
 
  private:
-  // recstore::ParallelPqV2<AsyncGradElement> pq_;
 };
 
 }  // namespace recstore
