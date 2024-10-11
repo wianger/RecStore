@@ -32,13 +32,13 @@ class CircleBuffer:
                 f"cached_sampler_r{rank}_{i}", (int(1e6), ), th.int64, )
             self.buffer.append(sliced_id_tensor)
 
-        self.step_tensor = recstore.IPCTensorFactory.NewIPCTensor(
+        self.step_tensor = recstore.IPCTensorFactory.NewOrGetIPCTensor(
             f"step_r{rank}", (int(L), ), th.int64, )
 
-        self.circle_buffer_end = recstore.IPCTensorFactory.NewIPCTensor(
+        self.circle_buffer_end = recstore.IPCTensorFactory.NewOrGetIPCTensor(
             f"circle_buffer_end_r{rank}", (int(1), ), th.int64, )
 
-        self.circle_buffer_old_end = recstore.IPCTensorFactory.NewIPCTensor(
+        self.circle_buffer_old_end = recstore.IPCTensorFactory.NewOrGetIPCTensor(
             f"circle_buffer_end_cppseen_r{rank}", (int(1), ), th.int64, )
 
         # [start, end)
@@ -251,7 +251,8 @@ class KGCacheControllerWrapperBase:
     @classmethod
     def BeforeDDPInit(cls):
         th.set_num_threads(8)
-        recstore.IPCTensorFactory.ClearIPCMemory()
+        # This line error ↓
+        recstore.IPCTensorFactory.ClearIPCMemory()  
         recstore.MultiProcessBarrierFactory.ClearIPCMemory()
 
     @classmethod
@@ -354,14 +355,12 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
     def GraceFullyStopThreads(self):
         if self.rank == 0 and self.use_cpp_controller:
-            print(
-                f"On rank0, prepare to call self.controller.StopThreads(), self={self}")
             self.controller.StopThreads()
 
     def StopThreads(self):
         if self.rank == 0 and self.use_cpp_controller:
             print(
-                f"On rank0, prepare to call self.controller.StopThreads(), self={self}")
+                f"On rank0, prepare to call self.controller.StopThreads(), self={self}, self.controller={self.controller}")
             self.controller.StopThreads()
         elif self.rank == 0:
             pass

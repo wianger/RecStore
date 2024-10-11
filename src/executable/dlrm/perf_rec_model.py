@@ -175,13 +175,13 @@ def main_routine(args, routine):
         routine(worker_id, args)
 
     kvinit()
-    emb = DistEmbedding(int(args['num_embs']),
-                        int(args['emb_dim']), name="full_emb",)
 
-    XLOG.warn("After init DistEmbedding")
-
-    # dummy LR, only register the tensor state of OSP
-    dist_opt = DistOpt.SparseSGD([emb], lr=LR)
+    # !!!!!!!!!!Don't init dist embedding in the main process, init it after fork !!!!!!!!!!!
+    # emb = DistEmbedding(int(args['num_embs']),
+    #                     int(args['emb_dim']), name="full_emb",)
+    # XLOG.warn("After init DistEmbedding")
+    # # dummy LR, only register the tensor state of OSP
+    # dist_opt = DistOpt.SparseSGD([emb], lr=LR)
 
     print(f"========== Running Perf with routine {routine}==========")
     workers = []
@@ -250,6 +250,7 @@ def routine_local_cache_helper(worker_id, args):
 
     emb = DistEmbedding(int(args['num_embs']),
                         int(args['emb_dim']), name="full_emb",)
+                        
     logging.debug(
         f"in rank{rank}, full_emb.data_ptr={hex(emb.get_shm_tensor().data_ptr())}")
     logging.warning(f"Rank{rank} reached before barrier")
@@ -264,10 +265,13 @@ def routine_local_cache_helper(worker_id, args):
     sparse_opt = optim.SGD(
         [fake_tensor], lr=LR,)
     dist_opt = DistOpt.SparseSGD([emb], lr=LR)
+
     abs_emb = CacheEmbFactory.New(args["emb_choice"], emb, args)
     abs_emb.reg_opt(sparse_opt)
     dist.barrier()
     # Generate our embedding done
+    
+
 
     if DIFF_TEST:
         # Generate standard embedding
@@ -330,6 +334,7 @@ def routine_local_cache_helper(worker_id, args):
                                    backmode=args['backwardMode'],
                                    )
     logging.info("Construct RecModelSampler done")
+
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
         kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(

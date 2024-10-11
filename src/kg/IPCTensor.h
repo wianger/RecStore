@@ -6,6 +6,11 @@
 #include <torch/extension.h>
 #include <torch/torch.h>
 
+#include <fcntl.h>     // for open()
+#include <sys/mman.h>  // for mmap()
+#include <sys/stat.h>  // for mode constants
+#include <unistd.h>    // for close()
+#include <cstring>     // for memset
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -30,7 +35,7 @@ enum IPCTensorType {
 class IPCTensorMemoryHandle {
   static constexpr int kShapeDimMax = 3;
 
-public:
+ public:
   IPCTensorMemoryHandle(const std::string &name, at::IntArrayRef shape,
                         at::ScalarType dtype)
       : dtype_(dtype) {
@@ -51,7 +56,9 @@ public:
   IPCTensorMemoryHandle(const std::string &name, at::IntArrayRef shape,
                         at::ScalarType dtype, int64_t dev_id,
                         cudaIpcMemHandle_t memHandle, void *dev_ptr)
-      : dtype_(dtype), dev_ptr_(dev_ptr), memHandle_(memHandle),
+      : dtype_(dtype),
+        dev_ptr_(dev_ptr),
+        memHandle_(memHandle),
         dev_id_(dev_id) {
     type_ = kGPUIPCTensor;
     memset(shape_, -1, kShapeDimMax * sizeof(int));
@@ -145,7 +152,7 @@ public:
     return p->load();
   }
 
-private:
+ private:
   union {
     struct {
       IPCTensorType type_;
@@ -177,7 +184,7 @@ class IPCMemory {
 
   // static constexpr int64_t kShmSize = 200 * (1024 * 1024 * 1024LL);
   // static constexpr int64_t kShmSize = 50* (1024 * 1024 * 1024LL);
-  static constexpr int64_t kShmSize = DEFINED_SHM_GB* (1024 * 1024 * 1024LL);
+  static constexpr int64_t kShmSize = DEFINED_SHM_GB * (1024 * 1024 * 1024LL);
 
   struct IPCShmRegion {
     IPCShmRegion() {}
@@ -188,20 +195,39 @@ class IPCMemory {
   };
 
   IPCMemory() {
-    folly::MemoryMapping::Options options =
-        folly::MemoryMapping::writable().setPrefault(true).setShared(true);
-    options.address = (void *)(0x100000000000);
-    system("touch /dev/shm/recstore_ipc_memory");
+    // system("touch /dev/shm/recstore_ipc_memory");
+    // folly::MemoryMapping::Options options =
+    //     folly::MemoryMapping::writable().setPrefault(true).setShared(true);
+    // options.address = (void *)(0x100000000000);
 
-    mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_memory", 0,
-                                        kShmSize, options);
-    header_ =
-        new ((IPCShmRegion *)mapping_->writableRange().begin()) IPCShmRegion();
+    // mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_memory", 0,
+    //                                     kShmSize, options);
+    // header_ =
+    //     new ((IPCShmRegion *)mapping_->writableRange().begin())
+    //     IPCShmRegion();
+
+    int fd = shm_open("recstore_ipc_memory", O_CREAT | O_RDWR, 0666);
+    if (fd == -1) {
+      perror("shm_open");
+      CHECK(fd != -1);
+    }
+    if (ftruncate(fd, kShmSize) == -1) {
+      perror("ftruncate");
+      close(fd);
+      CHECK(0);
+    }
+
+    void *mapping = mmap((void *)0x100000000000, kShmSize,
+                         PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    CHECK(mapping != MAP_FAILED);
+    header_ = new ((IPCShmRegion *)mapping) IPCShmRegion();
   }
 
-  ~IPCMemory() { delete mapping_; }
+  ~IPCMemory() {
+    // delete mapping_;
+  }
 
-public:
+ public:
   static IPCMemory *GetInstance() {
     static IPCMemory instance;
     return &instance;
@@ -239,6 +265,7 @@ public:
   IPCTensorMemoryHandle *RegisterGPUMemory(std::string name,
                                            at::IntArrayRef shape,
                                            at::ScalarType dtype, int dev_id) {
+    CHECK(0);
     int64_t size = numel(shape) * c10::elementSize(dtype);
     nv::CudaDeviceRestorer _;
     cudaSetDevice(dev_id);
@@ -309,14 +336,13 @@ public:
     for (int i = 0; i < kMaxRegTensorNum; i++) {
       header_->malloced_offsets_[i] = 0;
     }
-    // header_->accumulated_offset_ = sizeof(IPCShmRegion);
     header_->accumulated_offset_ =
         MathUtil::round_up_to_int64(sizeof(IPCShmRegion), 4096);
 
     CHECK_GE(header_->accumulated_offset_.load(), 0);
   }
 
-private:
+ private:
   void SetMallocedOffset(int64_t offset) {
     for (int i = 0; i < kMaxRegTensorNum; i++) {
       int64_t &malloced_offset = header_->malloced_offsets_[i];
@@ -329,20 +355,20 @@ private:
         << "Too many IPCTensors registered, please increase <kMaxRegTensorNum>";
   }
 
-private:
-  folly::MemoryMapping *mapping_;
+ private:
+  // folly::MemoryMapping *mapping_;
   IPCShmRegion *header_;
 };
 
 class SlicedTensor;
 
 class IPCTensorFactory : public torch::CustomClassHolder {
-public:
+ public:
   static void ClearIPCMemory() { IPCMemory::GetInstance()->ClearIPCMemory(); }
 
-  static torch::optional<torch::Tensor>
-  NewIPCTensor(const std::string &name, const at::IntArrayRef shape,
-               const at::ScalarType dtype) {
+  static torch::optional<torch::Tensor> NewIPCTensor(
+      const std::string &name, const at::IntArrayRef shape,
+      const at::ScalarType dtype) {
     auto handle = IPCMemory::GetInstance()->GetHandle(name);
     if (handle != nullptr) {
       LOG(WARNING) << "IPCTensor " << name << " already exists";
@@ -379,6 +405,43 @@ public:
   }
 
   static void ListIPCTensors() { IPCMemory::GetInstance()->ListIPCTensors(); }
+
+  static torch::Tensor NewOrGetIPCTensor(const std::string &name,
+                                         const at::IntArrayRef shape,
+                                         const at::ScalarType dtype) {
+    auto handle = IPCMemory::GetInstance()->GetHandle(name);
+    if (handle != nullptr) {
+      LOG(WARNING) << "IPCTensor " << name << " already exists";
+      CHECK_EQ(handle->shape_vec().size(), shape.size());
+      for (int i = 0; i < shape.size(); i++) {
+        CHECK(handle->shape_vec()[i] == shape[i]);
+      }
+      CHECK(handle->GetDtype() == dtype);
+      assert(handle->GetIPCType() == kCPUIPCTensor);
+
+      auto tensor = torch::from_blob(
+          handle->GetTensorPtr(), handle->shape_vec(),
+          torch::TensorOptions().dtype(handle->GetDtype()).device(torch::kCPU));
+      return tensor;
+    }
+
+    int64_t size_in_bytes = numel(shape) * c10::elementSize(dtype);
+    CHECK_NE(size_in_bytes, 0) << "malloc size = 0";
+
+    handle = IPCMemory::GetInstance()->RegisterCPUMemory(name, shape, dtype);
+    assert(handle->GetIPCType() == kCPUIPCTensor);
+
+    LOG(WARNING) << "NewIPCTensor: " << name << " " << shape
+                 << handle->GetTensorPtr() << " "
+                 << base::PrettyPrintBytes(size_in_bytes);
+
+    _mm_mfence();
+
+    auto tensor = torch::from_blob(
+        handle->GetTensorPtr(), handle->shape_vec(),
+        torch::TensorOptions().dtype(handle->GetDtype()).device(torch::kCPU));
+    return tensor;
+  }
 
   static torch::Tensor NewIPCGPUTensor(const std::string &name,
                                        const at::IntArrayRef shape,
@@ -461,22 +524,22 @@ public:
     return GetIPCTensorFromHandle(handle);
   }
 
-  static c10::intrusive_ptr<SlicedTensor>
-  GetSlicedIPCTensorFromName(const std::string &name);
+  static c10::intrusive_ptr<SlicedTensor> GetSlicedIPCTensorFromName(
+      const std::string &name);
 
-  static c10::intrusive_ptr<SlicedTensor>
-  NewSlicedIPCGPUTensor(const std::string &name, const at::IntArrayRef shape,
-                        const at::ScalarType dtype, const int64_t dev_id);
+  static c10::intrusive_ptr<SlicedTensor> NewSlicedIPCGPUTensor(
+      const std::string &name, const at::IntArrayRef shape,
+      const at::ScalarType dtype, const int64_t dev_id);
 
-  static c10::intrusive_ptr<SlicedTensor>
-  NewSlicedIPCTensor(const std::string &name, const at::IntArrayRef shape,
-                     const at::ScalarType dtype);
+  static c10::intrusive_ptr<SlicedTensor> NewSlicedIPCTensor(
+      const std::string &name, const at::IntArrayRef shape,
+      const at::ScalarType dtype);
 
-private:
+ private:
 };
 
 class SlicedTensor : public torch::CustomClassHolder {
-public:
+ public:
   SlicedTensor(IPCTensorMemoryHandle *handle) : handle_(handle) {}
 
   torch::Tensor GetSlicedTensor() const {
@@ -519,10 +582,10 @@ public:
     return ret;
   }
 
-private:
+ private:
   IPCTensorMemoryHandle *handle_;
 };
 
 void RegisterIPCTensorFactory(torch::Library &m);
 
-} // namespace recstore
+}  // namespace recstore

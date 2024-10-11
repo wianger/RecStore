@@ -67,6 +67,7 @@ void RegisterIPCTensorFactory(torch::Library &m) {
   m.class_<IPCTensorFactory>("IPCTensorFactory")
       .def_static("ClearIPCMemory", &IPCTensorFactory::ClearIPCMemory)
       .def_static("NewIPCTensor", &IPCTensorFactory::NewIPCTensor)
+      .def_static("NewOrGetIPCTensor", &IPCTensorFactory::NewOrGetIPCTensor)
       .def_static("NewIPCGPUTensor", &IPCTensorFactory::NewIPCGPUTensor)
       .def_static("ListIPCTensors", &IPCTensorFactory::ListIPCTensors)
       .def_static("FindIPCTensorFromName",

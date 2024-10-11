@@ -72,7 +72,7 @@ class MultiProcessBarrierFactory : public torch::CustomClassHolder {
   MultiProcessBarrierFactory() {
     folly::MemoryMapping::Options options =
         folly::MemoryMapping::writable().setPrefault(true).setShared(true);
-    options.address = (void *)(0x080000000000);
+    // options.address = (void *)(0x080000000000);
     system("touch /dev/shm/recstore_ipc_barrier");
     mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_barrier", 0,
                                         kShmSize, options);

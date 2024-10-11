@@ -341,21 +341,21 @@ class ExpMicroPerfEmb(LocalOnlyExperiment):
             "num_embs": [
                 int(10 * 1e6),
             ],
-            "batch_size": [
-                512,
-                1024,
-                2048,
-                4096,
-                6144,
-                8192,
-            ],
-            # "batch_size": [128, 512, 1024, 1536, 2048,],
+            # "batch_size": [
+            #     512,
+            #     1024,
+            #     2048,
+            #     4096,
+            #     6144,
+            #     8192,
+            # ],
+            "batch_size": [128, 512, 1024, 1536, 2048,],
             "run_steps": [200],
             "log_interval": [100],
             "cache_ratio": [
                 0.01,
                 0.05,
-                0.1,
+                # 0.1,
             ],
             "binding2": [
                 {

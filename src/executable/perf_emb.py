@@ -9,6 +9,7 @@ import debugpy
 import json
 import tqdm
 import time
+import logging
 
 import torch
 import torch as th
@@ -173,12 +174,13 @@ def main_routine(args, routine):
         routine(worker_id, args)
 
     kvinit()
-    emb = DistEmbedding(int(args['num_embs']),
-                        int(args['emb_dim']), name="full_emb",)
-    XLOG.warn("After init DistEmbedding")
-
-    # dummy LR, only register the tensor state of OSP
-    dist_opt = DistOpt.SparseSGD([emb], lr=LR)
+    
+    # !!!!!!!!!!Don't init dist embedding in the main process, init it after fork !!!!!!!!!!!
+    # emb = DistEmbedding(int(args['num_embs']),
+    #                     int(args['emb_dim']), name="full_emb",)
+    # XLOG.warn("After init DistEmbedding")
+    # # dummy LR, only register the tensor state of OSP
+    # dist_opt = DistOpt.SparseSGD([emb], lr=LR)
 
     print(f"========== Running Perf with routine {routine}==========")
     workers = []
@@ -322,7 +324,7 @@ def routine_local_cache_helper(worker_id, args):
         sparse_opt.zero_grad()
         dist_opt.zero_grad()
 
-        print(f"========== Step {_} ========== ", flush=True)
+        # print(f"========== Step {_} ========== ", flush=True)
 
         if with_perf and _ == warmup_iters:
             if rank == 0:
@@ -353,6 +355,8 @@ def routine_local_cache_helper(worker_id, args):
         input_keys = next(perf_sampler)
         start_barrier.Wait()
         timer_geninput.stop()
+
+
 
         timer_Forward.start()
         with xmh_nvtx_range(f"Step{_}:forward", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
@@ -385,18 +389,7 @@ def routine_local_cache_helper(worker_id, args):
         timer_Optimize_HBM.start()
         sparse_opt.step()
         timer_Optimize_HBM.stop()
-        # assert len(sparse_opt.param_groups[1]['params']) == 1
-        # with xmh_nvtx_range(f"Step{_}:xmhdebug", condition=rank == 0 and _ >= warmup_iters and args['with_perf']):
-        #     debug_emb = sparse_opt.param_groups[1]['params'][0]
-        #     with torch.no_grad():
-        #         debug_emb_grad = debug_emb.grad
-        #         assert debug_emb_grad.is_sparse
 
-        #         timer_debug = Timer("timer_debug")
-        #         while True:
-        #             timer_debug.start()
-        #             debug_emb.add_(debug_emb_grad)
-        #             timer_debug.stop()
 
         timer_Optimize_DRAM.start()
         dist_opt.step()

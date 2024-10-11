@@ -52,7 +52,7 @@ class ShmKVStore(AbsKVStore):
             assert temp.dtype == th.float32
             assert temp.is_cpu
             logging.debug(
-                f"Rank{th.distributed.get_rank()}: NewIPCTensor failed, find already existing tensor, {hex(temp.data_ptr())}")
+                f"NewIPCTensor failed, find already existing tensor, {hex(temp.data_ptr())}")
         else:
             if init_func is not None:
                 init_func(temp, shape, th.float32)
