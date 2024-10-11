@@ -8,6 +8,7 @@ import argparse
 import debugpy
 import json
 import tqdm
+import logging
 
 import torch
 import torch as th
@@ -202,9 +203,16 @@ class SimpleDLRM(nn.Module):
     def __init__(self, dim_list, sigmoid_layer=-1):
         super(SimpleDLRM, self).__init__()
         layers = nn.ModuleList()
+        logging.warning(f"SimpleDLRM before get rank")
+        rank = dist.get_rank()
+
         for i in range(len(dim_list)-1):
+            logging.warning(f"SimpleDLRM __init__ Rank{rank} Layer{i}")
+            
             n = dim_list[i]
             m = dim_list[i+1]
+
+            logging.warning(f"SimpleDLRM __init__ Rank{rank} Layer{i} Linear")
             LL = nn.Linear(int(n), int(m), bias=True)
             mean = 0.0  # std_dev = np.sqrt(variance)
             std_dev = np.sqrt(2 / (m + n))  # np.sqrt(1 / m) # np.sqrt(1 / n)
@@ -212,7 +220,9 @@ class SimpleDLRM(nn.Module):
             std_dev = np.sqrt(1 / m)  # np.sqrt(2 / (m + 1))
             bt = np.random.normal(mean, std_dev, size=m).astype(np.float32)
             # approach 1
+            logging.warning(f"SimpleDLRM __init__ Rank{rank} Layer{i} weight")
             LL.weight.data = torch.tensor(W, requires_grad=True)
+            logging.warning(f"SimpleDLRM __init__ Rank{rank} Layer{i} bias")
             LL.bias.data = torch.tensor(bt, requires_grad=True)
             layers.append(LL)
 
@@ -221,6 +231,8 @@ class SimpleDLRM(nn.Module):
                 layers.append(nn.Sigmoid())
             else:
                 layers.append(nn.ReLU())
+
+        logging.warning(f"SimpleDLRM __init__ {rank}")
 
         self.list = torch.nn.Sequential(*layers)
 
@@ -234,10 +246,13 @@ def routine_local_cache_helper(worker_id, args):
     USE_SGD = True
     # USE_SGD = False
     rank = dist.get_rank()
+    logging.warning(f"Rank{rank} reached before DistEmbedding")
+
     emb = DistEmbedding(int(args['num_embs']),
                         int(args['emb_dim']), name="full_emb",)
-    XLOG.debug(
+    logging.debug(
         f"in rank{rank}, full_emb.data_ptr={hex(emb.get_shm_tensor().data_ptr())}")
+    logging.warning(f"Rank{rank} reached before barrier")
     dist.barrier()
     # print("begin full_emb.get_shm_tensor().zero_()", flush=True)
     # emb.get_shm_tensor().zero_()
@@ -314,29 +329,33 @@ def routine_local_cache_helper(worker_id, args):
                                    dataset_name=args['dataset'],
                                    backmode=args['backwardMode'],
                                    )
-    print("Construct RecModelSampler done", flush=True)
+    logging.info("Construct RecModelSampler done")
 
     if args["emb_choice"] == "KnownLocalCachedEmbedding":
-        # kg_cache_controller = KGCacheControllerWrapper(
-        #     json_str, emb.shape[0],
-        # )
         kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(
             "RecStore", json_str)
     else:
         kg_cache_controller = KGCacheControllerWrapperBase.FactoryNew(
             "Dummy", "")
 
-    print("Construct KGCacheControllerWrapper done", flush=True)
+    logging.info("Construct KGCacheControllerWrapper done")
 
     kg_cache_controller.init()
+    logging.info("KGCacheControllerWrapper init done")
 
     perf_sampler.Prefill()
+    logging.info("RecModelSampler prefill done")
 
     # define NN
+    logging.info("before define NN")
     nn_model = SimpleDLRM(args['with_nn'])
+    logging.info("define NN done")
     nn_model = nn_model.cuda()
+    logging.info("NN.cuda done")
     nn_model = DDP(nn_model, device_ids=[rank])
+    logging.info("NN DDP done")
     sparse_opt.add_param_group({'params': nn_model.parameters()})
+    logging.info("add_param_group done")
 
     timer_geninput = Timer("GenInput")
     # timer_Forward = GPUTimer("Forward")

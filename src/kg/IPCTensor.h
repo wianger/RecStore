@@ -345,7 +345,7 @@ public:
                const at::ScalarType dtype) {
     auto handle = IPCMemory::GetInstance()->GetHandle(name);
     if (handle != nullptr) {
-      LOG(ERROR) << "IPCTensor " << name << " already exists";
+      LOG(WARNING) << "IPCTensor " << name << " already exists";
       return torch::nullopt;
       // CHECK_EQ(handle->shape_vec().size(), shape.size());
       // for (int i = 0; i < shape.size(); i++) {

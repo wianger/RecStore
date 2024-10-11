@@ -2,6 +2,7 @@ from operator import itemgetter
 import torch as th
 from abc import ABC
 import torch.nn.functional as F
+import logging
 
 import recstore
 from .utils import XLOG
@@ -50,17 +51,16 @@ class ShmKVStore(AbsKVStore):
             assert temp.shape == shape
             assert temp.dtype == th.float32
             assert temp.is_cpu
-            XLOG.debug(
-                f"rank{th.distributed.get_rank()}: NewIPCTensor failed, already exists, {hex(temp.data_ptr())}")
-
-        if init_func is not None:
-            init_func(temp, shape, th.float32)
+            logging.debug(
+                f"Rank{th.distributed.get_rank()}: NewIPCTensor failed, find already existing tensor, {hex(temp.data_ptr())}")
+        else:
+            if init_func is not None:
+                init_func(temp, shape, th.float32)
 
         # temp = init_func(
         #     shape=shape, dtype=dtype).share_memory_()
 
         # Don't use share_memory_().pinned_memory(). It will cause BUG!
-
         self.tensor_store[name] = temp
 
     def data_name_list(self):

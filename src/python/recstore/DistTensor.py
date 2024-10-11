@@ -41,6 +41,7 @@ class DistTensor:
 
         if init_func is None:
             init_func = _default_init_data
+
         exist_names = self.kvstore.data_name_list()
         # If a user doesn't provide a name, we generate a name ourselves.
         # We need to generate the name in a deterministic way.
@@ -53,11 +54,12 @@ class DistTensor:
 
         if self._name not in exist_names:
             self._owner = True
+            XLOG.debug(f"Tensor name {self._name} not exists in the kvstore, init it")
             self.kvstore.init_data(
                 self._name, shape, dtype, part_policy, init_func, is_gdata
             )
         else:
-            XLOG.warning("The tensor name already exists in the kvstore")
+            XLOG.debug("Tensor name {self._name} already exists in the kvstore")
             self._owner = False
             dtype1, shape1, _ = self.kvstore.get_data_meta(self._name)
             assert (

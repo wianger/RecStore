@@ -1,7 +1,6 @@
 export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 set -x
 set -e
-sudo service ssh start
 
 USER=xieminhui
 PROJECT_PATH="/home/${USER}/RecStore"
@@ -87,7 +86,6 @@ popd
 
 cd ${PROJECT_PATH}/src/kg/kg
 bash install_dgl.sh
-
 
 
 pip3 install pymemcache

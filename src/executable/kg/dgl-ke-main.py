@@ -274,10 +274,10 @@ def main():
     args.strict_rel_part = args.mix_cpu_gpu and (train_data.cross_part == False)
     args.num_workers = 8  # fix num_worker to 8
 
-    import pyinstrument
+    # import pyinstrument
 
-    profiler = pyinstrument.Profiler()
-    profiler.start()
+    # profiler = pyinstrument.Profiler()
+    # profiler.start()
 
     logging.warning(f"CreateSamplers")
     train_samplers = CreateSamplers(args, kg_dataset=dataset, train_data=train_data)
@@ -495,9 +495,9 @@ def main():
         "Total initialize time {:.3f} seconds".format(time.time() - init_time_start)
     )
 
-    profiler.stop()
-    profiler.print()
-    profiler.write_html("/home/xieminhui/RecStore/build/profile.html")
+    # profiler.stop()
+    # profiler.print()
+    # profiler.write_html("/home/xieminhui/RecStore/build/profile.html")
 
     # train
     if args.num_proc > 1:
