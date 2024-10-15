@@ -252,7 +252,7 @@ class KGCacheControllerWrapperBase:
     def BeforeDDPInit(cls):
         th.set_num_threads(8)
         # This line error ↓
-        recstore.IPCTensorFactory.ClearIPCMemory()  
+        recstore.IPCTensorFactory.ClearIPCMemory()
         recstore.MultiProcessBarrierFactory.ClearIPCMemory()
 
     @classmethod
@@ -339,7 +339,10 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
     def __init_rpc(self):
         rpc.init_rpc(name=f"worker{self.rank}",
-                     rank=self.rank, world_size=dist.get_world_size())
+                     rank=self.rank, world_size=dist.get_world_size(),
+                     rpc_backend_options=rpc.TensorPipeRpcBackendOptions(
+                         _transports=["uv"],)
+                     )
         dist.barrier()
 
     def init(self):
@@ -349,7 +352,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
         self.step = 0
         dist.barrier()
 
-    @classmethod
+    @ classmethod
     def StopThreads_cls(cls):
         KGCacheControllerWrapper.instance.StopThreads()
 
@@ -372,16 +375,19 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
     def AfterBackward(self,):
         self.timer_BarrierTimeBeforeRank0.start()
-        logging.debug(f"Rank{self.rank} has reached AfterBackward, {time.time()}")
+        logging.debug(
+            f"Rank{self.rank} has reached AfterBackward, {time.time()}")
         self.barrier.Wait()
         self.timer_BarrierTimeBeforeRank0.stop()
 
         if self.use_cpp_controller and self.rank == 0:
             self.timer_AfterBackward.start()
-            logging.debug(f"rank{self.rank}: before ProcessOneStep, {time.time()}")
+            logging.debug(
+                f"rank{self.rank}: before ProcessOneStep, {time.time()}")
             # TODO: 现在卡在这个里面
             self.controller.ProcessOneStep(self.step)
-            logging.debug(f"rank{self.rank}: after ProcessOneStep, {time.time()}")
+            logging.debug(
+                f"rank{self.rank}: after ProcessOneStep, {time.time()}")
             self.timer_AfterBackward.stop()
 
         # self.barrier.Wait()

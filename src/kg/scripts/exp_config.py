@@ -852,6 +852,13 @@ class ExpKGScalability(GNNExperiment):
                     "batch_size": [2000],
                     "nr_gpus": [8] if GetHostName() != "node182" else [4],
                 },
+                {
+                    "dataset": ["wikikg90M"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [0.01, 0.05, 0.1],
+                    "batch_size": [2000],
+                    "nr_gpus": [8] if GetHostName() != "node182" else [4],
+                },
                 # {
                 #     "dataset": ["FB15k",],
                 #     "hidden_dim": [400],
@@ -866,6 +873,7 @@ class ExpKGScalability(GNNExperiment):
                 #     "batch_size": [400, 800, 1200, 1600, 2000],
                 #     "nr_gpus": [4, 8] if GetHostName() != "node182" else [4],
                 # },
+                
                 # for scalability
                 {
                     "dataset": ["FB15k"],
@@ -936,9 +944,9 @@ class ExpKGScalability(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if GetHostName() == "node182" and each["dataset"] == "Freebase":
-                print("pass Freebase")
-                continue
+            # if GetHostName() == "node182" and each["dataset"] == "Freebase":
+            #     print("pass Freebase")
+            #     continue
             if self.filter_fn is not None and (not self.filter_fn(each)):
                 print("pass filter")
                 continue

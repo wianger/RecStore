@@ -90,12 +90,15 @@ class GradAsyncProcessingV2 : public GradProcessingBase {
       return;
     }
 
+    LOG(WARNING) << "call detect_thread_.join()";
     detect_thread_stop_flag_ = true;
     detect_thread_.join();
 
+    LOG(WARNING) << "call dispatch_thread_.join()";
     dispatch_thread_stop_flag_ = true;
     dispatch_thread_.join();
 
+    LOG(WARNING) << "call backward_threads_.join()";
     grad_thread_stop_flag_ = true;
     if (kUseBackThread_) {
       for (int i = 0; i < nr_background_threads_; ++i) {

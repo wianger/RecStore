@@ -351,7 +351,7 @@ def ConstructGraph(dataset, args):
     if args.dataset == "wikikg90M":
         print("|valid|:", num_valid)
         print("|test|:", num_test)
-        return
+        # return
 
     src = np.concatenate(src)
     etype_id = np.concatenate(etype_id)

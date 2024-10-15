@@ -265,7 +265,6 @@ class IPCMemory {
   IPCTensorMemoryHandle *RegisterGPUMemory(std::string name,
                                            at::IntArrayRef shape,
                                            at::ScalarType dtype, int dev_id) {
-    CHECK(0);
     int64_t size = numel(shape) * c10::elementSize(dtype);
     nv::CudaDeviceRestorer _;
     cudaSetDevice(dev_id);

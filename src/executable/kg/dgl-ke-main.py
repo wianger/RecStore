@@ -265,6 +265,9 @@ def main():
     g = ConstructGraph(dataset, args)
     logging.warning(f"ConstructGraph done")
 
+    print("xmh xmh ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓")
+    print(g)
+
     logging.warning(f"Construct TrainDataset")
     train_data = TrainDataset(
         g, dataset, args, ranks=args.num_proc, has_importance=args.has_edge_importance

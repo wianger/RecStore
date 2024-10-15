@@ -219,9 +219,11 @@ class GradProcessingBase {
   virtual void StopThreads() {
     stop_processOneStepNegThread_flag_.store(true);
     processOneStepNegThread_ping_.store(true);
+  #ifdef USE_NEG_THREAD
     LOG(WARNING) << "before processOneStepNegThread_.join();";
     processOneStepNegThread_.join();
     LOG(WARNING) << "after processOneStepNegThread_.join();";
+  #endif
   };
 
   virtual void StartThreads() {}
