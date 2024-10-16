@@ -31,18 +31,17 @@ else:
 
 def main():
     exp_lists = []
-    if suffix == 'A30':
+    if suffix == "A30":
         # each = exp_config.ExpKGScalability()
         # each.SetLogDir(f'{LOG_PREFIX}/1015-KG-scale-large-{suffix}')
         # each.SetFilter(lambda config: config['dataset'] == 'wikikg2')
         # exp_lists.append(each)
-        
 
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/1015-Rec-{suffix}')
-        each.SetFilter(lambda config: config['dataset'] == 'criteoTB')
+        each.SetLogDir(f"{LOG_PREFIX}/1015-Rec-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "criteoTB")
         exp_lists.append(each)
-        
+
         return exp_lists
 
         each = exp_config.ExpRecMotivation()
@@ -76,22 +75,39 @@ def main():
         # exp_lists.append(each)
 
     else:  # 3090
-        # each = exp_config.ExpKGPerfDebug()
-        # each.SetLogDir(f'{LOG_PREFIX}/0918-KG-debug-{suffix}')
-        # exp_lists.append(each)
-        # return exp_lists
-
         # sensitive
-        each = exp_config.ExpKGSensitiveFlushThreads()
-        each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-threads-{suffix}")
+        each = exp_config.ExpRecSensitiveModelPerf()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-rec-sen-model-{suffix}")
         exp_lists.append(each)
+
+        each = exp_config.ExpRecSensitiveFlushThreads()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-rec-sen-threads-{suffix}")
+        exp_lists.append(each)
+
+		# 大数据集REC
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-Rec-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "criteoTB")
+        exp_lists.append(each)
+
+
 
         each = exp_config.ExpKGSensitiveModel()
         each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-model-{suffix}")
         exp_lists.append(each)
 
-        return exp_lists
+        each = exp_config.ExpKGSensitiveFlushThreads()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-threads-{suffix}")
+        each.SetFilter(lambda config: config['dataset'] == 'Freebase')
+        exp_lists.append(each)
 
+        # 大数据集KG
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-KG-scale-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "wikikg2")
+        exp_lists.append(each)
+
+        return exp_lists
 
         # # 用这个
         each = exp_config.ExpMicroPerfEmb()
@@ -104,6 +120,7 @@ def main():
 
         each = exp_config.ExpRecPerf()
         each.SetLogDir(f"{LOG_PREFIX}/1011-Rec-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] != "criteoTB")
         exp_lists.append(each)
 
         each = exp_config.ExpRecMotivation()
@@ -121,7 +138,7 @@ def main():
         exp_lists.append(each)
 
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f"{LOG_PREFIX}/1003-KG-scale-large-{suffix}")
+        each.SetLogDir(f"{LOG_PREFIX}/1003-KG-scale-Freebase-{suffix}")
         each.SetFilter(lambda config: config["dataset"] == "Freebase")
         exp_lists.append(each)
 
