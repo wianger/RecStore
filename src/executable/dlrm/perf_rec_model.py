@@ -62,6 +62,10 @@ class RecModelSampler(BasePerfSampler):
             nr_ids_one_sample = 21
             self.dataset = RecDatasetLoader(
                 "/home/xieminhui/RecStoreDataset/avazu_binary", dist.get_world_size(), rank, batch_size)
+        elif dataset_name == "criteoTB":
+            nr_ids_one_sample = 26
+            self.dataset = RecDatasetLoader(
+                "/home/xieminhui/RecStoreDataset/criteoTB", dist.get_world_size(), rank, batch_size)
         else:
             assert False
 
@@ -119,7 +123,7 @@ def get_run_config():
         argparser.add_argument('--nr_background_threads', type=int,
                                default=16)
 
-        argparser.add_argument('--dataset', choices=['criteo', 'avazu'],
+        argparser.add_argument('--dataset', choices=['criteo', 'avazu', 'criteoTB'],
                                default='criteo')
 
         argparser.add_argument('--with_nn', type=str, default="256,")

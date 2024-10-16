@@ -209,7 +209,7 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
 
         if rank == 0 and step % 10 == 0:
             exp_all_now = time.time()
-            if exp_all_now - exp_all_start_time > 120:
+            if step >= 50 and (exp_all_now - exp_all_start_time > 120):
                 break
 
         if with_perf and step == warmup_iters:

@@ -11,6 +11,8 @@ class RecDatasetCapacity:
             return 9449205 + 1
         elif filename == 'criteo':
             return 33762577 + 1
+        elif filename == 'criteoTB':
+            return 73391340 + 1
         else:
             assert False
 
