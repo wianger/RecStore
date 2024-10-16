@@ -332,7 +332,7 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
 
         self.timer_BlockToStepN = Timer("BlockToStepN")
         self.timer_AfterBackward = Timer("ProcessBack")
-        self.timer_BarrierTimeBeforeRank0 = Timer("BarrierTimeBeforeRank0")
+        self.timer_BarrierTimeBeforeProcessBackward = Timer("BarrierTimeBeforeProcessBackward")
 
         self.__init_rpc()
         super()._RegisterFolly()
@@ -374,11 +374,11 @@ class KGCacheControllerWrapper(KGCacheControllerWrapperBase):
             XLOG.info("call rank0 to StopThreads done")
 
     def AfterBackward(self,):
-        self.timer_BarrierTimeBeforeRank0.start()
+        self.timer_BarrierTimeBeforeProcessBackward.start()
         logging.debug(
             f"Rank{self.rank} has reached AfterBackward, {time.time()}")
         self.barrier.Wait()
-        self.timer_BarrierTimeBeforeRank0.stop()
+        self.timer_BarrierTimeBeforeProcessBackward.stop()
 
         if self.use_cpp_controller and self.rank == 0:
             self.timer_AfterBackward.start()

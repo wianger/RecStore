@@ -78,7 +78,7 @@ cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo mak
 # "
 
 cd ${PROJECT_PATH}/binary
-pip3 install  -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+gitunknown-cp310-cp310-linux_x86_64.whl
+pip3 install  -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
 
 # GRPC
 cd ${PROJECT_PATH}/

@@ -1581,7 +1581,7 @@ class ExpRecPerf(RecExperiment):
     def __init__(
         self,
     ) -> None:
-        NAME = "rec perf a30"
+        NAME = "rec perf"
         COMMON_CONFIGS = {
             "with_nn": [
                 "512,256,1",
@@ -1600,8 +1600,9 @@ class ExpRecPerf(RecExperiment):
                     "dataset": [
                         "avazu",
                         "criteo",
+                        "criteoTB",
                     ],
-                    "cache_ratio": [0.005, 0.01, 0.05, 0.1],
+                    "cache_ratio": [0.01, 0.05, 0.1],
                     "batch_size": [
                         128,
                         1024,
@@ -1611,7 +1612,11 @@ class ExpRecPerf(RecExperiment):
                 # for scalability
                 {
                     # "dataset": ["avazu"],
-                    "dataset": ["avazu", "criteo"],
+                    "dataset": [
+                        "avazu", 
+                        "criteo"
+                        "criteoTB",
+                    ],
                     "cache_ratio": [
                         0.01,
                     ],
@@ -1651,10 +1656,20 @@ class ExpRecPerf(RecExperiment):
         self.name = NAME
         super().__init__(12, COMMON_CONFIGS, "127.0.0.1")
 
+    def SetFilter(self, fn):
+        self.filter_fn = fn
+
     def _SortConfigs(self, configs):
+        need_run = []
         for each in configs:
+            if self.filter_fn is not None and (not self.filter_fn(each)):
+                print("pass filter")
+                continue
+
             print(each)
-        return list(sorted(configs, key=lambda each: each["dataset"]))
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
 
     def _RunHook(self, previous_run, next_run):
         LocalExecute("rm -rf /tmp/cached_tensor_*", "")

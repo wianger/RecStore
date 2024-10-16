@@ -31,12 +31,18 @@ else:
 
 def main():
     exp_lists = []
-    if suffix == "A30":
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f"{LOG_PREFIX}/1015-KG-scale-large-{suffix}")
-        each.SetFilter(lambda config: config["dataset"] == "wikikg2")
-        exp_lists.append(each)
+    if suffix == 'A30':
+        # each = exp_config.ExpKGScalability()
+        # each.SetLogDir(f'{LOG_PREFIX}/1015-KG-scale-large-{suffix}')
+        # each.SetFilter(lambda config: config['dataset'] == 'wikikg2')
+        # exp_lists.append(each)
+        
 
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f'{LOG_PREFIX}/1015-Rec-{suffix}')
+        each.SetFilter(lambda config: config['dataset'] == 'criteoTB')
+        exp_lists.append(each)
+        
         return exp_lists
 
         each = exp_config.ExpRecMotivation()
