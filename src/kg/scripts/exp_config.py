@@ -1268,6 +1268,178 @@ class ExpKGSensitive(GNNExperiment):
         return
 
 
+
+class ExpKGSensitiveModel(GNNExperiment):
+    def __init__(
+        self,
+    ) -> None:
+        NAME = "overall-kg-sensitive"
+        COMMON_CONFIGS = {
+            "model_name": [
+                "TransE",
+                'SimplE'
+                # 'TransR',  OOM
+                # 'RESCAL',  too slow
+                # 'RotatE',  BUG
+                # 'DistMult',
+                # 'ComplEx',
+                # 'SimplE'
+            ],
+            "binding": [
+                {
+                    "dataset": [
+                        "FB15k",
+                    ],
+                    "hidden_dim": [400],
+                    "cache_ratio": [
+                        0.05,
+                    ],
+                    "batch_size": [1200],
+                    "nr_gpus": [8],
+                },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [
+                        0.05,
+                    ],
+                    "batch_size": [2000],
+                    "nr_gpus": [8],
+                },
+            ],
+            "binding2": [
+                # for debug performance
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": [
+                        "CppAsyncV2",
+                        "PySync",
+                        # "CppAsync"
+                    ],
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ["None"],
+                    "backwardMode": ["CppSync"],
+                },
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": [
+                        "KGExternelEmbedding",
+                        # "TorchNativeStdEmb",
+                        # "TorchNativeStdEmbDDP",
+                        "KnownShardedCachedEmbedding",
+                    ],
+                    "backwardMode": ["PySync"],
+                },
+            ],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        super().__init__(1230, COMMON_CONFIGS, "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        need_run = []
+        for each in configs:
+            if GetHostName() == "node182" and each["dataset"] == "Freebase":
+                print("pass Freebase")
+                continue
+            print(each)
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
+class ExpKGSensitiveFlushThreads(GNNExperiment):
+    def __init__(
+        self,
+    ) -> None:
+        NAME = "overall-kg-sensitive"
+        COMMON_CONFIGS = {
+            "model_name": [
+                "TransE",
+            ],
+            "binding": [
+                {
+                    "dataset": [
+                        "FB15k",
+                    ],
+                    "hidden_dim": [400],
+                    "cache_ratio": [
+                        0.05,
+                    ],
+                    "batch_size": [1200],
+                    "nr_gpus": [8],
+                },
+                {
+                    "dataset": ["Freebase"],
+                    "hidden_dim": [400],
+                    "cache_ratio": [
+                        0.05,
+                    ],
+                    "batch_size": [2000],
+                    "nr_gpus": [8],
+                },
+            ],
+            "binding2": [
+                {
+                    "use_my_emb": ["true"],
+                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
+                    "backwardMode": ["CppAsyncV2", "CppAsync"],
+                    "nr_background_threads": [2, 4, 6, 8, 12, 16, 24, 32],
+                },
+                {
+                    "use_my_emb": ["false"],
+                    "cached_emb_type": ["None"],
+                    "backwardMode": ["CppSync"],
+                },
+            ],
+            "max_step": [500],
+            "log_interval": [100],
+            **COMMON_CLIENT_CONFIGS,
+        }
+
+        self.name = NAME
+        super().__init__(1230, COMMON_CONFIGS, "127.0.0.1")
+
+    def _SortConfigs(self, configs):
+        need_run = []
+        for each in configs:
+            if GetHostName() == "node182" and each["dataset"] == "Freebase":
+                print("pass Freebase")
+                continue
+            print(each)
+            need_run.append(each)
+
+        return list(sorted(need_run, key=lambda each: each["dataset"]))
+
+    def _RunHook(self, previous_run, next_run):
+        LocalExecute("rm -rf /tmp/cached_tensor_*", "")
+        print("lnuke dgl-ke-main.py")
+        LocalNuke("dgl-ke-main.py")
+        LocalNukeAllPython()
+        if previous_run is not None:
+            GPUUnlock()
+        time.sleep(5)
+        if next_run is not None:
+            GPULock()
+        return
+
 class ExpKGPerfDebug(GNNExperiment):
     def __init__(
         self,

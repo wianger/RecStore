@@ -20,8 +20,7 @@ def mount_master(hosts):
 
 
 def config_each_server(hosts):
-    ParallelSSH(
-        hosts, f"sudo swapoff -a")
+    ParallelSSH(hosts, f"sudo swapoff -a")
 
 
 if GetHostName() == "node182":
@@ -30,38 +29,34 @@ else:
     suffix = "3090"
 
 
-
 def main():
     exp_lists = []
-    if suffix == 'A30':
+    if suffix == "A30":
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/1015-KG-scale-large-{suffix}')
-        each.SetFilter(lambda config: config['dataset'] == 'wikikg2')
+        each.SetLogDir(f"{LOG_PREFIX}/1015-KG-scale-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "wikikg2")
         exp_lists.append(each)
-        
-        
+
         return exp_lists
-        
-        
+
         each = exp_config.ExpRecMotivation()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-real-motiv-rec-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/0625-real-motiv-rec-{suffix}")
         exp_lists.append(each)
 
         # each = exp_config.ExpRealMotivationPerfEmb()
         # each.SetLogDir(f'{LOG_PREFIX}/0625-real-motiv-{suffix}')
         # exp_lists.append(each)
 
-
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-KG-scale-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/0625-KG-scale-{suffix}")
         exp_lists.append(each)
 
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-Rec-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/0625-Rec-{suffix}")
         exp_lists.append(each)
 
         each = exp_config.ExpMicroPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/0625-micro-emb-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/0625-micro-emb-{suffix}")
         exp_lists.append(each)
 
         # each = exp_config.ExpRecPerfvsA30()
@@ -74,58 +69,58 @@ def main():
         # each.SetFilter(lambda config: config['cached_emb_type'] != 'KnownLocalCachedEmbedding')
         # exp_lists.append(each)
 
-
-
-    else: # 3090
+    else:  # 3090
         # each = exp_config.ExpKGPerfDebug()
         # each.SetLogDir(f'{LOG_PREFIX}/0918-KG-debug-{suffix}')
         # exp_lists.append(each)
         # return exp_lists
-     
-     
+
+        # sensitive
+        each = exp_config.ExpKGSensitiveFlushThreads()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-threads-{suffix}")
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGSensitiveModel()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-model-{suffix}")
+        exp_lists.append(each)
+
+        return exp_lists
+
+
         # # 用这个
         each = exp_config.ExpMicroPerfEmb()
-        each.SetLogDir(f'{LOG_PREFIX}/1011-micro-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/1011-micro-{suffix}")
         exp_lists.append(each)
 
         # each = exp_config.ExpRealMotivationPerfEmb()
         # each.SetLogDir(f'{LOG_PREFIX}/1011-real-motiv-{suffix}')
-        # exp_lists.append(each) 
+        # exp_lists.append(each)
 
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/1011-Rec-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/1011-Rec-{suffix}")
         exp_lists.append(each)
-        
+
         each = exp_config.ExpRecMotivation()
-        each.SetLogDir(f'{LOG_PREFIX}/1011-real-motiv-rec-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/1011-real-motiv-rec-{suffix}")
         exp_lists.append(each)
 
         each = exp_config.ExpRecPerfvsA30()
-        each.SetLogDir(f'{LOG_PREFIX}/1011-RecVSA30-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/1011-RecVSA30-{suffix}")
         # each.SetFilter(lambda config: config['emb_choice'] == 'KnownLocalCachedEmbedding')
         exp_lists.append(each)
 
-
-
         each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/1003-KG-scale-{suffix}')
-        each.SetFilter(lambda config: config['dataset'] == 'FB15k')
-        exp_lists.append(each)
-     
-    
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f'{LOG_PREFIX}/1003-KG-scale-large-{suffix}')
-        each.SetFilter(lambda config: config['dataset'] == 'Freebase')
+        each.SetLogDir(f"{LOG_PREFIX}/1003-KG-scale-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "FB15k")
         exp_lists.append(each)
 
-        
-        
-        
-
-        
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f"{LOG_PREFIX}/1003-KG-scale-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "Freebase")
+        exp_lists.append(each)
 
         each = exp_config.ExpKGvsA30()
-        each.SetLogDir(f'{LOG_PREFIX}/1003-KGvsA30-{suffix}')
+        each.SetLogDir(f"{LOG_PREFIX}/1003-KGvsA30-{suffix}")
         # each.SetFilter(lambda config: config['cached_emb_type'] == 'KnownLocalCachedEmbedding')
         exp_lists.append(each)
 
@@ -141,13 +136,6 @@ def main():
         # each.SetLogDir(f'{LOG_PREFIX}/0510-KG-scale-decoupled-{suffix}')
         # exp_lists.append(each)
 
-
-
-
-
-
-
-
         # each = exp_config.ExpKGPerfDebug()
         # each.SetLogDir(f'{LOG_PREFIX}/0128-KG-debugomp{suffix}')
         # exp_lists.append(each)
@@ -160,18 +148,21 @@ def main():
     return exp_lists
 
 
-
-
 if __name__ == "__main__":
     exp_lists = main()
     for i, each in enumerate(exp_lists):
         # mount NFS
         mount_master(
-            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
+            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != "127.0.0.1"]
+        )
         config_each_server(
-            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != '127.0.0.1'])
+            [each for each in ALL_SERVERS_INCLUDING_NOT_USED if each != "127.0.0.1"]
+        )
 
         print("=================-====================")
-        print(f"Experiment {i}/{len(exp_lists)}: ", each.name,)
+        print(
+            f"Experiment {i}/{len(exp_lists)}: ",
+            each.name,
+        )
 
         each.RunExperiment()
