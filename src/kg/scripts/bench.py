@@ -84,13 +84,6 @@ def main():
         each.SetLogDir(f"{LOG_PREFIX}/1016-rec-sen-threads-{suffix}")
         exp_lists.append(each)
 
-		# 大数据集REC
-        each = exp_config.ExpRecPerf()
-        each.SetLogDir(f"{LOG_PREFIX}/1016-Rec-large-{suffix}")
-        each.SetFilter(lambda config: config["dataset"] == "criteoTB")
-        exp_lists.append(each)
-
-
         each = exp_config.ExpKGSensitiveFlushThreads()
         each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-threads-{suffix}")
         exp_lists.append(each)
@@ -103,6 +96,13 @@ def main():
         each = exp_config.ExpKGScalability()
         each.SetLogDir(f"{LOG_PREFIX}/1016-KG-scale-large-{suffix}")
         each.SetFilter(lambda config: config["dataset"] == "wikikg2")
+        exp_lists.append(each)
+
+
+		# 大数据集REC
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-Rec-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "criteoTB")
         exp_lists.append(each)
 
         return exp_lists

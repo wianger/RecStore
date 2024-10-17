@@ -747,7 +747,7 @@ def get_dataset(data_path, data_name, format_str, delimiter='\t', files=None, ha
         else:
             return None
     
-    cache_path = "/dev/shm/cached_dataset_{}.pkl".format(data_name)
+    cache_path = "/home/xieminhui/RecStoreDataset/cached_dataset_{}.pkl".format(data_name)
     dataset = load_or_initialize_cache(cache_path)
     if dataset:
         print("use pickled dataset in ", cache_path)

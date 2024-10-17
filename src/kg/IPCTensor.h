@@ -184,7 +184,7 @@ class IPCMemory {
 
   // static constexpr int64_t kShmSize = 200 * (1024 * 1024 * 1024LL);
   // static constexpr int64_t kShmSize = 50* (1024 * 1024 * 1024LL);
-  static constexpr int64_t kShmSize = DEFINED_SHM_GB * (1024 * 1024 * 1024LL);
+  static int64_t kShmSize = DEFINED_SHM_GB * (1024 * 1024 * 1024LL);
 
   struct IPCShmRegion {
     IPCShmRegion() {}
@@ -194,7 +194,16 @@ class IPCMemory {
     IPCTensorMemoryHandle handles[0];
   };
 
+  static inline std::string getEnvVar(std::string const &key) const {
+    char *val = getenv(key.c_str());
+    return val == NULL ? std::string("") : std::string(val);
+  }
+
   IPCMemory() {
+    // get environment variable from shell
+    std::string shm_gb = getEnvVar("SHM_GB");
+    if (shm_gb != "") kShmSize = std::stoi(str) * (1024 * 1024 * 1024LL);
+
     // system("touch /dev/shm/recstore_ipc_memory");
     // folly::MemoryMapping::Options options =
     //     folly::MemoryMapping::writable().setPrefault(true).setShared(true);
