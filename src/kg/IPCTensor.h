@@ -1,16 +1,16 @@
 #pragma once
 #include <ATen/cuda/CUDAContext.h>
+#include <fcntl.h>  // for open()
 #include <folly/system/MemoryMapping.h>
 #include <immintrin.h>
+#include <sys/mman.h>  // for mmap()
+#include <sys/stat.h>  // for mode constants
 #include <torch/custom_class.h>
 #include <torch/extension.h>
 #include <torch/torch.h>
+#include <unistd.h>  // for close()
 
-#include <fcntl.h>     // for open()
-#include <sys/mman.h>  // for mmap()
-#include <sys/stat.h>  // for mode constants
-#include <unistd.h>    // for close()
-#include <cstring>     // for memset
+#include <cstring>  // for memset
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -184,7 +184,7 @@ class IPCMemory {
 
   // static constexpr int64_t kShmSize = 200 * (1024 * 1024 * 1024LL);
   // static constexpr int64_t kShmSize = 50* (1024 * 1024 * 1024LL);
-  static constexpr int64_t kShmSize = DEFINED_SHM_GB * (1024 * 1024 * 1024LL);
+  static int64_t kShmSize;
 
   struct IPCShmRegion {
     IPCShmRegion() {}
@@ -194,13 +194,29 @@ class IPCMemory {
     IPCTensorMemoryHandle handles[0];
   };
 
+  static inline std::string getEnvVar(std::string const &key) {
+    char *val = getenv(key.c_str());
+    return val == NULL ? std::string("") : std::string(val);
+  }
+
   IPCMemory() {
+    // get environment variable from shell
+    std::string shm_gb = getEnvVar("SHM_GB");
+    if (shm_gb != "")
+      kShmSize = std::stoi(shm_gb) * (1024 * 1024 * 1024LL);
+    else
+      kShmSize = DEFINED_SHM_GB * (1024 * 1024 * 1024LL);
+
+    LOG(WARNING) << "IPC Memory use " << kShmSize / (1024 * 1024 * 1024LL)
+                 << " GB";
+
     // system("touch /dev/shm/recstore_ipc_memory");
     // folly::MemoryMapping::Options options =
     //     folly::MemoryMapping::writable().setPrefault(true).setShared(true);
     // options.address = (void *)(0x100000000000);
 
-    // mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_memory", 0,
+    // mapping_ = new folly::MemoryMapping("/dev/shm/recstore_ipc_memory",
+    // 0,
     //                                     kShmSize, options);
     // header_ =
     //     new ((IPCShmRegion *)mapping_->writableRange().begin())

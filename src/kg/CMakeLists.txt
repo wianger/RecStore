@@ -13,7 +13,7 @@ endif()
 cmake_host_system_information(RESULT xmh_host_name  QUERY HOSTNAME)
 
 if(xmh_host_name STREQUAL "node182")
-    add_compile_definitions(DEFINED_SHM_GB=50)
+    add_compile_definitions(DEFINED_SHM_GB=150)
 elseif(xmh_host_name STREQUAL "3090-server")
     add_compile_definitions(DEFINED_SHM_GB=200)
 else()

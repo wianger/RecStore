@@ -274,8 +274,13 @@ class ExternalEmbedding:
     def share_memory(self):
         """Use torch.tensor.share_memory_() to allow cross process tensor access
         """
+        print(f"before self.emb.share_memory_(), {self.emb.shape}")
         self.emb.share_memory_()
+        print("after self.emb.share_memory_()")
+        
+        print("before self.state_sum.share_memory_()")
         self.state_sum.share_memory_()
+        print("after self.state_sum.share_memory_()")
 
     def __call__(self, idx, gpu_id=-1, trace=True):
         """ Return sliced tensor.

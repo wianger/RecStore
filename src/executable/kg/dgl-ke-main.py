@@ -166,21 +166,13 @@ def prepare_save_path(args):
 
 
 def main():
-    # utils.Timer.StartReportThread()
-    common_args = f"--log_interval=1000 --model_name=TransE_l1 --nr_gpus=4 \
-        --max_step=1000000 --no_save_emb=true --batch_size=5000\
-        --neg_sample_size=200 --regularization_coef=1e-07\
-        --gamma=16.0 --lr=0.01 --batch_size_eval=16 --test=false\
-        --mix_cpu_gpu=true --dataset=FB15k --hidden_dim=400\
-        --cache_ratio=0.1 \
-        "
-
-    # cli_args = f'--use_my_emb=true --cached_emb_type=KnownShardedCachedEmbedding {common_args}'
-    # cli_args = f'--use_my_emb=true --cached_emb_type=KnownLocalCachedEmbedding --backwardMode=CppSync {common_args}'
-    cli_args = f"--use_my_emb=false --backwardMode=PySync {common_args}"
-
-    # args = ArgParser().parse_args(cli_args.split())
     args = ArgParser().parse_args()
+    if args.use_my_emb == False:
+        # write a environment variable to indicate a small IPC memory
+        os.environ["SHM_GB"] = "10"
+    else:
+        os.environ["SHM_GB"] = ""
+        
 
     json_str = f"""{{
         "num_gpus": {args.nr_gpus},

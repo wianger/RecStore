@@ -14,6 +14,8 @@
 
 namespace recstore {
 
+int64_t IPCMemory::kShmSize = 0;
+
 int64_t numel(const at::IntArrayRef shape) {
   int64_t ret = 1;
   for (auto i : shape) {

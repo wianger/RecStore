@@ -39,11 +39,16 @@ def main():
         # each.SetFilter(lambda config: config['dataset'] == 'wikikg2')
         # exp_lists.append(each)
         
-
-        each = exp_config.ExpRecPerf()
-        each.SetLogDir(f'{LOG_PREFIX}/1015-Rec-{suffix}')
-        each.SetFilter(lambda config: config['dataset'] == 'criteoTB')
+        each = exp_config.ExpKGvsA30()
+        each.SetLogDir(f'{LOG_PREFIX}/1017-KGvsA30-{suffix}')
+        each.SetFilter(lambda config: config['cached_emb_type'] != 'KnownLocalCachedEmbedding')
         exp_lists.append(each)
+
+
+        # each = exp_config.ExpRecPerf()
+        # each.SetLogDir(f'{LOG_PREFIX}/1015-Rec-{suffix}')
+        # each.SetFilter(lambda config: config['dataset'] == 'criteoTB')
+        # exp_lists.append(each)
         
         return exp_lists
         
@@ -72,11 +77,6 @@ def main():
         # each = exp_config.ExpRecPerfvsA30()
         # each.SetLogDir(f'{LOG_PREFIX}/0625-RecvsA30-{suffix}')
         # each.SetFilter(lambda config: config['emb_choice'] != 'KnownLocalCachedEmbedding')
-        # exp_lists.append(each)
-
-        # each = exp_config.ExpKGvsA30()
-        # each.SetLogDir(f'{LOG_PREFIX}/0625-KGvsA30-{suffix}')
-        # each.SetFilter(lambda config: config['cached_emb_type'] != 'KnownLocalCachedEmbedding')
         # exp_lists.append(each)
 
 
