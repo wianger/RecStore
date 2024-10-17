@@ -205,7 +205,8 @@ def train(json_str, args, model, train_sampler, valid_samplers=None, rank=0, rel
     print(f"rank{rank} start train")
     exp_all_start_time = time.time()
     for step in range(0, args.max_step):
-        # print(f"Step{step}:Rank{rank} start {time.time()}")
+        if rank == 0:
+            print(f"Step{step}:Rank{rank} start {time.time()}")
 
         if rank == 0 and step % 10 == 0:
             exp_all_now = time.time()

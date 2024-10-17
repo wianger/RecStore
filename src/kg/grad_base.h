@@ -181,6 +181,7 @@ class GradProcessingBase {
     clr_ = json_config_.at("clr");
     update_cache_use_omp_ = json_config_.value("update_cache_use_omp", 1);
     update_pq_use_omp_ = json_config_.value("update_pq_use_omp", 2);
+    nr_background_threads_ = json_config_.value("nr_background_threads", 8);
 
     if (backgrad_init_ == "cpu") {
       backgrad_init_enum_ = BackGradInitEnum::CPU;
@@ -347,7 +348,7 @@ class GradProcessingBase {
       shuffled_grads_in_each_rank_cache[rank].resize(num_gpus_);
     }
 
-#pragma omp parallel for num_threads(8)
+#pragma omp parallel for num_threads(nr_background_threads_)
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int shard_no = 0; shard_no < num_gpus_; shard_no++) {
         torch::Tensor in_this_rank =
@@ -441,7 +442,7 @@ class GradProcessingBase {
                        const std::vector<std::vector<torch::Tensor>>
                            &shuffled_grads_in_each_rank_cache) {
     xmh::Timer timer_SyncUpdateCache("ProcessBack:UpdateCache");
-#pragma omp parallel for num_threads(num_gpus_) if (update_cache_use_omp_)
+#pragma omp parallel for num_threads(nr_background_threads_) if (update_cache_use_omp_)
     for (int rank = 0; rank < num_gpus_; rank++) {
       for (int j = 0; j < num_gpus_; j++) {
         // update per rank cache
@@ -502,6 +503,7 @@ class GradProcessingBase {
   std::atomic_bool processOneStepNegThread_ping_{false};
   int update_cache_use_omp_;
   int update_pq_use_omp_;
+  int nr_background_threads_;
 };
 
 class GradSyncProcessing : public GradProcessingBase {
