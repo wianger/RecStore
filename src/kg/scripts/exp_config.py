@@ -1076,9 +1076,9 @@ class ExpKGvsA30(GNNExperiment):
     def _SortConfigs(self, configs):
         need_run = []
         for each in configs:
-            if GetHostName() == "node182" and each["dataset"] == "Freebase":
-                print("pass Freebase")
-                continue
+            # if GetHostName() == "node182" and each["dataset"] == "Freebase":
+            #     print("pass Freebase")
+            #     continue
             if self.filter_fn is not None and (not self.filter_fn(each)):
                 print("pass filter")
                 continue
