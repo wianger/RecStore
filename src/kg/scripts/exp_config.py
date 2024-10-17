@@ -1316,9 +1316,8 @@ class ExpKGSensitiveModel(GNNExperiment):
                 # 'TransR',  OOM
                 # 'RESCAL',  too slow
                 # 'RotatE',  BUG
-                # 'DistMult',
-                # 'ComplEx',
-                # 'SimplE'
+                'DistMult',
+                'ComplEx',
             ],
             "binding": [
                 {
@@ -1639,7 +1638,10 @@ class ExpRecPerf(RecExperiment):
                         "criteo",
                         "criteoTB",
                     ],
-                    "cache_ratio": [0.01, 0.05, 0.1],
+                    "cache_ratio": [
+                        # 0.01,
+                        0.05, 
+                        0.1],
                     "batch_size": [
                         128,
                         1024,
@@ -1654,7 +1656,7 @@ class ExpRecPerf(RecExperiment):
                         "criteo" "criteoTB",
                     ],
                     "cache_ratio": [
-                        0.01,
+                        0.05,
                     ],
                     # "batch_size": [1024,],
                     "batch_size": [128, 1024],
@@ -1727,7 +1729,7 @@ class ExpRecSensitiveModelPerf(RecExperiment):
                     ],
                     "cache_ratio": [0.05],
                     "batch_size": [
-                        128,
+                        # 128,
                         1024,
                     ],
                     "num_workers": [8] if GetHostName() != "node182" else [4],
@@ -1804,7 +1806,7 @@ class ExpRecSensitiveFlushThreads(RecExperiment):
                     ],
                     "cache_ratio": [0.05],
                     "batch_size": [
-                        128,
+                        # 128,
                         1024,
                     ],
                     "num_workers": [8] if GetHostName() != "node182" else [4],
@@ -1825,7 +1827,7 @@ class ExpRecSensitiveFlushThreads(RecExperiment):
                     ],
                 },
                 {
-                    "cached_emb_type": ["KnownLocalCachedEmbedding"],
+                    "emb_choice": ["KnownLocalCachedEmbedding"],
                     "backwardMode": ["CppAsyncV2", "CppAsync"],
                     "nr_background_threads": [2, 4, 6, 8, 12, 16, 24, 32],
                 },

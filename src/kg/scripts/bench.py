@@ -91,14 +91,12 @@ def main():
         exp_lists.append(each)
 
 
+        each = exp_config.ExpKGSensitiveFlushThreads()
+        each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-threads-{suffix}")
+        exp_lists.append(each)
 
         each = exp_config.ExpKGSensitiveModel()
         each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-model-{suffix}")
-        exp_lists.append(each)
-
-        each = exp_config.ExpKGSensitiveFlushThreads()
-        each.SetLogDir(f"{LOG_PREFIX}/1016-kgsen-threads-{suffix}")
-        each.SetFilter(lambda config: config['dataset'] == 'Freebase')
         exp_lists.append(each)
 
         # 大数据集KG
