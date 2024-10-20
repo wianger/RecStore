@@ -263,6 +263,13 @@ class LocalOnlyExperiment(Experiment):
         configs = []
         for each in os.listdir(self.log_dir):
             if each.startswith("run_"):
+                with open(os.path.join(self.log_dir, each, "log"), 'r') as f:
+                    content = f.read()
+                if "Succ" not in content:
+                    print(f"no success {os.path.join(self.log_dir, each)}")
+                    # LocalExecute(f"rm -rf {os.path.join(self.log_dir, each)}")
+                    continue
+
                 with open(os.path.join(self.log_dir, each, "config"), 'r') as f:
                     config = json.load(f)
                     config.pop('command')

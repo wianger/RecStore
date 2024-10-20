@@ -410,7 +410,7 @@ class TrainDataset(object):
         new_version_g.edata["tid"] = g.edata["tid"]
 
         print("original graph: ", g)
-        pickle_path = f"/tmp/metis_{args.dataset}_{ranks}"
+        pickle_path = f"/home/xieminhui/RecStoreDataset/metis_{args.dataset}_{ranks}"
         if os.path.exists(pickle_path):
             print("Loading cached metis", flush=True)
             with open(pickle_path, "rb") as f:

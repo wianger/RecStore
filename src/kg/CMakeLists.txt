@@ -32,6 +32,8 @@ set(recstore_pytorch_srcs
     IPC_barrier.cc
     torch_utils.cc
     parallel_pq.cc
+    grad_async_v1.h
+    grad_async_v2.h
 )
 
 add_library(recstore_pytorch MODULE 

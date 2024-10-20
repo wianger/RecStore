@@ -16,3 +16,12 @@ target_link_libraries(uvm_libtorch PRIVATE Python3::Python)
 
 set_target_properties(uvm_libtorch PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 set_target_properties(uvm_libtorch PROPERTIES CUDA_ARCHITECTURES OFF)
+
+
+
+add_library(intercept SHARED intercept.cpp)
+set_target_properties(intercept PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
+set_target_properties(intercept PROPERTIES CUDA_ARCHITECTURES OFF)
+
+
+# g++ -I/usr/local/cuda/include -fPIC -shared -o intercept.so intercept.cpp -ldl -L/usr/local/cuda/lib64 -lcudart -lcuda

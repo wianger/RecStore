@@ -18,6 +18,7 @@ def ConvertHostNumaList2Host(host_numa_lists):
 # DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
 DIR_PATH = "/home/xieminhui/RecStore/src/executable"
 
+NR_ALL_CARDS_DUE_TO_ERROR = 6
 
 def GswLock():
     lock_file = "/tmp/xmh_gsw_lock"
@@ -880,21 +881,21 @@ class ExpKGScalability(GNNExperiment):
                     "hidden_dim": [400],
                     "cache_ratio": [0.01, 0.05, 0.1],
                     "batch_size": [1200],
-                    "nr_gpus": [8] if GetHostName() != "node182" else [4],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR] if GetHostName() != "node182" else [4],
                 },
                 {
                     "dataset": ["Freebase"],
                     "hidden_dim": [400],
                     "cache_ratio": [0.01, 0.05, 0.1],
                     "batch_size": [2000],
-                    "nr_gpus": [8] if GetHostName() != "node182" else [4],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR] if GetHostName() != "node182" else [4],
                 },
                 {
                     "dataset": ["wikikg90M"],
                     "hidden_dim": [400],
-                    "cache_ratio": [0.01, 0.05, 0.1],
+                    "cache_ratio": [0.05, 0.1],
                     "batch_size": [2000],
-                    "nr_gpus": [8] if GetHostName() != "node182" else [4],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR] if GetHostName() != "node182" else [4],
                 },
                 # {
                 #     "dataset": ["FB15k",],
@@ -937,6 +938,14 @@ class ExpKGScalability(GNNExperiment):
                         else [2, 3, 4]
                     ),
                 },
+
+                # {
+                #     "dataset": ["wikikg90M"],
+                #     "hidden_dim": [400],
+                #     "cache_ratio": [0.05,],
+                #     "batch_size": [2000],
+                #     "nr_gpus": [2,3,4,5,6,7,8] if GetHostName() != "node182" else [2,3,4],
+                # },
             ],
             "binding2": [
                 # for debug performance
@@ -1329,7 +1338,7 @@ class ExpKGSensitiveModel(GNNExperiment):
                         0.05,
                     ],
                     "batch_size": [1200],
-                    "nr_gpus": [8],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR],
                 },
                 {
                     "dataset": ["Freebase"],
@@ -1338,7 +1347,7 @@ class ExpKGSensitiveModel(GNNExperiment):
                         0.05,
                     ],
                     "batch_size": [2000],
-                    "nr_gpus": [8],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR],
                 },
             ],
             "binding2": [
@@ -1348,7 +1357,7 @@ class ExpKGSensitiveModel(GNNExperiment):
                     "cached_emb_type": ["KnownLocalCachedEmbedding"],
                     "backwardMode": [
                         "CppAsyncV2",
-                        "PySync",
+                        # "PySync",
                         # "CppAsync"
                     ],
                 },
@@ -1360,7 +1369,7 @@ class ExpKGSensitiveModel(GNNExperiment):
                 {
                     "use_my_emb": ["true"],
                     "cached_emb_type": [
-                        "KGExternelEmbedding",
+                        # "KGExternelEmbedding",
                         # "TorchNativeStdEmb",
                         # "TorchNativeStdEmbDDP",
                         "KnownShardedCachedEmbedding",
@@ -1443,6 +1452,11 @@ class ExpKGSensitiveFlushThreads(GNNExperiment):
                     "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
+                # {
+                #     "use_my_emb": ["false"],
+                #     "cached_emb_type": ["None"],
+                #     "backwardMode": ["CppSync"],
+                # },
             ],
             "max_step": [500],
             "log_interval": [100],
@@ -1646,7 +1660,7 @@ class ExpRecPerf(RecExperiment):
                         128,
                         1024,
                     ],
-                    "num_workers": [8] if GetHostName() != "node182" else [4],
+                    "num_workers": [NR_ALL_CARDS_DUE_TO_ERROR] if GetHostName() != "node182" else [4],
                 },
                 # for scalability
                 {

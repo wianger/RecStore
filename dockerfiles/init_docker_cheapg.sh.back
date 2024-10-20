@@ -22,12 +22,12 @@ source /home/${USER}/.bashrc
 # git submodule add https://github.com/google/glog third_party/glog
 sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
 
-cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
+cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
 sudo make install
 
 
 # git submodule add https://github.com/fmtlib/fmt third_party/fmt
-cd ${PROJECT_PATH}/third_party/fmt/ && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
+cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
 
 
 # git submodule add https://github.com/facebook/folly third_party/folly
@@ -36,14 +36,14 @@ export CXX=`which g++`
 cd ${PROJECT_PATH}/third_party/folly && \
 # git checkout v2021.01.04.00 && \
 git checkout v2023.09.11.00 && \
-mkdir -p _build && cd _build \
+rm -rf _build && mkdir -p _build && cd _build \
 && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake .. -DCMAKE_INCLUDE_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/include -DCMAKE_LIBRARY_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/lib \
 && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
 
 # git submodule add https://github.com/google/googletest third_party/googletest
 
 
-cd ${PROJECT_PATH}/third_party/gperftools && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && sudo  make install && make clean
+cd ${PROJECT_PATH}/third_party/gperftools && rm -rf _build && mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && sudo  make install && make clean
 
 
 # cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install
@@ -85,7 +85,7 @@ pip3 install  -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
 cd ${PROJECT_PATH}/
 cd third_party/grpc
 export MY_INSTALL_DIR=${PROJECT_PATH}/third_party/grpc-install
-# rm -rf cmake/build
+rm -rf cmake/build
 mkdir -p cmake/build
 pushd cmake/build
 cmake -DgRPC_INSTALL=ON \
