@@ -82,17 +82,20 @@ def main():
 
     else:  # 3090
         # 大数据集KG
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f"{LOG_PREFIX}/1020-KG-scale-large-{suffix}")
-        each.SetFilter(lambda config: config["dataset"] == "wikikg90M" and config['nr_gpus']<=6)
-        exp_lists.append(each)
-        
-        each = exp_config.ExpKGSensitiveModel()
-        each.SetLogDir(f"{LOG_PREFIX}/1020-kgsen-model-{suffix}")
-        exp_lists.append(each)
-
         each = exp_config.ExpKGSensitiveFlushThreads()
         each.SetLogDir(f"{LOG_PREFIX}/1020-kgsen-threads-{suffix}")
+        each.SetFilter(lambda config: config['nr_gpus']<=6)
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGSensitiveModel()
+        each.SetLogDir(f"{LOG_PREFIX}/1020-kgsen-model-{suffix}")
+        each.SetFilter(lambda config: config['nr_gpus']<=6)
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f"{LOG_PREFIX}/1020-KG-scale-large-{suffix}")
+        # each.SetFilter(lambda config: config["dataset"] == "wikikg90M" and config['nr_gpus']<=6)
+        each.SetFilter(lambda config: config['nr_gpus']<=6)
         exp_lists.append(each)
 
         return exp_lists
