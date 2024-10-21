@@ -17,7 +17,8 @@ if(xmh_host_name STREQUAL "node182")
 elseif(xmh_host_name STREQUAL "3090-server")
     add_compile_definitions(DEFINED_SHM_GB=200)
 else()
-    message(FATAL_ERROR "Unknown machine")
+    # message(FATAL_ERROR "Unknown machine")
+    add_compile_definitions(DEFINED_SHM_GB=15)
 endif()
 
 
