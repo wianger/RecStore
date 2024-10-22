@@ -525,8 +525,13 @@ class TrainDataset(object):
 
         cache_sizes_all_rank = []
         keys_ordered_all_rank = []
-        n_entities = self.g.number_of_nodes()
+        if self.dataset_name == 'wikikg90M':
+            n_entities = 87143637
+        else:
+            n_entities = self.g.number_of_nodes()
+
         cache_size_per_rank = int(cached_ratio * n_entities // self.nr_world)
+        print("cache_size_per_rank = ", cache_size_per_rank)
         # cache_size_per_rank = int(cached_ratio * n_entities)
 
         # samplers = self.CreateSamplers(

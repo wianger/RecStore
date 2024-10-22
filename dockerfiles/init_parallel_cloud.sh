@@ -55,7 +55,8 @@ sudo apt-get update -y && \
   sudo \
   libtbb-dev \
   libmemcached-dev \
-  libzstd-dev
+  libzstd-dev \
+  libaio-dev
 
 # git submodule add https://github.com/facebook/folly third_party/folly
 export CC=`which gcc`
@@ -97,7 +98,7 @@ popd
 
 
 cd ${PROJECT_PATH}/dockerfiles
-source start_core.sh
+# source start_core.sh
 
 
 cd ${PROJECT_PATH}/src/kg/kg

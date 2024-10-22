@@ -18,7 +18,7 @@ def ConvertHostNumaList2Host(host_numa_lists):
 # DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
 DIR_PATH = "/home/xieminhui/RecStore/src/executable"
 
-NR_ALL_CARDS_DUE_TO_ERROR = 6
+NR_ALL_CARDS_DUE_TO_ERROR = 8
 
 def GswLock():
     lock_file = "/tmp/xmh_gsw_lock"
