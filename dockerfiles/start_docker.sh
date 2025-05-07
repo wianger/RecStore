@@ -1,2 +1,23 @@
+set -x s
 cd "$(dirname "$0")"
-sudo docker run --cap-add=SYS_ADMIN --privileged --security-opt seccomp=unconfined --runtime=nvidia --name cheapg-new --net=host -v /home/xieminhui/RecStore:/home/xieminhui/RecStore  -v /dev/shm:/dev/shm -v /dev/hugepages:/dev/hugepages -v  /home/xieminhui/RecStoreDataset:/home/xieminhui/RecStoreDataset -v /home/xieminhui/dgl-data:/home/xieminhui/dgl-data -v /dev:/dev -v /nas:/nas -w /home/xieminhui/RecStore --rm -it --gpus all -d cheapg
+
+
+# sudo docker build -f Dockerfile.recstore --build-arg uid=$UID  -t recstore .
+
+
+RECSTORE_PATH="$(cd ".." && pwd)"
+DATASET_PATH="/home/xieminhui/FrugalDataset"
+DGL_DATASET_PATH="/home/xieminhui/dgl-data"
+
+sudo docker run --cap-add=SYS_ADMIN --privileged --security-opt seccomp=unconfined --runtime=nvidia \
+--name recstore --net=host \
+-v ${RECSTORE_PATH}:${RECSTORE_PATH} \
+-v /dev/shm:/dev/shm \
+-v /dev/hugepages:/dev/hugepages \
+-v ${DATASET_PATH}:${DATASET_PATH} \
+-v ${DGL_DATASET_PATH}:${DGL_DATASET_PATH} \
+-v /dev:/dev -v /nas:/nas \
+-w ${RECSTORE_PATH} --rm -it --gpus all -d recstore
+
+
+# sudo docker exec -it recstore /bin/bash

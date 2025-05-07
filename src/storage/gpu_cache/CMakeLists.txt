@@ -19,6 +19,7 @@ file(GLOB gpu_cache_src
   static_table.cu
   static_hash_table.cu
   uvm_table.cu
+  gpu_cache_nohash.cu
 )
 
 

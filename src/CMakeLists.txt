@@ -14,4 +14,7 @@ add_subdirectory(small_tests)
 
 add_subdirectory(perf_uva)
 
+
+add_subdirectory(framework)
+
 add_subdirectory(executable/uvm)

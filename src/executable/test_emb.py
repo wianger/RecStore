@@ -21,7 +21,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 
 import sys
-sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
+sys.path.append("/home/xieminhui/RecStore/src/python/pytorch")  # nopep8
 
 import recstore
 from recstore import KGCacheControllerWrapperBase

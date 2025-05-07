@@ -22,7 +22,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.profiler import profile, record_function, ProfilerActivity
 
 import sys
-sys.path.append("/home/xieminhui/RecStore/src/python")  # nopep8
+sys.path.append("/home/xieminhui/RecStore/src/python/pytorch")  # nopep8
 
 import recstore
 from recstore import KGCacheControllerWrapperBase, KGCacheControllerWrapper, KGCacheControllerWrapperDummy
