@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "folly/Random.h"
 #include "basic_ssd_kv_interface.h"
+#include "folly/Random.h"
 
 using base::ConstArray;
 

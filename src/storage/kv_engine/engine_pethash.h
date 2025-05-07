@@ -1,27 +1,28 @@
 #pragma once
 #include <memory>
 
-#include "base_kv.h"
 #include "base/factory.h"
+#include "base_kv.h"
 #include "storage/nvm/pet_kv/pet_kv.h"
 
 DECLARE_int32(prefetch_method);
 
 class KVEnginePetKV : public BaseKV {
- public:
+public:
   explicit KVEnginePetKV(const BaseKVConfig &config) : BaseKV(config) {
-    std::string shm_path = config.path;
+    std::string shm_path = config.json_config_["path"];
     const int shard_num = 16;
     shm_kv = std::make_unique<base::PetMultiKV>(
         shm_path + "/shm", shard_num,
-        config.value_size * config.capacity / shard_num,
-        // config.capacity / shard_num, config.value_size));
-        config.capacity / shard_num, 0);
+        config.json_config_.at("value_size").get<int>() *
+            config.json_config_.at("capacity").get<int>() / shard_num,
+        config.json_config_.at("capacity").get<int>() / shard_num, 0);
   }
 
   void Get(const uint64_t key, std::string &value, unsigned t) override {
     auto kv_data = shm_kv->Get(key);
-    if (kv_data.data) value = std::string(kv_data.data, kv_data.size);
+    if (kv_data.data)
+      value = std::string(kv_data.data, kv_data.size);
   }
 
   void BatchGet(base::ConstArray<uint64> keys,
@@ -47,13 +48,13 @@ class KVEnginePetKV : public BaseKV {
     CHECK(shm_kv->Update(key, value.data(), value.size()));
   }
 
-  std::pair<uint64_t, uint64_t> RegisterPMAddr() const override {
+  std::pair<uint64_t, uint64_t> RegisterPMAddr() const {
     return base::PMMmapRegisterCenter::GetInstance()->ForRDMAMemoryRegion();
   }
 
   void DebugInfo() const override { shm_kv->GetInfo(); }
 
- private:
+private:
   base::ScopedTempDir dir;
   std::unique_ptr<base::PetMultiKV> shm_kv;
 };

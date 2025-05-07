@@ -1,16 +1,16 @@
 
+#include "spdk_wrapper.h"
+
 #include <folly/Format.h>
 #include <folly/GLog.h>
 #include <folly/Likely.h>
-
-#include "spdk_wrapper.h"
 
 const char *using_ssd = "0000:17:00.0";
 
 namespace ssdps {
 
 class SpdkWrapperImplementation : public SpdkWrapper {
-private:
+ private:
   static constexpr int MAX_QPAIR_NUM = 32;
   int queue_cnt;
 
@@ -36,14 +36,15 @@ private:
     LOG(INFO) << "Initialization complete";
 
     for (auto &ns_entry : g_namespaces_) {
-      for(int i = 0; i < queue_cnt; i++){
-        ns_entry.qpair[i] = spdk_nvme_ctrlr_alloc_io_qpair(ns_entry.ctrlr, NULL, 0);
+      for (int i = 0; i < queue_cnt; i++) {
+        ns_entry.qpair[i] =
+            spdk_nvme_ctrlr_alloc_io_qpair(ns_entry.ctrlr, NULL, 0);
 
         CHECK_NE(ns_entry.qpair[i], nullptr)
             << "ERROR: spdk_nvme_ctrlr_alloc_io_qpair() failed";
       }
     }
-    
+
     LOG(INFO) << "Allocated " << queue_cnt << " qpairs";
   }
 
@@ -53,7 +54,7 @@ private:
 
   ~SpdkWrapperImplementation() {
     for (auto ns_entry : g_namespaces_) {
-      for(int qp_id = 0; qp_id < queue_cnt; qp_id++){
+      for (int qp_id = 0; qp_id < queue_cnt; qp_id++) {
         spdk_nvme_ctrlr_free_io_qpair(ns_entry.qpair[qp_id]);
       }
       struct spdk_nvme_detach_ctx *detach_ctx = NULL;
@@ -65,27 +66,28 @@ private:
   }
 
   int SubmitWriteCommand(const void *pinned_src, const int64_t bytes,
-                         const int64_t lba, spdk_nvme_cmd_cb func,
-                         void *ctx, int qp_id) override {
+                         const int64_t lba, spdk_nvme_cmd_cb func, void *ctx,
+                         int qp_id) override {
     auto ns_entry = g_namespaces_[0];
     uint32_t lba_count = (bytes + kLBASize_ - 1) / kLBASize_;
 
-    int ret =
-        spdk_nvme_ns_cmd_write(ns_entry.ns, ns_entry.qpair[qp_id], (void *)pinned_src,
-                               lba, lba_count, func, ctx, 0);
+    int ret = spdk_nvme_ns_cmd_write(ns_entry.ns, ns_entry.qpair[qp_id],
+                                     (void *)pinned_src, lba, lba_count, func,
+                                     ctx, 0);
 
     CHECK(ret == 0 || ret == -ENOMEM) << ret;
     return ret;
   }
 
   void SubmitReadCommand(void *pinned_dst, const int64_t bytes,
-                         const int64_t lba, spdk_nvme_cmd_cb func,
-                         void *ctx, int qp_id) override {
+                         const int64_t lba, spdk_nvme_cmd_cb func, void *ctx,
+                         int qp_id) override {
     auto ns_entry = g_namespaces_[0];
     uint32_t lba_count = (bytes + kLBASize_ - 1) / kLBASize_;
     while (1) {
-      auto ret = spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id], pinned_dst,
-                                       lba, lba_count, func, ctx, 0);
+      auto ret =
+          spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id], pinned_dst,
+                                lba, lba_count, func, ctx, 0);
       if (ret == 0) {
         return;
       } else if (ret == -ENOMEM) {
@@ -112,7 +114,8 @@ private:
     return capacity / GetLBASize();
   }
 
-  void SyncRead(void *pinned_dst, const int64_t bytes, const int64_t lba, int qp_id) override {
+  void SyncRead(void *pinned_dst, const int64_t bytes, const int64_t lba,
+                int qp_id) override {
     std::atomic_bool flag{false};
     SubmitReadCommand(pinned_dst, bytes, lba, SyncCommandCompleteCB,
                       (void *)&flag, qp_id);
@@ -121,8 +124,8 @@ private:
     }
   }
 
-  void SyncWrite(const void *pinned_src, const int64_t bytes,
-                 const int64_t lba, int qp_id) override {
+  void SyncWrite(const void *pinned_src, const int64_t bytes, const int64_t lba,
+                 int qp_id) override {
     std::atomic_bool flag{false};
     SubmitWriteCommand(pinned_src, bytes, lba, SyncCommandCompleteCB,
                        (void *)&flag, qp_id);
@@ -138,9 +141,9 @@ private:
     std::atomic_bool flag{false};
     auto ns_entry = g_namespaces_[0];
 
-    auto ret =
-        spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id], pinned_dst, lba, 1,
-                              nullptr, nullptr, SPDK_NVME_CMD_FUSE_FIRST);
+    auto ret = spdk_nvme_ns_cmd_read(ns_entry.ns, ns_entry.qpair[qp_id],
+                                     pinned_dst, lba, 1, nullptr, nullptr,
+                                     SPDK_NVME_CMD_FUSE_FIRST);
     if (ret == 0) {
       LOG(INFO) << "submit successful 1";
     } else if (ret == -ENOMEM) {
@@ -188,7 +191,7 @@ private:
   static bool ProbeCallBack(void *cb_ctx,
                             const struct spdk_nvme_transport_id *trid,
                             struct spdk_nvme_ctrlr_opts *opts) {
-    if(strcmp(using_ssd, trid->traddr) != 0){
+    if (strcmp(using_ssd, trid->traddr) != 0) {
       return false;
     }
     LOG(INFO) << "Attaching to " << trid->traddr;

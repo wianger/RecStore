@@ -1,23 +1,21 @@
 #pragma once
 
-#include "storage/kv_engine/base_kv.h"
-#include "ps_common/shard_manager.h"
-
-#include <cmath>
 #include <folly/Conv.h>
 #include <folly/GLog.h>
 #include <stdlib.h>
+
+#include <cmath>
 #include <thread>
 
-class LoadDBHelper {
+#include "ps_common/shard_manager.h"
+#include "storage/kv_engine/base_kv.h"
 
+class LoadDBHelper {
 public:
   LoadDBHelper(BaseKV *kv, int server_id, int warm_thread_count,
                int64_t all_ps_warm_capacity, int value_size)
-      : kv_(kv), server_id_(server_id),
-        warm_thread_count_(warm_thread_count),
-        warm_capacity_(all_ps_warm_capacity), value_size_(value_size) {
-  }
+      : kv_(kv), server_id_(server_id), warm_thread_count_(warm_thread_count),
+        warm_capacity_(all_ps_warm_capacity), value_size_(value_size) {}
 
   void PreLoadDB(bool shuffle_load = false) {
     uint64_t warm_kv_per_thread =

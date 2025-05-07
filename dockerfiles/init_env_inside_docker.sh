@@ -1,13 +1,10 @@
 cd "$(dirname "$0")"
-#export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890 all_proxy=socks5://127.0.0.1:7890
 set -x
 set -e
-# git config --global user.name "Minhui Xie"
-# git config --global user.email "645214784@qq.com"
 
 sudo service ssh start
 
-USER=xieminhui
+USER="$(whoami)"
 PROJECT_PATH="$(cd .. && pwd)"
 
 sudo apt install -y libmemcached-dev 

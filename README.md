@@ -16,12 +16,12 @@ In ubuntu, simply:
 After installing docker and nvidia-docker, build the Docker image by running the following command in the `dockerfiles` directory:
 
 	cd dockerfiles
-	sudo docker build -f Dockerfile.frugal --build-arg uid=$UID  -t frugal .
+	sudo docker build -f Dockerfile.recstore --build-arg uid=$UID  -t recstore .
 	cd -
 
 And then start this container, by running the following commands. **Please modify corresponding pathes below**.
 
-	sudo docker run --cap-add=SYS_ADMIN --privileged --security-opt seccomp=unconfined --runtime=nvidia --name frugal --net=host -v /home/xieminhui/RecStore:/home/xieminhui/RecStore  -v /dev/shm:/dev/shm -v /dev/hugepages:/dev/hugepages -v /home/xieminhui/FrugalDataset:/home/xieminhui/FrugalDataset -v /home/xieminhui/dgl-data:/home/xieminhui/dgl-data -v /dev:/dev -w /home/xieminhui/RecStore --rm -it --gpus all -d recStore
+	sudo docker run --cap-add=SYS_ADMIN --privileged --security-opt seccomp=unconfined --runtime=nvidia --name recstore --net=host -v /home/xieminhui/RecStore:/home/xieminhui/RecStore  -v /dev/shm:/dev/shm -v /dev/hugepages:/dev/hugepages -v /home/xieminhui/FrugalDataset:/home/xieminhui/FrugalDataset -v /home/xieminhui/dgl-data:/home/xieminhui/dgl-data -v /dev:/dev -w /home/xieminhui/RecStore --rm -it --gpus all -d recStore
 
 or 
 	

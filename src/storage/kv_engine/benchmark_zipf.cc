@@ -1,15 +1,16 @@
-#include "base/zipf.h"
-#include "base/factory.h"
-#include "storage/kv_engine/base_kv.h"
-
-#include <atomic>
 #include <folly/GLog.h>
 #include <folly/init/Init.h>
-#include <memory>
 #include <stdlib.h>
-#include <thread>
 #include <time.h>
 #include <unistd.h>
+
+#include <atomic>
+#include <memory>
+#include <thread>
+
+#include "base/factory.h"
+#include "base/zipf.h"
+#include "storage/kv_engine/base_kv.h"
 
 DEFINE_string(db, "", "");
 DEFINE_int32(value_size, 32 * 4, "");
@@ -81,9 +82,10 @@ void thread_run(int id) {
 int main(int argc, char *argv[]) {
   folly::init(&argc, &argv);
   BaseKVConfig config;
-  config.capacity = kKeySpace;
-  config.value_size = FLAGS_value_size;
-  kv = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance(FLAGS_db, config);
+  config.json_config_["capacity"] = kKeySpace;
+  config.json_config_["value_size"] = FLAGS_value_size;
+  kv = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance(FLAGS_db,
+                                                                config);
   for (int i = 0; i < FLAGS_thread_count; i++) {
     th[i] = std::thread(thread_run, i);
   }
@@ -106,8 +108,8 @@ int main(int argc, char *argv[]) {
     clock_gettime(CLOCK_REALTIME, &s);
     sleep(1);
     clock_gettime(CLOCK_REALTIME, &e);
-    int microseconds =
-        (e.tv_sec - s.tv_sec) * 1000000 + (double)(e.tv_nsec - s.tv_nsec) / 1000;
+    int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
+                       (double)(e.tv_nsec - s.tv_nsec) / 1000;
 
     all_tp = 0;
     for (int i = 0; i < FLAGS_thread_count; ++i) {

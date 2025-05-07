@@ -1,14 +1,15 @@
 #pragma once
 
-#include <emmintrin.h>  //NOLINT
-#include <nmmintrin.h>  //NOLINT
+#include <emmintrin.h> //NOLINT
+#include <folly/GLog.h>
+#include <nmmintrin.h> //NOLINT
+
 #include <cmath>
 #include <functional>
 #include <iostream>
 #include <thread>
 #include <vector>
 
-#include <folly/GLog.h>
 #include "base/array.h"
 #include "base/base.h"
 #include "persistence.h"
@@ -17,8 +18,7 @@ namespace base {
 
 #pragma pack(push)
 #pragma pack(2)
-template <class K, class T>
-struct EntryT {
+template <class K, class T> struct EntryT {
   EntryT() : first(), second() {}
   explicit EntryT(K s, T d) : first(s), second(d) {}
   explicit EntryT(K s) : first(s), second() {}
@@ -28,7 +28,7 @@ struct EntryT {
 #pragma pack(pop)
 
 class SparseMaskIter {
- public:
+public:
   explicit SparseMaskIter(int mask) : mask_(mask) {}
   bool HasNext() const { return mask_ != 0; }
   unsigned Next() {
@@ -38,7 +38,7 @@ class SparseMaskIter {
   }
   uint32_t Val() const { return mask_; }
 
- private:
+private:
   uint32_t mask_;
 };
 
@@ -49,11 +49,11 @@ struct F14Chunk {
   static constexpr int kFullMask = (1 << kMaxSize) - 1;
 
   SparseMaskIter MatchTag(uint8_t tag) const {
-    auto tag_vec = _mm_load_si128(static_cast<__m128i const *>(  // NOLINT
-        static_cast<const void *>(&tags_[0])));                  // NOLINT
-    auto cmp_val = _mm_set1_epi8(tag);                           // NOLINT
-    auto eq_vec = _mm_cmpeq_epi8(tag_vec, cmp_val);              // NOLINT
-    auto mask = _mm_movemask_epi8(eq_vec) & kFullMask;           // NOLINT
+    auto tag_vec = _mm_load_si128(static_cast<__m128i const *>( // NOLINT
+        static_cast<const void *>(&tags_[0])));                 // NOLINT
+    auto cmp_val = _mm_set1_epi8(tag);                          // NOLINT
+    auto eq_vec = _mm_cmpeq_epi8(tag_vec, cmp_val);             // NOLINT
+    auto mask = _mm_movemask_epi8(eq_vec) & kFullMask;          // NOLINT
     return SparseMaskIter{mask};
   }
 
@@ -85,10 +85,12 @@ struct F14Chunk {
   }
   ItemT *Get(size_t i) { return value_ + i; }
   void IncOverflow() {
-    if (overflow_count_ != 255) ++overflow_count_;
+    if (overflow_count_ != 255)
+      ++overflow_count_;
   }
   void DecOverflow() {
-    if (overflow_count_ != 255) --overflow_count_;
+    if (overflow_count_ != 255)
+      --overflow_count_;
   }
   void Delete(size_t i) {
     tags_[i] = 0;
@@ -102,7 +104,8 @@ struct F14Chunk {
   inline size_t Size() const { return size_; }
   bool InUse(size_t i) const { return tags_[i] != 0; }
   void Initialize() {
-    for (int i = 0; i < kMaxSize; i++) value_[i].first = -1;
+    for (int i = 0; i < kMaxSize; i++)
+      value_[i].first = -1;
   }
 
   uint8_t tags_[kMaxSize];
@@ -117,7 +120,7 @@ struct F14Chunk {
 template <typename KeyT, typename ValueT, bool Persistence = false,
           bool MM_PREFETCH = true>
 class PetHash {
- public:
+public:
   typedef EntryT<KeyT, ValueT> ItemT;
   typedef F14Chunk<KeyT, ValueT, Persistence> ChunkT;
   typedef std::function<bool(const KeyT &, const ValueT &,
@@ -136,7 +139,8 @@ class PetHash {
   }
 
   void Initialize(uint64_t capacity, bool ignore_load_factor = false) {
-    if (!ignore_load_factor) capacity /= kMaxLoadFactor / 100.0;
+    if (!ignore_load_factor)
+      capacity /= kMaxLoadFactor / 100.0;
     chunk_num_ = OverFallChunkNum(capacity);
     capacity_ = chunk_num_ * kChunkSize;
     size_ = 0;
@@ -151,7 +155,8 @@ class PetHash {
               std::function<void(KeyT, ValueT)> mallocSetValid,
               const int kRecoveryThread = 4) {
     CHECK(Persistence) << "If not PMEM KV, dont use Reload";
-    if (!ignore_load_factor) capacity /= kMaxLoadFactor / 100.0;
+    if (!ignore_load_factor)
+      capacity /= kMaxLoadFactor / 100.0;
     // chunk_num_ = Next2Power((capacity + kChunkSize - 1) / kChunkSize);
     chunk_num_ = OverFallChunkNum(capacity);
     capacity_ = chunk_num_ * kChunkSize;
@@ -172,7 +177,8 @@ class PetHash {
           chunk.overflow_count_ = 0;
           for (int chunk_offset = 0; chunk_offset < ChunkT::kMaxSize;
                chunk_offset++) {
-            if (chunk.value_[chunk_offset].first == -1) continue;
+            if (chunk.value_[chunk_offset].first == -1)
+              continue;
             chunk.size_++;
             ItemT &chunkItem = chunk.value_[chunk_offset];
             // 设置 size_             √
@@ -190,7 +196,8 @@ class PetHash {
         }
       }));
     }
-    for (auto &each : thread_pool) each.join();
+    for (auto &each : thread_pool)
+      each.join();
     size_.store(count_size);
     if (fabs((double)old_size - (double)size_) >= 1000) {
       LOG(ERROR) << "Large Diff after reload.";
@@ -225,10 +232,11 @@ class PetHash {
                 uint8_t temp;
                 do {
                   temp = chunk_table_[pos].overflow_count_;
-                  if (temp == 255) break;
+                  if (temp == 255)
+                    break;
                 } while (
                     !chunk_table_[pos].overflow_count_.compare_exchange_strong(
-                        temp, temp + 1));  // NOLINT
+                        temp, temp + 1)); // NOLINT
                 pos = (pos + step) & (chunk_num_ - 1);
               }
             }
@@ -236,12 +244,14 @@ class PetHash {
         }
       }));
     }
-    for (auto &each : thread_pool) each.join();
+    for (auto &each : thread_pool)
+      each.join();
   }
 
   static uint64_t MemorySize(uint64_t capacity,
                              bool ignore_load_factor = false) {
-    if (!ignore_load_factor) capacity /= kMaxLoadFactor / 100.0;
+    if (!ignore_load_factor)
+      capacity /= kMaxLoadFactor / 100.0;
     // auto chunk_table_num = Next2Power((capacity + kChunkSize - 1) /
     // kChunkSize);
     auto chunk_table_num = OverFallChunkNum(capacity);
@@ -250,7 +260,8 @@ class PetHash {
 
   static uint64_t Next2Power(uint64_t size) {
     uint64_t new_size = 1;
-    while (new_size < size) new_size <<= 1;
+    while (new_size < size)
+      new_size <<= 1;
     return new_size;
   }
 
@@ -297,7 +308,8 @@ class PetHash {
       LOG(ERROR) << fmt::format("PetHash invalid {} != {}", total_num,
                                 chunk_table_total_num);
     if (total_num != size_)
-      LOG(ERROR) << fmt::format("PetHash invalid {} != {}", total_num, size_.load());
+      LOG(ERROR) << fmt::format("PetHash invalid {} != {}", total_num,
+                                size_.load());
     return total_num == chunk_table_total_num && total_num == size_;
   }
 
@@ -329,10 +341,10 @@ class PetHash {
     _mm_prefetch((const char *)(chunk->Get(0)), _MM_HINT_T0);
   }
 
-  std::tuple<const ValueT, ValueT *const, bool> GetInternal(
-      const KeyT &key, uint64 *const item_pos = nullptr,
-      ChunkT **const chunk_pos = nullptr,
-      uint8_t *const in_chunk_id = nullptr) {
+  std::tuple<const ValueT, ValueT *const, bool>
+  GetInternal(const KeyT &key, uint64 *const item_pos = nullptr,
+              ChunkT **const chunk_pos = nullptr,
+              uint8_t *const in_chunk_id = nullptr) {
   RETRY:
     uint64_t hash_value = Hash(key);
     auto sign = Sign(hash_value);
@@ -344,11 +356,12 @@ class PetHash {
       auto chunk = chunk_table_ + pos;
       if (MM_PREFETCH) {
         _mm_prefetch(
-            static_cast<char const *>(static_cast<void const *>(  // NOLINT
+            static_cast<char const *>(static_cast<void const *>( // NOLINT
                 chunk->Get(3))),
-            _MM_HINT_T0);  // NOLINT
+            _MM_HINT_T0); // NOLINT
       }
-      if (UNLIKELY(chunk->is_migrating)) touch_migrating_chunk = true;
+      if (UNLIKELY(chunk->is_migrating))
+        touch_migrating_chunk = true;
 
       auto it = chunk->MatchTag(sign);
       while (it.HasNext()) {
@@ -356,16 +369,21 @@ class PetHash {
         auto val = chunk->Get(id);
         // re-read the key to ensure no-one modify it
         if (LIKELY(key == val->first)) {
-          if (item_pos != nullptr) *item_pos = pos * kChunkSize + id;
-          if (chunk_pos != nullptr) *chunk_pos = chunk;
-          if (in_chunk_id != nullptr) *in_chunk_id = id;
+          if (item_pos != nullptr)
+            *item_pos = pos * kChunkSize + id;
+          if (chunk_pos != nullptr)
+            *chunk_pos = chunk;
+          if (in_chunk_id != nullptr)
+            *in_chunk_id = id;
           return std::make_tuple(val->second, &val->second, true);
         }
       }
-      if (LIKELY(chunk->OverflowCount() == 0)) break;
+      if (LIKELY(chunk->OverflowCount() == 0))
+        break;
       pos = (pos + step) & (chunk_num_ - 1);
     }
-    if (UNLIKELY(touch_migrating_chunk)) goto RETRY;
+    if (UNLIKELY(touch_migrating_chunk))
+      goto RETRY;
     return std::make_tuple(ValueT(), nullptr, false);
   }
 
@@ -484,7 +502,8 @@ class PetHash {
                              //  unlock
                              each->is_migrating = false;
                              //  unlock done
-                             if (each == current_chunk) return;
+                             if (each == current_chunk)
+                               return;
                              each->DecOverflow();
                            });
     }
@@ -522,7 +541,8 @@ class PetHash {
         for (size_t id = 0; id < kChunkSize; ++id)
           if (chunk->InUse(id)) {
             auto it = chunk->Get(id);
-            if (!check_func(it->first, it->second, false)) Delete(it->first);
+            if (!check_func(it->first, it->second, false))
+              Delete(it->first);
           }
       }
 
@@ -553,7 +573,8 @@ class PetHash {
           return nullptr;
         }
         auto it = chunk->Get((sign + i) % kChunkSize);
-        if (check_func != nullptr) check_func(it->first, it->second, true);
+        if (check_func != nullptr)
+          check_func(it->first, it->second, true);
         Delete(it->first);
       } else {
         chunk->IncOverflow();
@@ -567,7 +588,8 @@ class PetHash {
   bool Delete(const KeyT &key) {
     uint64_t pos;
     auto [nouse0, nouse1, exists] = GetInternal(key, &pos);
-    if (!exists) return true;
+    if (!exists)
+      return true;
 
     uint64_t hash_value = Hash(key);
     size_t step = ProbeDelta(Sign(hash_value));
@@ -585,19 +607,22 @@ class PetHash {
 
   ValueT *GetById(uint64_t pos, KeyT *key = nullptr) {
     auto it = chunk_table_[pos / kChunkSize].Get(pos % kChunkSize);
-    if (key != nullptr) *key = it->first;
+    if (key != nullptr)
+      *key = it->first;
     return &it->second;
   }
 
   bool IndexInUse(uint64_t pos) {
-    if (pos >= capacity_) return false;
+    if (pos >= capacity_)
+      return false;
     return chunk_table_[pos / kChunkSize].InUse(pos % kChunkSize);
   }
 
   int64_t Lookup(const KeyT &key) {
     uint64_t pos;
     auto [nouse0, nouse1, exists] = GetInternal(key, &pos);
-    if (exists) return pos;
+    if (exists)
+      return pos;
     return -1;
   }
 
@@ -607,11 +632,11 @@ class PetHash {
 
   inline bool Full() { return size_ * 100 >= capacity_ * kMaxLoadFactor; }
 
- private:
+private:
   inline size_t ProbeDelta(size_t key) const { return key * 2 | 1; }
 
-  static inline uint8_t Sign(const uint64_t &key) {  // NOLINT
-    uint64_t c = _mm_crc32_u64(0, key);              // NOLINT
+  static inline uint8_t Sign(const uint64_t &key) { // NOLINT
+    uint64_t c = _mm_crc32_u64(0, key);             // NOLINT
     // ??????
     // WARNING(xieminhui): diff from kuaishou
     // key += c;
@@ -627,4 +652,4 @@ class PetHash {
   ChunkT chunk_table_[0];
 };
 
-}  // namespace base
+} // namespace base

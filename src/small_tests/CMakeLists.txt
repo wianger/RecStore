@@ -1,4 +1,4 @@
-
+add_subdirectory(perf_uva)
 
 
 add_executable(test_multi_thread_cht test_multi_thread_cht.cc)

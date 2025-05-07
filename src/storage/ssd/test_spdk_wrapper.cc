@@ -28,10 +28,12 @@ TEST(SpdkWrapper, test) {
 // TEST(SpdkWrapper, test_fused_operation) {
 //   auto ssd = ssdps::SpdkWrapper::create();
 //   ssd->Init();
-//   char *buf = (char *)spdk_zmalloc(0x1000, 0x1000, NULL, SPDK_ENV_SOCKET_ID_ANY,
+//   char *buf = (char *)spdk_zmalloc(0x1000, 0x1000, NULL,
+//   SPDK_ENV_SOCKET_ID_ANY,
 //                                    SPDK_MALLOC_DMA);
 //   char *buf_2 = (char *)spdk_zmalloc(0x1000, 0x1000, NULL,
-//                                      SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+//                                      SPDK_ENV_SOCKET_ID_ANY,
+//                                      SPDK_MALLOC_DMA);
 //   snprintf(buf, 0x1000, "%s", "Hello world!\n");
 
 //   ssd->SyncWrite((void *)buf, 512, 0);

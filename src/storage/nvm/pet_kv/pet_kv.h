@@ -26,7 +26,7 @@ class PetKV {
   static constexpr int valid_file_size = 4;
   inline static const std::string valid_file_tag = "valid tag";
 
- public:
+public:
   explicit PetKV(const std::string &shm_dir, int64 memory_size, int capacity,
                  int pre_known_value_size = 0);
   ~PetKV();
@@ -36,14 +36,14 @@ class PetKV {
   PetKVReadData Get(uint64 key) const {
     PetKVReadData read_data;
     auto [cache, exists] = dict_->Get(key);
-    if (!exists) return read_data;
+    if (!exists)
+      return read_data;
     read_data.expire_timet = cache.expire_timet();
     read_data.data = shm_malloc_->GetMallocData(cache.shm_malloc_offset());
-    if (pre_known_value_size_ == 0) {
+    if (pre_known_value_size_ == 0)
       read_data.size = shm_malloc_->GetMallocSize(cache.shm_malloc_offset());
-    } else {
+    else
       read_data.size = pre_known_value_size_;
-    }
     return read_data;
   }
 
@@ -54,7 +54,7 @@ class PetKV {
   std::string GetInfo();
   int64 key_num() const { return dict_->Size(); }
 
- private:
+private:
   uint64_t start_ts_ = 0;
 
   ShmKDoubleDict *dict_ = nullptr;
@@ -76,7 +76,7 @@ class PetKV {
 };
 
 class PetMultiKV {
- public:
+public:
   explicit PetMultiKV(const std::vector<std::string> &shm_dir, int shard_num,
                       int64 shard_memory, int shard_cache_capacity,
                       int pre_known_value_size = 0);
@@ -86,7 +86,8 @@ class PetMultiKV {
       : PetMultiKV(std::vector<std::string>{shm_dir}, shard_num, shard_memory,
                    shard_cache_capacity, pre_known_value_size) {}
   ~PetMultiKV() {
-    for (auto shm_kv : shm_kv_) delete shm_kv;
+    for (auto shm_kv : shm_kv_)
+      delete shm_kv;
   }
   int GetShard(uint64 key) const {
     return GetHashWithLevel(key, 1) % shard_num_;
@@ -116,17 +117,18 @@ class PetMultiKV {
   }
 
   std::string GetInfo();
-  
+
   int64 key_num() const {
     int64 key_num = 0;
-    for (auto shm_kv : shm_kv_) key_num += shm_kv->key_num();
+    for (auto shm_kv : shm_kv_)
+      key_num += shm_kv->key_num();
     return key_num;
   }
 
   int shard_num() const { return shard_num_; }
   const std::string &shm_dir() const { return shm_dir_.front(); }
 
- private:
+private:
   std::string shm_dir(int shard_id);
   void LoadShard(int shard);
 
@@ -139,4 +141,4 @@ class PetMultiKV {
   DISALLOW_COPY_AND_ASSIGN(PetMultiKV);
 };
 
-}  // namespace base
+} // namespace base

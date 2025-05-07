@@ -1,13 +1,13 @@
 #include "pet_hash.h"
 // #include "third_party/HashEvaluation-for-petps/hash/common/hash_api.h"
-#include "memory/shm_file.h"
 #include "/home/xieminhui/HashEvaluation/hash/common/hash_api.h"
+#include "memory/shm_file.h"
 
 typedef base::PetHash<uint64, uint64> PiBenchPetHashDict;
 const bool IGNORE_LOAD_FACTOR = false;
 
 class PetHashAPI : public hash_api {
-public:
+ public:
   PetHashAPI(uint64_t capacity, const std::string &shm_dir) {
     auto dict_size = capacity;
     auto dict_memory_size =
@@ -30,8 +30,7 @@ public:
                                 dict_->Capacity(),
                                 dict_->Size() / (float)dict_->Capacity());
     LOG(INFO) << "MemoryUtil: "
-              << dict_->Size() * 16 /
-                     (float)dict_shm_file_.Size();
+              << dict_->Size() * 16 / (float)dict_shm_file_.Size();
   }
 
   void thread_ini(int id) {}
@@ -50,8 +49,7 @@ public:
    */
   virtual bool find(const char *key, size_t sz, char *value_out, unsigned tid) {
     auto [value, exists] = dict_->Get(*(uint64_t *)key);
-    if (exists)
-      *(uint64_t *)value_out = value;
+    if (exists) *(uint64_t *)value_out = value;
     return exists;
   }
 

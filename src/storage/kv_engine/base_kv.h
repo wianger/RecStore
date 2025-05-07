@@ -4,24 +4,16 @@
 #include <tuple>
 
 #include "base/array.h"
+#include "base/json.h"
 #include "base/log.h"
-
-#define XMH_SIMPLE_MALLOC
 
 using boost::coroutines2::coroutine;
 
+#define XMH_SIMPLE_MALLOC
+
 struct BaseKVConfig {
-  int value_size = 0;
-  int num_threads = 0;
-  int corotine_per_thread = 0;
-  int max_batch_keys_size = 0;
-  size_t pool_size = 0;
-  int64_t hash_size = 0;
-  int64_t capacity = 0;
-  int64_t memory_pool_size = 0;
-  std::string path = "";
-  std::string library_file = "";
-  std::string hash_name = "clht";
+  int num_threads_ = 0;
+  json json_config_;  // add your custom config in this field
 };
 
 class BaseKV {
@@ -38,7 +30,7 @@ class BaseKV {
 
   virtual void BatchPut(coroutine<void>::push_type &sink,
                         base::ConstArray<uint64_t> keys,
-                        std::vector<base::ConstArray<float>> &values,
+                        std::vector<base::ConstArray<float>> *values,
                         unsigned tid) {
     LOG(FATAL) << "not implemented";
   };
@@ -54,13 +46,11 @@ class BaseKV {
     LOG(FATAL) << "not implemented";
   }
 
-  virtual std::pair<uint64_t, uint64_t> RegisterPMAddr() const = 0;
+  virtual void DebugInfo() const {}
 
   virtual void BulkLoad(base::ConstArray<uint64_t> keys, const void *value) {
     LOG(FATAL) << "not implemented";
   };
-
-  virtual void DebugInfo() const {};
 
   virtual void clear() { LOG(FATAL) << "not implemented"; };
 };

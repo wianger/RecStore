@@ -1,6 +1,5 @@
 ARG IMAGE_VERSION=23.06-tf2-py3
 FROM nvcr.io/nvidia/tensorflow:${IMAGE_VERSION} AS devel
-
 ARG username=xieminhui
 ARG uid=1000
 
@@ -11,18 +10,12 @@ ARG SM="60;61;70;75;80"
 ARG VAL_MODE=OFF
 ARG ENABLE_MULTINODES=ON
 
-# RUN apt-get remove --auto-remove -y python3 cmake && \
-#     rm -rfv /usr/local/mpi /usr/local/ucx
-
 RUN apt-get remove --auto-remove -y cmake  && \
     rm -rfv /usr/local/mpi /usr/local/ucx
 
 
 # ENV http_proxy=http://127.0.0.1:7890
 # ENV https_proxy=http://127.0.0.1:7890
-
-# ENV http_proxy=http://192.168.1.30:7890
-# ENV https_proxy=http://192.168.1.30:7890
 
 ENV no_proxy=localhost,127.0.0.1,kwaidc.com
 ENV CC=/usr/bin/gcc
@@ -113,12 +106,9 @@ USER ${uid}:${uid}
 WORKDIR /home/${username}
 
 RUN mkdir .ssh
-RUN echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCiMP0T//ukA8H5xY+l6yxvC/gc77RoREKX5LKhoYjosswCM9pGDHLH0f2DkS2y4sTX219VBz0bX3xiFcczOca0jH1ABEm0oB46y1zmUxyDDNPoCtaACo0toQaSSjeORIvQWYdwpKwZAAJqrGAAxvNDSoT8RsSXhSMu5ETxitJHknCP1kuApM/KGt48Qeu6UCrETb7q7bRZYxo0Vcs6bDs331eRzo4PDRP2/3YUefE/Ae/pSU2G/8GaFgHq8Vj15TKGqZn5Zesykk1mlYL7CLczGhyEQqf1/HytfaHMQdsMgnrdUvlVjeiTI4h5G/y4wfDTLFi50zjJogFrA8FDEPsyTq56tO6q2zX3vck1V/1aPgrAJ6JRX0mgQUrRC2uBFw4f0n/RzVhOO1aztiq6bHiUXMRXMwRQZ/XQ26AoOEh+cabI46pPKqsa+9WLwFH+7A4eLzNx6Hox0K2oikQpyVUJSUpeQDm81fVcRd2oFwKJGUK2U45ZGoSBdiHFUim4DeE= xieminhui@xieminhuideMac-mini.local' >>.ssh/authorized_keys
 RUN chmod 600 .ssh/authorized_keys
 
 RUN alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
-# ENV PYTHONPATH=/data/project/HugeCTR/build/lib
-
 RUN sudo rm -f /opt/conda/lib/libtinfo*
 RUN sudo rm -rf /opt/conda/include/grpc*
 

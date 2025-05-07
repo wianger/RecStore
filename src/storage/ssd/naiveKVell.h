@@ -20,8 +20,10 @@ template <typename KEY_T>
 class SsdPsInterface {
  public:
   virtual void BulkLoad(int keys_size, const void *value) = 0;
-  virtual void BatchGet(ConstArray<KEY_T> keys_array, ConstArray<uint64_t> index, void *dst, int tid) = 0;
-  virtual void BatchPut(ConstArray<uint64_t> keys_array, const void *value, int tid) = 0;
+  virtual void BatchGet(ConstArray<KEY_T> keys_array,
+                        ConstArray<uint64_t> index, void *dst, int tid) = 0;
+  virtual void BatchPut(ConstArray<uint64_t> keys_array, const void *value,
+                        int tid) = 0;
   virtual ~SsdPsInterface(){};
 };
 
@@ -29,24 +31,29 @@ template <typename KEY_T>
 class NaiveArraySSD : public SsdPsInterface<KEY_T> {
  public:
   NaiveArraySSD(int VALUE_SIZE, uint64_t vector_capability, int thread_num)
-      : VALUE_SIZE(VALUE_SIZE), vector_capability(vector_capability), thread_num(thread_num) {
+      : VALUE_SIZE(VALUE_SIZE),
+        vector_capability(vector_capability),
+        thread_num(thread_num) {
     CHECK(thread_num <= MAX_QUEUE_NUM);
     ssd_ = ssdps::SpdkWrapper::create(thread_num);
     ssd_->Init();
-    rawbouncedBuffer_ = (char *)spdk_malloc(kBouncedBuffer_ * ssd_->GetLBASize() * thread_num, 0, NULL,
-                                 SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-                            
+    rawbouncedBuffer_ =
+        (char *)spdk_malloc(kBouncedBuffer_ * ssd_->GetLBASize() * thread_num,
+                            0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+
     // cudaMallocHost(&bouncedBuffer_, kBouncedBuffer_ * ssd_->GetLBASize(),
     //                cudaHostAllocDefault);
     CHECK(rawbouncedBuffer_);
     const int nr_batch_pages = 32;
     int64_t pinned_bytes = ssd_->GetLBASize() * nr_batch_pages;
-    rawwrite_buffer_ = (char *)spdk_malloc(
-        pinned_bytes * thread_num, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+    rawwrite_buffer_ =
+        (char *)spdk_malloc(pinned_bytes * thread_num, 0, NULL,
+                            SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
     CHECK(rawwrite_buffer_) << "spdk_malloc";
 
     for (int i = 0; i < thread_num; i++) {
-      bouncedBuffer_[i] = (char *)rawbouncedBuffer_ + i * kBouncedBuffer_ * ssd_->GetLBASize();
+      bouncedBuffer_[i] =
+          (char *)rawbouncedBuffer_ + i * kBouncedBuffer_ * ssd_->GetLBASize();
       write_buffer_[i] = (char *)rawwrite_buffer_ + i * pinned_bytes;
     }
   }
@@ -57,7 +64,7 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     int64_t lba_no = index * VALUE_SIZE / ssd_->GetLBASize();
     int in_lba_offset = (index * VALUE_SIZE) % ssd_->GetLBASize();
     return std::make_pair(lba_no, in_lba_offset);
-#else 
+#else
 #if 0
     int64_t lba_no = index * 1;
     int in_lba_offset = 0;
@@ -79,28 +86,26 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     return lba_no * ssd_->GetLBASize() + in_lba_offset;
   }
 
-  void BatchPut(ConstArray<uint64_t> keys_array, const void *value, int tid) override {
+  void BatchPut(ConstArray<uint64_t> keys_array, const void *value,
+                int tid) override {
     const int nr_batch_pages = 32;
     int i = 0;
-    while(i < keys_array.Size()) {
+    while (i < keys_array.Size()) {
       int batched_size = std::min(nr_batch_pages, keys_array.Size() - i);
-      SubBulkLoad(
-          batched_size,
-          keys_array.SubArray(i, i + batched_size), (char *)value + VALUE_SIZE * i,
-          write_buffer_[tid], tid);
+      SubBulkLoad(batched_size, keys_array.SubArray(i, i + batched_size),
+                  (char *)value + VALUE_SIZE * i, write_buffer_[tid], tid);
       i += batched_size;
     }
   }
 
-  void BatchPut(ConstArray<uint64_t> keys_array, std::vector<ConstArray<float>> &value, int tid) {
+  void BatchPut(ConstArray<uint64_t> keys_array,
+                std::vector<ConstArray<float>> &value, int tid) {
     const int nr_batch_pages = 32;
     int i = 0;
-    while(i < keys_array.Size()) {
+    while (i < keys_array.Size()) {
       int batched_size = std::min(nr_batch_pages, keys_array.Size() - i);
-      SubBulkLoad(
-          batched_size,
-          keys_array.SubArray(i, i + batched_size), value, i,
-          write_buffer_[tid], tid);
+      SubBulkLoad(batched_size, keys_array.SubArray(i, i + batched_size), value,
+                  i, write_buffer_[tid], tid);
       i += batched_size;
     }
   }
@@ -109,7 +114,7 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     // LOG(ERROR) << "ArraySSD: Load " << ssd_pages << " pages ("
     //            << ssd_pages * ssd_->GetLBASize() / 1024 / 1024 << "MB)";
     std::vector<uint64_t> keys_vec;
-    for(int i = 0; i < keys_size; i++) {
+    for (int i = 0; i < keys_size; i++) {
       keys_vec.push_back(i);
     }
     BatchPut(ConstArray<uint64_t>(keys_vec), value, 0);
@@ -128,7 +133,8 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
   // of dst matrix (i.e. we need * VALUE_SIZE)
   void BatchGet(ConstArray<KEY_T> keys_array, ConstArray<uint64_t> index,
                 void *dst, int tid) override {
-    static thread_local std::vector<ReadCompleteCBContext> cb_contexts(kBouncedBuffer_);
+    static thread_local std::vector<ReadCompleteCBContext> cb_contexts(
+        kBouncedBuffer_);
     CHECK_LE(keys_array.Size(), kBouncedBuffer_);
     bool orderedByIndex = true;
     if (index.Data() != nullptr) {
@@ -179,9 +185,8 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
  private:
   // keys_array:  [5,6,7]
   // indexs_array: [5,6,7]
-  void SubBulkLoad(int keys_size,
-                   base::ConstArray<uint64_t> indexs_array, const void *value,
-                   char *pinned_value, int tid) {
+  void SubBulkLoad(int keys_size, base::ConstArray<uint64_t> indexs_array,
+                   const void *value, char *pinned_value, int tid) {
     CHECK(keys_size == indexs_array.Size());
 
     int64_t subarray_size = keys_size;
@@ -199,7 +204,8 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
         do {
           ret = ssd_->SubmitWriteCommand(
               pinned_value + submit_counter * ssd_->GetLBASize(),
-              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter, tid);
+              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter,
+              tid);
           ssd_->PollCompleteQueue(tid);
         } while (ret != 0);
         submit_counter++;
@@ -221,7 +227,8 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
     while (submit_counter != finished_counter) ssd_->PollCompleteQueue(tid);
   }
 
-  void SubBulkLoad(int keys_size, base::ConstArray<uint64_t> indexs_array, std::vector<ConstArray<float>> &value, int start,
+  void SubBulkLoad(int keys_size, base::ConstArray<uint64_t> indexs_array,
+                   std::vector<ConstArray<float>> &value, int start,
                    char *pinned_value, int tid) {
     CHECK(keys_size == indexs_array.Size());
 
@@ -240,7 +247,8 @@ class NaiveArraySSD : public SsdPsInterface<KEY_T> {
         do {
           ret = ssd_->SubmitWriteCommand(
               pinned_value + submit_counter * ssd_->GetLBASize(),
-              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter, tid);
+              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter,
+              tid);
           ssd_->PollCompleteQueue(tid);
         } while (ret != 0);
         submit_counter++;

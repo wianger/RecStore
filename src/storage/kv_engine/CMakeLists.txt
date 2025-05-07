@@ -21,7 +21,7 @@ endif()
 
 target_link_libraries(
   kv_engine
-  INTERFACE pet_kv
+  INTERFACE pet_kv dram_hash
   # spdk_wrapper
 )
   # INTERFACE pet_kv dash_hash PMHashPCLHT PMHashLevel PMHashClevel PMHashCCEHVM)
@@ -32,9 +32,9 @@ target_sources(
   kv_engine INTERFACE kv_engine_register.cc)
 # KV engine factory done
 
-add_executable(perf_kv_engine benchmark_kv_engine.cc)
-target_link_libraries(perf_kv_engine PUBLIC pthread base kv_engine ps_common mayfly)
-target_link_libraries(perf_kv_engine PUBLIC OpenMP::OpenMP_CXX)
+add_executable(benchmark_kv_engine benchmark_kv_engine.cc)
+target_link_libraries(benchmark_kv_engine PUBLIC pthread base kv_engine ps_common)
+target_link_libraries(benchmark_kv_engine PUBLIC OpenMP::OpenMP_CXX)
 
 add_executable(bench benchmark_zipf.cc)
 target_link_libraries(bench PUBLIC pthread base kv_engine)

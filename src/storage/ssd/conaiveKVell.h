@@ -2,9 +2,9 @@
 #include <folly/GLog.h>
 #include <folly/Portability.h>
 #include <folly/system/MemoryMapping.h>
-#include <boost/coroutine2/all.hpp>
 
 #include <boost/algorithm/string/join.hpp>
+#include <boost/coroutine2/all.hpp>
 #include <experimental/filesystem>
 #include <filesystem>
 #include <iostream>
@@ -22,24 +22,29 @@ template <typename KEY_T>
 class CoNaiveArraySSD {
  public:
   CoNaiveArraySSD(int VALUE_SIZE, uint64_t vector_capability, int thread_num)
-      : VALUE_SIZE(VALUE_SIZE), vector_capability(vector_capability), thread_num(thread_num) {
+      : VALUE_SIZE(VALUE_SIZE),
+        vector_capability(vector_capability),
+        thread_num(thread_num) {
     CHECK(thread_num <= MAX_QUEUE_NUM);
     ssd_ = ssdps::SpdkWrapper::create(thread_num);
     ssd_->Init();
-    rawbouncedBuffer_ = (char *)spdk_malloc(kBouncedBuffer_ * ssd_->GetLBASize() * thread_num, 0, NULL,
-                                 SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-                            
+    rawbouncedBuffer_ =
+        (char *)spdk_malloc(kBouncedBuffer_ * ssd_->GetLBASize() * thread_num,
+                            0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+
     // cudaMallocHost(&bouncedBuffer_, kBouncedBuffer_ * ssd_->GetLBASize(),
     //                cudaHostAllocDefault);
     CHECK(rawbouncedBuffer_);
     const int nr_batch_pages = 32;
     int64_t pinned_bytes = ssd_->GetLBASize() * nr_batch_pages;
-    rawwrite_buffer_ = (char *)spdk_malloc(
-        pinned_bytes * thread_num, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+    rawwrite_buffer_ =
+        (char *)spdk_malloc(pinned_bytes * thread_num, 0, NULL,
+                            SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
     CHECK(rawwrite_buffer_) << "spdk_malloc";
 
     for (int i = 0; i < thread_num; i++) {
-      bouncedBuffer_[i] = (char *)rawbouncedBuffer_ + i * kBouncedBuffer_ * ssd_->GetLBASize();
+      bouncedBuffer_[i] =
+          (char *)rawbouncedBuffer_ + i * kBouncedBuffer_ * ssd_->GetLBASize();
       write_buffer_[i] = (char *)rawwrite_buffer_ + i * pinned_bytes;
     }
   }
@@ -50,7 +55,7 @@ class CoNaiveArraySSD {
     int64_t lba_no = index * VALUE_SIZE / ssd_->GetLBASize();
     int in_lba_offset = (index * VALUE_SIZE) % ssd_->GetLBASize();
     return std::make_pair(lba_no, in_lba_offset);
-#else 
+#else
 #if 0
     int64_t lba_no = index * 1;
     int in_lba_offset = 0;
@@ -75,25 +80,22 @@ class CoNaiveArraySSD {
   void BatchPut(ConstArray<uint64_t> keys_array, const void *value, int tid) {
     const int nr_batch_pages = 32;
     int i = 0;
-    while(i < keys_array.Size()) {
+    while (i < keys_array.Size()) {
       int batched_size = std::min(nr_batch_pages, keys_array.Size() - i);
-      SubBulkLoad(
-          batched_size,
-          keys_array.SubArray(i, i + batched_size), (char *)value + VALUE_SIZE * i,
-          write_buffer_[tid], tid);
+      SubBulkLoad(batched_size, keys_array.SubArray(i, i + batched_size),
+                  (char *)value + VALUE_SIZE * i, write_buffer_[tid], tid);
       i += batched_size;
     }
   }
 
-  void BatchPut(ConstArray<uint64_t> keys_array, std::vector<ConstArray<float>> &value, int tid) {
+  void BatchPut(ConstArray<uint64_t> keys_array,
+                std::vector<ConstArray<float>> &value, int tid) {
     const int nr_batch_pages = 32;
     int i = 0;
-    while(i < keys_array.Size()) {
+    while (i < keys_array.Size()) {
       int batched_size = std::min(nr_batch_pages, keys_array.Size() - i);
-      SubBulkLoad(
-          batched_size,
-          keys_array.SubArray(i, i + batched_size), value, i,
-          write_buffer_[tid], tid);
+      SubBulkLoad(batched_size, keys_array.SubArray(i, i + batched_size), value,
+                  i, write_buffer_[tid], tid);
       i += batched_size;
     }
   }
@@ -102,7 +104,7 @@ class CoNaiveArraySSD {
     // LOG(ERROR) << "ArraySSD: Load " << ssd_pages << " pages ("
     //            << ssd_pages * ssd_->GetLBASize() / 1024 / 1024 << "MB)";
     std::vector<uint64_t> keys_vec;
-    for(int i = 0; i < keys_size; i++) {
+    for (int i = 0; i < keys_size; i++) {
       keys_vec.push_back(i);
     }
     BatchPut(ConstArray<uint64_t>(keys_vec), value, 0);
@@ -119,9 +121,10 @@ class CoNaiveArraySSD {
 
   // batch get keys and save to dst with index, the index stores the slot number
   // of dst matrix (i.e. we need * VALUE_SIZE)
-  void BatchGet(coroutine<void>::push_type& sink, ConstArray<KEY_T> keys_array, ConstArray<uint64_t> index,
-                void *dst, int tid) {
-    static thread_local std::vector<ReadCompleteCBContext> cb_contexts(kBouncedBuffer_);
+  void BatchGet(coroutine<void>::push_type &sink, ConstArray<KEY_T> keys_array,
+                ConstArray<uint64_t> index, void *dst, int tid) {
+    static thread_local std::vector<ReadCompleteCBContext> cb_contexts(
+        kBouncedBuffer_);
     CHECK_LE(keys_array.Size(), kBouncedBuffer_);
     bool orderedByIndex = true;
     if (index.Data() != nullptr) {
@@ -174,9 +177,8 @@ class CoNaiveArraySSD {
  private:
   // keys_array:  [5,6,7]
   // indexs_array: [5,6,7]
-  void SubBulkLoad(int keys_size,
-                   base::ConstArray<uint64_t> indexs_array, const void *value,
-                   char *pinned_value, int tid) {
+  void SubBulkLoad(int keys_size, base::ConstArray<uint64_t> indexs_array,
+                   const void *value, char *pinned_value, int tid) {
     CHECK(keys_size == indexs_array.Size());
 
     int64_t subarray_size = keys_size;
@@ -194,7 +196,8 @@ class CoNaiveArraySSD {
         do {
           ret = ssd_->SubmitWriteCommand(
               pinned_value + submit_counter * ssd_->GetLBASize(),
-              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter, tid);
+              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter,
+              tid);
           ssd_->PollCompleteQueue(tid);
         } while (ret != 0);
         submit_counter++;
@@ -216,7 +219,8 @@ class CoNaiveArraySSD {
     while (submit_counter != finished_counter) ssd_->PollCompleteQueue(tid);
   }
 
-  void SubBulkLoad(int keys_size, base::ConstArray<uint64_t> indexs_array, std::vector<ConstArray<float>> &value, int start,
+  void SubBulkLoad(int keys_size, base::ConstArray<uint64_t> indexs_array,
+                   std::vector<ConstArray<float>> &value, int start,
                    char *pinned_value, int tid) {
     CHECK(keys_size == indexs_array.Size());
 
@@ -235,7 +239,8 @@ class CoNaiveArraySSD {
         do {
           ret = ssd_->SubmitWriteCommand(
               pinned_value + submit_counter * ssd_->GetLBASize(),
-              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter, tid);
+              ssd_->GetLBASize(), old_page_id, BulkLoadCB, &finished_counter,
+              tid);
           ssd_->PollCompleteQueue(tid);
         } while (ret != 0);
         submit_counter++;

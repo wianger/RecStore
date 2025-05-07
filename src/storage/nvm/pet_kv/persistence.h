@@ -4,14 +4,14 @@
 
 static const int kCACHELINE_SIZE = 64;
 
-#define IF_Persistence(something)                                              \
-  if (Persistence) {                                                           \
-    something                                                                  \
+#define IF_Persistence(something) \
+  if (Persistence) {              \
+    something                     \
   }
 
 namespace base {
 class FENCE {
-public:
+ public:
   static void mfence() { asm volatile("mfence" ::: "memory"); }
   static void lfence() { asm volatile("lfence" ::: "memory"); }
   static void sfence() { asm volatile("sfence" ::: "memory"); }
@@ -42,4 +42,4 @@ inline void clflushopt_range(void *des, size_t size) {
   }
   FENCE::sfence();
 }
-}; // namespace base
+};  // namespace base
