@@ -82,51 +82,54 @@ def main():
 
     else:  # 3090
         # 大数据集KG
-        each = exp_config.ExpKGScalability()
-        each.SetLogDir(f"{LOG_PREFIX}/1020-KG-scale-large-{suffix}")
-        each.SetFilter(lambda config: config["dataset"] == "wikikg90M" and config['nr_gpus']<=6)
-        exp_lists.append(each)
-        
         each = exp_config.ExpKGSensitiveModel()
-        each.SetLogDir(f"{LOG_PREFIX}/1020-kgsen-model-{suffix}")
+        each.SetLogDir(f"{LOG_PREFIX}/1022-kgsen-model-{suffix}")
+        # each.SetFilter(lambda config: config['nr_gpus']<=6)
         exp_lists.append(each)
 
-        each = exp_config.ExpKGSensitiveFlushThreads()
-        each.SetLogDir(f"{LOG_PREFIX}/1020-kgsen-threads-{suffix}")
-        exp_lists.append(each)
-
-        return exp_lists
-        
 
         # sensitive
         each = exp_config.ExpRecSensitiveModelPerf()
-        each.SetLogDir(f"{LOG_PREFIX}/1016-rec-sen-model-{suffix}")
+        each.SetLogDir(f"{LOG_PREFIX}/1022-rec-sen-model-{suffix}")
         exp_lists.append(each)
 
         each = exp_config.ExpRecSensitiveFlushThreads()
-        each.SetLogDir(f"{LOG_PREFIX}/1016-rec-sen-threads-{suffix}")
+        each.SetLogDir(f"{LOG_PREFIX}/1022-rec-sen-threads-{suffix}")
         exp_lists.append(each)
 
 
 		# 大数据集REC
         each = exp_config.ExpRecPerf()
-        each.SetLogDir(f"{LOG_PREFIX}/1016-Rec-large-{suffix}")
-        each.SetFilter(lambda config: config["dataset"] == "criteoTB"  and config['num_workers']<=6)
+        each.SetLogDir(f"{LOG_PREFIX}/1022-Rec-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "criteoTB")
         exp_lists.append(each)
 
         # # 用这个
         each = exp_config.ExpMicroPerfEmb()
-        each.SetLogDir(f"{LOG_PREFIX}/1011-micro-{suffix}")
+        each.SetLogDir(f"{LOG_PREFIX}/1022-micro-{suffix}")
         exp_lists.append(each)
+
+        each = exp_config.ExpRecPerf()
+        each.SetLogDir(f"{LOG_PREFIX}/1022-Rec-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] != "criteoTB")
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGScalability()
+        each.SetLogDir(f"{LOG_PREFIX}/1022-KG-scale-large-{suffix}")
+        each.SetFilter(lambda config: config["dataset"] == "wikikg90M")
+        # each.SetFilter(lambda config: config['nr_gpus']<=6)
+        exp_lists.append(each)
+
+        each = exp_config.ExpKGSensitiveFlushThreads()
+        each.SetLogDir(f"{LOG_PREFIX}/1022-kgsen-threads-{suffix}")
+        # each.SetFilter(lambda config: config['nr_gpus']<=6)
+        exp_lists.append(each)
+
+        return exp_lists
 
         # each = exp_config.ExpRealMotivationPerfEmb()
         # each.SetLogDir(f'{LOG_PREFIX}/1011-real-motiv-{suffix}')
         # exp_lists.append(each)
-
-        each = exp_config.ExpRecPerf()
-        each.SetLogDir(f"{LOG_PREFIX}/1011-Rec-{suffix}")
-        each.SetFilter(lambda config: config["dataset"] != "criteoTB")
-        exp_lists.append(each)
 
         each = exp_config.ExpRecMotivation()
         each.SetLogDir(f"{LOG_PREFIX}/1011-real-motiv-rec-{suffix}")

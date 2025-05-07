@@ -18,7 +18,7 @@ def ConvertHostNumaList2Host(host_numa_lists):
 # DIR_PATH = "/home/xieminhui/RecStore/src/framework_adapters/torch/python"
 DIR_PATH = "/home/xieminhui/RecStore/src/executable"
 
-NR_ALL_CARDS_DUE_TO_ERROR = 6
+NR_ALL_CARDS_DUE_TO_ERROR = 8
 
 def GswLock():
     lock_file = "/tmp/xmh_gsw_lock"
@@ -1428,7 +1428,7 @@ class ExpKGSensitiveFlushThreads(GNNExperiment):
                         0.05,
                     ],
                     "batch_size": [1200],
-                    "nr_gpus": [8],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR],
                 },
                 {
                     "dataset": ["Freebase"],
@@ -1437,7 +1437,7 @@ class ExpKGSensitiveFlushThreads(GNNExperiment):
                         0.05,
                     ],
                     "batch_size": [2000],
-                    "nr_gpus": [8],
+                    "nr_gpus": [NR_ALL_CARDS_DUE_TO_ERROR],
                 },
             ],
             "binding2": [
@@ -1452,11 +1452,6 @@ class ExpKGSensitiveFlushThreads(GNNExperiment):
                     "cached_emb_type": ["None"],
                     "backwardMode": ["CppSync"],
                 },
-                # {
-                #     "use_my_emb": ["false"],
-                #     "cached_emb_type": ["None"],
-                #     "backwardMode": ["CppSync"],
-                # },
             ],
             "max_step": [500],
             "log_interval": [100],
