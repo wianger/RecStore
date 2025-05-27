@@ -10,7 +10,7 @@ PROJECT_PATH="$(cd .. && pwd)"
 sudo apt install -y libmemcached-dev 
 
 
-ln -sf ${PROJECT_PATH}/docker_config/.bashrc /home/${USER}/.bashrc
+ln -sf ${PROJECT_PATH}/dockerfiles/docker_config/.bashrc /home/${USER}/.bashrc
 source /home/${USER}/.bashrc
 
 

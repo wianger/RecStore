@@ -28,7 +28,7 @@ static bool check_eq_2d(const std::vector<std::vector<float>> &a,
 int main(int argc, char **argv) {
   folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread(2000);
-  ParameterClient client("127.0.0.1", 15000, 1);
+  GRPCParameterClient client("127.0.0.1", 15000, 1);
   std::random_device
       rd;  // Will be used to obtain a seed for the random number engine
   std::mt19937 gen(rd());  // Standard mersenne_twister_engine seeded with rd()

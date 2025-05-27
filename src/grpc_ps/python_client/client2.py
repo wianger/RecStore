@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 
-class ParameterClient:
+class GRPCParameterClient:
     def __init__(self, host: str, port: int, shard: int, emb_dim: int) -> None:
         assert(type(host) == str)
         assert(type(port) == int)

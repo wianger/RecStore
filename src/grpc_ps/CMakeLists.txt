@@ -24,12 +24,12 @@ target_link_libraries(
     # ${TORCH_LIBRARIES}
 )
 
-# add_executable(grpc_ps_client_test
-#     grpc_ps_client_test.cpp 
-# )
-# target_link_libraries(grpc_ps_client_test PUBLIC
-#     grpc_ps_client
-# )
+add_executable(grpc_ps_client_test
+    grpc_ps_client_test.cpp 
+)
+target_link_libraries(grpc_ps_client_test PUBLIC
+    grpc_ps_client
+)
 
 
 add_executable(grpc_ps_server
@@ -66,15 +66,14 @@ target_link_libraries(grpc_ps_server PUBLIC
 # )
 
 
-# add_library(grpc_ps_client_python MODULE
-#     grpc_ps_client_python.cpp
-# )
+add_library(grpc_ps_client_python MODULE
+    grpc_ps_client_pytorch.cpp
+)
 
-# target_include_directories(grpc_ps_client_python PUBLIC ${TORCH_INCLUDE_DIRS})
+target_include_directories(grpc_ps_client_python PUBLIC ${TORCH_INCLUDE_DIRS})
 
-# target_link_libraries(grpc_ps_client_python PUBLIC
-#     grpc_ps_client
-#     ${TORCH_LIBRARIES}
-# )
-
-# target_link_libraries(grpc_ps_client_python PRIVATE Python3::Python)
+target_link_libraries(grpc_ps_client_python PUBLIC
+    grpc_ps_client
+    ${TORCH_LIBRARIES}
+    Python3::Python
+ )

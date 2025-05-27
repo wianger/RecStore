@@ -1,4 +1,4 @@
-from client import ParameterClient as Client
+from client import GRPCParameterClient as Client
 import argparse
 
 

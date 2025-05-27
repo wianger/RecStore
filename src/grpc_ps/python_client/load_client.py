@@ -1,5 +1,5 @@
 from loadGenerator import loadGenerator
-from client import ParameterClient as Client
+from client import GRPCParameterClient as Client
 from dataset import DatasetLoader
 import argparse, json
 

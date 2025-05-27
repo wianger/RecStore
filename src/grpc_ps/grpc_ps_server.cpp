@@ -11,28 +11,32 @@
 #include "base/array.h"
 #include "base/base.h"
 #include "base/timer.h"
+#include "base_ps/base_ps_server.h"
 #include "cache_ps_impl.h"
 #include "flatc.h"
 #include "parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
-
-#include "base_ps_server.h"
+#include "recstore_config.h"
 
 using grpc::Server;
 using grpc::ServerBuilder;
 using grpc::ServerContext;
 using grpc::Status;
 
-using xmhps::CommandRequest;
-using xmhps::CommandResponse;
-using xmhps::GetParameterRequest;
-using xmhps::GetParameterResponse;
-using xmhps::PSCommand;
-using xmhps::PutParameterRequest;
-using xmhps::PutParameterResponse;
+using recstoreps::CommandRequest;
+using recstoreps::CommandResponse;
+using recstoreps::GetParameterRequest;
+using recstoreps::GetParameterResponse;
+using recstoreps::PSCommand;
+using recstoreps::PutParameterRequest;
+using recstoreps::PutParameterResponse;
 
-class ParameterServiceImpl final : public xmhps::ParameterService::Service {
+DEFINE_string(config_path, RECSTORE_PATH "/src/grpc_ps/grpc_ps_config.json",
+              "config file path");
+
+class ParameterServiceImpl final
+    : public recstoreps::ParameterService::Service {
  public:
   ParameterServiceImpl(CachePS *cache_ps) { cache_ps_ = cache_ps; }
 
@@ -51,7 +55,6 @@ class ParameterServiceImpl final : public xmhps::ParameterService::Service {
     FB_LOG_EVERY_MS(INFO, 1000)
         << "[PS] Getting " << keys_array.Size() << " keys";
 
-  
     for (auto each : keys_array) {
       ParameterPack parameter_pack;
       cache_ps_->GetParameterRun2Completion(each, parameter_pack, 0);
@@ -122,11 +125,9 @@ class GRPCParameterServer : public BaseParameterServer {
  public:
   GRPCParameterServer() = default;
 
-  // void Init(const nlohmann::json &config) {}
-
   void Run() {
     std::string server_address("0.0.0.0:15000");
-    auto cache_ps = std::make_unique<CachePS>(33762591LL, 128, 1*1024*1024*1024LL, 8, 4, 65536);  // 1GB dict
+    auto cache_ps = std::make_unique<CachePS>(config_["cache_ps"]);
     ParameterServiceImpl service(cache_ps.get());
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -149,13 +150,9 @@ class GRPCParameterServer : public BaseParameterServer {
 int main(int argc, char **argv) {
   folly::Init(&argc, &argv);
   xmh::Reporter::StartReportThread(2000);
-  nlohmann::json ex = nlohmann::json::parse(R"(
-  {
-    "pi": 3.141,
-    "happy": true
-  }
-  )");
-
+  std::ifstream config_file(FLAGS_config_path);
+  nlohmann::json ex;
+  config_file >> ex;
   recstore::GRPCParameterServer ps;
   ps.Init(ex);
   ps.Run();

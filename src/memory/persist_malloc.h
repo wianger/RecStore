@@ -17,9 +17,10 @@
 
 #include "base/async_time.h"
 #include "base/bitmap.h"
+#include "base/counter.h"
+#include "base/hashtable.h"
 #include "malloc.h"
 #include "shm_file.h"
-// #include "pet_kv/shm_common.h"
 
 namespace base {
 
@@ -53,7 +54,7 @@ class PersistSimpleMalloc : public MallocApi {
   }
 
   char *New(int malloc_size) override {
-    CHECK_EQ(malloc_size, slab_size_);
+    CHECK_EQ(malloc_size, slab_size_)<< "Simple Malloc, size inconsistent";
     auto offset = allocated_.fetch_add(malloc_size);
     nr_malloc_++;
     // TODO allocate
@@ -501,4 +502,101 @@ class PersistMemoryPool : public MallocApi {
   base::Lock lock_;
   // different slab
 };
+
+class PersistLoopShmMalloc : public MallocApi {
+ public:
+  static const int max_fast_list_type = 32;
+  static const int max_fast_list_num = 1 << 20;
+  // filename: 文件名, 内存大小
+  PersistLoopShmMalloc(const std::string &filename, int64 memory_size);
+  // 如果分配内存不是固定的几种大小，且我们需要利用循环首次适应的 LRU 特性,
+  // 关闭这个功能
+  void DisableFastMalloc() { enable_fast_malloc_ = false; }
+  char *New(int memory_size);
+  bool Free(void *memory_data);
+
+  bool load_success() const { return load_success_; }
+  void GetMallocsAppend(std::vector<char *> *mallocs_data) const;
+  void GetMallocsAppend(std::vector<int64> *mallocs_offset) const;
+  std::string GetInfo() const {
+    std::string info;
+    info.append(folly::stringPrintf("used/healthy/total block: %ld/%ld/%ld\n",
+                                    total_used_, healthy_used_, block_num_));
+    info.append(total_fast_malloc_.Display() + "\n");
+    info.append(total_loop_malloc_.Display() + "\n");
+    return info;
+  }
+  void Initialize() {
+    total_used_ = 0;
+    total_malloc_ = 0;
+    last_malloc_block_ = 0;
+    memset(used_bits_, 0, block_num_ >> 3);
+    clflushopt_range(used_bits_, block_num_ >> 3);
+  }
+  // 一共使用了多少 8 字节的 block
+  int64 total_used() const { return total_used_; }
+  // 一共分配了多少块内存, 和 GetUsedBlockAppend 对应
+  uint64 total_malloc() const { return total_malloc_; }
+  bool Healthy() const { return total_used_ <= healthy_used_; }
+
+  char *GetMallocData(int64 offset) const {
+    if (offset < 8 || (offset & 7) != 0 || offset > block_num_ * 8L)
+      return NULL;
+    return data_ + offset;
+  }
+  int GetMallocSize(int64 offset) const {
+    if (offset == block_num_ * 8L) return 0;
+    if (offset < 8 || (offset & 7) != 0 || offset > block_num_ * 8L) return -1;
+    return Block()[BlockIndex(offset) - 1];
+  }
+  int64 GetMallocOffset(const char *data) const {
+    int64 offset = data - data_;
+    if (offset < 8 || (offset & 7) != 0 || offset > block_num_ * 8L) return -1;
+    return offset;
+  }
+  int GetMallocSize(const char *data) const {
+    int64 offset = GetMallocOffset(data);
+    if (offset == block_num_ * 8L) return 0;
+    if (offset < 0) return -1;
+    return Block()[BlockIndex(offset) - 1];
+  }
+
+  void AddMallocs4Recovery(int64_t shm_offset);
+
+ private:
+  static int BlockNum(int memory_size) { return (memory_size + 7) >> 3; }
+  static int64 BlockIndex(int64 offset) { return offset >> 3; }
+  bool UnusedMemoryValid(int64 block_index) const;
+  bool MemoryValid() const;
+  bool Used(int64 index) const {
+    return (used_bits_[index >> 6] & (1ul << (index & 63))) != 0;
+  }
+  const uint64 *Block() const {
+    return reinterpret_cast<const uint64 *>(data_);
+  }
+  uint64 *Block() { return reinterpret_cast<uint64 *>(data_); }
+  void UseBlock(int64 index) { used_bits_[index >> 6] |= 1ul << (index & 63); }
+  void FreeBlock(int64 index) {
+    used_bits_[index >> 6] &= ~(1ul << (index & 63));
+  }
+  ShmFile shm_file_;
+  base::Lock lock_;
+  uint64 *used_bits_;
+  char *data_;
+  char *start_address_;
+  int64 memory_size_;
+  int64 block_num_;
+  int64 last_malloc_block_;
+  int64 total_used_;
+  int64 total_malloc_;
+  int64 healthy_used_;
+  bool load_success_;
+  bool enable_fast_malloc_ = true;
+  StdAutoDeleteHash<std::deque<int64>> fast_malloc_lists_;
+  Counter total_fast_malloc_{"total_fast_malloc"};
+  Counter total_loop_malloc_{"total_loop_malloc"};
+
+  DISALLOW_COPY_AND_ASSIGN(PersistLoopShmMalloc);
+};
+
 }  // namespace base

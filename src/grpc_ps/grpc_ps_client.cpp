@@ -20,21 +20,19 @@ using grpc::Channel;
 using grpc::ClientContext;
 using grpc::Status;
 using grpc::ClientAsyncResponseReader;
-using xmhps::CommandRequest;
-using xmhps::CommandResponse;
-using xmhps::GetParameterRequest;
-using xmhps::GetParameterResponse;
-using xmhps::PSCommand;
-using xmhps::PutParameterRequest;
-using xmhps::PutParameterResponse;
+using recstoreps::CommandRequest;
+using recstoreps::CommandResponse;
+using recstoreps::GetParameterRequest;
+using recstoreps::GetParameterResponse;
+using recstoreps::PSCommand;
+using recstoreps::PutParameterRequest;
+using recstoreps::PutParameterResponse;
 
 
 DEFINE_int32(get_parameter_threads, 4, "get clients per shard");
 DEFINE_bool(parameter_client_random_init, false, "");
 
-// static const int MAX_PARAMETER_BATCH = 16384;
-
-ParameterClient::ParameterClient(const std::string &host, int port, int shard)
+GRPCParameterClient::GRPCParameterClient(const std::string &host, int port, int shard)
     : host_(host),
       port_(port),
       shard_(shard),
@@ -44,12 +42,12 @@ ParameterClient::ParameterClient(const std::string &host, int port, int shard)
                                  grpc::InsecureChannelCredentials());
   for (int i = 0; i < nr_clients_; i++) {
     stubs_.push_back(nullptr);
-    stubs_[i] = xmhps::ParameterService::NewStub(channel_);
+    stubs_[i] = recstoreps::ParameterService::NewStub(channel_);
     LOG(INFO) << "Init PS Client Shard " << i;
   }
 }
 
-bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
+bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys, float *values,
                                    bool perf) {
   if (FLAGS_parameter_client_random_init) {
     CHECK(0) << "todo implement";
@@ -129,7 +127,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys, float *values,
   return true;
 }
 
-bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
+bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys,
                                    std::vector<std::vector<float>> *values,
                                    bool perf) {
   if (FLAGS_parameter_client_random_init) {
@@ -211,7 +209,7 @@ bool ParameterClient::GetParameter(ConstArray<uint64_t> &keys,
   return true;
 }
 
-bool ParameterClient::ClearPS() {
+bool GRPCParameterClient::ClearPS() {
   CommandRequest request;
   CommandResponse response;
   request.set_command(PSCommand::CLEAR_PS);
@@ -220,7 +218,7 @@ bool ParameterClient::ClearPS() {
   return status.ok();
 }
 
-bool ParameterClient::LoadFakeData(int64_t data){
+bool GRPCParameterClient::LoadFakeData(int64_t data){
   CommandRequest request;
   CommandResponse response;
   request.set_command(PSCommand::LOAD_FAKE_DATA);
@@ -230,7 +228,7 @@ bool ParameterClient::LoadFakeData(int64_t data){
   return status.ok();
 }
 
-bool ParameterClient::LoadCkpt(
+bool GRPCParameterClient::LoadCkpt(
     const std::vector<std::string> &model_config_path,
     const std::vector<std::string> &emb_file_path) {
   CommandRequest request;
@@ -248,7 +246,7 @@ bool ParameterClient::LoadCkpt(
   return status.ok();
 }
 
-bool ParameterClient::PutParameter(
+bool GRPCParameterClient::PutParameter(
     const std::vector<uint64_t> &keys,
     const std::vector<std::vector<float>> &values) {
   for (int start = 0, index = 0; start < keys.size();

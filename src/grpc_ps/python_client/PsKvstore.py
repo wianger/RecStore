@@ -1,10 +1,10 @@
 from operator import itemgetter
 import torch as th
-from client import ParameterClient
+from client import GRPCParameterClient
 
 class KvStore:
     def __init__(self):
-        self.client = ParameterClient("127.0.0.1", 15000, 0, 32)
+        self.client = GRPCParameterClient("127.0.0.1", 15000, 0, 32)
         self.num_servers = 1
         
     def init_data(self, name, shape, dtype, part_policy=None, init_func=None, is_gdata=False):

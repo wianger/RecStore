@@ -9,7 +9,7 @@
 
 using boost::coroutines2::coroutine;
 
-#define XMH_SIMPLE_MALLOC
+// #define XMH_SIMPLE_MALLOC
 
 struct BaseKVConfig {
   int num_threads_ = 0;
@@ -19,7 +19,9 @@ struct BaseKVConfig {
 class BaseKV {
  public:
   virtual ~BaseKV() { std::cout << "exit BaseKV" << std::endl; }
+
   explicit BaseKV(const BaseKVConfig &config){};
+
   virtual void Util() {
     std::cout << "BaseKV Util: no impl" << std::endl;
     return;
@@ -52,5 +54,18 @@ class BaseKV {
     LOG(FATAL) << "not implemented";
   };
 
+  virtual void LoadFakeData(int64_t key_capacity, int value_size) {
+    std::vector<uint64_t> keys;
+    float *values = new float[value_size / sizeof(float) * key_capacity];
+    keys.reserve(key_capacity);
+    for (int64_t i = 0; i < key_capacity; i++) {
+      keys.push_back(i);
+    }
+    this->BulkLoad(base::ConstArray<uint64_t>(keys), values);
+    delete[] values;
+  };
+
   virtual void clear() { LOG(FATAL) << "not implemented"; };
+
+ protected:
 };

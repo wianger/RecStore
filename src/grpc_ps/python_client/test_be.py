@@ -1,12 +1,12 @@
 import torch as th
 import time
-from client import ParameterClient
+from client import GRPCParameterClient
 def main():
     keys_raw = []
     for i in range(100000):
         keys_raw.append(i)
     keys = th.tensor(keys_raw, dtype=th.int64)
-    client = ParameterClient("127.0.0.1", 15000, 0, 32)
+    client = GRPCParameterClient("127.0.0.1", 15000, 0, 32)
     times = 0.0
     cnt = 0
     while(1):

@@ -1,4 +1,6 @@
 #pragma once
+#include <folly/ProducerConsumerQueue.h>
+
 #include <algorithm>
 #include <atomic>
 #include <boost/coroutine2/all.hpp>
@@ -9,7 +11,6 @@
 #include "base/factory.h"
 #include "base/log.h"  // NOLINT
 #include "base/timer.h"
-#include "folly/ProducerConsumerQueue.h"
 #include "parameters.h"
 #include "storage/kv_engine/base_kv.h"
 
@@ -35,18 +36,13 @@ class CachePS {
  public:
   using key_t = uint64_t;
 
-  CachePS(int64_t dict_capability, int value_size, int64_t memory_pool_size,
-          int num_threads, int corotine_per_thread, int max_batch_keys_size)
-      : value_size(value_size) {
-    BaseKVConfig config;
-    config.num_threads_ = num_threads;
-    config.json_config_["capacity"] = dict_capability;
-    config.json_config_["value_size"] = value_size;
-    config.json_config_["memory_pool_size"] = memory_pool_size;
-    config.json_config_["corotine_per_thread"] = corotine_per_thread;
-    config.json_config_["max_batch_keys_size"] = max_batch_keys_size;
+  CachePS(json config) {
+    BaseKVConfig kv_config;
+    kv_config.num_threads_ = config["num_threads"].get<int>();
+    kv_config.json_config_ = config["base_kv_config"];
+    LOG(INFO) << "cache ps config: " << kv_config.json_config_.dump(2);
     auto p = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance(
-        "KVEngineMap", config);
+        config["kv_type"].get<std::string>(), kv_config);
     base_kv_.reset(p);
   }
 
@@ -62,14 +58,8 @@ class CachePS {
 
   void Clear() { base_kv_->clear(); }
 
-  void LoadFakeData(int64_t key_size) {
-    std::vector<uint64_t> keys;
-    float *values = new float[value_size / sizeof(float) * key_size];
-    for (int64_t i = 0; i < key_size; i++) {
-      keys.push_back(i);
-    }
-    base_kv_->BulkLoad(base::ConstArray<uint64_t>(keys), values);
-    delete[] values;
+  void LoadFakeData(int64_t key_capacity, int value_size) {
+    base_kv_->LoadFakeData(key_capacity, value_size);
   }
 
   bool LoadCkpt(const std::vector<std::string> &model_config_path,
@@ -138,7 +128,6 @@ class CachePS {
   }
 
  private:
-  int value_size;
   std::unique_ptr<BaseKV> base_kv_;
   std::atomic<bool> stopFlag_{false};
 };
