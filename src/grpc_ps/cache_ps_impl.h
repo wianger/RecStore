@@ -42,7 +42,7 @@ class CachePS {
     kv_config.json_config_ = config["base_kv_config"];
     LOG(INFO) << "cache ps config: " << kv_config.json_config_.dump(2);
     auto p = base::Factory<BaseKV, const BaseKVConfig &>::NewInstance(
-        config["kv_type"].get<std::string>(), kv_config);
+        config["base_kv_config"]["kv_type"].get<std::string>(), kv_config);
     base_kv_.reset(p);
   }
 

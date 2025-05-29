@@ -32,7 +32,7 @@ using recstoreps::PSCommand;
 using recstoreps::PutParameterRequest;
 using recstoreps::PutParameterResponse;
 
-DEFINE_string(config_path, RECSTORE_PATH "/src/grpc_ps/grpc_ps_config.json",
+DEFINE_string(config_path, RECSTORE_PATH "/recstore_config.json",
               "config file path");
 
 class ParameterServiceImpl final

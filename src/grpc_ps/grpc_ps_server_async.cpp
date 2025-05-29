@@ -40,7 +40,8 @@ using recstoreps::PutParameterResponse;
 using boost::coroutines2::coroutine;
 
 DEFINE_string(port, "15000", "Server Port");
-DEFINE_string(config_path, RECSTORE_PATH "/src/grpc_ps/grpc_ps_config.json",
+
+DEFINE_string(config_path, RECSTORE_PATH "/recstore_config.json",
               "config file path");
 
 const int GET_PATA_REQ_NUM = 10240;
