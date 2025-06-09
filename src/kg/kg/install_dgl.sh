@@ -4,6 +4,7 @@ set -x
 # sudo apt-get install libboost-all-dev
 
 cd dgl-0.9.1
+git checkout 0.9.1
 
 if [[ `hostname` == "node182" ]]; then
     echo "Installing on node182"
