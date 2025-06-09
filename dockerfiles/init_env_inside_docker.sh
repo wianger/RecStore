@@ -77,8 +77,10 @@ cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo mak
 # sudo rm /opt/conda/lib/libtinfo.so.6
 # "
 
+mkdir -p ${PROJECT_PATH}/binary
 cd ${PROJECT_PATH}/binary
-pip3 install  -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
+# pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
+pip install torch==2.0.0 -f https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
 
 # GRPC
 cd ${PROJECT_PATH}/
@@ -90,13 +92,14 @@ pushd cmake/build
 cmake -DgRPC_INSTALL=ON \
       -DgRPC_BUILD_TESTS=OFF \
       -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
+      $CMAKE_REQUIRE \
       ../..
 make -j
 make install -j
 popd
 
 sudo apt install -y sshpass
-ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
+yes y | ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
 
 cd ${PROJECT_PATH}/dockerfiles
 source set_coredump.sh
