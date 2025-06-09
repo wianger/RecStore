@@ -7,6 +7,8 @@ sudo service ssh start
 USER="$(whoami)"
 PROJECT_PATH="$(cd .. && pwd)"
 
+CMAKE_REQUIRE="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+
 sudo apt install -y libmemcached-dev 
 
 
@@ -17,13 +19,13 @@ source /home/${USER}/.bashrc
 # git submodule add https://github.com/google/glog third_party/glog
 sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
 
-cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build &&  mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
+cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build &&  mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. ${CMAKE_REQUIRE} && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
 sudo make install
 make clean
 
 
 # git submodule add https://github.com/fmtlib/fmt third_party/fmt
-cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
+cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. ${CMAKE_REQUIRE} && make -j20 && sudo make install
 
 
 # git submodule add https://github.com/facebook/folly third_party/folly
@@ -34,13 +36,13 @@ cd ${PROJECT_PATH}/third_party/folly && \
 git checkout v2023.09.11.00 && \
 rm -rf _build && \
 mkdir -p _build && cd _build \
-&& CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake .. -DCMAKE_INCLUDE_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/include -DCMAKE_LIBRARY_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/lib \
+&& CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake .. -DCMAKE_INCLUDE_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/include -DCMAKE_LIBRARY_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/lib ${CMAKE_REQUIRE} \
 && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
 
 # git submodule add https://github.com/google/googletest third_party/googletest
 
 
-cd ${PROJECT_PATH}/third_party/gperftools && rm -rf _build &&  mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && sudo  make install && make clean
+cd ${PROJECT_PATH}/third_party/gperftools && rm -rf _build &&  mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. ${CMAKE_REQUIRE} && make -j20 && sudo  make install && make clean
 
 
 # cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install

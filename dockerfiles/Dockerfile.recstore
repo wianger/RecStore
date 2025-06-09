@@ -106,7 +106,7 @@ USER ${uid}:${uid}
 WORKDIR /home/${username}
 
 RUN mkdir .ssh
-RUN chmod 600 .ssh/authorized_keys
+RUN chmod 600 .ssh/authorized_keys || true
 
 RUN alias sudo='sudo PATH="$PATH" HOME="$HOME" LD_LIBRARY_PATH="$LD_LIBRARY_PATH"'
 RUN sudo rm -f /opt/conda/lib/libtinfo*
