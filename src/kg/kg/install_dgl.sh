@@ -3,8 +3,7 @@ set -x
 
 # sudo apt-get install libboost-all-dev
 
-cd dgl-0.9.1
-git checkout 0.9.1
+cd dgl
 
 if [[ `hostname` == "node182" ]]; then
     echo "Installing on node182"
@@ -20,7 +19,15 @@ cd ${temp_dir}
 
 # export CC=`which gcc-7`
 # export CXX=`which g++-7`
-cmake -DUSE_CUDA=ON -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda ..
+# https://github.com/dmlc/dgl/issues/3608
+# ..
+
+# maybe meet at::globalContext().lazyInitDevice(at::kCUDA); error
+# just comment it
+cmake -DUSE_CUDA=ON \
+      -DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda \
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+      ..
 make -j
 cd ..
 cd python
