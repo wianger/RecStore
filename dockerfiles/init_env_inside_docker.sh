@@ -8,8 +8,9 @@ USER="$(whoami)"
 PROJECT_PATH="$(cd .. && pwd)"
 
 CMAKE_REQUIRE="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+GPU_ARCH="80"
 
-sudo apt install -y libmemcached-dev 
+sudo apt install -y libmemcached-dev ca-certificates lsb-release wget
 
 
 ln -sf ${PROJECT_PATH}/dockerfiles/docker_config/.bashrc /home/${USER}/.bashrc
@@ -81,6 +82,30 @@ mkdir -p ${PROJECT_PATH}/binary
 cd ${PROJECT_PATH}/binary
 # pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
 pip install torch==2.0.0 -f https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+
+# HugeCTR
+cd ${PROJECT_PATH}/build
+wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+sudo apt update
+sudo apt install -y -V libarrow-dev libparquet-dev
+
+# find /usr -name "libparquet.so"
+# find /usr -name "properties.h" | grep "parquet/properties.h"
+cd ${PROJECT_PATH}/third_party/HugeCTR && rm -rf _build && mkdir -p _build && cd _build && \
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF \
+      -DENABLE_SAMPLES=OFF \
+      -DSM=${GPU_ARCH} \
+      -DCMAKE_INSTALL_PREFIX=/usr/local/hugectr \
+      -DPARQUET_LIB_PATH=/usr/lib/x86_64-linux-gnu/libparquet.so \
+      -DPARQUET_INCLUDE_DIR=/usr/include \
+      ${CMAKE_REQUIRE} \
+      ..
+make embedding -j20
+sudo find . -name "*.so" -exec cp {} /usr/local/hugectr/lib/ \;
+make clean
+
 
 # GRPC
 cd ${PROJECT_PATH}/
