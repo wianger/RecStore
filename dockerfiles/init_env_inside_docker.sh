@@ -7,7 +7,10 @@ sudo service ssh start
 USER="$(whoami)"
 PROJECT_PATH="$(cd .. && pwd)"
 
-sudo apt install -y libmemcached-dev 
+CMAKE_REQUIRE="-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+GPU_ARCH="80"
+
+sudo apt install -y libmemcached-dev ca-certificates lsb-release wget
 
 
 ln -sf ${PROJECT_PATH}/dockerfiles/docker_config/.bashrc /home/${USER}/.bashrc
@@ -17,13 +20,13 @@ source /home/${USER}/.bashrc
 # git submodule add https://github.com/google/glog third_party/glog
 sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
 
-cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build &&  mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
+cd ${PROJECT_PATH}/third_party/glog/ && git checkout v0.5.0 && rm -rf _build &&  mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. ${CMAKE_REQUIRE} && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/glog/glog-install-fPIC install
 sudo make install
 make clean
 
 
 # git submodule add https://github.com/fmtlib/fmt third_party/fmt
-cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. && make -j20 && sudo make install
+cd ${PROJECT_PATH}/third_party/fmt/ && rm -rf _build && mkdir -p _build && cd _build && CXXFLAGS="-fPIC" cmake .. ${CMAKE_REQUIRE} && make -j20 && sudo make install
 
 
 # git submodule add https://github.com/facebook/folly third_party/folly
@@ -34,13 +37,13 @@ cd ${PROJECT_PATH}/third_party/folly && \
 git checkout v2023.09.11.00 && \
 rm -rf _build && \
 mkdir -p _build && cd _build \
-&& CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake .. -DCMAKE_INCLUDE_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/include -DCMAKE_LIBRARY_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/lib \
+&& CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' cmake .. -DCMAKE_INCLUDE_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/include -DCMAKE_LIBRARY_PATH=${PROJECT_PATH}/third_party/glog/glog-install-fPIC/usr/local/lib ${CMAKE_REQUIRE} \
 && make -j20 && make DESTDIR=${PROJECT_PATH}/third_party/folly/folly-install-fPIC install && make clean
 
 # git submodule add https://github.com/google/googletest third_party/googletest
 
 
-cd ${PROJECT_PATH}/third_party/gperftools && rm -rf _build &&  mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. && make -j20 && sudo  make install && make clean
+cd ${PROJECT_PATH}/third_party/gperftools && rm -rf _build &&  mkdir -p _build && cd _build && CFLAGS='-fPIC' CXXFLAGS='-fPIC -Wl,-lrt' CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake .. ${CMAKE_REQUIRE} && make -j20 && sudo  make install && make clean
 
 
 # cd ${PROJECT_PATH}/third_party/gperftools/ && ./autogen.sh && ./configure && make -j20 && sudo make install
@@ -75,8 +78,34 @@ cd ${PROJECT_PATH}/third_party/cityhash/ && ./configure && make -j20 && sudo mak
 # sudo rm /opt/conda/lib/libtinfo.so.6
 # "
 
+mkdir -p ${PROJECT_PATH}/binary
 cd ${PROJECT_PATH}/binary
-pip3 install  -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
+# pip3 install -i https://pypi.tuna.tsinghua.edu.cn/simple torch-2.0.0a0+git*.whl
+pip install torch==2.0.0 -f https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
+
+# HugeCTR
+cd ${PROJECT_PATH}/build
+wget https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+sudo apt update
+sudo apt install -y -V libarrow-dev libparquet-dev
+
+# find /usr -name "libparquet.so"
+# find /usr -name "properties.h" | grep "parquet/properties.h"
+cd ${PROJECT_PATH}/third_party/HugeCTR && rm -rf _build && mkdir -p _build && cd _build && \
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF \
+      -DENABLE_SAMPLES=OFF \
+      -DSM=${GPU_ARCH} \
+      -DCMAKE_INSTALL_PREFIX=/usr/local/hugectr \
+      -DPARQUET_LIB_PATH=/usr/lib/x86_64-linux-gnu/libparquet.so \
+      -DPARQUET_INCLUDE_DIR=/usr/include \
+      ${CMAKE_REQUIRE} \
+      ..
+make embedding -j20
+sudo find . -name "*.so" -exec cp {} /usr/local/hugectr/lib/ \;
+make clean
+
 
 # GRPC
 cd ${PROJECT_PATH}/
@@ -88,13 +117,14 @@ pushd cmake/build
 cmake -DgRPC_INSTALL=ON \
       -DgRPC_BUILD_TESTS=OFF \
       -DCMAKE_INSTALL_PREFIX=$MY_INSTALL_DIR \
+      $CMAKE_REQUIRE \
       ../..
 make -j
 make install -j
 popd
 
 sudo apt install -y sshpass
-ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
+yes y | ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
 
 cd ${PROJECT_PATH}/dockerfiles
 source set_coredump.sh
