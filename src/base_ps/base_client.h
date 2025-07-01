@@ -8,10 +8,7 @@
 
 namespace recstore {
 
-struct BasePS {
-  int num_threads_ = 0;
-  json json_config_;  // add your custom config in this field
-};
+enum class PSCommand { CLEAR_PS, RELOAD_PS, LOAD_FAKE_DATA };
 
 class BasePSClient {
   json json_config_;
@@ -28,6 +25,8 @@ class BasePSClient {
 
   virtual int PutParameter(const base::ConstArray<uint64_t> &keys,
                            const std::vector<std::vector<float>> &values) = 0;
+
+  virtual void Command(PSCommand command) = 0;
 };
 
 }  // namespace recstore

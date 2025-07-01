@@ -62,7 +62,7 @@ class BenchmarkClientCommon {
         //                                               "127.0.0.1", 1234, 0);
 
         client = base::Factory<BaseParameterClient, const std::string &, int,
-                               int>::NewInstance("WqRPCParameterClient",
+                               int>::NewInstance("PetPSClient",
                                                  "127.0.0.1", 1234, 0);
 
         // client = base::Factory<BaseParameterClient, const std::string &,
@@ -75,7 +75,7 @@ class BenchmarkClientCommon {
              shard++) {
           auto shard_client =
               base::Factory<BaseParameterClient, const std::string &, int,
-                            int>::NewInstance("WqRPCParameterClient",
+                            int>::NewInstance("PetPSClient",
                                               "127.0.0.1", 1234, shard);
           shard_clients.push_back(shard_client);
         }

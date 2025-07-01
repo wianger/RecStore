@@ -1,8 +1,8 @@
 #include "petps_client.h"
 
 #include "petps_magic.h"
-#include "ps_common/Postoffice.h"
-#include "ps_common/shard_manager.h"
+#include "base_ps/Postoffice.h"
+#include "base_ps/shard_manager.h"
 
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
@@ -10,7 +10,7 @@ DEFINE_int32(numa_id, 0, "");
 
 namespace petps {
 
-void WqRPCParameterClient::Init() {
+void PetPSClient::Init() {
   constexpr uint64_t dsm_size = 1 * 1000 * define::MB;
   static uint64_t dsm_base_addr = (uint64_t)hugePageAlloc(dsm_size);
 
@@ -31,13 +31,12 @@ void WqRPCParameterClient::Init() {
   LOG(INFO) << "set NUMA ID = " << FLAGS_numa_id;
 }
 
-int WqRPCParameterClient::GetParameter(base::ConstArray<uint64_t> keys,
-                                       std::vector<std::vector<float>> *values,
-                                       bool perf) {
+int PetPSClient::GetParameter(
+    base::ConstArray<uint64_t> keys, std::vector<std::vector<float>> *values) {
   return 0;
 }
 
-std::vector<int> WqRPCParameterClient::GetServerThreadIDs() {
+std::vector<int> PetPSClient::GetServerThreadIDs() {
   auto m = RawMessage::get_new_msg();
   m->node_id = dsm_->getMyNodeID();
   m->t_id = dsm_->getMyThreadID();
@@ -65,14 +64,14 @@ std::vector<int> WqRPCParameterClient::GetServerThreadIDs() {
   return std::vector<int>();
 }
 
-int WqRPCParameterClient::SelectServerThreadID() const {
+int PetPSClient::SelectServerThreadID() const {
   static int round_robin = 0;
   int ret = serverThreadIdsRoutedTo_[round_robin];
   round_robin = (round_robin + 1) % serverThreadIdsRoutedTo_.size();
   return ret;
 }
 
-void *WqRPCParameterClient::GetReceiveBuffer(size_t size) {
+void *PetPSClient::GetReceiveBuffer(size_t size) {
   static std::atomic<uint64_t> client_memory_offset_acc{0};
   GlobalAddress gaddr;
   gaddr.nodeID = dsm_->getMyNodeID();
@@ -81,8 +80,8 @@ void *WqRPCParameterClient::GetReceiveBuffer(size_t size) {
 }
 
 // this interface assume all keys with the same embedding dimension
-int WqRPCParameterClient::GetParameter(base::ConstArray<uint64_t> keys,
-                                       float *values, bool isAsync, bool perf,
+int PetPSClient::GetParameter(base::ConstArray<uint64_t> keys,
+                                       float *values, bool isAsync,
                                        int async_req_id) {
   thread_local auto m = RawMessage::get_new_msg();
   GlobalAddress gaddr = dsm_->gaddr(values);
@@ -112,12 +111,12 @@ int WqRPCParameterClient::GetParameter(base::ConstArray<uint64_t> keys,
   return rpcIDAcc_ - 1;
 }
 
-bool WqRPCParameterClient::QueryRPCFinished(int rpc_id) {
+bool PetPSClient::QueryRPCFinished(int rpc_id) {
   auto *poll = (std::atomic<int> *)rpcId2PollMap_[rpc_id];
   return poll->load(std::memory_order::memory_order_relaxed) != FINISH_MAGIC;
 }
 
-void WqRPCParameterClient::WaitRPCFinish(int rpc_id) {
+void PetPSClient::WaitRPCFinish(int rpc_id) {
   auto *poll = (std::atomic<int> *)rpcId2PollMap_[rpc_id];
   while (poll->load(std::memory_order::memory_order_relaxed) == FINISH_MAGIC) {
 #ifdef RPC_DEBUG
@@ -133,18 +132,18 @@ void WqRPCParameterClient::WaitRPCFinish(int rpc_id) {
   return;
 }
 
-void WqRPCParameterClient::RevokeRPCResource(int rpc_id) {
+void PetPSClient::RevokeRPCResource(int rpc_id) {
   rpcId2PollMap_.erase(rpc_id);
 };
 
-int WqRPCParameterClient::PutParameter(
+int PetPSClient::PutParameter(
     const std::vector<uint64_t> &keys,
     const std::vector<std::vector<float>> &values) {
   LOG(FATAL) << "";
   return 0;
 }
 
-int WqRPCParameterClient::FakePutParameter(base::ConstArray<uint64_t> keys,
+int PetPSClient::FakePutParameter(base::ConstArray<uint64_t> keys,
                                            float *values) {
   thread_local auto m = RawMessage::get_new_msg();
   GlobalAddress gaddr = dsm_->gaddr(values);

@@ -15,7 +15,7 @@ class KVEngineMap : public BaseKV {
       : BaseKV(config),
         kValueSize_(config.json_config_.value("value_size", 0)),
         kPreKnownValueSize_(
-            config.json_config_.at("pre_known_value_size").get<bool>()) {
+            config.json_config_.value("pre_known_value_size", false)) {
     if (kPreKnownValueSize_) CHECK_NE(kValueSize_, 0);
     auto capacity = config.json_config_.at("capacity").get<uint64_t>();
     auto path = config.json_config_.at("path").get<std::string>();
@@ -104,6 +104,16 @@ class KVEngineMap : public BaseKV {
   ~KVEngineMap() {
     std::cout << "exit KVEngineMap" << std::endl;
     // hash_table_->hash_name();
+  }
+
+  void clear() {
+    std::unique_lock<std::shared_mutex> _(lock_);
+    for (auto &item : *hash_table_) {
+      base::PetKVData shmkv_data = *(base::PetKVData *)(&item.second);
+      shm_malloc_->Free(
+          shm_malloc_->GetMallocData(shmkv_data.shm_malloc_offset()));
+    }
+    hash_table_->clear();
   }
 
  private:

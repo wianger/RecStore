@@ -7,7 +7,7 @@
 #include <cmath>
 #include <thread>
 
-#include "ps_common/shard_manager.h"
+#include "base_ps/shard_manager.h"
 #include "storage/kv_engine/base_kv.h"
 
 class LoadDBHelper {

@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "base/array.h"
-#include "flatc.h"
-#include "parameters.h"
+#include "base/flatc.h"
+#include "base_ps/parameters.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
 
@@ -36,13 +36,11 @@ class GRPCParameterClient {
   ~GRPCParameterClient() {}
 
   bool GetParameter(const ConstArray<uint64_t> &keys,
-                    std::vector<std::vector<float>> *values, bool perf = true);
+                    std::vector<std::vector<float>> *values);
   bool GetParameter(const ConstArray<unsigned int> &keys,
-                    std::vector<std::vector<float>> *values, bool perf = true);
-
+                    std::vector<std::vector<float>> *values);
   // this interface assume all keys with the same embedding dimension
-  bool GetParameter(const ConstArray<uint64_t> &keys, float *values,
-                    bool perf = true);
+  bool GetParameter(const ConstArray<uint64_t> &keys, float *values);
 
   inline int shard() const { return shard_; }
 

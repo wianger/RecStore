@@ -3,29 +3,23 @@ find_package(Python3 COMPONENTS Interpreter Development)
 
 add_subdirectory(proto)
 
-set(common 
-    flatc.h
-    parameters.h
-    parameters.cpp
-)
 
-
-add_library(grpc_ps_client 
-    grpc_ps_client.cpp grpc_ps_client.h ${common} 
+add_library(grpc_ps_client
+    grpc_ps_client.cpp grpc_ps_client.h
 )
 
 target_link_libraries(
     grpc_ps_client PUBLIC
     base
+    base_ps
     ps_proto
     gRPC::grpc++_reflection
     gRPC::grpc++
     protobuf::libprotobuf
-    # ${TORCH_LIBRARIES}
 )
 
 add_executable(grpc_ps_client_test
-    grpc_ps_client_test.cpp 
+    grpc_ps_client_test.cpp
 )
 target_link_libraries(grpc_ps_client_test PUBLIC
     grpc_ps_client
@@ -33,13 +27,13 @@ target_link_libraries(grpc_ps_client_test PUBLIC
 
 
 add_executable(grpc_ps_server
-    grpc_ps_server.cpp 
-    grpc_ps_server.h 
-    cache_ps_impl.h
-    ${common}
+    grpc_ps_server.cpp
+    grpc_ps_server.h
 )
+
 target_link_libraries(grpc_ps_server PUBLIC
     base
+    base_ps
     ps_proto
     gRPC::grpc++_reflection
     gRPC::grpc++
@@ -76,4 +70,4 @@ target_link_libraries(grpc_ps_client_python PUBLIC
     grpc_ps_client
     ${TORCH_LIBRARIES}
     Python3::Python
- )
+)

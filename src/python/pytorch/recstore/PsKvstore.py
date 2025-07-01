@@ -21,7 +21,7 @@ class AbsKVStore(ABC):
     def get_data_meta(self, name):
         raise NotImplementedError
 
-    def Get(self, name, id_tensor):
+    def Get(self, name, id_tensor, emb_dim=None):
         raise NotImplementedError
 
     def Put(self, name, id_tensor, data_tensor):
@@ -56,11 +56,7 @@ class ShmKVStore(AbsKVStore):
         else:
             if init_func is not None:
                 init_func(temp, shape, th.float32)
-
-        # temp = init_func(
-        #     shape=shape, dtype=dtype).share_memory_()
-
-        # Don't use share_memory_().pinned_memory(). It will cause BUG!
+        # NOTE: Don't use share_memory_().pinned_memory(). It will cause BUG!
         self.tensor_store[name] = temp
 
     def data_name_list(self):
@@ -103,13 +99,45 @@ class ShmKVStore(AbsKVStore):
         return self.tensor_store[name]
 
 
+class GRPCKVStore(AbsKVStore):
+    def __init__(self, host, port, shard):
+        from recstore.client import GRPCParameterClient
+        self.client = GRPCParameterClient(host, port, shard)
+        self.num_servers = 1
+
+    def init_data(self, name, shape, dtype, part_policy=None, init_func=None, is_gdata=False):
+        nemb, emb_shape = shape
+        if isinstance(emb_shape, int):
+            emb_shape = (1, emb_shape)
+        self.client.PutParameter(th.tensor([name + str(i) for i in range(nemb)]),
+                                 th.cat([init_func(emb_shape, dtype) for _ in range(nemb)], dim=0))
+
+    def data_name_list(self):
+        raise NotImplementedError(
+            "GRPCKVStore does not support data_name_list")
+
+    def get_data_meta(self, name):
+        raise NotImplementedError()
+
+    def Get(self, name, id_tensor, emb_dim):
+        return self.client.GetParameter(id_tensor, emb_dim)
+
+    def Put(self, name, id_tensor, data_tensor):
+        assert isinstance(id_tensor, list)
+        self.client.PutParameter(id_tensor, data_tensor)
+
+    def Delete(self, name):
+        pass
+
+
 KVSTORE = None
 
 
 def kvinit():
     global KVSTORE
     if KVSTORE is None:
-        KVSTORE = ShmKVStore()
+        # KVSTORE = ShmKVStore()
+        KVSTORE = GRPCKVStore("127,0.1", 15000, 0)
 
 
 def get_kvstore():

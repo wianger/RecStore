@@ -11,7 +11,7 @@
 #include "folly/String.h"
 #include "folly/init/Init.h"
 #include "folly/system/MemoryMapping.h"
-#include "ps_common/Postoffice.h"
+#include "base_ps/Postoffice.h"
 
 #include <folly/MPMCQueue.h>
 #include <string>

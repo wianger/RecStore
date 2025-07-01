@@ -1,3 +1,5 @@
+#include "grpc_ps_client.h"
+
 #include <fmt/core.h>
 #include <grpcpp/grpcpp.h>
 
@@ -6,20 +8,19 @@
 #include <string>
 #include <vector>
 
-#include "flatc.h"
-#include "folly/executors/CPUThreadPoolExecutor.h"
-#include "base/log.h"
 #include "base/array.h"
+#include "base/flatc.h"
+#include "base/log.h"
 #include "base/timer.h"
-#include "parameters.h"
+#include "base_ps/parameters.h"
+#include "folly/executors/CPUThreadPoolExecutor.h"
 #include "ps.grpc.pb.h"
 #include "ps.pb.h"
-#include "grpc_ps_client.h"
 
 using grpc::Channel;
+using grpc::ClientAsyncResponseReader;
 using grpc::ClientContext;
 using grpc::Status;
-using grpc::ClientAsyncResponseReader;
 using recstoreps::CommandRequest;
 using recstoreps::CommandResponse;
 using recstoreps::GetParameterRequest;
@@ -28,11 +29,11 @@ using recstoreps::PSCommand;
 using recstoreps::PutParameterRequest;
 using recstoreps::PutParameterResponse;
 
-
 DEFINE_int32(get_parameter_threads, 4, "get clients per shard");
 DEFINE_bool(parameter_client_random_init, false, "");
 
-GRPCParameterClient::GRPCParameterClient(const std::string &host, int port, int shard)
+GRPCParameterClient::GRPCParameterClient(const std::string &host, int port,
+                                         int shard)
     : host_(host),
       port_(port),
       shard_(shard),
@@ -47,8 +48,8 @@ GRPCParameterClient::GRPCParameterClient(const std::string &host, int port, int 
   }
 }
 
-bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys, float *values,
-                                   bool perf) {
+bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys,
+                                       float *values) {
   if (FLAGS_parameter_client_random_init) {
     CHECK(0) << "todo implement";
     return true;
@@ -73,21 +74,21 @@ bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys, float *
     auto &status = get_param_status_[index];
     auto &request = get_param_requests_[index];
     auto &response = get_param_responses_[index];
-    request.set_perf(perf);
     request.set_keys(reinterpret_cast<const char *>(&keys[start]),
-                      sizeof(uint64_t) * key_size);
+                     sizeof(uint64_t) * key_size);
     // rpc
     grpc::ClientContext context;
-    std::unique_ptr<ClientAsyncResponseReader<GetParameterResponse>> rpc = stubs_[0]->AsyncGetParameter(&context, request, &cq);
-        // GetParameter(&context, request, &response);
-    rpc->Finish(&response, &status, reinterpret_cast<void*>(index));
+    std::unique_ptr<ClientAsyncResponseReader<GetParameterResponse>> rpc =
+        stubs_[0]->AsyncGetParameter(&context, request, &cq);
+    // GetParameter(&context, request, &response);
+    rpc->Finish(&response, &status, reinterpret_cast<void *>(index));
   }
   int get = 0;
-  while(get != request_num){
+  while (get != request_num) {
     void *got_tag;
     bool ok = false;
     cq.Next(&got_tag, &ok);
-    if(!ok){
+    if (!ok) {
       LOG(ERROR) << "error";
     }
     get++;
@@ -127,9 +128,8 @@ bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys, float *
   return true;
 }
 
-bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys,
-                                   std::vector<std::vector<float>> *values,
-                                   bool perf) {
+bool GRPCParameterClient::GetParameter(
+    const ConstArray<uint64_t> &keys, std::vector<std::vector<float>> *values) {
   if (FLAGS_parameter_client_random_init) {
     values->clear();
     values->reserve(keys.Size());
@@ -145,7 +145,7 @@ bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys,
   get_param_requests_.clear();
   get_param_responses_.clear();
   get_param_resonse_readers_.clear();
-  
+
   values->reserve(keys.Size());
 
   int request_num =
@@ -162,23 +162,23 @@ bool GRPCParameterClient::GetParameter(const ConstArray<uint64_t> &keys,
     auto &status = get_param_status_[index];
     auto &request = get_param_requests_[index];
     auto &response = get_param_responses_[index];
-    request.set_perf(perf);
     request.set_keys(reinterpret_cast<const char *>(&keys[start]),
-                      sizeof(uint64_t) * key_size);
+                     sizeof(uint64_t) * key_size);
     // rpc
     grpc::ClientContext context;
-    get_param_resonse_readers_.emplace_back(stubs_[0]->AsyncGetParameter(&context, request, &cq));
+    get_param_resonse_readers_.emplace_back(
+        stubs_[0]->AsyncGetParameter(&context, request, &cq));
     auto &rpc = get_param_resonse_readers_.back();
-        // GetParameter(&context, request, &response);
-    rpc->Finish(&response, &status, reinterpret_cast<void*>(index));
+    // GetParameter(&context, request, &response);
+    rpc->Finish(&response, &status, reinterpret_cast<void *>(index));
   }
 
   int get = 0;
-  while(get != request_num){
+  while (get != request_num) {
     void *got_tag;
     bool ok = false;
     cq.Next(&got_tag, &ok);
-    if(unlikely(!ok)){
+    if (unlikely(!ok)) {
       LOG(ERROR) << "error";
     }
     get++;
@@ -218,7 +218,7 @@ bool GRPCParameterClient::ClearPS() {
   return status.ok();
 }
 
-bool GRPCParameterClient::LoadFakeData(int64_t data){
+bool GRPCParameterClient::LoadFakeData(int64_t data) {
   CommandRequest request;
   CommandResponse response;
   request.set_command(PSCommand::LOAD_FAKE_DATA);
@@ -270,8 +270,7 @@ bool GRPCParameterClient::PutParameter(
     CHECK_EQ(blocks.size(), 1);
     request.mutable_parameter_value()->swap(blocks[0]);
     grpc::ClientContext context;
-    grpc::Status status =
-        stubs_[0]->PutParameter(&context, request, &response);
+    grpc::Status status = stubs_[0]->PutParameter(&context, request, &response);
     if (status.ok()) {
       ret->set_value(true);
     } else {
