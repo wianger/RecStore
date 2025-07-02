@@ -32,3 +32,13 @@ target_link_libraries(corotine PUBLIC
     ${BOOST_LIBRARIES}
     ${FOLLY_LIBRARIES}
 )
+
+# ExtendibleHash 单元测试
+add_executable(test_extendible_hash test_extendible_hash.cpp)
+target_link_libraries(test_extendible_hash PUBLIC
+    dram_hash 
+    base 
+    gtest 
+    gtest_main 
+    pthread
+)
