@@ -1,8 +1,7 @@
-#ifndef EXTENDIBLE_PTR_H_
-#define EXTENDIBLE_PTR_H_
+#pragma once
 
-#include "../util/pair.h"
-#include "hash.h"
+#include "hash_interface.h"
+#include "pair.h"
 #include <cstring>
 #include <vector>
 // #include "/home/nammh/quartz/src/lib/pmalloc.h"
@@ -99,6 +98,9 @@ public:
   bool Delete(Key_t &);
   Value_t Get(Key_t &);
   Value_t FindAnyway(Key_t &);
+  void Insert(const Key_t &key, Value_t value);
+  bool InsertOnly(const Key_t &key, Value_t value);
+  Value_t Get(const Key_t &key);
   double Utilization(void);
   size_t Capacity(void);
 
@@ -110,8 +112,6 @@ public:
   }
 
 private:
-  size_t global_depth;
   Directory dir;
+  size_t global_depth;
 };
-
-#endif // EXTENDIBLE_PTR_H_
