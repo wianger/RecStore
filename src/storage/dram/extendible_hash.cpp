@@ -1,6 +1,6 @@
 #include "extendible_hash.h"
-#include "../util/hash.h"
-#include "../util/persist.h"
+#include "hash.h"
+#include "persist.h"
 #include <bitset>
 #include <cassert>
 #include <cmath>
@@ -71,6 +71,17 @@ int Block::Insert(Key_t &key, Value_t value, size_t key_hash) {
   int ret = -1;
   while (!CAS(&sema, &lock, lock + 1)) {
     lock = sema;
+  }
+  for (unsigned i = 0; i < kNumSlot; ++i) {
+    if (_[i].key == key) {
+      _[i].value = value;
+      ret = i;
+      lock = sema;
+      while (!CAS(&sema, &lock, lock - 1)) {
+        lock = sema;
+      }
+      return ret;
+    }
   }
   Key_t LOCK = INVALID;
   for (unsigned i = 0; i < kNumSlot; ++i) {
@@ -484,4 +495,19 @@ size_t Block::numElem(void) {
     }
   }
   return sum;
+}
+
+void ExtendibleHash::Insert(const Key_t &key, Value_t value) {
+  Key_t mutable_key = key;
+  Insert(mutable_key, value);
+}
+
+bool ExtendibleHash::InsertOnly(const Key_t &key, Value_t value) {
+  Key_t mutable_key = key;
+  return InsertOnly(mutable_key, value);
+}
+
+Value_t ExtendibleHash::Get(const Key_t &key) {
+  Key_t mutable_key = key;
+  return Get(mutable_key);
 }
