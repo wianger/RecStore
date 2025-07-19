@@ -31,7 +31,7 @@ public:
     value_size_ = config.json_config_.at("value_size").get<int>();
 
     // 初始化extendible hash表
-    hash_table_ = new ExtendibleHash();
+    Index *index = new ExtendibleHash();
 
     std::string path = config.json_config_.at("path").get<std::string>();
 
@@ -58,7 +58,7 @@ public:
     base::PetKVData shmkv_data;
     // std::shared_lock<std::shared_mutex> _(lock_);
     Key_t hash_key = key;
-    Value_t read_value = hash_table_->Get(hash_key);
+    Value_t read_value = index->Get(hash_key);
 
     if (read_value == NONE) {
       value = std::string();
@@ -92,7 +92,7 @@ public:
     memcpy(sync_data, value.data(), value.size());
 
     Key_t hash_key = key;
-    hash_table_->Insert(hash_key, shmkv_data.data_value);
+    index->Insert(hash_key, shmkv_data.data_value);
   }
 
   void BatchGet(base::ConstArray<uint64_t> keys,
@@ -104,7 +104,7 @@ public:
     for (auto k : keys) {
       base::PetKVData shmkv_data;
       Key_t hash_key = k;
-      Value_t read_value = hash_table_->Get(hash_key);
+      Value_t read_value = index->Get(hash_key);
 
       if (read_value == NONE) {
         values->emplace_back();
@@ -127,14 +127,14 @@ public:
 
   ~KVEngineHybrid() {
     std::cout << "exit KVEngineHybrid" << std::endl;
-    if (hash_table_) {
-      delete hash_table_;
-      hash_table_ = nullptr;
+    if (index) {
+      delete index;
+      index = nullptr;
     }
   }
 
 private:
-  ExtendibleHash *hash_table_;
+  Index *index;
   // std::shared_mutex lock_;
 
   uint64_t counter = 0;

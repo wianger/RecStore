@@ -4,6 +4,7 @@
 #include "pair.h"
 #include <cstring>
 #include <vector>
+#include "../hybrid/index.h"
 // #include "/home/nammh/quartz/src/lib/pmalloc.h"
 
 #define LSB
@@ -88,8 +89,9 @@ struct Directory {
   void LSBUpdate(int, int, int, int, Block **);
 };
 
-class ExtendibleHash : public Hash {
+class ExtendibleHash : public Index, public Hash {
 public:
+  ExtendibleHash(const IndexConfig &config);
   ExtendibleHash(void);
   ExtendibleHash(size_t);
   ~ExtendibleHash(void);
@@ -110,7 +112,35 @@ public:
     // ret = pmalloc(size);
     return ret;
   }
+// From Index
+  void Util() override;
 
+  void Get(const uint64_t key, uint64_t &value, unsigned tid) override;
+  void Put(const uint64_t key, uint64_t value, unsigned tid) override;
+
+  void BatchPut(coroutine<void>::push_type &sink,
+                base::ConstArray<uint64_t> keys,
+                uint64_t* pointers,
+                unsigned tid) override;
+
+  void BatchGet(base::ConstArray<uint64_t> keys,
+                uint64_t* pointers,
+                unsigned tid) override;
+
+  void BatchGet(coroutine<void>::push_type &sink,
+                base::ConstArray<uint64_t> keys,
+                uint64_t* pointers,
+                unsigned tid) override;
+
+  void DebugInfo() const override;
+
+  void BulkLoad(base::ConstArray<uint64_t> keys, const void *value) override;
+
+  void LoadFakeData(int64_t key_capacity, int value_size) override;
+
+  void clear() override;
+
+  std::string RetrieveValue(uint64_t raw_value) override;
 private:
   Directory dir;
   size_t global_depth;

@@ -42,3 +42,13 @@ target_link_libraries(test_extendible_hash PUBLIC
     gtest_main 
     pthread
 )
+
+# index 单元测试
+add_executable(test_index test_index.cpp)
+target_link_libraries(test_index PUBLIC
+    dram_hash 
+    base 
+    gtest 
+    gtest_main 
+    pthread
+)
