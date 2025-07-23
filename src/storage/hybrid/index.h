@@ -7,6 +7,7 @@
 #include "base/json.h"
 #include "base/log.h"
 #include "storage/hybrid/pointer.h"
+#include "value.h"
 
 using boost::coroutines2::coroutine;
 
@@ -18,7 +19,7 @@ class Index {
  public:
   virtual ~Index() { std::cout << "exit Index" << std::endl; }
 
-  explicit Index(const IndexConfig &config){};
+  explicit Index(const IndexConfig &config){};//TODO::value_初始化
 
   virtual void Util() {
     std::cout << "Index Util: no impl" << std::endl;
@@ -68,27 +69,14 @@ class Index {
 
   virtual std::string RetrieveValue(uint64_t raw_value) { 
     UnifiedPointer p = UnifiedPointer::FromRaw(raw_value);
-    std::cout << "Raw pointer info: " << p.toString() << std::endl;
-
-    switch (p.type()) { // TODO: retrieve value from different tier
-      case UnifiedPointer::Type::Memory: {
-        std::cout << "Memory Pointer: " << p.asMemoryPointer() << std::endl;
-        break;
-      }
-      case UnifiedPointer::Type::Disk:
-        std::cout << "Disk PageID: " << p.asDiskPageId() << std::endl;
-        break;
-      case UnifiedPointer::Type::PMem:
-        std::cout << "PMem Offset: " << p.asPMemOffset() << std::endl;
-        break;
-      case UnifiedPointer::Type::Invalid:
-      default:
-        std::cout << "Invalid pointer type." << std::endl;
-        break;
-    }
-
-    return "";
+    return value_.RetrieveValue(p);
   }
 
- protected:
+  virtual int WriteValue(const std::string_view &value){
+    UnifiedPointer p =value_.WriteValue(value);
+    return p.value;
+  }
+
+ private:
+  ValueManager value_;
 };

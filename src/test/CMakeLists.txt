@@ -52,3 +52,14 @@ target_link_libraries(test_index PUBLIC
     gtest_main 
     pthread
 )
+
+#value 单元测试
+add_executable(test_value test_value.cpp)
+target_link_libraries(test_value PUBLIC
+    dram_hash 
+    base 
+    gtest 
+    gtest_main 
+    pthread
+    base_memory
+)
