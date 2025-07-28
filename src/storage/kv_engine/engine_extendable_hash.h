@@ -15,19 +15,11 @@ class KVEngineExtendibleHash : public BaseKV {
 public:
   KVEngineExtendibleHash(const BaseKVConfig &config)
       : BaseKV(config),
-#ifdef XMH_SIMPLE_MALLOC
-        shm_malloc_(config.json_config_.at("path").get<std::string>() +
-                        "/value",
-                    config.json_config_.at("capacity").get<size_t>() *
-                        config.json_config_.at("value_size").get<size_t>(),
-                    config.json_config_.at("value_size").get<size_t>())
-#else
+
         shm_malloc_(config.json_config_.at("path").get<std::string>() +
                         "/value",
                     1.2 * config.json_config_.at("capacity").get<size_t>() *
-                        config.json_config_.at("value_size").get<size_t>())
-#endif
-  {
+                        config.json_config_.at("value_size").get<size_t>()) {
     value_size_ = config.json_config_.at("value_size").get<int>();
 
     // 初始化extendible hash表
@@ -131,11 +123,7 @@ private:
   std::string dict_pool_name_;
   size_t dict_pool_size_;
   int value_size_;
-#ifdef XMH_SIMPLE_MALLOC
-  base::PersistSimpleMalloc shm_malloc_;
-#else
   base::PersistLoopShmMalloc shm_malloc_;
-#endif
   base::ShmFile valid_shm_file_;
 };
 
