@@ -15,7 +15,15 @@ public:
 		Invalid= 0b11
 	};
 
-	UnifiedPointer() : raw_(0) {}
+	UnifiedPointer() : raw_((static_cast<uint64_t>(Type::Invalid) << 62)) {};
+
+	explicit operator bool() const {
+        return type() != Type::Invalid;
+    }
+
+	static UnifiedPointer FromInvalid() {
+        return UnifiedPointer(); // 直接使用默认构造
+    }
 
 	static UnifiedPointer FromRaw(uint64_t raw) {
 		UnifiedPointer p;
@@ -49,7 +57,7 @@ public:
 	}
 
 	uint64_t value() const {
-		return raw_ & VALUE_MASK;
+		return raw_;
 	}
 
 	void* asMemoryPointer() const {

@@ -67,16 +67,15 @@ class Index {
 
   virtual void clear() { LOG(FATAL) << "not implemented"; };
 
-  virtual std::string RetrieveValue(uint64_t raw_value) { 
-    UnifiedPointer p = UnifiedPointer::FromRaw(raw_value);
-    return value_.RetrieveValue(p);
-  }
+  // virtual std::string RetrieveValue(const uint64_t key,uint64_t raw_value) { 
+  //   UnifiedPointer p = UnifiedPointer::FromRaw(raw_value);
+  //   return value_.RetrieveValue(key,p);
+  // }
 
-  virtual int WriteValue(const std::string_view &value){
-    UnifiedPointer p =value_.WriteValue(value);
-    return p.value;
-  }
+  // virtual int WriteValue(const uint64_t key,const std::string_view &value){
+  //   UnifiedPointer p =value_.WriteValue(key,value);
+  //   return p.value;
+  // }
 
  private:
-  ValueManager value_;
 };
