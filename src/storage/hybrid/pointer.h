@@ -9,10 +9,10 @@
 class UnifiedPointer {
 public:
 	enum class Type : uint8_t {
-		Memory = 0b00,
-		Disk   = 0b01,
-		PMem   = 0b10,
-		Invalid= 0b11
+		Invalid= 0b00,
+		Memory = 0b01,
+		Disk   = 0b10,
+		PMem   = 0b11
 	};
 
 	UnifiedPointer() : raw_((static_cast<uint64_t>(Type::Invalid) << 62)) {};
@@ -57,6 +57,10 @@ public:
 	}
 
 	uint64_t value() const {
+		return raw_ & VALUE_MASK;
+	}
+
+	uint64_t RawValue() const {
 		return raw_;
 	}
 
