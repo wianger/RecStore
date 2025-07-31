@@ -63,3 +63,13 @@ target_link_libraries(test_value PUBLIC
     pthread
     base_memory
 )
+
+add_executable(test_hybridkv test_hybridkv.cpp)
+target_link_libraries(test_hybridkv PUBLIC
+    dram_hash 
+    base 
+    gtest 
+    gtest_main 
+    pthread
+    base_memory
+)

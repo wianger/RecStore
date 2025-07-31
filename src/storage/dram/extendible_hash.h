@@ -140,7 +140,7 @@ public:
 
   void clear() override;
 
-  std::string RetrieveValue(uint64_t raw_value) override;
+  // std::string RetrieveValue(uint64_t raw_value) override;
 private:
   Directory dir;
   size_t global_depth;
