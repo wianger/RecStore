@@ -2,8 +2,8 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <cstdlib>
-#include <unistd.h>  // 添加 unistd.h 头文件
-#include <fcntl.h>   // 添加 fcntl.h 头文件
+#include <unistd.h>  
+#include <fcntl.h>   
 
 namespace {
 
@@ -14,22 +14,21 @@ class ValueManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // 创建临时文件路径
-        char shm_tmpl[] = "/tmp/shm_XXXXXX";
+        // char shm_tmpl[] = "/tmp/shm_XXXXXX";
         char ssd_tmpl[] = "/tmp/ssd_XXXXXX";
         
-        // 创建并关闭临时文件
-        int shm_fd = mkstemp(shm_tmpl);
-        ASSERT_NE(shm_fd, -1) << "Failed to create SHM temp file";
-        close(shm_fd);
+        // int shm_fd = mkstemp(shm_tmpl);
+        // ASSERT_NE(shm_fd, -1) << "Failed to create SHM temp file";
+        // close(shm_fd);
         
         int ssd_fd = mkstemp(ssd_tmpl);
         ASSERT_NE(ssd_fd, -1) << "Failed to create SSD temp file";
         close(ssd_fd);
-        shm_path_ = shm_tmpl;
+        // shm_path_ = shm_tmpl;
         ssd_path_ = ssd_tmpl;
             
         manager_ = std::make_unique<ValueManager>(
-            shm_path_, kSmallSize,  // 小容量SHM（易满）
+            // shm_path_, kSmallSize,  // 小容量SHM（易满）
             ssd_path_, kLargeSize   // 大容量SSD
         );
     }
@@ -38,11 +37,11 @@ protected:
         manager_.reset();  // 确保先销毁manager以关闭文件
         
         // 删除临时文件
-        std::remove(shm_path_.c_str());
+        // std::remove(shm_path_.c_str());
         std::remove(ssd_path_.c_str());
     }
 
-    std::string shm_path_;
+    // std::string shm_path_;
     std::string ssd_path_;
     std::unique_ptr<ValueManager> manager_;
 };
@@ -77,15 +76,15 @@ TEST_F(ValueManagerTest, WriteLargeValueToSSD) {
 // 测试混合读写（SHM和SSD交替）
 TEST_F(ValueManagerTest, MixedTierOperations) {
     // 填充SHM
-    std::string shm_data(kSmallSize / 2, 'A');
-    auto shm_ptr = manager_->WriteValue(shm_data);
+    // std::string shm_data(kSmallSize / 2, 'A');
+    // auto shm_ptr = manager_->WriteValue(shm_data);
     
     // 写入大文件到SSD
     std::string ssd_data(kSmallSize + 1024, 'B');
     auto ssd_ptr = manager_->WriteValue(ssd_data);
     
     // 验证SHM数据
-    ASSERT_EQ(manager_->RetrieveValue(shm_ptr), shm_data);
+    // ASSERT_EQ(manager_->RetrieveValue(shm_ptr), shm_data);
     
     // 验证SSD数据
     ASSERT_EQ(manager_->RetrieveValue(ssd_ptr), ssd_data);
