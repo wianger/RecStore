@@ -1,5 +1,4 @@
-#ifndef CCEH_FILE_H_
-#define CCEH_FILE_H_
+#pragma once
 
 #include <cstdint>
 #include <cstdlib>
@@ -88,5 +87,3 @@ private:
   PageID_t next_page_id;
   char empty_page[PAGE_SIZE] = {0};
 };
-
-#endif // CCEH_FILE_H_
