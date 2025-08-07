@@ -43,16 +43,14 @@ struct Segment {
   ~Segment(void) {}
 
   void initSegment(void) {
-    for (int i = 0; i < kNumSlot; ++i) {
+    for (int i = 0; i < kNumSlot; ++i)
       bucket[i].key = INVALID;
-    }
     local_depth = 0;
   }
 
   void initSegment(size_t depth) {
-    for (int i = 0; i < kNumSlot; ++i) {
+    for (int i = 0; i < kNumSlot; ++i)
       bucket[i].key = INVALID;
-    }
     local_depth = depth;
   }
 
@@ -60,8 +58,8 @@ struct Segment {
   bool Insert4split(Key_t &, Value_t, size_t);
   PageID_t *Split(FileManager *);
   std::vector<std::pair<size_t, size_t>> find_path(size_t, size_t);
-  void execute_path(FileManager *, PageID_t,
-                    std::vector<std::pair<size_t, size_t>> &, Key_t &, Value_t);
+  void execute_path(FileManager *, std::vector<std::pair<size_t, size_t>> &,
+                    Key_t &, Value_t);
   void execute_path(std::vector<std::pair<size_t, size_t>> &, Pair);
   size_t numElement(void);
 
@@ -97,9 +95,8 @@ struct DirectoryHeader {
   void initDirectory(size_t _depth) {
     depth = _depth;
     capacity = pow(2, _depth);
-    if ((capacity / DirectoryPage::kNumPointers) > kMaxDirectoryPages) {
+    if ((capacity / DirectoryPage::kNumPointers) > kMaxDirectoryPages)
       capacity = kMaxDirectoryPages * DirectoryPage::kNumPointers;
-    }
   }
 
   void initDirectory(void) {
@@ -107,9 +104,8 @@ struct DirectoryHeader {
     size_t _depth = 10;
     depth = _depth;
     capacity = pow(2, _depth);
-    if ((capacity / DirectoryPage::kNumPointers) > kMaxDirectoryPages) {
+    if ((capacity / DirectoryPage::kNumPointers) > kMaxDirectoryPages)
       capacity = kMaxDirectoryPages * DirectoryPage::kNumPointers;
-    }
   }
 };
 
