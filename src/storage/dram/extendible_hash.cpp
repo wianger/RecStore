@@ -625,6 +625,6 @@ void ExtendibleHash::clear() {
   }
 }
 
-std::string ExtendibleHash::RetrieveValue(uint64_t raw_value) {
-  return Index::RetrieveValue(raw_value); 
-}
+// std::string ExtendibleHash::RetrieveValue(uint64_t raw_value) {
+//   return Index::RetrieveValue(raw_value); 
+// }
