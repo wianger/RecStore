@@ -1,7 +1,7 @@
 #pragma once
 
+#include "../dram/pair.h"
 #include "file.h"
-#include "pair.h"
 #include "util.h"
 #include <cmath>
 #include <cstdint>
@@ -56,6 +56,7 @@ struct Segment {
 
   int Insert(FileManager *, Key_t &, Value_t, size_t, size_t);
   bool Insert4split(Key_t &, Value_t, size_t);
+  PageID_t *Split(coroutine<Value_t>::push_type &sink, FileManager *);
   PageID_t *Split(FileManager *);
   std::vector<std::pair<size_t, size_t>> find_path(size_t, size_t);
   void execute_path(FileManager *, std::vector<std::pair<size_t, size_t>> &,
@@ -114,26 +115,28 @@ public:
   CCEH(const std::string &file_path);
   ~CCEH(void);
 
+  void Insert(coroutine<Value_t>::push_type &sink, Key_t &, Value_t);
   bool Insert(Key_t &, Value_t);
   bool InsertOnly(Key_t &, Value_t);
   bool Delete(Key_t &);
+  void Get(coroutine<Value_t>::push_type &sink, const Key_t &);
   Value_t Get(const Key_t &);
   Value_t FindAnyway(const Key_t &);
 
-  double Utilization(void);
-  size_t Capacity(void);
-  void Recovery(void);
+  double Utilization();
+  size_t Capacity();
+  void Recovery();
 
   bool crashed = true;
 
 private:
   void initCCEH(size_t);
-  std::mutex &get_segment_lock(PageID_t page_id) const;
+  std::shared_mutex &get_segment_lock(PageID_t page_id) const;
 
   PageID_t dir_header_page_id;
   FileManager *fm;
   mutable std::shared_mutex dir_mutex;
   mutable std::mutex segment_locks_mutex;
-  mutable std::unordered_map<PageID_t, std::unique_ptr<std::mutex>>
+  mutable std::unordered_map<PageID_t, std::unique_ptr<std::shared_mutex>>
       segment_locks;
 };
