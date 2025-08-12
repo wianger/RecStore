@@ -66,6 +66,18 @@ target_link_libraries(test_engine_extendible_hash PUBLIC
     pthread
 )
 
+add_executable(test_engine_cceh test_engine_cceh.cpp)
+target_link_libraries(test_engine_cceh PUBLIC
+    cceh
+    base
+    base_memory
+    ps_common
+    kv_engine
+    gtest
+    gtest_main
+    pthread
+)
+
 # index 单元测试
 add_executable(test_index test_index.cpp)
 target_link_libraries(test_index PUBLIC

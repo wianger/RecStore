@@ -17,19 +17,10 @@ class KVEngineCCEH : public BaseKV {
 public:
   KVEngineCCEH(const BaseKVConfig &config)
       : BaseKV(config),
-#ifdef XMH_SIMPLE_MALLOC
-        shm_malloc_(config.json_config_.at("path").get<std::string>() +
-                        "/value",
-                    config.json_config_.at("capacity").get<size_t>() *
-                        config.json_config_.at("value_size").get<size_t>(),
-                    config.json_config_.at("value_size").get<size_t>())
-#else
         shm_malloc_(config.json_config_.at("path").get<std::string>() +
                         "/value",
                     1.2 * config.json_config_.at("capacity").get<size_t>() *
-                        config.json_config_.at("value_size").get<size_t>())
-#endif
-  {
+                        config.json_config_.at("value_size").get<size_t>()) {
     value_size_ = config.json_config_.at("value_size").get<int>();
 
     // 初始化extendible
@@ -85,57 +76,56 @@ public:
     hash_table_->Insert(hash_key, shmkv_data.data_value);
   }
 
-  void BatchPut(base::ConstArray<uint64_t> keys,
-                std::vector<base::ConstArray<float>> &values,
-                unsigned tid) override {
-    std::vector<std::unique_ptr<coroutine<Value_t>::pull_type>> coros;
-    int size = keys.Size();
-    for (int i = 0; i < size; i++) {
-    }
-  }
-
   void BatchGet(base::ConstArray<uint64_t> keys,
                 std::vector<base::ConstArray<float>> *values,
                 unsigned tid) override {
     values->clear();
-    std::vector<std::unique_ptr<coroutine<Value_t>::pull_type>> coros;
-    for (auto k : keys) {
-      coros.emplace_back(new coroutine<Value_t>::pull_type{
-          [this, k](auto &yield) { hash_table_->Get(yield, k); }});
-    }
-    bool progress = true;
     int size = keys.Size();
+    std::vector<std::unique_ptr<coroutine<Value_t>::pull_type>> coros;
+    for (size_t i = 0; i < size; i++) {
+      auto k = keys[i];
+      coros.emplace_back(new coroutine<Value_t>::pull_type{
+          [this, i, k](auto &yield) { hash_table_->Get(yield, i, k); }});
+    }
+    struct io_uring *ring = hash_table_->fm->get_thread_ring();
+    struct io_uring_cqe *cqe;
     std::vector<Value_t> vals(size, NONE);
-    while (progress) {
-      progress = false;
-      for (int i = 0; i < size; i++) {
-        auto &coro = coros[i];
-        if (*coro) {
-          vals[i] = coro->get();
-          Value_t tmp = vals[i];
-          (*coro)();
-          progress = true;
+    while (active_coro) {
+      if (!io_uring_peek_cqe(ring, &cqe)) {
+        if (cqe->res < 0) {
+          active_coro--;
+          io_uring_cqe_seen(ring, cqe);
+          throw std::runtime_error("Write operation failed: " +
+                                   std::string(strerror(-cqe->res)));
+        }
+        if (cqe->res != PAGE_SIZE) {
+          active_coro--;
+          io_uring_cqe_seen(ring, cqe);
+          throw std::runtime_error("Incomplete write: expected " +
+                                   std::to_string(PAGE_SIZE) +
+                                   " bytes, wrote " + std::to_string(cqe->res));
+        }
+        int id = cqe->user_data;
+        active_coro--;
+        io_uring_cqe_seen(ring, cqe);
+        if (coros[id] && *coros[id]) {
+          (*coros[id])();
+          vals[id] = coros[id]->get();
         }
       }
     }
     for (auto v : vals) {
       base::PetKVData shmkv_data;
-
       if (v == NONE) {
         values->emplace_back();
       } else {
-        // 正确的类型转换：直接将读取的data_value赋值给PetKVData
         shmkv_data.data_value = v;
         char *data = shm_malloc_.GetMallocData(shmkv_data.shm_malloc_offset());
         if (data == nullptr) {
           values->emplace_back();
           continue;
         }
-#ifdef XMH_VARIABLE_SIZE_KV
-        int size = shm_malloc_.GetMallocSize(shmkv_data.shm_malloc_offset());
-#else
         int size = value_size_;
-#endif
         values->emplace_back((float *)data, size / sizeof(float));
       }
     }
