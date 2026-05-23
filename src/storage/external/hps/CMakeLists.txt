@@ -45,6 +45,7 @@ if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/include
+    ${PROJECT_BINARY_DIR}/third_party/HugeCTR/HugeCTR/include
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/parallel-hashmap
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/rocksdb/include
     ${RECSTORE_CUDA_INCLUDE_DIRS}

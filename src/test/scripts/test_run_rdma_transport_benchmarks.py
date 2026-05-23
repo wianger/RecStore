@@ -40,7 +40,6 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
             rdma_put_client_send_arena_bytes=123456,
             rdma_put_server_scratch_bytes=654321,
             rdma_wait_timeout_ms=15000,
-            rdma_transport_mode="descriptor_doorbell",
         )
 
         runner = build_rdma_runner(args)
@@ -57,8 +56,6 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         self.assertEqual(runner.rdma_put_client_send_arena_bytes, 123456)
         self.assertEqual(runner.rdma_put_server_scratch_bytes, 654321)
         self.assertEqual(runner.rdma_wait_timeout_ms, 15000)
-        self.assertEqual(runner.rdma_transport_mode, "descriptor_doorbell")
-        self.assertTrue(runner.rdma_transport_mode_client_flag)
 
     def test_load_client_endpoint_for_default_grpc_config(self):
         host, port = load_client_endpoint(DEFAULT_GRPC_MAIN_CONFIG)
@@ -121,7 +118,6 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         rows = [
             {
                 "transport": "RDMA",
-                "transport_mode": "descriptor_doorbell",
                 "put_v2_transfer_mode": "read",
                 "op": "put",
                 "rounds": 50,
@@ -136,7 +132,6 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
             },
             {
                 "transport": "RDMA",
-                "transport_mode": "descriptor_doorbell",
                 "put_v2_transfer_mode": "read",
                 "op": "get",
                 "rounds": 50,
@@ -175,7 +170,7 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         self.assertIn("--rdma-only", completed.stdout)
         self.assertIn("--rdma-put-protocol-version", completed.stdout)
         self.assertIn("--rdma-put-v2-transfer-mode", completed.stdout)
-        self.assertIn("--rdma-transport-mode", completed.stdout)
+        self.assertNotIn("--rdma-transport-mode", completed.stdout)
 
 
 if __name__ == "__main__":

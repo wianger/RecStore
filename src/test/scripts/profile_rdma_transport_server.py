@@ -32,11 +32,6 @@ def parse_args():
         help="Optional libprofiler.so path to prepend to LD_PRELOAD.",
     )
     parser.add_argument(
-        "--rdma-transport-mode",
-        choices=["raw_message", "descriptor_doorbell"],
-        required=True,
-    )
-    parser.add_argument(
         "--rdma-put-v2-transfer-mode",
         choices=["read", "push"],
         default="read",
@@ -86,7 +81,6 @@ def main():
         rdma_put_protocol_version=2,
         rdma_put_v2_transfer_mode=args.rdma_put_v2_transfer_mode,
         rdma_wait_timeout_ms=30000,
-        rdma_transport_mode=args.rdma_transport_mode,
     )
 
     with runner.run():

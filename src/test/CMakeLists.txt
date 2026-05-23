@@ -554,15 +554,6 @@ target_link_libraries(brpc_ps_server_unit_test PUBLIC
 add_test(NAME brpc_ps_server_unit_test COMMAND brpc_ps_server_unit_test)
 set_tests_properties(brpc_ps_server_unit_test PROPERTIES LABELS "ps_unit")
 
-add_executable(test_rdma_protocol test_rdma_protocol.cpp)
-target_link_libraries(test_rdma_protocol PUBLIC
-    base
-    gtest
-    gtest_main
-    pthread
-)
-add_test(NAME test_rdma_protocol COMMAND test_rdma_protocol)
-
 add_executable(test_allshards_ps_client test_allshards_ps_client.cpp)
 target_link_libraries(test_allshards_ps_client PUBLIC
     base

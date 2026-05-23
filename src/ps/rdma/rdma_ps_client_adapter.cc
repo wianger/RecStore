@@ -18,6 +18,9 @@ DECLARE_int32(global_id);
 DECLARE_int32(num_server_processes);
 DECLARE_int32(num_client_processes);
 DECLARE_string(rdma_transport_mode);
+DEFINE_string(rdma_transport_mode,
+              "raw_message",
+              "RDMA transport mode: raw_message");
 
 namespace recstore {
 

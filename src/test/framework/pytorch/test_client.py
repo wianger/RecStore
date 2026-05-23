@@ -127,7 +127,6 @@ def start_server_if_needed():
             max_kv_num_per_request=rdma_config["max_kv_num_per_request"],
             timeout=15,
             use_local_memcached=RDMA_MEMCACHED_MODE,
-            rdma_transport_mode=os.environ.get("RECSTORE_RDMA_TRANSPORT_MODE"),
         )
         _server_runner.start()
         os.environ["RECSTORE_MEMCACHED_HOST"] = _server_runner.memcached_host

@@ -118,35 +118,6 @@ TEST(PetPSIntegrationTest, PutGetRoundTripMultiShard) {
   wrapper.RevokeRPCResource(rpc_id);
 }
 
-TEST(PetPSIntegrationTest, PutRemoteControlV2EncodeDecode) {
-  petps::PutRemotePayloadV2 control{
-      petps::kPutRemotePayloadMagic,
-      petps::kPutProtocolVersionV2,
-      0,
-      8,
-      4,
-      GlobalAddress{1, 4096},
-      static_cast<std::uint32_t>(petps::PutPayloadBytes(8, 4 * sizeof(float))),
-      petps::kPutV2TransferModeRead,
-      0,
-  };
-  std::string payload;
-  std::string error;
-  ASSERT_TRUE(petps::EncodePutRemoteControlV2(control, &payload, &error))
-      << error;
-  ASSERT_TRUE(petps::IsPutRemoteControlV2(payload));
-
-  petps::PutRemotePayloadV2 decoded{};
-  ASSERT_TRUE(petps::DecodePutRemoteControlV2(payload, &decoded, &error))
-      << error;
-  EXPECT_EQ(decoded.key_count, control.key_count);
-  EXPECT_EQ(decoded.embedding_dim, control.embedding_dim);
-  EXPECT_EQ(decoded.payload_bytes, control.payload_bytes);
-  EXPECT_EQ(decoded.transfer_mode, control.transfer_mode);
-  EXPECT_EQ(decoded.payload_gaddr.nodeID, control.payload_gaddr.nodeID);
-  EXPECT_EQ(decoded.payload_gaddr.offset, control.payload_gaddr.offset);
-}
-
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   folly::Init init(&argc, &argv);

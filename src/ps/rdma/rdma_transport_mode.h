@@ -6,7 +6,6 @@ namespace petps {
 
 enum class RdmaTransportMode {
   kRawMessage,
-  kDescriptorDoorbell,
 };
 
 inline bool ParseRdmaTransportMode(
@@ -21,12 +20,9 @@ inline bool ParseRdmaTransportMode(
     *mode = RdmaTransportMode::kRawMessage;
     return true;
   }
-  if (value == "descriptor_doorbell") {
-    *mode = RdmaTransportMode::kDescriptorDoorbell;
-    return true;
-  }
   if (error != nullptr) {
-    *error = "unknown RDMA transport mode: " + value;
+    *error = "unknown RDMA transport mode: " + value +
+             "; only raw_message is supported";
   }
   return false;
 }

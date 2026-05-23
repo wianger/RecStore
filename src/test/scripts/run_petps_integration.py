@@ -62,11 +62,6 @@ def main():
     parser.add_argument("--rdma-server-ready-timeout-sec", type=int)
     parser.add_argument("--rdma-server-ready-poll-ms", type=int)
     parser.add_argument("--rdma-client-receive-arena-bytes", type=int)
-    parser.add_argument(
-        "--rdma-transport-mode",
-        choices=["raw_message", "descriptor_doorbell"],
-        default="raw_message",
-    )
     parser.add_argument("--validate-routing", action="store_true")
     parser.add_argument(
         "--show-runner-logs",
@@ -96,7 +91,6 @@ def main():
         rdma_server_ready_timeout_sec=args.rdma_server_ready_timeout_sec,
         rdma_server_ready_poll_ms=args.rdma_server_ready_poll_ms,
         rdma_client_receive_arena_bytes=args.rdma_client_receive_arena_bytes,
-        rdma_transport_mode=args.rdma_transport_mode,
         validate_routing=args.validate_routing,
     )
 

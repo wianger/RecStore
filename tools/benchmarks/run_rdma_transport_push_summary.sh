@@ -17,7 +17,6 @@ cd "${ROOT_DIR}"
 exec python3 "${RUNNER_SCRIPT}" \
   --benchmark-binary "${BENCHMARK_BINARY}" \
   --rdma-only \
-  --rdma-transport-mode descriptor_doorbell \
   --iterations 500 \
   --batch-keys 500 \
   --rounds 20 \

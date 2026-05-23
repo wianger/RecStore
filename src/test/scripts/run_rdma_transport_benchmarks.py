@@ -89,8 +89,6 @@ def build_rdma_runner(args):
             args, "rdma_put_server_scratch_bytes", None
         ),
         rdma_wait_timeout_ms=getattr(args, "rdma_wait_timeout_ms", None),
-        rdma_transport_mode=getattr(args, "rdma_transport_mode", None),
-        rdma_transport_mode_client_flag=True,
         validate_routing=getattr(args, "validate_routing", False),
     )
 
@@ -286,11 +284,6 @@ def main():
     parser.add_argument("--rdma-put-server-scratch-bytes", type=int)
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
     parser.add_argument(
-        "--rdma-transport-mode",
-        choices=["raw_message", "descriptor_doorbell"],
-        default=None,
-    )
-    parser.add_argument(
         "--rdma-client-timeout-sec",
         type=int,
         default=120,
@@ -332,7 +325,6 @@ def main():
             print_filtered_output(completed.stderr, args.show_runner_logs)
         rows = collect_summary_rows(completed.stdout)
         for row in rows:
-            row["transport_mode"] = args.rdma_transport_mode or "raw_message"
             row["put_v2_transfer_mode"] = args.rdma_put_v2_transfer_mode
         summary_rows.extend(rows)
         rc = completed.returncode

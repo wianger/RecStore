@@ -105,34 +105,6 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--rdma_server_ready_poll_ms=3", client_cmd)
         self.assertIn("--rdma_client_receive_arena_bytes=134217728", client_cmd)
 
-    def test_builds_transport_mode_flags_for_server_and_client(self):
-        runner = PetPSClusterRunner(
-            server_path="./build/bin/petps_server",
-            config_path="./src/test/configs/recstore_config.rdma_test.json",
-            use_local_memcached="never",
-            rdma_transport_mode="descriptor_doorbell",
-        )
-
-        server_cmd = runner.build_server_cmd(global_id=0)
-        client_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"])
-
-        self.assertIn("--rdma_transport_mode=descriptor_doorbell", server_cmd)
-        self.assertIn("--rdma_transport_mode=descriptor_doorbell", client_cmd)
-
-    def test_can_disable_transport_mode_client_flag(self):
-        runner = PetPSClusterRunner(
-            rdma_transport_mode="descriptor_doorbell",
-            rdma_transport_mode_client_flag=False,
-        )
-
-        env = runner.build_env()
-        server_cmd = runner.build_server_cmd(global_id=0)
-        client_cmd = runner.build_client_cmd(["./build/bin/ps_transport_benchmark"])
-
-        self.assertEqual(env["RECSTORE_RDMA_TRANSPORT_MODE"], "descriptor_doorbell")
-        self.assertIn("--rdma_transport_mode=descriptor_doorbell", server_cmd)
-        self.assertNotIn("--rdma_transport_mode=descriptor_doorbell", client_cmd)
-
     @mock.patch("petps_cluster_runner.os.geteuid", return_value=0)
     @mock.patch("petps_cluster_runner.shutil.which", return_value="/usr/bin/memcached")
     def test_build_memcached_cmd_uses_system_memcached_as_root(
