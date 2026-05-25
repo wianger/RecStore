@@ -306,7 +306,7 @@ void TestPrefetchConcurrency(const std::vector<int>& ports) {
     std::vector<std::vector<float>> values;
   };
 
-  std::vector<CaseData> cases(4);
+  std::vector<CaseData> cases(16);
   for (size_t c = 0; c < cases.size(); ++c) {
     auto& cs = cases[c];
     for (int i = 0; i < 12; ++i) {

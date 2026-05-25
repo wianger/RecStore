@@ -55,6 +55,59 @@ class TestTorchRecAggregate(unittest.TestCase):
         self.assertEqual(agg["embed_transport_ms_p95"], 3.4)
         self.assertEqual(agg["embed_transport_ms_max"], 3.5)
 
+    def test_aggregate_main_csv_includes_prefetch_counter_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "main.csv"
+            with path.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(
+                    f,
+                    fieldnames=[
+                        "step_total_ms",
+                        "prefetch_depth",
+                        "prefetch_issued_batches",
+                        "prefetch_consumed_batches",
+                        "prefetch_pending_batches",
+                        "prefetch_ready_batches",
+                        "prefetch_total_ids",
+                        "prefetch_consumed_total_ids",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "step_total_ms": 10.0,
+                        "prefetch_depth": 2,
+                        "prefetch_issued_batches": 1,
+                        "prefetch_consumed_batches": 0,
+                        "prefetch_pending_batches": 1,
+                        "prefetch_ready_batches": 0,
+                        "prefetch_total_ids": 10,
+                        "prefetch_consumed_total_ids": 0,
+                    }
+                )
+                writer.writerow(
+                    {
+                        "step_total_ms": 20.0,
+                        "prefetch_depth": 2,
+                        "prefetch_issued_batches": 1,
+                        "prefetch_consumed_batches": 1,
+                        "prefetch_pending_batches": 2,
+                        "prefetch_ready_batches": 1,
+                        "prefetch_total_ids": 14,
+                        "prefetch_consumed_total_ids": 14,
+                    }
+                )
+
+            agg = aggregate_torchrec_main_csv(path)
+
+        self.assertEqual(agg["prefetch_depth_mean"], 2.0)
+        self.assertEqual(agg["prefetch_issued_batches_mean"], 1.0)
+        self.assertEqual(agg["prefetch_consumed_batches_mean"], 0.5)
+        self.assertEqual(agg["prefetch_pending_batches_mean"], 1.5)
+        self.assertEqual(agg["prefetch_ready_batches_mean"], 0.5)
+        self.assertEqual(agg["prefetch_total_ids_mean"], 12.0)
+        self.assertEqual(agg["prefetch_consumed_total_ids_mean"], 7.0)
+
     def test_write_aggregate_csv(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             out_path = Path(tmpdir) / "agg.csv"

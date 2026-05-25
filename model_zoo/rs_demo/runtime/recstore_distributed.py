@@ -359,8 +359,77 @@ class ShardedRecstoreClient:
             raise RuntimeError(
                 "enable_gpu_cache requires a RecStore client or ops library exposing "
                 "enable_gpu_cache()."
-            )
+        )
         return bool(enable(int(capacity), int(embedding_dim)))
+
+    def set_gpu_cache_lookup_bypass_enabled(self, enabled: bool) -> None:
+        setter = getattr(self._client, "set_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(setter):
+            ops = getattr(self._client, "ops", None)
+            setter = getattr(ops, "set_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(setter):
+            raise RuntimeError(
+                "set_gpu_cache_lookup_bypass_enabled requires a RecStore client or "
+                "ops library exposing set_gpu_cache_lookup_bypass_enabled()."
+            )
+        setter(bool(enabled))
+
+    def is_gpu_cache_lookup_bypass_enabled(self) -> bool:
+        getter = getattr(self._client, "is_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(getter):
+            ops = getattr(self._client, "ops", None)
+            getter = getattr(ops, "is_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(getter):
+            raise RuntimeError(
+                "is_gpu_cache_lookup_bypass_enabled requires a RecStore client or "
+                "ops library exposing is_gpu_cache_lookup_bypass_enabled()."
+            )
+        return bool(getter())
+
+    def is_gpu_cache_lookup_bypassed(self) -> bool:
+        getter = getattr(self._client, "is_gpu_cache_lookup_bypassed", None)
+        if not callable(getter):
+            ops = getattr(self._client, "ops", None)
+            getter = getattr(ops, "is_gpu_cache_lookup_bypassed", None)
+        if not callable(getter):
+            raise RuntimeError(
+                "is_gpu_cache_lookup_bypassed requires a RecStore client or ops "
+                "library exposing is_gpu_cache_lookup_bypassed()."
+            )
+        return bool(getter())
+
+    def reset_gpu_cache_bypass_state(self) -> None:
+        reset = getattr(self._client, "reset_gpu_cache_bypass_state", None)
+        if not callable(reset):
+            ops = getattr(self._client, "ops", None)
+            reset = getattr(ops, "reset_gpu_cache_bypass_state", None)
+        if not callable(reset):
+            raise RuntimeError(
+                "reset_gpu_cache_bypass_state requires a RecStore client or ops "
+                "library exposing reset_gpu_cache_bypass_state()."
+            )
+        reset()
+
+    def prefill_gpu_cache(
+        self,
+        name: str,
+        ids: torch.Tensor,
+        values: torch.Tensor,
+    ) -> None:
+        self._require_active_shard("prefill_gpu_cache")
+        prefill = getattr(self._client, "prefill_gpu_cache", None)
+        if callable(prefill):
+            prefill(name, ids, values)
+            return
+        ops = getattr(self._client, "ops", None)
+        prefill = getattr(ops, "prefill_gpu_cache", None)
+        if not callable(prefill):
+            raise RuntimeError(
+                "prefill_gpu_cache requires a RecStore client or ops library "
+                "exposing prefill_gpu_cache()."
+            )
+        normalized_ids = self._normalize_ids(ids, keep_device=True)
+        prefill(normalized_ids, values)
 
     def get_last_gpu_cache_profile(self) -> dict[str, float]:
         getter = getattr(self._client, "get_last_gpu_cache_profile", None)

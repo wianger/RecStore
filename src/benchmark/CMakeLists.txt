@@ -42,7 +42,9 @@ add_executable(ps_transport_benchmark
 target_link_libraries(ps_transport_benchmark PUBLIC
     base
     grpc_ps_client
+    dist_grpc_ps_client
     brpc_ps_client
+    dist_brpc_ps_client
     local_shm_ps_client
     ${warp_wq_ps_client}
     Folly::folly

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <filesystem>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -10,9 +11,12 @@
 #include <vector>
 
 #include "core/faster.h"
+#include "core/config.h"
 #include "core/key_hash.h"
 #include "core/status.h"
+#include "device/file_system_disk.h"
 #include "device/null_disk.h"
+#include "environment/file_linux.h"
 
 namespace recstore::storage::fasterkv {
 namespace {
@@ -263,8 +267,12 @@ private:
   bool found_;
 };
 
-using FasterStore =
+using MemoryStore =
     FasterKv<UInt64Key, VariableValue, FASTER::device::NullDisk>;
+using SsdDisk =
+    FASTER::device::FileSystemDisk<FASTER::environment::QueueIoHandler,
+                                   uint64_t{1} << 30>;
+using SsdStore = FasterKv<UInt64Key, VariableValue, SsdDisk>;
 
 uint64_t NextPowerOfTwo(uint64_t value) {
   uint64_t out = 1;
@@ -295,34 +303,50 @@ void CheckStatus(Status status, const char* operation) {
   }
 }
 
-void CompletePendingOrThrow(FasterStore& store, const char* operation) {
+uint64_t ResolveLogSize(uint64_t capacity,
+                        size_t value_size,
+                        const FasterKVBackendOptions& options) {
+  uint64_t log_size =
+      options.hlog_memory_bytes == 0
+          ? ComputeLogSize(capacity, value_size)
+          : options.hlog_memory_bytes;
+  constexpr uint64_t kPageSize = 32ULL << 20;
+  if (log_size < kPageSize * 6) {
+    log_size = kPageSize * 6;
+  }
+  return NextPowerOfTwo(log_size);
+}
+
+uint64_t ResolveReadCacheSize(uint64_t read_cache_bytes) {
+  constexpr uint64_t kPageSize = 32ULL << 20;
+  return NextPowerOfTwo(std::max(read_cache_bytes, kPageSize * 6));
+}
+
+double ResolveMutableFraction(const FasterKVBackendOptions& options) {
+  if (options.mutable_fraction < 0.0 || options.mutable_fraction > 1.0) {
+    throw std::invalid_argument("FasterKV mutable_fraction must be in [0, 1]");
+  }
+  if (options.mutable_fraction > 0.0) {
+    return options.mutable_fraction;
+  }
+  return options.storage == FasterKVStorage::kSsd ? 0.5 : 1.0;
+}
+
+template <typename Store>
+void CompletePendingOrThrow(Store& store, const char* operation) {
   if (!store.CompletePending(true)) {
     throw std::runtime_error(std::string(operation) +
                              " failed: pending operations did not complete");
   }
 }
 
-} // namespace
-
-class FasterKVBackend::Impl {
+template <typename Store>
+class FasterStoreAdapter {
 public:
-  Impl(uint64_t capacity, size_t value_size)
-      : value_size_(value_size),
-        store_(FasterStore::IndexConfig{ComputeHashTableSize(capacity)},
-               ComputeLogSize(capacity, value_size),
-               "",
-               1.0) {
-    if (capacity == 0) {
-      throw std::invalid_argument("FasterKVBackend capacity must be > 0");
-    }
-    if (value_size_ == 0 ||
-        value_size_ >
-            static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
-      throw std::invalid_argument("FasterKVBackend value_size is invalid");
-    }
-  }
+  FasterStoreAdapter(std::unique_ptr<Store> store, size_t value_size)
+      : value_size_(value_size), store_(std::move(store)) {}
 
-  ~Impl() { StopThreadSessionIfNeeded(); }
+  ~FasterStoreAdapter() { StopThreadSessionIfNeeded(); }
 
   void Insert(size_t num_keys, const long long* keys, const char* values) {
     EnsureThreadSession();
@@ -335,19 +359,19 @@ public:
                             values + i * value_size_,
                             static_cast<uint32_t>(value_size_)};
       const Status status =
-          store_.Upsert(context, callback, NextSerialNumber());
+          store_->Upsert(context, callback, NextSerialNumber());
       if (status == Status::Pending) {
         continue;
       }
       CheckStatus(status, "FasterKV::Upsert");
     }
-    CompletePendingOrThrow(store_, "FasterKV::Upsert");
+    CompletePendingOrThrow(*store_, "FasterKV::Upsert");
   }
 
   void Fetch(size_t num_keys,
              const long long* keys,
              char* values,
-             const MissCallback& on_miss) {
+             const FasterKVBackend::MissCallback& on_miss) {
     EnsureThreadSession();
     for (size_t i = 0; i < num_keys; ++i) {
       auto callback = [](IAsyncContext* context, Status status) {
@@ -368,13 +392,13 @@ public:
           static_cast<uint32_t>(value_size_),
           i,
           &on_miss};
-      const Status status = store_.Read(context, callback, NextSerialNumber());
+      const Status status = store_->Read(context, callback, NextSerialNumber());
       if (status == Status::NotFound) {
         context.NotifyMiss();
         continue;
       }
       if (status == Status::Pending) {
-        CompletePendingOrThrow(store_, "FasterKV::Read");
+        CompletePendingOrThrow(*store_, "FasterKV::Read");
         continue;
       }
       CheckStatus(status, "FasterKV::Read");
@@ -392,23 +416,26 @@ private:
     if (session_.owner != nullptr) {
       throw std::runtime_error("Thread already owns a FasterKVBackend session");
     }
-    store_.StartSession();
+    store_->StartSession();
     session_.owner = this;
   }
 
   void StopThreadSessionIfNeeded() {
     if (session_.owner == this) {
-      store_.StopSession();
+      store_->StopSession();
       session_.owner = nullptr;
     }
   }
 
-  void StopSessionFromThreadExit() { store_.StopSession(); }
+  void StopSessionFromThreadExit() {
+    store_->StopSession();
+    session_.owner = nullptr;
+  }
 
   uint64_t NextSerialNumber() { return serial_number_.fetch_add(1) + 1; }
 
   struct ThreadSession {
-    Impl* owner = nullptr;
+    FasterStoreAdapter* owner = nullptr;
 
     ~ThreadSession() {
       if (owner != nullptr) {
@@ -418,17 +445,122 @@ private:
   };
 
   size_t value_size_;
-  FasterStore store_;
+  std::unique_ptr<Store> store_;
   std::atomic<uint64_t> serial_number_{0};
 
   static thread_local ThreadSession session_;
 };
 
-thread_local FasterKVBackend::Impl::ThreadSession
-    FasterKVBackend::Impl::session_;
+template <typename Store>
+thread_local typename FasterStoreAdapter<Store>::ThreadSession
+    FasterStoreAdapter<Store>::session_;
+
+class IFasterStore {
+public:
+  virtual ~IFasterStore() = default;
+  virtual void
+  Insert(size_t num_keys, const long long* keys, const char* values) = 0;
+  virtual void Fetch(size_t num_keys,
+                     const long long* keys,
+                     char* values,
+                     const FasterKVBackend::MissCallback& on_miss)   = 0;
+};
+
+template <typename Store>
+class FasterStoreHolder final : public IFasterStore {
+public:
+  FasterStoreHolder(std::unique_ptr<Store> store, size_t value_size)
+      : adapter_(std::move(store), value_size) {}
+
+  void
+  Insert(size_t num_keys, const long long* keys, const char* values) override {
+    adapter_.Insert(num_keys, keys, values);
+  }
+
+  void Fetch(size_t num_keys,
+             const long long* keys,
+             char* values,
+             const FasterKVBackend::MissCallback& on_miss) override {
+    adapter_.Fetch(num_keys, keys, values, on_miss);
+  }
+
+private:
+  FasterStoreAdapter<Store> adapter_;
+};
+
+FASTER::core::ReadCacheConfig
+BuildReadCacheConfig(const FasterKVBackendOptions& options) {
+  if (options.read_cache_bytes == 0) {
+    return FASTER::core::DEFAULT_READ_CACHE_CONFIG;
+  }
+  return FASTER::core::ReadCacheConfig{
+      .mem_size         = ResolveReadCacheSize(options.read_cache_bytes),
+      .mutable_fraction = 0.5,
+      .pre_allocate     = false,
+      .enabled          = true};
+}
+
+} // namespace
+
+class FasterKVBackend::Impl {
+public:
+  Impl(uint64_t capacity,
+       size_t value_size,
+       const FasterKVBackendOptions& options) {
+    if (capacity == 0) {
+      throw std::invalid_argument("FasterKVBackend capacity must be > 0");
+    }
+    if (value_size == 0 ||
+        value_size >
+            static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
+      throw std::invalid_argument("FasterKVBackend value_size is invalid");
+    }
+    if (options.storage == FasterKVStorage::kMemory) {
+      auto store = std::make_unique<MemoryStore>(
+          MemoryStore::IndexConfig{ComputeHashTableSize(capacity)},
+          ResolveLogSize(capacity, value_size, options),
+          "",
+          ResolveMutableFraction(options),
+          BuildReadCacheConfig(options));
+      store_ = std::make_unique<FasterStoreHolder<MemoryStore>>(
+          std::move(store), value_size);
+      return;
+    }
+    if (options.log_path.empty()) {
+      throw std::invalid_argument("FasterKV SSD storage requires log_path");
+    }
+    std::filesystem::create_directories(options.log_path);
+    auto store = std::make_unique<SsdStore>(
+        SsdStore::IndexConfig{ComputeHashTableSize(capacity)},
+        ResolveLogSize(capacity, value_size, options),
+        options.log_path,
+        ResolveMutableFraction(options),
+        BuildReadCacheConfig(options));
+    store_ = std::make_unique<FasterStoreHolder<SsdStore>>(
+        std::move(store), value_size);
+  }
+
+  void Insert(size_t num_keys, const long long* keys, const char* values) {
+    store_->Insert(num_keys, keys, values);
+  }
+
+  void Fetch(size_t num_keys,
+             const long long* keys,
+             char* values,
+             const MissCallback& on_miss) {
+    store_->Fetch(num_keys, keys, values, on_miss);
+  }
+
+private:
+  std::unique_ptr<IFasterStore> store_;
+};
 
 FasterKVBackend::FasterKVBackend(uint64_t capacity, size_t value_size)
-    : impl_(std::make_unique<Impl>(capacity, value_size)) {}
+    : FasterKVBackend(capacity, value_size, FasterKVBackendOptions{}) {}
+
+FasterKVBackend::FasterKVBackend(
+    uint64_t capacity, size_t value_size, const FasterKVBackendOptions& options)
+    : impl_(std::make_unique<Impl>(capacity, value_size, options)) {}
 
 FasterKVBackend::~FasterKVBackend() = default;
 

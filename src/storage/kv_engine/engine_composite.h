@@ -1,11 +1,8 @@
 #pragma once
 
 #include <algorithm>
-#include <array>
 #include <cstring>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
@@ -14,7 +11,6 @@
 #include "storage/index/dram/extendible_hash_index.h"
 #include "storage/index/dram/pet_hash_index.h"
 #include "storage/index/dram/unordered_map_index.h"
-#include "storage/index/ssd/ssd_extendible_hash_index.h"
 #include "storage/kv_engine/base_kv.h"
 #include "storage/value_store/dram_value_store.h"
 #include "storage/value_store/hybrid_value_store.h"
@@ -47,11 +43,15 @@ public:
 
   void Get(const uint64_t key, std::string& value, unsigned tid) override {
     (void)tid;
-    std::shared_lock<std::shared_mutex> lock(KeyMutex(key));
     Value_t handle = kValueHandleNone;
     index_->Get(key, handle);
     if (handle == kValueHandleNone) {
       value.clear();
+      return;
+    }
+    if (const char* ptr = value_store_->DirectPtr(handle)) {
+      value.resize(value_store_->SlotCapacity(handle));
+      std::memcpy(value.data(), ptr, value.size());
       return;
     }
     value.resize(value_store_->SlotCapacity(handle));
@@ -62,7 +62,6 @@ public:
 
   bool Exists(const uint64_t key, unsigned tid) override {
     (void)tid;
-    std::shared_lock<std::shared_mutex> lock(KeyMutex(key));
     Value_t handle = kValueHandleNone;
     index_->Get(key, handle);
     return handle != kValueHandleNone;
@@ -106,82 +105,40 @@ public:
       return;
     }
 
-    std::vector<size_t> lock_ids;
-    lock_ids.reserve(static_cast<size_t>(keys.Size()));
-    for (int i = 0; i < keys.Size(); ++i) {
-      lock_ids.push_back(LockIndex(keys[i]));
-    }
-    std::sort(lock_ids.begin(), lock_ids.end());
-    lock_ids.erase(
-        std::unique(lock_ids.begin(), lock_ids.end()), lock_ids.end());
-
-    std::vector<std::unique_lock<std::shared_mutex>> locks;
-    locks.reserve(lock_ids.size());
-    for (size_t id : lock_ids) {
-      locks.emplace_back(key_mutexes_[id]);
-    }
-
-    struct OverwriteItem {
-      Value_t handle = kValueHandleNone;
+    struct PutItem {
+      uint64_t key = 0;
       ValueStore::WriteSpec spec{};
     };
-    struct ReallocItem {
-      uint64_t key       = 0;
-      Value_t old_handle = kValueHandleNone;
-      ValueStore::WriteSpec spec{};
-    };
-    std::vector<OverwriteItem> overwrites;
-    std::vector<ReallocItem> reallocs;
-    overwrites.reserve(static_cast<size_t>(keys.Size()));
-    reallocs.reserve(static_cast<size_t>(keys.Size()));
+    std::vector<PutItem> items;
+    items.reserve(static_cast<size_t>(keys.Size()));
 
     for (int i = 0; i < keys.Size(); ++i) {
       const auto& item   = (*values)[i];
       const void* data   = item.Data();
       const size_t size  = static_cast<size_t>(item.Size()) * sizeof(float);
-      Value_t old_handle = kValueHandleNone;
-      index_->Get(keys[i], old_handle);
-      if (old_handle != kValueHandleNone &&
-          value_store_->SlotCapacity(old_handle) >= size) {
-        overwrites.push_back(
-            OverwriteItem{old_handle, ValueStore::WriteSpec{data, size}});
-        continue;
-      }
-      reallocs.push_back(
-          ReallocItem{keys[i], old_handle, ValueStore::WriteSpec{data, size}});
+      items.push_back(PutItem{keys[i], ValueStore::WriteSpec{data, size}});
     }
 
-    if (!overwrites.empty()) {
-      std::vector<uint64_t> handles;
-      std::vector<ValueStore::WriteSpec> specs;
-      handles.reserve(overwrites.size());
-      specs.reserve(overwrites.size());
-      for (const auto& item : overwrites) {
-        handles.push_back(item.handle);
-        specs.push_back(item.spec);
+    std::vector<ValueStore::WriteSpec> specs;
+    specs.reserve(items.size());
+    for (const auto& item : items) {
+      specs.push_back(item.spec);
+    }
+    const auto new_handles = value_store_->BatchAllocAndWrite(specs);
+    if (new_handles.size() != items.size()) {
+      LOG(FATAL) << "KVEngine::BatchPut allocation result size mismatch";
+    }
+    for (size_t i = 0; i < items.size(); ++i) {
+      if (new_handles[i] == kValueHandleNone) {
+        LOG(FATAL) << "KVEngine batch value allocation failed, key="
+                   << items[i].key << " size=" << items[i].spec.size;
       }
-      value_store_->BatchWrite(handles, specs);
     }
 
-    if (!reallocs.empty()) {
-      std::vector<ValueStore::WriteSpec> specs;
-      specs.reserve(reallocs.size());
-      for (const auto& item : reallocs) {
-        specs.push_back(item.spec);
-      }
-      const auto new_handles = value_store_->BatchAllocAndWrite(specs);
-      if (new_handles.size() != reallocs.size()) {
-        LOG(FATAL) << "KVEngine::BatchPut allocation result size mismatch";
-      }
-      for (size_t i = 0; i < reallocs.size(); ++i) {
-        if (new_handles[i] == kValueHandleNone) {
-          LOG(FATAL) << "KVEngine batch value allocation failed, key="
-                     << reallocs[i].key << " size=" << reallocs[i].spec.size;
-        }
-        index_->Put(reallocs[i].key, new_handles[i]);
-        if (reallocs[i].old_handle != kValueHandleNone) {
-          value_store_->Free(reallocs[i].old_handle);
-        }
+    for (size_t i = 0; i < items.size(); ++i) {
+      Value_t old_handle = index_->Put(items[i].key, new_handles[i], tid);
+      if (old_handle != kValueHandleNone) {
+        value_store_->Retire(old_handle);
       }
     }
   }
@@ -197,27 +154,14 @@ public:
     buffers.clear();
     buffers.resize(keys.Size());
 
-    std::vector<size_t> lock_ids;
-    lock_ids.reserve(static_cast<size_t>(keys.Size()));
-    for (int i = 0; i < keys.Size(); ++i) {
-      lock_ids.push_back(LockIndex(keys[i]));
+    if (keys.Size() > 0) {
+      index_->BatchGet(keys, handles.data(), tid);
     }
-    std::sort(lock_ids.begin(), lock_ids.end());
-    lock_ids.erase(
-        std::unique(lock_ids.begin(), lock_ids.end()), lock_ids.end());
-
-    std::vector<std::shared_lock<std::shared_mutex>> locks;
-    locks.reserve(lock_ids.size());
-    for (size_t id : lock_ids) {
-      locks.emplace_back(key_mutexes_[id]);
-    }
-
     std::vector<uint64_t> batch_handles;
     std::vector<size_t> batch_indices;
     batch_handles.reserve(static_cast<size_t>(keys.Size()));
     batch_indices.reserve(static_cast<size_t>(keys.Size()));
     for (int i = 0; i < keys.Size(); ++i) {
-      index_->Get(keys[i], handles[i]);
       if (handles[i] == kValueHandleNone) {
         (*values)[i] = base::ConstArray<float>();
         continue;
@@ -295,10 +239,26 @@ public:
     if (value_size == 0) {
       LOG(FATAL) << "KVEngine::BulkLoad requires value_size hint";
     }
-    const char* data = reinterpret_cast<const char*>(value);
-    for (int i = 0; i < keys.Size(); ++i) {
-      PutInternal(keys[i], data + i * value_size, value_size, 0, false);
+    if (keys.Size() == 0) {
+      return;
     }
+    const char* data = reinterpret_cast<const char*>(value);
+    std::vector<ValueStore::WriteSpec> specs;
+    specs.reserve(static_cast<size_t>(keys.Size()));
+    for (int i = 0; i < keys.Size(); ++i) {
+      specs.push_back(ValueStore::WriteSpec{data + i * value_size, value_size});
+    }
+    std::vector<uint64_t> handles = value_store_->BatchAllocAndWrite(specs);
+    if (handles.size() != static_cast<size_t>(keys.Size())) {
+      LOG(FATAL) << "KVEngine::BulkLoad allocation result size mismatch";
+    }
+    for (int i = 0; i < keys.Size(); ++i) {
+      if (handles[static_cast<size_t>(i)] == kValueHandleNone) {
+        LOG(FATAL) << "KVEngine bulk value allocation failed, key=" << keys[i]
+                   << " size=" << value_size;
+      }
+    }
+    index_->BatchPut(keys, handles.data(), 0);
   }
 
   void Util() override {
@@ -319,40 +279,22 @@ private:
                    bool emit_fence) {
     (void)tid;
     (void)emit_fence;
-    std::unique_lock<std::shared_mutex> lock(KeyMutex(key));
-    Value_t old_handle = kValueHandleNone;
-    index_->Get(key, old_handle);
-    if (old_handle != kValueHandleNone &&
-        value_store_->SlotCapacity(old_handle) >= size) {
-      value_store_->Write(old_handle, data, size);
-      return;
-    }
     Value_t new_handle = value_store_->AllocAndWrite(data, size);
     if (new_handle == kValueHandleNone) {
       LOG(FATAL) << "KVEngine value allocation failed, key=" << key
                  << " size=" << size;
       return;
     }
-    index_->Put(key, new_handle);
+    Value_t old_handle = index_->Put(key, new_handle, tid);
     if (old_handle != kValueHandleNone) {
-      value_store_->Free(old_handle);
+      value_store_->Retire(old_handle);
     }
-  }
-
-  std::shared_mutex& KeyMutex(uint64_t key) {
-    return key_mutexes_[LockIndex(key)];
-  }
-
-  size_t LockIndex(uint64_t key) const {
-    return static_cast<size_t>(key & (kLockStripeNum - 1));
   }
 
   BaseKVConfig config_;
   std::unique_ptr<Index> index_;
   std::unique_ptr<ValueStore> value_store_;
-  int num_threads_                       = 0;
-  static constexpr size_t kLockStripeNum = 4096;
-  std::array<std::shared_mutex, kLockStripeNum> key_mutexes_;
+  int num_threads_ = 0;
 };
 
 FACTORY_REGISTER(

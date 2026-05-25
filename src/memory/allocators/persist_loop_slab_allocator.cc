@@ -15,18 +15,20 @@ PersistLoopShmMalloc::PersistLoopShmMalloc(
          memory_size) {
     block_num_ += 64;
   }
-  shm_file_.type_  = medium;
   healthy_used_    = block_num_ * FLAGS_shm_malloc_healthy_rate;
   bool file_exists = base::file_util::PathExists(filename);
-  if (!shm_file_.Initialize(filename, memory_size)) {
+  shm_file_        = ShmFile::New(ShmFile::ConfigForMedium(
+      medium, filename, memory_size));
+  if (!shm_file_) {
     file_exists = false;
     CHECK(base::file_util::Delete(filename, false));
-    CHECK(shm_file_.Initialize(filename, memory_size))
-        << filename << " " << memory_size;
+    shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+        medium, filename, memory_size));
+    CHECK(shm_file_) << filename << " " << memory_size;
   }
 
-  used_bits_    = reinterpret_cast<uint64*>(shm_file_.Data());
-  data_         = shm_file_.Data() + (block_num_ >> 3);
+  used_bits_    = reinterpret_cast<uint64*>(shm_file_->Data());
+  data_         = shm_file_->Data() + (block_num_ >> 3);
   load_success_ = file_exists;
   Initialize();
   if (!file_exists) {

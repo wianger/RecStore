@@ -251,7 +251,8 @@ int main(int argc, char* argv[]) {
   folly::init(&argc, &argv);
   xmh::Reporter::StartReportThread();
 
-  base::PMMmapRegisterCenter::GetConfig().use_dram = FLAGS_use_dram;
+  base::PMMmapRegisterCenter::GetConfig().backend =
+      base::PMMmapRegisterCenter::BackendFromUseDram(FLAGS_use_dram);
   base::PMMmapRegisterCenter::GetConfig().numa_id  = 0;
 
   if (FLAGS_actor == "server") {

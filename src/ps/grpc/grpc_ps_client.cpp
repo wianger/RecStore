@@ -450,7 +450,6 @@ int GRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
 // return prefetch id
 uint64_t
 GRPCParameterClient::PrefetchParameter(const base::ConstArray<uint64_t>& keys) {
-  uint64_t prefetch_id = next_prefetch_id_++;
   int request_num =
       (keys.Size() + MAX_PARAMETER_BATCH - 1) / MAX_PARAMETER_BATCH;
 
@@ -476,12 +475,18 @@ GRPCParameterClient::PrefetchParameter(const base::ConstArray<uint64_t>& keys) {
     // GetParameter(&context, request, &response);
     rpc->Finish(&response, &status, reinterpret_cast<void*>(index));
   }
-  prefetch_batches_.emplace(prefetch_id, std::move(pb));
+  uint64_t prefetch_id = 0;
+  {
+    std::lock_guard<std::mutex> lk(prefetch_mu_);
+    prefetch_id = next_prefetch_id_++;
+    prefetch_batches_.emplace(prefetch_id, std::move(pb));
+  }
 
   return prefetch_id;
 }
 
 bool GRPCParameterClient::IsPrefetchDone(uint64_t prefetch_id) {
+  std::lock_guard<std::mutex> lk(prefetch_mu_);
   auto it = prefetch_batches_.find(prefetch_id);
   if (it == prefetch_batches_.end()) {
     LOG(ERROR) << "Invalid prefetch_id: " << prefetch_id;
@@ -522,6 +527,7 @@ bool GRPCParameterClient::IsPrefetchDone(uint64_t prefetch_id) {
 }
 
 void GRPCParameterClient::WaitForPrefetch(uint64_t prefetch_id) {
+  std::lock_guard<std::mutex> lk(prefetch_mu_);
   auto it = prefetch_batches_.find(prefetch_id);
   if (it == prefetch_batches_.end()) {
     LOG(ERROR) << "Invalid prefetch_id: " << prefetch_id;
@@ -563,6 +569,7 @@ void GRPCParameterClient::WaitForPrefetch(uint64_t prefetch_id) {
 
 bool GRPCParameterClient::GetPrefetchResult(
     uint64_t prefetch_id, std::vector<std::vector<float>>* values) {
+  std::lock_guard<std::mutex> lk(prefetch_mu_);
   auto it = prefetch_batches_.find(prefetch_id);
   if (it == prefetch_batches_.end()) {
     LOG(ERROR) << "Invalid prefetch_id: " << prefetch_id;
@@ -609,6 +616,7 @@ bool GRPCParameterClient::GetPrefetchResultFlat(
     std::vector<float>* values,
     int64_t* num_rows,
     int64_t embedding_dim) {
+  std::lock_guard<std::mutex> lk(prefetch_mu_);
   auto it = prefetch_batches_.find(prefetch_id);
   if (it == prefetch_batches_.end()) {
     LOG(ERROR) << "Invalid prefetch_id: " << prefetch_id;

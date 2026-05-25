@@ -243,6 +243,37 @@
           "type": "integer",
           "minimum": 1
         },
+        "fasterkv": {
+          "type": "object",
+          "description": "Optional KVEngineFasterKV backend settings. storage=memory keeps NullDisk; storage=ssd uses FasterKV FileSystemDisk for the hybrid log.",
+          "additionalProperties": true,
+          "properties": {
+            "storage": {
+              "type": "string",
+              "enum": [
+                "memory",
+                "ssd"
+              ],
+              "default": "memory"
+            },
+            "log_path": {
+              "type": "string"
+            },
+            "hlog_memory_bytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "mutable_fraction": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "read_cache_bytes": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
         "rocksdb_path": {
           "type": "string",
           "minLength": 1

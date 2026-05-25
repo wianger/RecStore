@@ -22,6 +22,46 @@ size_t ConfigValueSize(const BaseKVConfig& config) {
   return 0;
 }
 
+recstore::storage::fasterkv::FasterKVBackendOptions
+ConfigBackendOptions(const BaseKVConfig& config) {
+  recstore::storage::fasterkv::FasterKVBackendOptions options;
+  const auto& j = config.json_config_;
+  if (!j.contains("fasterkv")) {
+    return options;
+  }
+  const auto& fkv           = j.at("fasterkv");
+  const std::string storage = fkv.value("storage", "memory");
+  if (storage == "memory") {
+    options.storage = recstore::storage::fasterkv::FasterKVStorage::kMemory;
+  } else if (storage == "ssd") {
+    options.storage = recstore::storage::fasterkv::FasterKVStorage::kSsd;
+  } else {
+    throw std::invalid_argument(
+        "KVEngineFasterKV fasterkv.storage must be memory or ssd");
+  }
+  if (fkv.contains("log_path")) {
+    options.log_path = fkv.at("log_path").get<std::string>();
+  } else if (options.storage ==
+                 recstore::storage::fasterkv::FasterKVStorage::kSsd &&
+             j.contains("path") && !j.at("path").get<std::string>().empty()) {
+    options.log_path = j.at("path").get<std::string>() + "/fasterkv-log";
+  }
+  if (fkv.contains("hlog_memory_bytes")) {
+    options.hlog_memory_bytes = fkv.at("hlog_memory_bytes").get<uint64_t>();
+  }
+  if (fkv.contains("mutable_fraction")) {
+    options.mutable_fraction = fkv.at("mutable_fraction").get<double>();
+  }
+  if (fkv.contains("read_cache_bytes")) {
+    options.read_cache_bytes = fkv.at("read_cache_bytes").get<uint64_t>();
+  }
+  if (options.mutable_fraction < 0.0 || options.mutable_fraction > 1.0) {
+    throw std::invalid_argument(
+        "KVEngineFasterKV fasterkv.mutable_fraction must be in [0, 1]");
+  }
+  return options;
+}
+
 void ValidateFloatAligned(size_t value_size, const char* operation) {
   if (value_size == 0 || value_size % sizeof(float) != 0) {
     throw std::invalid_argument(
@@ -46,7 +86,8 @@ public:
       : BaseKV(config),
         value_size_(ConfigValueSize(config)),
         backend_(config.json_config_.at("capacity").get<uint64_t>(),
-                 value_size_) {
+                 value_size_,
+                 ConfigBackendOptions(config)) {
     if (value_size_ == 0) {
       throw std::invalid_argument("KVEngineFasterKV requires value_size");
     }

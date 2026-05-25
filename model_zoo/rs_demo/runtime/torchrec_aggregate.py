@@ -4,6 +4,16 @@ import csv
 import math
 from pathlib import Path
 
+EXTRA_NUMERIC_COLUMNS = {
+    "prefetch_depth",
+    "prefetch_issued_batches",
+    "prefetch_consumed_batches",
+    "prefetch_pending_batches",
+    "prefetch_ready_batches",
+    "prefetch_total_ids",
+    "prefetch_consumed_total_ids",
+}
+
 
 def _percentile(values: list[float], p: float) -> float:
     if not values:
@@ -38,7 +48,11 @@ def aggregate_torchrec_main_csv(path: Path) -> dict[str, float | int]:
         raise ValueError(f"no rows found in torchrec main csv: {path}")
 
     result: dict[str, float | int] = {"row_count": len(rows)}
-    numeric_columns = [name for name in rows[0].keys() if name.endswith("_ms")]
+    numeric_columns = [
+        name
+        for name in rows[0].keys()
+        if name.endswith("_ms") or name in EXTRA_NUMERIC_COLUMNS
+    ]
 
     for column in numeric_columns:
         values = []

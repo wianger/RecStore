@@ -3,6 +3,7 @@ FROM nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04 AS devel
 ENV no_proxy=localhost,127.0.0.1
 ENV CC=/usr/bin/gcc
 ENV CXX=/usr/bin/g++
+ENV TZ=Asia/Shanghai
 
 RUN sed -i "s@http://.*archive.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
 RUN sed -i "s@http://.*security.ubuntu.com@https://mirrors.tuna.tsinghua.edu.cn@g" /etc/apt/sources.list
@@ -11,7 +12,8 @@ RUN apt-get update -y && \
       DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       python3 python3-pip python3-setuptools python3-wheel \
       gcc g++ \
-      vim gdb git wget tar unzip curl clang-format libboost-all-dev && \
+      vim gdb git wget tar unzip curl clang-format libboost-all-dev \
+      tzdata && \
       rm -rf /var/lib/apt/lists/*
 
 

@@ -61,6 +61,27 @@ std::unique_ptr<BaseKV> CreateEngine(const std::string& external_engine_type) {
           resolved.engine, resolved.cfg));
 }
 
+std::unique_ptr<BaseKV> CreateFasterKvSsdEngine() {
+  const std::string path = "/tmp/test_external_kv_engine_fasterkv_ssd_" +
+                           std::to_string(static_cast<long long>(getpid()));
+  std::filesystem::remove_all(path);
+  std::filesystem::create_directories(path);
+
+  BaseKVConfig config = MakeExternalEngineConfig("KVEngineFasterKV", path);
+  config.json_config_["fasterkv"] = {
+      {"storage", "ssd"},
+      {"log_path", path + "/fasterkv-log"},
+      {"hlog_memory_bytes", 1ULL << 30},
+      {"mutable_fraction", 0.5}};
+
+  base::EngineResolved resolved;
+  EXPECT_NO_THROW(resolved = base::ResolveEngine(config));
+  EXPECT_EQ(resolved.engine, "KVEngineFasterKV");
+  return std::unique_ptr<BaseKV>(
+      base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
+          resolved.engine, resolved.cfg));
+}
+
 std::unique_ptr<BaseKV>
 CreateEngineFromRecstoreConfigFile(const std::string& external_engine_type) {
   const std::string path =
@@ -197,6 +218,26 @@ TEST(ExternalKVEngineFactoryTest, FasterKVEngineUsesBaseKVInterface) {
 
 TEST(ExternalKVEngineFactoryTest, FasterKVEngineCanBeSelectedByConfigFile) {
   AssertConfigFileEngine("KVEngineFasterKV");
+}
+
+TEST(ExternalKVEngineFactoryTest, FasterKVEngineSupportsSsdLogConfig) {
+  auto kv = CreateFasterKvSsdEngine();
+  ASSERT_NE(kv, nullptr);
+  AssertBasicPutGet(kv.get());
+  AssertBatchPutGet(kv.get());
+}
+
+TEST(ExternalKVEngineFactoryTest,
+     FasterKVEngineRejectsSsdWithoutLogPathOrPath) {
+  BaseKVConfig config = MakeExternalEngineConfig("KVEngineFasterKV", "");
+  config.json_config_["fasterkv"] = {{"storage", "ssd"}};
+
+  base::EngineResolved resolved;
+  ASSERT_NO_THROW(resolved = base::ResolveEngine(config));
+  EXPECT_THROW(std::unique_ptr<BaseKV>(
+                   base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
+                       resolved.engine, resolved.cfg)),
+               std::invalid_argument);
 }
 #endif
 

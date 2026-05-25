@@ -23,6 +23,8 @@
 | SSD index + `DRAM_VALUE_STORE` | 拒绝 |
 | SSD index + `TIERED_VALUE_STORE` | 拒绝 |
 
+显式外部引擎不参与上表的 `KVEngineComposite` 组合规则。`KVEngineFasterKV` 使用 FasterKV 内部的内存 hash index；它的可选 `fasterkv.storage` 只控制 FasterKV hybrid log/value backend：`memory` 使用 `NullDisk`，`ssd` 使用 `FileSystemDisk` 并可将 hybrid log/value 放到 `fasterkv.log_path`。这和 RecStore 内置的 `index` / `value` 分层不是同一套配置面。
+
 ## 配置样例
 
 ??? example "DRAM index + DRAM value"

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -19,17 +20,19 @@ public:
       : memory_size_(memory_size) {
     LOG(INFO) << "filename:" << filename << ", memory_size:" << memory_size
               << ", medium:" << medium;
-    shm_file_.type_ = medium;
-    LOG(INFO) << "shm_file.type_:" << shm_file_.type_;
     bool file_exists = base::file_util::PathExists(filename);
-    if (!shm_file_.Initialize(filename, memory_size)) {
+    shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+        medium, filename, memory_size));
+    if (!shm_file_) {
       file_exists = false;
       CHECK(base::file_util::Delete(filename, false));
-      CHECK(shm_file_.Initialize(filename, memory_size))
+      shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+          medium, filename, memory_size));
+      CHECK(shm_file_)
           << filename << " " << memory_size;
     }
 
-    data_ = shm_file_.Data();
+    data_ = shm_file_->Data();
     LOG(INFO) << "init data_ addr:" << static_cast<void*>(data_);
     // Use the full mapped budget for the allocator. Using half here can make
     // concurrent arena creation fail under moderate write concurrency.
@@ -128,7 +131,7 @@ public:
   }
 
 private:
-  ShmFile shm_file_;
+  std::unique_ptr<ShmFile> shm_file_;
   char* data_;
   int64 memory_size_;
   int64 total_used_;

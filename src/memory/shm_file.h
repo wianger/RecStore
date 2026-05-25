@@ -5,16 +5,17 @@
 #include <atomic>
 #include <deque>
 #include <fstream>
+#include <memory>
 #include <queue>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "base/base.h"
+#include "base/factory.h"
+#include "base/json.h"
 #include "base/string.h"
 #include "storage/nvm/pet_kv/persistence.h"
-
-DECLARE_bool(use_dram);
 
 namespace base {
 
@@ -96,14 +97,23 @@ public:
     CHECK(Valid());
   }
 
+  enum class Backend {
+    kAnonymousDram,
+    kDevDax,
+  };
+
   struct Config {
-    bool use_dram = true;
-    int numa_id   = 0;
+    Backend backend = Backend::kAnonymousDram;
+    int numa_id    = 0;
   };
 
   static Config& GetConfig() {
     static Config config;
     return config;
+  }
+
+  static Backend BackendFromUseDram(bool use_dram) {
+    return use_dram ? Backend::kAnonymousDram : Backend::kDevDax;
   }
 
 private:
@@ -155,7 +165,7 @@ private:
     CHECK_NE(GetConfig().numa_id, -1);
 
     char* data;
-    if (GetConfig().use_dram) {
+    if (GetConfig().backend == Backend::kAnonymousDram) {
       // filename_ = folly::sformat("/dev/shm/big_file{}", GetConfig().numa_id);
       fd_ = 0;
       LOG(WARNING) << "use dram mmap for PMMmapRegisterCenter";
@@ -231,30 +241,63 @@ private:
 
 class ShmFile {
 public:
-  ShmFile() : data_(NULL), size_(0), fd_(-1) {}
-  ~ShmFile() { Clear(); }
-  bool Initialize(const std::string& filename, int64 size);
+  ShmFile() : data_(NULL), size_(0) {}
+  virtual ~ShmFile() = default;
+
+  static std::unique_ptr<ShmFile> New(const json& config);
+  static json ConfigForMedium(
+      const std::string& medium, const std::string& filename, int64 size);
+
+  virtual bool Initialize(const json& config) = 0;
+  virtual void Clear()                       = 0;
   char* Data() const { return data_; }
   int64 Size() const { return size_; }
   const std::string& filename() const { return filename_; }
-  std::string type_;
 
-private:
-  void Clear();
+protected:
+  static std::string ConfigFilename(const json& config);
+  static int64 ConfigSize(const json& config);
 
-  bool InitializeDevDax(const std::string& filename, int64 size);
-  bool InitializeFsDax(const std::string& filename, int64 size);
-  bool InitializeAnonymousDram(const std::string& filename, int64 size);
-  void ClearDevDax();
-  void ClearFsDax();
-  void ClearAnonymousDram();
   std::string filename_;
   char* data_;
   int64 size_;
-  int fd_;
-  bool anonymous_dram_ = false;
 
+private:
   DISALLOW_COPY_AND_ASSIGN(ShmFile);
+};
+
+class FsDaxShmFile : public ShmFile {
+public:
+  explicit FsDaxShmFile(const json& config) : fd_(-1) {}
+  ~FsDaxShmFile() override { Clear(); }
+  bool Initialize(const json& config) override;
+  void Clear() override;
+
+private:
+  int fd_;
+  DISALLOW_COPY_AND_ASSIGN(FsDaxShmFile);
+};
+
+class AnonyDramShmFile : public ShmFile {
+public:
+  explicit AnonyDramShmFile(const json& config) {}
+  ~AnonyDramShmFile() override { Clear(); }
+  bool Initialize(const json& config) override;
+  void Clear() override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(AnonyDramShmFile);
+};
+
+class DevDaxShmFile : public ShmFile {
+public:
+  explicit DevDaxShmFile(const json& config) {}
+  ~DevDaxShmFile() override { Clear(); }
+  bool Initialize(const json& config) override;
+  void Clear() override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(DevDaxShmFile);
 };
 
 } // namespace base

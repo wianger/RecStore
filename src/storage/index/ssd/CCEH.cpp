@@ -314,11 +314,11 @@ std::shared_mutex& CCEH::get_segment_lock(PageID_t page_id) const {
   return *it->second;
 }
 
-void CCEH::Put(coroutine<void>::push_type& sink,
-               int index,
-               Key_t key,
-               Value_t value,
-               unsigned tid) {
+Value_t CCEH::Put(coroutine<void>::push_type& sink,
+                  int index,
+                  Key_t key,
+                  Value_t value,
+                  unsigned tid) {
   auto f_hash = hash_funcs[0](&key, sizeof(Key_t), f_seed);
   auto f_idx  = (f_hash % Segment::kNumGroups) * kNumPairPerCacheLine;
   ExponentialBackoff backoff;
@@ -384,10 +384,11 @@ void CCEH::Put(coroutine<void>::push_type& sink,
       auto loc       = (f_idx + i) % Segment::kNumSlot;
       auto storedKey = target_ptr->bucket[loc].key;
       if (storedKey == key) {
+        Value_t old_value = target_ptr->bucket[loc].value;
         target_ptr->bucket[loc].value = value;
         mfence();
         io_backend->Unpin(sink, index, target_page_id, target_ptr, true);
-        return;
+        return old_value;
       }
       if ((((hash_funcs[0](&storedKey, sizeof(Key_t), f_seed) >>
              (8 * sizeof(f_hash) - target_ptr->local_depth)) != pattern) ||
@@ -398,7 +399,7 @@ void CCEH::Put(coroutine<void>::push_type& sink,
           mfence();
           target_ptr->bucket[loc].key = key;
           io_backend->Unpin(sink, index, target_page_id, target_ptr, true);
-          return;
+          return kValueHandleNone;
         }
       }
     }
@@ -408,10 +409,11 @@ void CCEH::Put(coroutine<void>::push_type& sink,
       auto loc       = (s_idx + i) % Segment::kNumSlot;
       auto storedKey = target_ptr->bucket[loc].key;
       if (storedKey == key) {
+        Value_t old_value = target_ptr->bucket[loc].value;
         target_ptr->bucket[loc].value = value;
         mfence();
         io_backend->Unpin(sink, index, target_page_id, target_ptr, true);
-        return;
+        return old_value;
       }
       if ((((hash_funcs[0](&storedKey, sizeof(Key_t), f_seed) >>
              (8 * sizeof(s_hash) - target_ptr->local_depth)) != pattern) ||
@@ -422,7 +424,7 @@ void CCEH::Put(coroutine<void>::push_type& sink,
           mfence();
           target_ptr->bucket[loc].key = key;
           io_backend->Unpin(sink, index, target_page_id, target_ptr, true);
-          return;
+          return kValueHandleNone;
         }
       }
     }
@@ -457,7 +459,7 @@ void CCEH::Put(coroutine<void>::push_type& sink,
             sink, index, dir_header_page_id, dir_header_ptr, false);
         delete[] s;
         std::cerr << "Expansion limit reached" << std::endl;
-        return; // Expansion limit reached
+        return kValueHandleNone; // Expansion limit reached
       }
       auto old_dir_header_page_id     = this->dir_header_page_id;
       auto old_dir_header_ptr         = dir_header_ptr;
@@ -581,7 +583,7 @@ void CCEH::Put(coroutine<void>::push_type& sink,
   }
 }
 
-void CCEH::Put(Key_t key, Value_t value, unsigned tid) {
+Value_t CCEH::Put(Key_t key, Value_t value, unsigned tid) {
   auto f_hash = hash_funcs[0](&key, sizeof(Key_t), f_seed);
   auto f_idx  = (f_hash % Segment::kNumGroups) * kNumPairPerCacheLine;
   ExponentialBackoff backoff;
@@ -641,10 +643,11 @@ void CCEH::Put(Key_t key, Value_t value, unsigned tid) {
       auto loc       = (f_idx + i) % Segment::kNumSlot;
       auto storedKey = target_ptr->bucket[loc].key;
       if (storedKey == key) {
+        Value_t old_value = target_ptr->bucket[loc].value;
         target_ptr->bucket[loc].value = value;
         mfence();
         io_backend->Unpin(target_page_id, target_ptr, true);
-        return;
+        return old_value;
       }
       if ((((hash_funcs[0](&storedKey, sizeof(Key_t), f_seed) >>
              (8 * sizeof(f_hash) - target_ptr->local_depth)) != pattern) ||
@@ -655,7 +658,7 @@ void CCEH::Put(Key_t key, Value_t value, unsigned tid) {
           mfence();
           target_ptr->bucket[loc].key = key;
           io_backend->Unpin(target_page_id, target_ptr, true);
-          return;
+          return kValueHandleNone;
         }
       }
     }
@@ -665,10 +668,11 @@ void CCEH::Put(Key_t key, Value_t value, unsigned tid) {
       auto loc       = (s_idx + i) % Segment::kNumSlot;
       auto storedKey = target_ptr->bucket[loc].key;
       if (storedKey == key) {
+        Value_t old_value = target_ptr->bucket[loc].value;
         target_ptr->bucket[loc].value = value;
         mfence();
         io_backend->Unpin(target_page_id, target_ptr, true);
-        return;
+        return old_value;
       }
       if ((((hash_funcs[0](&storedKey, sizeof(Key_t), f_seed) >>
              (8 * sizeof(s_hash) - target_ptr->local_depth)) != pattern) ||
@@ -679,7 +683,7 @@ void CCEH::Put(Key_t key, Value_t value, unsigned tid) {
           mfence();
           target_ptr->bucket[loc].key = key;
           io_backend->Unpin(target_page_id, target_ptr, true);
-          return;
+          return kValueHandleNone;
         }
       }
     }
@@ -713,7 +717,7 @@ void CCEH::Put(Key_t key, Value_t value, unsigned tid) {
         io_backend->Unpin(dir_header_page_id, dir_header_ptr, false);
         delete[] s;
         std::cerr << "Expansion limit reached" << std::endl;
-        return; // Expansion limit reached
+        return kValueHandleNone; // Expansion limit reached
       }
       auto old_dir_header_page_id     = this->dir_header_page_id;
       auto old_dir_header_ptr         = dir_header_ptr;

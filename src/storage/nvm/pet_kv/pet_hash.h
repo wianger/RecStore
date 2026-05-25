@@ -528,12 +528,63 @@ public:
   ValueT* Set(const KeyT& key,
               const ValueT& value,
               CheckFuncT check_func = nullptr,
-              bool is_force         = false) {
-    auto [old_p_value, exists] = GetReturnPtr(key);
-    if (exists) {
-      *old_p_value = value;
-      IF_Persistence(clflushopt_range(old_p_value, sizeof(uint64)););
-      return old_p_value;
+              bool is_force         = false,
+              ValueT* old_value_out = nullptr) {
+    static_assert(sizeof(ValueT) <= sizeof(uint64_t),
+                  "PetHash::Set CAS update expects a 64-bit-or-smaller value");
+    if (old_value_out != nullptr) {
+      *old_value_out = ValueT();
+    }
+
+  RETRY:
+    uint64_t hash_value = Hash(key);
+    auto sign           = Sign(hash_value);
+    size_t step         = ProbeDelta(sign);
+    size_t pos          = hash_value & (chunk_num_ - 1);
+    bool touch_migrating_chunk = false;
+
+    for (size_t i = 0; i < chunk_num_; ++i) {
+      auto chunk = chunk_table_ + pos;
+      if (UNLIKELY(chunk->is_migrating)) {
+        touch_migrating_chunk = true;
+      }
+
+      {
+        auto it = chunk->MatchTag(sign);
+        while (it.HasNext()) {
+          auto id  = it.Next();
+          auto val = chunk->Get(id);
+          if (LIKELY(key == val->first)) {
+            while (LIKELY(key == val->first)) {
+              ValueT expected = val->second;
+              ValueT desired  = value;
+              if (__atomic_compare_exchange_n(&val->second,
+                                              &expected,
+                                              desired,
+                                              false,
+                                              __ATOMIC_ACQ_REL,
+                                              __ATOMIC_ACQUIRE)) {
+                if (old_value_out != nullptr) {
+                  *old_value_out = expected;
+                }
+                IF_Persistence(clflushopt_range(&val->second, sizeof(uint64)););
+                return &val->second;
+              }
+              __asm__ volatile("pause" ::: "memory");
+            }
+            goto RETRY;
+          }
+        }
+      }
+
+      if (LIKELY(chunk->OverflowCount() == 0)) {
+        break;
+      }
+      pos = (pos + step) & (chunk_num_ - 1);
+    }
+
+    if (UNLIKELY(touch_migrating_chunk)) {
+      goto RETRY;
     }
     return Insert(key, value, check_func, is_force);
   }

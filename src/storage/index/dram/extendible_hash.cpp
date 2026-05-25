@@ -44,7 +44,10 @@ size_t Block::numElem(void) {
   return sum;
 }
 
-int Block::Insert(Key_t& key, Value_t value, size_t key_hash) {
+int Block::Insert(Key_t& key,
+                  Value_t value,
+                  size_t key_hash,
+                  Value_t* old_value) {
 #ifdef INPLACE
   if (sema == -1)
     return -2;
@@ -115,7 +118,11 @@ int Block::Insert(Key_t& key, Value_t value, size_t key_hash) {
   }
   for (unsigned i = 0; i < kNumSlot; ++i) {
     if (_[i].key == key) {
-      _[i].value = value;
+      Value_t previous =
+          __atomic_exchange_n(&_[i].value, value, __ATOMIC_ACQ_REL);
+      if (old_value != nullptr) {
+        *old_value = previous;
+      }
       ret        = i;
       lock       = sema;
       while (!CAS(&sema, &lock, lock - 1)) {
@@ -291,9 +298,10 @@ void Directory::LSBUpdate(
   return;
 }
 
-void ExtendibleHash::Insert(Key_t& key, Value_t value) {
+Value_t ExtendibleHash::Insert(Key_t& key, Value_t value) {
   using namespace std;
   auto key_hash = h(&key, sizeof(key));
+  Value_t old_value = kValueHandleNone;
 
 RETRY:
 #ifdef LSB
@@ -303,7 +311,7 @@ RETRY:
   auto x = (key_hash >> (8 * sizeof(key_hash) - global_depth));
 #endif
   auto target = dir._[x];
-  auto ret    = target->Insert(key, value, key_hash);
+  auto ret    = target->Insert(key, value, key_hash, &old_value);
 
   if (ret == -1) {
     Block** s = target->Split();
@@ -420,10 +428,15 @@ RETRY:
     }
     goto RETRY;
   } else if (ret == -2) {
-    Insert(key, value);
+    // Block is splitting or directory pointers are stale; retry without recursion.
+    if (target->sema == -1) {
+      std::this_thread::yield();
+    }
+    goto RETRY;
   } else {
     clflush((char*)&dir._[x]->_[ret], sizeof(Pair));
   }
+  return old_value;
 }
 
 // This function does not allow resizing
@@ -555,8 +568,8 @@ void ExtendibleHash::Get(Key_t key, Value_t& pointer, unsigned tid) {
   pointer = Extract(key);
 }
 
-void ExtendibleHash::Put(Key_t key, Value_t pointer, unsigned tid) {
-  Insert(key, static_cast<Value_t>(pointer));
+Value_t ExtendibleHash::Put(Key_t key, Value_t pointer, unsigned tid) {
+  return Insert(key, static_cast<Value_t>(pointer));
 }
 
 void ExtendibleHash::BatchGet(

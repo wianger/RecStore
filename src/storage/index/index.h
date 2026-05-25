@@ -33,17 +33,18 @@ public:
       unsigned tid) {
     LOG(FATAL) << "not implemented";
   }
-  virtual void Put(Key_t key, Value_t pointer) {
-    Put(key, pointer, CurrentTid());
+  virtual Value_t Put(Key_t key, Value_t pointer) {
+    return Put(key, pointer, CurrentTid());
   }
-  virtual void Put(Key_t key, Value_t pointer, unsigned tid) = 0;
-  virtual void
+  virtual Value_t Put(Key_t key, Value_t pointer, unsigned tid) = 0;
+  virtual Value_t
   Put(coroutine<void>::push_type& sink,
       int index,
       Key_t key,
       Value_t pointer,
       unsigned tid) {
     LOG(FATAL) << "not implemented";
+    return NONE;
   }
   virtual void BatchPut(base::ConstArray<Key_t> keys, Value_t* pointers) {
     BatchPut(keys, pointers, CurrentTid());

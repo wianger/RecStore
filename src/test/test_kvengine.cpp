@@ -7,6 +7,8 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <mutex>
@@ -52,12 +54,24 @@ public:
     return false;
   }
 
+  static bool IsSlabAllocatorForHeavyScenarios(const std::string& allocator) {
+    return allocator == "PERSIST_LOOP_SLAB" ||
+           allocator == "CONCURRENT_SLAB_MEMORY_POOL";
+  }
+
+  static bool RunAllEnabled() {
+    const char* value = std::getenv("RUN_ALL");
+    return value != nullptr && std::strcmp(value, "1") == 0;
+  }
+
   static bool ShouldRunHeavyScenario(const std::string& idx,
                                      const std::string& val,
                                      const std::string& allocator) {
+    if (RunAllEnabled())
+      return true;
     if (idx == "DRAM_EXTENDIBLE_HASH" && val == "DRAM_VALUE_STORE")
       return true;
-    if (allocator != "PERSIST_LOOP_SLAB")
+    if (!IsSlabAllocatorForHeavyScenarios(allocator))
       return false;
     return idx == "DRAM_UNORDERED_MAP" || idx == "DRAM_PET_HASH";
   }
@@ -72,9 +86,9 @@ protected:
   void SetUp() override {
     const char *idx_c, *val_c, *allocator_c;
     std::tie(idx_c, val_c, allocator_c) = GetParam();
-    index_type_                         = idx_c;
-    value_type_                         = val_c;
-    allocator_type_                     = allocator_c;
+    index_type_                  = idx_c;
+    value_type_                  = val_c;
+    allocator_type_              = allocator_c;
 
     const auto* test_info =
         ::testing::UnitTest::GetInstance()->current_test_info();
@@ -84,12 +98,16 @@ protected:
                    << value_type_ << "," << allocator_type_ << ")";
     }
 
-    test_dir_ =
-        "/dev/shm/test_kv_engine_cartesian_" + std::to_string(getpid()) + "_" +
+    const std::string test_name =
+        "test_kv_engine_cartesian_" + std::to_string(getpid()) + "_" +
         index_type_ + "_" + value_type_ + "_" + allocator_type_;
-    std::filesystem::create_directories(test_dir_);
+    dram_test_dir_ = "/dev/shm/" + test_name;
+    ssd_test_dir_  = "/tmp/" + test_name;
+    std::filesystem::create_directories(dram_test_dir_);
+    std::filesystem::create_directories(ssd_test_dir_);
 
-    base::PMMmapRegisterCenter::GetConfig().use_dram = true;
+    base::PMMmapRegisterCenter::GetConfig().backend =
+        base::PMMmapRegisterCenter::Backend::kAnonymousDram;
     base::PMMmapRegisterCenter::GetConfig().numa_id  = 0;
 
     cfg_.num_threads_     = 8;
@@ -120,18 +138,29 @@ protected:
       kv_engine_.reset(base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
           engine_name_, r.cfg));
     } catch (const std::exception& e) {
-      GTEST_SKIP() << "Create engine failed for allocator=" << allocator_type_
-                   << " : " << e.what();
+      if (RunAllEnabled()) {
+        FAIL() << "Create engine failed for allocator=" << allocator_type_
+               << " : " << e.what();
+      } else {
+        GTEST_SKIP() << "Create engine failed for allocator=" << allocator_type_
+                     << " : " << e.what();
+      }
     }
     if (!kv_engine_) {
-      GTEST_SKIP() << "Engine '" << engine_name_ << "' or allocator '"
-                   << allocator_type_ << "' not registered/linked.";
+      if (RunAllEnabled()) {
+        FAIL() << "Engine '" << engine_name_ << "' or allocator '"
+               << allocator_type_ << "' not registered/linked.";
+      } else {
+        GTEST_SKIP() << "Engine '" << engine_name_ << "' or allocator '"
+                     << allocator_type_ << "' not registered/linked.";
+      }
     }
   }
 
   void TearDown() override {
     kv_engine_.reset();
-    std::filesystem::remove_all(test_dir_);
+    std::filesystem::remove_all(dram_test_dir_);
+    std::filesystem::remove_all(ssd_test_dir_);
   }
 
   class SimpleBarrier {
@@ -155,7 +184,8 @@ protected:
     std::condition_variable condition_;
   };
 
-  std::string test_dir_;
+  std::string dram_test_dir_;
+  std::string ssd_test_dir_;
   BaseKVConfig cfg_;
   std::unique_ptr<BaseKV> kv_engine_;
   std::string index_type_, value_type_, allocator_type_, engine_name_;
@@ -174,43 +204,39 @@ private:
     json j = {{"capacity", capacity},
               {"index", {{"type", index_type_}}},
               {"value",
-               {{"type", value_type_}, {"default_value_size_hint", value_sz}}}};
-    if (IsSsdIndex(index_type_)) {
-      j["index"]["path"] = test_dir_ + "/index_pages.db";
-      j["index"]["io"]   = {
-          {"type", "IOURING"}, {"queue_depth", 512}, {"base_offset_bytes", 0}};
-    }
+               {{"type", value_type_},
+                {"default_value_size_hint", value_sz}}}};
     if (value_type_ == "DRAM_VALUE_STORE") {
-      j["value"]["path"]           = test_dir_ + "/value";
-      j["value"]["dram_allocator"] = {
-          {"type", allocator_type_},
-          {"capacity_bytes", capacity * static_cast<size_t>(value_sz)}};
+      j["value"]["path"] = dram_test_dir_ + "/value";
+      j["value"]["dram_allocator"] =
+          {{"type", allocator_type_},
+           {"capacity_bytes", capacity * static_cast<size_t>(value_sz)}};
     } else if (value_type_ == "SSD_VALUE_STORE") {
-      j["value"]["ssd_allocator"] = {
-          {"type", "SSD_BUDDY"},
-          {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
-          {"min_block_size", 128},
-          {"max_block_size", 65536},
-          {"io",
-           {{"type", "IOURING"},
-            {"queue_depth", 512},
-            {"base_offset_bytes", 4096}}}};
-      j["value"]["path"] = test_dir_ + "/value_pages.db";
+      j["value"]["ssd_allocator"] =
+          {{"type", "SSD_BUDDY"},
+           {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
+           {"min_block_size", 128},
+           {"max_block_size", 65536},
+           {"io",
+            {{"type", "IOURING"},
+             {"queue_depth", 512},
+             {"base_offset_bytes", 4096}}}};
+      j["value"]["path"] = ssd_test_dir_ + "/value_pages.db";
     } else if (value_type_ == "TIERED_VALUE_STORE") {
-      j["value"]["dram_allocator"] = {
-          {"type", allocator_type_},
-          {"capacity_bytes", capacity * static_cast<size_t>(value_sz) / 2},
-          {"path", test_dir_ + "/dram"}};
-      j["value"]["ssd_allocator"] = {
-          {"type", "SSD_BUDDY"},
-          {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
-          {"min_block_size", 128},
-          {"max_block_size", 65536},
-          {"path", test_dir_ + "/tiered_value_pages.db"},
-          {"io",
-           {{"type", "IOURING"},
-            {"queue_depth", 512},
-            {"base_offset_bytes", 4096}}}};
+      j["value"]["dram_allocator"] =
+          {{"type", allocator_type_},
+           {"capacity_bytes", capacity * static_cast<size_t>(value_sz) / 2},
+           {"path", dram_test_dir_ + "/dram"}};
+      j["value"]["ssd_allocator"] =
+          {{"type", "SSD_BUDDY"},
+           {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
+           {"min_block_size", 128},
+           {"max_block_size", 65536},
+           {"path", ssd_test_dir_ + "/tiered_value_pages.db"},
+           {"io",
+            {{"type", "IOURING"},
+             {"queue_depth", 512},
+             {"base_offset_bytes", 4096}}}};
       j["value"]["tiering"] = {{"cache_policy", "LRU"}};
     }
     return j;
@@ -342,19 +368,20 @@ TEST_P(KVEngineCartesianTest, BatchGetMixedKeys) {
 
 TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
   const std::vector<uint64_t> keys = {7001, 7002, 7003, 7004};
-  std::vector<std::vector<float>> initial_values(
-      keys.size(), std::vector<float>(16, 1.0f));
+  std::vector<std::vector<float>> initial_values(keys.size(),
+                                                 std::vector<float>(16, 1.0f));
   std::vector<base::ConstArray<float>> initial_slices;
   initial_slices.reserve(keys.size());
   for (size_t i = 0; i < keys.size(); ++i) {
     for (size_t j = 0; j < initial_values[i].size(); ++j) {
       initial_values[i][j] = static_cast<float>(i * 10 + j);
     }
-    initial_slices.emplace_back(
-        initial_values[i].data(), static_cast<int>(initial_values[i].size()));
+    initial_slices.emplace_back(initial_values[i].data(),
+                                static_cast<int>(initial_values[i].size()));
   }
-  kv_engine_->BatchPut(
-      base::ConstArray<uint64_t>(keys.data(), keys.size()), &initial_slices, 0);
+  kv_engine_->BatchPut(base::ConstArray<uint64_t>(keys.data(), keys.size()),
+                       &initial_slices,
+                       0);
 
   std::vector<std::vector<float>> updated_values(keys.size());
   updated_values[0].resize(16); // overwrite path
@@ -369,15 +396,17 @@ TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
   std::vector<base::ConstArray<float>> updated_slices;
   updated_slices.reserve(keys.size());
   for (size_t i = 0; i < updated_values.size(); ++i) {
-    updated_slices.emplace_back(
-        updated_values[i].data(), static_cast<int>(updated_values[i].size()));
+    updated_slices.emplace_back(updated_values[i].data(),
+                                static_cast<int>(updated_values[i].size()));
   }
-  kv_engine_->BatchPut(
-      base::ConstArray<uint64_t>(keys.data(), keys.size()), &updated_slices, 0);
+  kv_engine_->BatchPut(base::ConstArray<uint64_t>(keys.data(), keys.size()),
+                       &updated_slices,
+                       0);
 
   std::vector<base::ConstArray<float>> out_values;
-  kv_engine_->BatchGet(
-      base::ConstArray<uint64_t>(keys.data(), keys.size()), &out_values, 0);
+  kv_engine_->BatchGet(base::ConstArray<uint64_t>(keys.data(), keys.size()),
+                       &out_values,
+                       0);
   ASSERT_EQ(out_values.size(), keys.size());
   for (size_t i = 0; i < keys.size(); ++i) {
     ASSERT_EQ(out_values[i].Size(), static_cast<int>(updated_values[i].size()));
@@ -389,7 +418,7 @@ TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
 }
 
 TEST_P(KVEngineCartesianTest, BatchGetRepeatedKeysKeepsConsistentValues) {
-  std::vector<uint64_t> put_keys                  = {8101, 8102};
+  std::vector<uint64_t> put_keys = {8101, 8102};
   std::vector<std::vector<float>> put_values_data = {
       std::vector<float>(32, 0.0f), std::vector<float>(32, 0.0f)};
   for (int i = 0; i < 32; ++i) {
@@ -397,21 +426,15 @@ TEST_P(KVEngineCartesianTest, BatchGetRepeatedKeysKeepsConsistentValues) {
     put_values_data[1][i] = static_cast<float>(200 + i);
   }
   std::vector<base::ConstArray<float>> put_values = {
-      base::ConstArray<float>(
-          put_values_data[0].data(), put_values_data[0].size()),
-      base::ConstArray<float>(
-          put_values_data[1].data(), put_values_data[1].size())};
+      base::ConstArray<float>(put_values_data[0].data(), put_values_data[0].size()),
+      base::ConstArray<float>(put_values_data[1].data(), put_values_data[1].size())};
   kv_engine_->BatchPut(
-      base::ConstArray<uint64_t>(put_keys.data(), put_keys.size()),
-      &put_values,
-      0);
+      base::ConstArray<uint64_t>(put_keys.data(), put_keys.size()), &put_values, 0);
 
   std::vector<uint64_t> get_keys = {8102, 8101, 8102, 8101, 8101};
   std::vector<base::ConstArray<float>> out_values;
   kv_engine_->BatchGet(
-      base::ConstArray<uint64_t>(get_keys.data(), get_keys.size()),
-      &out_values,
-      0);
+      base::ConstArray<uint64_t>(get_keys.data(), get_keys.size()), &out_values, 0);
   ASSERT_EQ(out_values.size(), get_keys.size());
 
   for (size_t i = 0; i < get_keys.size(); ++i) {
@@ -421,6 +444,49 @@ TEST_P(KVEngineCartesianTest, BatchGetRepeatedKeysKeepsConsistentValues) {
     for (int j = 0; j < out_values[i].Size(); ++j) {
       EXPECT_FLOAT_EQ(out_values[i][j], expected[j])
           << "key=" << get_keys[i] << " idx=" << j;
+    }
+  }
+}
+
+TEST_P(KVEngineCartesianTest, BulkLoadThenGetAndBatchGet) {
+  constexpr int kRows = 8;
+  constexpr int kFloatsPerRow = 32;
+  std::vector<uint64_t> keys;
+  keys.reserve(kRows);
+  std::vector<float> values(kRows * kFloatsPerRow);
+  for (int row = 0; row < kRows; ++row) {
+    keys.push_back(static_cast<uint64_t>(9001 + row));
+    for (int col = 0; col < kFloatsPerRow; ++col) {
+      values[row * kFloatsPerRow + col] =
+          static_cast<float>(row * 100 + col);
+    }
+  }
+
+  kv_engine_->BulkLoad(base::ConstArray<uint64_t>(keys.data(), keys.size()),
+                       values.data());
+
+  for (int row = 0; row < kRows; ++row) {
+    std::string out;
+    kv_engine_->Get(keys[row], out, 0);
+    ASSERT_EQ(out.size(), kFloatsPerRow * sizeof(float));
+    EXPECT_EQ(std::memcmp(out.data(),
+                          values.data() + row * kFloatsPerRow,
+                          out.size()),
+              0)
+        << "row=" << row;
+  }
+
+  std::vector<base::ConstArray<float>> out_values;
+  kv_engine_->BatchGet(base::ConstArray<uint64_t>(keys.data(), keys.size()),
+                       &out_values,
+                       0);
+  ASSERT_EQ(out_values.size(), keys.size());
+  for (int row = 0; row < kRows; ++row) {
+    ASSERT_EQ(out_values[row].Size(), kFloatsPerRow);
+    for (int col = 0; col < kFloatsPerRow; ++col) {
+      EXPECT_FLOAT_EQ(out_values[row][col],
+                      values[row * kFloatsPerRow + col])
+          << "row=" << row << " col=" << col;
     }
   }
 }
@@ -521,7 +587,7 @@ TEST_P(KVEngineCartesianTest, PerformanceTest) {
   auto get_duration = std::chrono::duration_cast<std::chrono::microseconds>(
       get_end_time - insert_end_time);
 
-  std::cout << "KVEngineExtendibleHash Performance Results for "
+  std::cout << "KVEngineComposite Performance Results for "
             << num_operations << " operations:\n";
   std::cout << "Insert time: " << insert_duration.count() << " microseconds\n";
   std::cout << "Get time: " << get_duration.count() << " microseconds\n";
@@ -830,18 +896,186 @@ TEST_P(KVEngineCartesianTest, DataConsistencyTest) {
   EXPECT_GT(total_updates.load(), 0);
 }
 
+#if defined(RECSTORE_TEST_ENABLE_FASTERKV_ENGINE) || \
+    defined(RECSTORE_TEST_ENABLE_HPS_ENGINE)
+
+class KVEngineExternalEngineTest : public ::testing::TestWithParam<const char*> {
+public:
+  static std::string Sanitize(std::string s) {
+    for (char& c : s)
+      if (!std::isalnum((unsigned char)c))
+        c = '_';
+    return s;
+  }
+
+protected:
+  std::string CreateFixedLengthValue(const std::string& base_value) {
+    std::string value = base_value;
+    value.resize(128);
+    return value;
+  }
+
+  void SetUp() override {
+    engine_type_ = GetParam();
+    test_dir_    = "/tmp/test_kv_engine_external_" + engine_type_ + "_" +
+                std::to_string(getpid());
+    std::filesystem::remove_all(test_dir_);
+    std::filesystem::create_directories(test_dir_);
+
+    cfg_.num_threads_ = 8;
+    cfg_.json_config_ = {{"external_engine_type", engine_type_},
+                         {"path", test_dir_},
+                         {"capacity", 1000000},
+                         {"value_size", 128}};
+
+    auto resolved  = base::ResolveEngine(cfg_);
+    engine_name_   = resolved.engine;
+    ASSERT_EQ(engine_name_, engine_type_);
+
+    try {
+      kv_engine_.reset(base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
+          engine_name_, resolved.cfg));
+    } catch (const std::exception& e) {
+      FAIL() << "Create external engine failed for " << engine_type_ << " : "
+             << e.what();
+    }
+    ASSERT_NE(kv_engine_, nullptr);
+  }
+
+  void TearDown() override {
+    kv_engine_.reset();
+    std::filesystem::remove_all(test_dir_);
+  }
+
+  std::string test_dir_;
+  BaseKVConfig cfg_;
+  std::unique_ptr<BaseKV> kv_engine_;
+  std::string engine_type_;
+  std::string engine_name_;
+};
+
+TEST_P(KVEngineExternalEngineTest, BasicPutAndGet) {
+  uint64_t key      = 123;
+  std::string value = CreateFixedLengthValue("external_test_value_123");
+  std::string retrieved_value;
+
+  kv_engine_->Put(key, value, 0);
+  kv_engine_->Get(key, retrieved_value, 0);
+  EXPECT_EQ(retrieved_value, value);
+}
+
+TEST_P(KVEngineExternalEngineTest, GetNonExistentKey) {
+  std::string retrieved_value;
+  kv_engine_->Get(999999, retrieved_value, 0);
+  EXPECT_TRUE(retrieved_value.empty());
+}
+
+TEST_P(KVEngineExternalEngineTest, KeyOverwrite) {
+  uint64_t key = 456;
+  std::string value1 = CreateFixedLengthValue("external_value1");
+  std::string value2 = CreateFixedLengthValue("external_value2");
+  std::string retrieved_value;
+
+  kv_engine_->Put(key, value1, 0);
+  kv_engine_->Put(key, value2, 0);
+  kv_engine_->Get(key, retrieved_value, 0);
+  EXPECT_EQ(retrieved_value, value2);
+}
+
+TEST_P(KVEngineExternalEngineTest, MultiplePutAndGet) {
+  const int num_keys = 100;
+  for (int i = 0; i < num_keys; i++) {
+    std::string value = CreateFixedLengthValue("external_key_" + std::to_string(i));
+    kv_engine_->Put(i, value, 0);
+  }
+  for (int i = 0; i < num_keys; i++) {
+    std::string expected = CreateFixedLengthValue("external_key_" + std::to_string(i));
+    std::string retrieved;
+    kv_engine_->Get(i, retrieved, 0);
+    EXPECT_EQ(retrieved, expected) << "Mismatch for key " << i;
+  }
+}
+
+TEST_P(KVEngineExternalEngineTest, BatchGet) {
+  std::vector<uint64_t> keys;
+  for (int i = 0; i < 10; i++) {
+    keys.push_back(i);
+    kv_engine_->Put(i, CreateFixedLengthValue("batch_" + std::to_string(i)), 0);
+  }
+
+  base::ConstArray<uint64_t> key_view(keys.data(), keys.size());
+  std::vector<base::ConstArray<float>> values;
+  kv_engine_->BatchGet(key_view, &values, 0);
+
+  ASSERT_EQ(values.size(), keys.size());
+  const int floats_per_row = 128 / static_cast<int>(sizeof(float));
+  for (size_t i = 0; i < keys.size(); ++i) {
+    ASSERT_EQ(values[i].Size(), floats_per_row);
+  }
+}
+
+TEST_P(KVEngineExternalEngineTest, BulkLoadThenGetAndBatchGet) {
+  const int num_keys = 50;
+  std::vector<uint64_t> keys(num_keys);
+  std::vector<std::string> values(num_keys);
+  std::vector<char> bulk_data(static_cast<size_t>(num_keys) * 128);
+
+  for (int i = 0; i < num_keys; i++) {
+    keys[i]   = i + 1000;
+    values[i] = CreateFixedLengthValue("bulk_" + std::to_string(i));
+    std::memcpy(bulk_data.data() + static_cast<size_t>(i) * 128, values[i].data(),
+                128);
+  }
+
+  base::ConstArray<uint64_t> key_view(keys.data(), keys.size());
+  kv_engine_->BulkLoad(key_view, bulk_data.data());
+
+  for (int i = 0; i < num_keys; i++) {
+    std::string retrieved;
+    kv_engine_->Get(keys[i], retrieved, 0);
+    EXPECT_EQ(retrieved, values[i]);
+  }
+
+  std::vector<base::ConstArray<float>> batch_values;
+  kv_engine_->BatchGet(key_view, &batch_values, 0);
+  ASSERT_EQ(batch_values.size(), keys.size());
+}
+
+#ifdef RECSTORE_TEST_ENABLE_FASTERKV_ENGINE
+INSTANTIATE_TEST_SUITE_P(
+    FasterKV,
+    KVEngineExternalEngineTest,
+    ::testing::Values("KVEngineFasterKV"),
+    [](const testing::TestParamInfo<KVEngineExternalEngineTest::ParamType>& info) {
+      return KVEngineExternalEngineTest::Sanitize(info.param);
+    });
+#endif
+
+#ifdef RECSTORE_TEST_ENABLE_HPS_ENGINE
+INSTANTIATE_TEST_SUITE_P(
+    HPSRocksDB,
+    KVEngineExternalEngineTest,
+    ::testing::Values("KVEngineHPSRocksDB"),
+    [](const testing::TestParamInfo<KVEngineExternalEngineTest::ParamType>& info) {
+      return KVEngineExternalEngineTest::Sanitize(info.param);
+    });
+#endif
+
+#endif  // RECSTORE_TEST_ENABLE_FASTERKV_ENGINE || RECSTORE_TEST_ENABLE_HPS_ENGINE
+
 INSTANTIATE_TEST_SUITE_P(
     AllCombos,
     KVEngineCartesianTest,
     ::testing::Combine(
         ::testing::Values("DRAM_EXTENDIBLE_HASH",
                           "DRAM_UNORDERED_MAP",
-                          "DRAM_PET_HASH",
-                          "SSD",
-                          "SSD_EXTENDIBLE_HASH"),
-        ::testing::Values(
-            "DRAM_VALUE_STORE", "SSD_VALUE_STORE", "TIERED_VALUE_STORE"),
-        ::testing::Values("PERSIST_LOOP_SLAB", "R2_SLAB")),
+                          "DRAM_PET_HASH"),
+        ::testing::Values("DRAM_VALUE_STORE",
+                          "SSD_VALUE_STORE",
+                          "TIERED_VALUE_STORE"),
+        ::testing::Values("PERSIST_LOOP_SLAB",
+                          "R2_SLAB",
+                          "CONCURRENT_SLAB_MEMORY_POOL")),
     [](const testing::TestParamInfo<KVEngineCartesianTest::ParamType>& info) {
       auto idx = std::get<0>(info.param);
       auto val = std::get<1>(info.param);

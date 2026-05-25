@@ -960,7 +960,8 @@ int main(int argc, char* argv[]) {
   }
   xmh::Reporter::StartReportThread();
 
-  base::PMMmapRegisterCenter::GetConfig().use_dram = FLAGS_use_dram;
+  base::PMMmapRegisterCenter::GetConfig().backend =
+      base::PMMmapRegisterCenter::BackendFromUseDram(FLAGS_use_dram);
   base::PMMmapRegisterCenter::GetConfig().numa_id  = FLAGS_numa_id;
 
   extern int global_socket_id;

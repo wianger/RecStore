@@ -27,6 +27,21 @@ DEFINE_string(backend,
               "hps_hash_map|hps_rocksdb|raw_rocksdb|raw_rocksdb_memenv|"
               "fasterkv|recstore");
 DEFINE_string(path, "", "RecStore data path");
+DEFINE_string(fasterkv_storage,
+              "memory",
+              "FasterKV storage backend: memory|ssd");
+DEFINE_string(fasterkv_log_path,
+              "",
+              "FasterKV SSD log directory; defaults to path/fasterkv-log");
+DEFINE_int64(fasterkv_hlog_memory_bytes,
+             0,
+             "FasterKV hybrid log memory bytes; 0 uses backend default");
+DEFINE_double(fasterkv_mutable_fraction,
+              0.0,
+              "FasterKV hybrid log mutable fraction; 0 uses backend default");
+DEFINE_int64(fasterkv_read_cache_bytes,
+             0,
+             "FasterKV read cache bytes; 0 disables read cache");
 DEFINE_string(index_type, "DRAM_EXTENDIBLE_HASH", "RecStore index.type");
 DEFINE_string(value_store_type, "DRAM_VALUE_STORE", "RecStore value.type");
 DEFINE_string(dram_allocator, "PERSIST_LOOP_SLAB", "RecStore DRAM allocator");
@@ -231,8 +246,11 @@ private:
 
 class FasterKVBenchmarkBackend : public BenchmarkBackend {
 public:
-  FasterKVBenchmarkBackend(uint64_t capacity, size_t value_size)
-      : backend_(capacity, value_size) {}
+  FasterKVBenchmarkBackend(
+      uint64_t capacity,
+      size_t value_size,
+      const recstore::storage::fasterkv::FasterKVBackendOptions& options)
+      : backend_(capacity, value_size, options) {}
 
   void Insert(const std::string& table_name,
               size_t num_keys,
@@ -261,6 +279,40 @@ public:
 private:
   recstore::storage::fasterkv::FasterKVBackend backend_;
 };
+
+recstore::storage::fasterkv::FasterKVBackendOptions FasterKvOptions() {
+  recstore::storage::fasterkv::FasterKVBackendOptions options;
+  if (FLAGS_fasterkv_storage == "memory") {
+    options.storage = recstore::storage::fasterkv::FasterKVStorage::kMemory;
+  } else if (FLAGS_fasterkv_storage == "ssd") {
+    options.storage = recstore::storage::fasterkv::FasterKVStorage::kSsd;
+  } else {
+    throw std::invalid_argument("fasterkv_storage must be memory or ssd");
+  }
+  options.log_path = FLAGS_fasterkv_log_path;
+  if (options.storage == recstore::storage::fasterkv::FasterKVStorage::kSsd &&
+      options.log_path.empty()) {
+    if (FLAGS_path.empty()) {
+      throw std::invalid_argument(
+          "path or fasterkv_log_path is required for fasterkv_storage=ssd");
+    }
+    options.log_path = FLAGS_path + "/fasterkv-log";
+  }
+  if (FLAGS_fasterkv_hlog_memory_bytes > 0) {
+    options.hlog_memory_bytes =
+        static_cast<uint64_t>(FLAGS_fasterkv_hlog_memory_bytes);
+  }
+  if (FLAGS_fasterkv_mutable_fraction < 0.0 ||
+      FLAGS_fasterkv_mutable_fraction > 1.0) {
+    throw std::invalid_argument("fasterkv_mutable_fraction must be in [0, 1]");
+  }
+  options.mutable_fraction = FLAGS_fasterkv_mutable_fraction;
+  if (FLAGS_fasterkv_read_cache_bytes > 0) {
+    options.read_cache_bytes =
+        static_cast<uint64_t>(FLAGS_fasterkv_read_cache_bytes);
+  }
+  return options;
+}
 
 const std::string& EffectiveTableName() {
   static const std::string kRocksDbDefaultTable = "default";
@@ -326,7 +378,8 @@ std::unique_ptr<BenchmarkBackend> CreateBenchmarkBackend() {
   if (FLAGS_backend == "fasterkv") {
     return std::make_unique<FasterKVBenchmarkBackend>(
         static_cast<uint64_t>(FLAGS_record_count),
-        static_cast<size_t>(FLAGS_value_size));
+        static_cast<size_t>(FLAGS_value_size),
+        FasterKvOptions());
   }
   return std::make_unique<HpsBenchmarkBackend>(CreateBackend());
 }

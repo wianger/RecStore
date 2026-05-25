@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -63,8 +64,8 @@ private:
   MallocApi* shm_malloc_;
   ShmBaseRecycle* shm_recycle_;
 
-  ShmFile dict_shm_file_;
-  ShmFile valid_shm_file_;
+  std::unique_ptr<ShmFile> dict_shm_file_;
+  std::unique_ptr<ShmFile> valid_shm_file_;
 
   std::string shm_dir_;
   TimestampGetter ts_getter_ = nullptr;

@@ -41,7 +41,7 @@ struct Block {
     return ret;
   }
 
-  int Insert(Key_t&, Value_t, size_t);
+  int Insert(Key_t&, Value_t, size_t, Value_t* old_value = nullptr);
   void Insert4split(Key_t&, Value_t);
   bool Put(Key_t&, Value_t, size_t);
   Block** Split(void);
@@ -104,7 +104,7 @@ public:
   double Utilization(void) override;
   size_t Capacity(void) override;
   void Get(Key_t key, Value_t& value, unsigned tid) override;
-  void Put(Key_t key, Value_t value, unsigned tid) override;
+  Value_t Put(Key_t key, Value_t value, unsigned tid) override;
   void BatchGet(base::ConstArray<Key_t> keys,
                 Value_t* pointers,
                 unsigned tid) override;
@@ -126,7 +126,7 @@ private:
   size_t global_depth;
 
   Value_t Extract(Key_t& key);
-  void Insert(Key_t& key, Value_t value);
+  Value_t Insert(Key_t& key, Value_t value);
   bool InsertOnly(Key_t& key, Value_t value);
   Value_t FindAnyway(Key_t&);
 };

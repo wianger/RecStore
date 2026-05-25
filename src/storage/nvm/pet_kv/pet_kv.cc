@@ -51,23 +51,31 @@ PetKV::PetKV(const std::string& shm_dir,
       "PetKV allocate {:.2f} GB; capacity={} for dict",
       (double)dict_memory_size / 1024 / 1024 / 1024,
       dict_size);
-  if (!dict_shm_file_.Initialize(shm_dir + "/dict", dict_memory_size)) {
+  dict_shm_file_ = base::ShmFile::New(base::ShmFile::ConfigForMedium(
+      "DRAM", shm_dir + "/dict", dict_memory_size));
+  if (!dict_shm_file_) {
     base::file_util::Delete(shm_dir + "/dict", false);
-    CHECK(dict_shm_file_.Initialize(shm_dir + "/dict", dict_memory_size));
+    dict_shm_file_ = base::ShmFile::New(base::ShmFile::ConfigForMedium(
+        "DRAM", shm_dir + "/dict", dict_memory_size));
+    CHECK(dict_shm_file_);
     LOG(INFO) << "Reinitialize shm dict size: " << dict_memory_size;
   }
 
   auto dict_file_init_ts = base::GetTimestamp() / 1000;
 
-  if (!valid_shm_file_.Initialize(shm_dir + "/valid", valid_file_size)) {
+  valid_shm_file_ = base::ShmFile::New(base::ShmFile::ConfigForMedium(
+      "DRAM", shm_dir + "/valid", valid_file_size));
+  if (!valid_shm_file_) {
     base::file_util::Delete(shm_dir + "/valid", false);
-    CHECK(valid_shm_file_.Initialize(shm_dir + "/valid", valid_file_size));
+    valid_shm_file_ = base::ShmFile::New(base::ShmFile::ConfigForMedium(
+        "DRAM", shm_dir + "/valid", valid_file_size));
+    CHECK(valid_shm_file_);
     shm_malloc_->Initialize();
   }
   auto valid_file_init_ts = base::GetTimestamp() / 1000;
 
-  dict_ = reinterpret_cast<ShmKDoubleDict*>(dict_shm_file_.Data());
-  if (!dict_->Valid(dict_shm_file_.Size())) {
+  dict_ = reinterpret_cast<ShmKDoubleDict*>(dict_shm_file_->Data());
+  if (!dict_->Valid(dict_shm_file_->Size())) {
     dict_->Initialize(dict_size, IGNORE_LOAD_FACTOR);
   } else {
     LOG(INFO) << "Before recovery: [shm_malloc] " << shm_malloc_->GetInfo();
@@ -97,9 +105,9 @@ PetKV::~PetKV() {
 bool PetKV::Valid() {
   const int kCheckThreadNum = 3;
   auto begin_ts             = base::GetTimestamp() / 1000;
-  if (!dict_->Valid(dict_shm_file_.Size())) {
-    LOG(ERROR) << "dict load error: " << dict_shm_file_.filename()
-               << ", size: " << dict_shm_file_.Size();
+  if (!dict_->Valid(dict_shm_file_->Size())) {
+    LOG(ERROR) << "dict load error: " << dict_shm_file_->filename()
+               << ", size: " << dict_shm_file_->Size();
     return false;
   }
   auto dict_check_ts = base::GetTimestamp() / 1000;
@@ -202,6 +210,7 @@ PetMultiKV::PetMultiKV(const std::vector<std::string>& shm_dir,
 }
 
 void PetMultiKV::LoadShard(int shard) {
+  base::file_util::CreateDirectory(shm_dir(shard));
   LOG(INFO) << "PetMultiKV LoadShard shm_file:" << shm_dir(shard)
             << ", shard memory_size:" << shard_memory_
             << ", shard_cache_capacity:" << shard_cache_capacity_

@@ -9,7 +9,8 @@ DEFINE_int32(numa_id, 0, "");
 int main(int argc, char** argv) {
   base::Init(&argc, &argv);
   if (FLAGS_command == "reinit") {
-    base::PMMmapRegisterCenter::GetConfig().use_dram = false;
+    base::PMMmapRegisterCenter::GetConfig().backend =
+        base::PMMmapRegisterCenter::Backend::kDevDax;
     base::PMMmapRegisterCenter::GetConfig().numa_id  = FLAGS_numa_id;
     base::PMMmapRegisterCenter::GetInstance()->ReInitialize();
     auto command = base::SFormat("rm -rf /media/aep0/*;"

@@ -20,7 +20,7 @@ TEST_F(IndexTest, BasicPutAndGet) {
   uint64_t value = 456;
   unsigned tid   = 0;
 
-  index_->Put(key, value, tid); // 插入
+  EXPECT_EQ(index_->Put(key, value, tid), kValueHandleNone); // 插入
   uint64_t retrieved;
   index_->Get(key, retrieved, tid); // 检索
 
@@ -47,8 +47,8 @@ TEST_F(IndexTest, PutOverwrite) {
   uint64_t value2 = 300;
   unsigned tid    = 0;
 
-  index_->Put(key, value1, tid);
-  index_->Put(key, value2, tid);
+  EXPECT_EQ(index_->Put(key, value1, tid), kValueHandleNone);
+  EXPECT_EQ(index_->Put(key, value2, tid), value1);
 
   uint64_t retrieved;
   index_->Get(key, retrieved, tid);

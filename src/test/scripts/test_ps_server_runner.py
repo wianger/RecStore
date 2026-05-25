@@ -1,4 +1,6 @@
 import unittest
+import json
+import tempfile
 
 from ps_server_runner import PSServerRunner
 
@@ -73,6 +75,29 @@ class TestPSServerRunner(unittest.TestCase):
                 "FATAL: Failed to start gRPC server shard 0"
             )
         )
+
+    def test_reads_shard_ids_from_config_without_assuming_order(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
+            json.dump(
+                {
+                    "cache_ps": {
+                        "servers": [
+                            {"host": "127.0.0.1", "port": 15001, "shard": 7},
+                            {"host": "127.0.0.1", "port": 15000, "shard": 3},
+                        ]
+                    }
+                },
+                f,
+            )
+            f.flush()
+
+            runner = PSServerRunner(
+                config_path=f.name,
+                num_shards=2,
+                verbose=False,
+            )
+
+            self.assertEqual(runner._configured_shard_ids(), [7, 3])
 
 
 if __name__ == "__main__":

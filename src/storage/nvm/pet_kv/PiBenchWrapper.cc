@@ -3,6 +3,8 @@
 #include "/home/xieminhui/HashEvaluation/hash/common/hash_api.h"
 #include "memory/shm_file.h"
 
+#include <memory>
+
 typedef base::PetHash<uint64, uint64> PiBenchPetHashDict;
 const bool IGNORE_LOAD_FACTOR = false;
 
@@ -12,15 +14,19 @@ public:
     auto dict_size = capacity;
     auto dict_memory_size =
         PiBenchPetHashDict::MemorySize(dict_size, IGNORE_LOAD_FACTOR);
-    if (!dict_shm_file_.Initialize(shm_dir + "/dict", dict_memory_size)) {
+    dict_shm_file_ = base::ShmFile::New(base::ShmFile::ConfigForMemoryBackend(
+        shm_dir + "/dict", dict_memory_size));
+    if (!dict_shm_file_) {
       fs::remove(shm_dir + "/dict");
-      CHECK(dict_shm_file_.Initialize(shm_dir + "/dict", dict_memory_size));
+      dict_shm_file_ = base::ShmFile::New(base::ShmFile::ConfigForMemoryBackend(
+          shm_dir + "/dict", dict_memory_size));
+      CHECK(dict_shm_file_);
       LOG(INFO) << "Initialize shm dict size: " << dict_memory_size
                 << ",  ShmKVDict Need: "
                 << PiBenchPetHashDict::MemorySize(capacity * 2);
     }
-    dict_ = reinterpret_cast<PiBenchPetHashDict*>(dict_shm_file_.Data());
-    if (!dict_->Valid(dict_shm_file_.Size())) {
+    dict_ = reinterpret_cast<PiBenchPetHashDict*>(dict_shm_file_->Data());
+    if (!dict_->Valid(dict_shm_file_->Size())) {
       dict_->Initialize(dict_size, IGNORE_LOAD_FACTOR);
     }
   }
@@ -32,7 +38,7 @@ public:
         dict_->Capacity(),
         dict_->Size() / (float)dict_->Capacity());
     LOG(INFO) << "MemoryUtil: "
-              << dict_->Size() * 16 / (float)dict_shm_file_.Size();
+              << dict_->Size() * 16 / (float)dict_shm_file_->Size();
   }
 
   void thread_ini(int id) {}
@@ -123,7 +129,7 @@ public:
   scan(const char* key, size_t key_sz, int scan_sz, char* values_out) {
     return true;
   };
-  base::ShmFile dict_shm_file_;
+  std::unique_ptr<base::ShmFile> dict_shm_file_;
   PiBenchPetHashDict* dict_;
 };
 

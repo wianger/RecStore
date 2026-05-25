@@ -94,4 +94,24 @@ auto* kv = base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
 
 允许的显式外部引擎是 `KVEngineFasterKV`、`KVEngineHPSHashMap`、`KVEngineHPSRocksDB`。它们不走 `KVEngineComposite` 的 `index/value` 组合规则。
 
+`KVEngineFasterKV` 可以额外配置可选的 `fasterkv` 块，用来选择 FasterKV 自身的 memory 或 SSD 后端：
+
+```json
+{
+  "external_engine_type": "KVEngineFasterKV",
+  "path": "/tmp/fasterkv_data",
+  "capacity": 1000000,
+  "value_size": 512,
+  "fasterkv": {
+    "storage": "ssd",
+    "log_path": "/data/fasterkv/hlog",
+    "hlog_memory_bytes": 1073741824,
+    "mutable_fraction": 0.9,
+    "read_cache_bytes": 268435456
+  }
+}
+```
+
+`fasterkv.storage` 可取 `memory` 或 `ssd`，默认是 `memory`，保持 FasterKV `NullDisk` 行为。`ssd` 使用 FasterKV `FileSystemDisk`，FasterKV 的 hash index 仍在内存中，hybrid log/value 可落到 `log_path`。如果未显式设置 `log_path`，`KVEngineFasterKV` 会使用顶层 `path` 下的 `fasterkv-log`；`storage=ssd` 时必须至少提供非空的 `log_path` 或顶层 `path`。`hlog_memory_bytes` 是可选的内存 log 容量，`mutable_fraction` 必须大于 0 且不超过 1，`read_cache_bytes` 大于 0 时启用 FasterKV read cache，实际分配会按 FasterKV page 约束向上取整。
+
 旧字段 `engine_type` 仍作为兼容别名被接受，但新配置应使用 `external_engine_type`。如果两个字段同时出现，值必须一致。

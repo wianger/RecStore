@@ -15,3 +15,6 @@ target_link_libraries(base_memory PUBLIC base jemalloc)
 
 add_executable(pm_command pm_command.cc)
 target_link_libraries(pm_command PUBLIC base_memory)
+
+add_executable(benchmark_malloc allocators/benchmark_malloc.cc)
+target_link_libraries(benchmark_malloc PUBLIC base_memory pthread)

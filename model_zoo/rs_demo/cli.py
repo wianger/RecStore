@@ -123,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                     if effective_ps_type == "LOCAL_SHM"
                     else None
                 ),
+                index_type=cfg.recstore_index_type,
             )
             cfg.recstore_runtime_dir = str(runtime_dir)
 

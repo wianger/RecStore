@@ -1,5 +1,8 @@
 #include "../io_backend.h"
 #include <cerrno>
+
+thread_local int pending = 0;
+thread_local std::vector<std::unique_ptr<coroutine<void>::pull_type>> coros;
 #include <cstdlib>
 #include <fcntl.h>
 #include <liburing.h>

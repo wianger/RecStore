@@ -6,6 +6,7 @@
 #include <string>
 
 #include "base/factory.h"
+#include "memory/malloc.h"
 #include "memory/memory_factory.h"
 #include "storage/value_store/value_store.h"
 
@@ -25,7 +26,7 @@ public:
     }
     const std::string path           = value.at("path").get<std::string>();
     const auto& dram                 = value.at("dram_allocator");
-    const std::string allocator_type = dram.value("type", "PERSIST_LOOP_SLAB");
+    const std::string allocator_type = dram.value("type", "R2_SLAB");
     const uint64_t capacity_bytes = dram.at("capacity_bytes").get<uint64_t>();
     using MF                      = base::
         Factory<base::MallocApi, const std::string&, int64, const std::string&>;
@@ -35,6 +36,9 @@ public:
       throw std::runtime_error("failed to create DramValueStore allocator");
     }
     allocator_->Initialize();
+    recycler_ =
+        std::make_unique<base::ThreadSafeDelayedRecycle>(allocator_.get(),
+                                                         kRecycleDelayUs);
   }
 
   uint64_t Alloc(size_t size) override {
@@ -80,6 +84,13 @@ public:
     }
   }
 
+  void Retire(uint64_t handle) override {
+    if (handle == kValueHandleNone) {
+      return;
+    }
+    recycler_->Recycle(allocator_->GetMallocData(DecodeOffset(handle)));
+  }
+
   const char* DirectPtr(uint64_t handle) const override {
     return allocator_->GetMallocData(DecodeOffset(handle));
   }
@@ -111,6 +122,8 @@ private:
   }
 
   std::unique_ptr<base::MallocApi> allocator_;
+  std::unique_ptr<base::ThreadSafeDelayedRecycle> recycler_;
+  static constexpr int64 kRecycleDelayUs = 1000;
 };
 
 FACTORY_REGISTER(

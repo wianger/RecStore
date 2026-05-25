@@ -1,6 +1,9 @@
 #pragma once
+#include <atomic>
+#include <memory>
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "base/base.h"
@@ -80,6 +83,58 @@ private:
   std::queue<std::pair<int64, char*>> recycle_ptr_;
   MallocApi* malloc_;
   int64 delay_ts_;
+};
+
+class ThreadSafeDelayedRecycle : public ShmBaseRecycle {
+public:
+  explicit ThreadSafeDelayedRecycle(MallocApi* malloc)
+      : malloc_(malloc), delay_ts_(1000000) {}
+  ThreadSafeDelayedRecycle(MallocApi* malloc, int64 delay_ts)
+      : malloc_(malloc), delay_ts_(delay_ts) {}
+  ~ThreadSafeDelayedRecycle() override { LocalRecyclers().erase(this); }
+
+  void Recycle(void* ptr) override { LocalRecycle().Recycle(ptr); }
+
+  int64 GetPendingNum() const {
+    auto& recyclers = LocalRecyclers();
+    auto it         = recyclers.find(this);
+    return it == recyclers.end() ? 0 : it->second->GetPendingNum();
+  }
+
+  void SetDelayTs(int delay_ts) {
+    delay_ts_.store(delay_ts, std::memory_order_relaxed);
+    auto& recyclers = LocalRecyclers();
+    auto it         = recyclers.find(this);
+    if (it != recyclers.end()) {
+      it->second->SetDelayTs(delay_ts);
+    }
+  }
+
+private:
+  using RecyclerMap =
+      std::unordered_map<const ThreadSafeDelayedRecycle*,
+                         std::unique_ptr<DelayedRecycle>>;
+
+  static RecyclerMap& LocalRecyclers() {
+    thread_local RecyclerMap recyclers;
+    return recyclers;
+  }
+
+  DelayedRecycle& LocalRecycle() const {
+    auto& recyclers = LocalRecyclers();
+    auto it         = recyclers.find(this);
+    if (it == recyclers.end()) {
+      it = recyclers
+               .emplace(this,
+                        std::make_unique<DelayedRecycle>(
+                            malloc_, delay_ts_.load(std::memory_order_relaxed)))
+               .first;
+    }
+    return *it->second;
+  }
+
+  MallocApi* malloc_;
+  std::atomic<int64> delay_ts_;
 };
 
 class StdDelayedRecycle : public ShmBaseRecycle {

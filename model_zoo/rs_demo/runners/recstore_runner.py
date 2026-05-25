@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,100 @@ GPU_CACHE_PROFILE_KEYS = (
     "gpu_cache_request_count",
     "gpu_cache_miss_count",
 )
+
+
+class LookaheadPrefetcher:
+    """Issue fused prefetches ahead of consumption by a fixed batch depth."""
+
+    def __init__(self, embedding_module: Any, depth: int) -> None:
+        self._embedding_module = embedding_module
+        self._depth = max(0, int(depth))
+        self._pending: deque[tuple[int, int, float, Any, Any]] = deque()
+        self._ready: deque[tuple[int, int, float, Any, Any]] = deque()
+        self._stats: dict[str, float] = {}
+        self.reset_stats()
+
+    @property
+    def depth(self) -> int:
+        return self._depth
+
+    def reset_stats(self) -> None:
+        self._stats = {
+            "prefetch_depth": float(self._depth),
+            "prefetch_issued_batches": 0.0,
+            "prefetch_consumed_batches": 0.0,
+            "prefetch_pending_batches": float(len(self._pending)),
+            "prefetch_ready_batches": float(len(self._ready)),
+            "prefetch_total_ids": 0.0,
+            "prefetch_consumed_total_ids": 0.0,
+            "prefetch_issue_to_consume_ms": 0.0,
+        }
+
+    def enqueue(self, sparse_features: Any) -> None:
+        if self._depth <= 0:
+            return
+        result = self._embedding_module.issue_fused_prefetch(
+            sparse_features,
+            record_handle=False,
+        )
+        handle, num_ids, issue_ts, fused_ids_cpu, fused_inverse = result
+        self._pending.append(
+            (int(handle), int(num_ids), float(issue_ts), fused_ids_cpu, fused_inverse)
+        )
+        self._stats["prefetch_issued_batches"] += 1.0
+        self._stats["prefetch_total_ids"] += float(num_ids)
+        self._stats["prefetch_pending_batches"] = float(len(self._pending))
+        self._stats["prefetch_ready_batches"] = float(len(self._ready))
+
+    def advance(self) -> bool:
+        if self._depth <= 0 or len(self._pending) <= self._depth:
+            self._stats["prefetch_pending_batches"] = float(len(self._pending))
+            self._stats["prefetch_ready_batches"] = float(len(self._ready))
+            return False
+        self._ready.append(self._pending.popleft())
+        self._stats["prefetch_pending_batches"] = float(len(self._pending))
+        self._stats["prefetch_ready_batches"] = float(len(self._ready))
+        return True
+
+    def advance_all(self) -> int:
+        moved = 0
+        while self._pending:
+            self._ready.append(self._pending.popleft())
+            moved += 1
+        self._stats["prefetch_pending_batches"] = float(len(self._pending))
+        self._stats["prefetch_ready_batches"] = float(len(self._ready))
+        return moved
+
+    def attach_next(self) -> bool:
+        if self._depth <= 0 or not self._ready:
+            self._stats["prefetch_pending_batches"] = float(len(self._pending))
+            self._stats["prefetch_ready_batches"] = float(len(self._ready))
+            return False
+        handle, num_ids, issue_ts, fused_ids_cpu, fused_inverse = self._ready.popleft()
+        self._embedding_module.set_fused_prefetch_handle(
+            handle,
+            num_ids=num_ids,
+            issue_ts=issue_ts,
+            fused_ids_cpu=fused_ids_cpu,
+            fused_inverse=fused_inverse,
+        )
+        self._stats["prefetch_consumed_batches"] += 1.0
+        self._stats["prefetch_consumed_total_ids"] += float(num_ids)
+        self._stats["prefetch_issue_to_consume_ms"] += max(
+            0.0,
+            (time.perf_counter() - issue_ts) * 1e3,
+        )
+        self._stats["prefetch_pending_batches"] = float(len(self._pending))
+        self._stats["prefetch_ready_batches"] = float(len(self._ready))
+        return True
+
+    def consume_stats(self, *, reset: bool = True) -> dict[str, float]:
+        self._stats["prefetch_pending_batches"] = float(len(self._pending))
+        self._stats["prefetch_ready_batches"] = float(len(self._ready))
+        stats = dict(self._stats)
+        if reset:
+            self.reset_stats()
+        return stats
 
 
 @contextmanager
@@ -194,6 +289,14 @@ def _configure_gpu_cache(
     enabled = bool(enable(int(cfg.gpu_cache_capacity), int(embedding_dim)))
     if not enabled:
         raise RuntimeError("GPU cache enable request returned False")
+    if getattr(cfg, "disable_gpu_cache_lookup_bypass", False):
+        setter = getattr(kv_client, "set_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(setter):
+            raise RuntimeError(
+                "GPU cache lookup bypass control requires "
+                "kv_client.set_gpu_cache_lookup_bypass_enabled support"
+            )
+        setter(False)
 
 
 def _pick_socket_ifname() -> str | None:
@@ -419,6 +522,8 @@ class RecStoreRunner(BenchmarkRunner):
             str(cfg.embedding_dim),
             "--fuse-k",
             str(cfg.fuse_k),
+            "--recstore-index-type",
+            str(cfg.recstore_index_type),
             "--dense-arch-layer-sizes",
             str(cfg.dense_arch_layer_sizes),
             "--over-arch-layer-sizes",
@@ -439,6 +544,8 @@ class RecStoreRunner(BenchmarkRunner):
             str(cfg.library_path),
             "--read-mode",
             str(cfg.read_mode),
+            "--prefetch-depth",
+            str(cfg.prefetch_depth),
             "--no-start-server",
         ]
         if cfg.enable_single_node_distributed_fast_path:
@@ -459,6 +566,8 @@ class RecStoreRunner(BenchmarkRunner):
                     str(cfg.gpu_cache_capacity),
                 ]
             )
+            if cfg.disable_gpu_cache_lookup_bypass:
+                cmd.append("--disable-gpu-cache-lookup-bypass")
         if not cfg.read_before_update:
             cmd.append("--no-read-before-update")
         return cmd
@@ -665,46 +774,88 @@ class RecStoreRunner(BenchmarkRunner):
             update_lat_us: list[float] = []
             rows: list[dict[str, Any]] = []
             data_iter = iter(dataloader)
-            for step in range(cfg.steps):
+            lookahead_prefetcher = LookaheadPrefetcher(
+                embedding_module,
+                depth=cfg.prefetch_depth
+                if cfg.read_before_update and cfg.read_mode == "prefetch"
+                else 0,
+            )
+            prepared_batches: deque[
+                tuple[dict[str, Any], float, Any, Any, Any, Any]
+            ] = deque()
+
+            def prepare_next_batch(batch_step: int):
                 row: dict[str, Any] = {
                     "backend": "recstore",
                     "nproc": world_size,
                     "rank": rank,
                     "batch_size": cfg.batch_size,
-                    "step": step,
-                    "warmup_excluded": _bool_int(step < cfg.warmup_steps),
+                    "step": batch_step,
+                    "warmup_excluded": _bool_int(batch_step < cfg.warmup_steps),
                     "nnodes": cfg.nnodes,
                     "nproc_per_node": cfg.nproc_per_node,
                     "world_size": cfg.nnodes * cfg.nproc_per_node,
                     "dist_mode": "multi_node" if cfg.nnodes > 1 else "single_node",
                 }
-                step_start = time.perf_counter()
-                with stage_timer(row, "batch_prepare_ms"):
-                    try:
-                        raw_dense_batch, sparse_batch, labels_batch = next(data_iter)
-                    except StopIteration:
-                        data_iter = iter(dataloader)
-                        raw_dense_batch, sparse_batch, labels_batch = next(data_iter)
-                    dense_batch = raw_dense_batch
-
-                with stage_timer(row, "input_pack_ms"):
-                    _, sparse_features = build_kjt_batch_from_dense_sparse_labels(
-                        dense_batch,
-                        sparse_batch,
-                        labels_batch,
-                        device=device,
+                batch_prepare_start = time.perf_counter()
+                try:
+                    raw_dense_batch, sparse_batch, labels_batch = next(
+                        data_iter_state["iter"]
                     )
+                except StopIteration:
+                    data_iter_state["iter"] = iter(dataloader)
+                    raw_dense_batch, sparse_batch, labels_batch = next(
+                        data_iter_state["iter"]
+                    )
+                dense_batch = raw_dense_batch
+                row["batch_prepare_ms"] = (
+                    time.perf_counter() - batch_prepare_start
+                ) * 1e3
+
+                input_pack_start = time.perf_counter()
+                _, sparse_features = build_kjt_batch_from_dense_sparse_labels(
+                    dense_batch,
+                    sparse_batch,
+                    labels_batch,
+                    device=device,
+                )
+                row["input_pack_ms"] = (time.perf_counter() - input_pack_start) * 1e3
+
+                if cfg.read_before_update and cfg.read_mode == "prefetch":
+                    lookahead_prefetcher.enqueue(sparse_features)
+                    lookahead_prefetcher.advance()
+
+                return row, time.perf_counter(), dense_batch, sparse_features, labels_batch
+
+            data_iter_state = {"iter": data_iter}
+            for step in range(cfg.steps):
+                while (
+                    len(prepared_batches) <= lookahead_prefetcher.depth
+                    and step + len(prepared_batches) < cfg.steps
+                ):
+                    prepared_batches.append(prepare_next_batch(step + len(prepared_batches)))
+                if step + len(prepared_batches) >= cfg.steps:
+                    lookahead_prefetcher.advance_all()
+
+                row, step_start, dense_batch, sparse_features, labels_batch = (
+                    prepared_batches.popleft()
+                )
 
                 _reset_perf_stats(embedding_module)
                 _reset_perf_stats(sparse_optimizer)
+                lookahead_prefetcher.reset_stats()
                 sparse_optimizer.zero_grad()
                 embeddings = None
                 with stage_timer(row, "embed_lookup_local_ms"):
                     sync_device(torch, device)
                     if cfg.read_before_update and cfg.read_mode == "prefetch":
-                        embedding_module.issue_fused_prefetch(sparse_features)
+                        if cfg.prefetch_depth > 0:
+                            lookahead_prefetcher.attach_next()
+                        else:
+                            embedding_module.issue_fused_prefetch(sparse_features)
                     embeddings = embedding_module(sparse_features)
                     sync_device(torch, device)
+                row.update(lookahead_prefetcher.consume_stats(reset=False))
                 _merge_numeric_fields(
                     row,
                     getattr(embedding_module, "_single_node_forward_profile", None),

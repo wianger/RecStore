@@ -42,7 +42,7 @@ TEST_F(SSDExtendibleHashTest, BasicPutAndGet) {
   uint64_t value = 456;
   unsigned tid   = 0;
 
-  index_->Put(key, value, tid); // 插入
+  EXPECT_EQ(index_->Put(key, value, tid), kValueHandleNone); // 插入
   uint64_t retrieved;
   index_->Get(key, retrieved, tid); // 检索
 
@@ -67,8 +67,8 @@ TEST_F(SSDExtendibleHashTest, PutOverwrite) {
   uint64_t value2 = 300;
   unsigned tid    = 0;
 
-  index_->Put(key, value1, tid);
-  index_->Put(key, value2, tid);
+  EXPECT_EQ(index_->Put(key, value1, tid), kValueHandleNone);
+  EXPECT_EQ(index_->Put(key, value2, tid), value1);
 
   uint64_t retrieved;
   index_->Get(key, retrieved, tid);
@@ -214,8 +214,8 @@ TEST_F(SSDExtendibleHashTest, EdgeKeysAndOverwrite) {
   const uint64_t k0   = 0;
   const uint64_t kmax = std::numeric_limits<uint64_t>::max();
 
-  index_->Put(k0, 111, tid);
-  index_->Put(kmax, 222, tid);
+  EXPECT_EQ(index_->Put(k0, 111, tid), kValueHandleNone);
+  EXPECT_EQ(index_->Put(kmax, 222, tid), kValueHandleNone);
 
   uint64_t got = 0;
   index_->Get(k0, got, tid);
@@ -224,7 +224,7 @@ TEST_F(SSDExtendibleHashTest, EdgeKeysAndOverwrite) {
   index_->Get(kmax, got, tid);
   EXPECT_EQ(got, 222u);
 
-  index_->Put(k0, 333, tid);
+  EXPECT_EQ(index_->Put(k0, 333, tid), 111u);
   index_->Get(k0, got, tid);
   EXPECT_EQ(got, 333u);
 }

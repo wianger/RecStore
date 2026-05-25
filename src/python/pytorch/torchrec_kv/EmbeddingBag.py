@@ -235,6 +235,10 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
     def reset_perf_stats(self) -> None:
         self._perf_stats: Dict[str, float] = {
             "prefetch_issue_ms": 0.0,
+            "planned_gpu_cache_prefill_ms": 0.0,
+            "planned_gpu_cache_prefill_batches": 0.0,
+            "planned_gpu_cache_prefill_ids": 0.0,
+            "planned_gpu_cache_prefill_fallbacks": 0.0,
             "lookup_ids_build_ms": 0.0,
             "lookup_wait_ms": 0.0,
             "lookup_owner_exchange_ms": 0.0,
@@ -643,6 +647,77 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
         setattr(self, "_single_node_forward_profile", profile)
         return local_embeddings
 
+    def _prefill_gpu_cache_from_fused_prefetch(
+        self,
+        fused_values_all: torch.Tensor,
+        *,
+        compute_device: torch.device,
+    ) -> bool:
+        if self._fused_prefetch_handle is None:
+            return False
+        if compute_device.type != "cuda":
+            return False
+        prefill = getattr(self.kv_client, "prefill_gpu_cache", None)
+        if not callable(prefill):
+            return False
+        ids_cached = self._fused_ids_cpu
+        if ids_cached is None:
+            return False
+        t_prefill_start = perf_counter()
+        prefill_ids = ids_cached.to(device=compute_device, dtype=torch.int64)
+        if not prefill_ids.is_contiguous():
+            prefill_ids = prefill_ids.contiguous()
+        try:
+            t_wait_start = time.time()
+            all_embeddings = self.kv_client.wait_and_get(
+                self._fused_prefetch_handle,
+                self._master_config.embedding_dim,
+                device=compute_device,
+            )
+            t_wait_end = time.time()
+            self._prefetch_wait_latencies.append(t_wait_end - t_wait_start)
+            issue_latency = t_wait_start - (self._fused_prefetch_issue_ts or t_wait_start)
+            self._prefetch_issue_latencies.append(issue_latency)
+            if all_embeddings.size(0) == ids_cached.numel():
+                prefill_values = all_embeddings
+            elif all_embeddings.size(0) == fused_values_all.numel():
+                prefill_ids = fused_values_all.to(device=compute_device, dtype=torch.int64)
+                prefill_values = all_embeddings
+            else:
+                logging.warning(
+                    "[EBC] Fused prefetch prefill size mismatch: got %s rows, "
+                    "expected %s unique rows or %s fused rows; falling back to "
+                    "local lookup prefill.",
+                    all_embeddings.size(0),
+                    ids_cached.numel(),
+                    fused_values_all.numel(),
+                )
+                prefill_values = self.kv_client.local_lookup_flat(
+                    self._master_config.name,
+                    prefill_ids,
+                )
+        except Exception as exc:
+            logging.debug(
+                "[EBC] Fused prefetch wait failed during GPU cache prefill; "
+                "falling back to local lookup prefill: %s",
+                exc,
+            )
+            self._perf_add("planned_gpu_cache_prefill_fallbacks", 1.0)
+            prefill_values = self.kv_client.local_lookup_flat(
+                self._master_config.name,
+                prefill_ids,
+            )
+        if not prefill_values.is_contiguous():
+            prefill_values = prefill_values.contiguous()
+        prefill(self._master_config.name, prefill_ids, prefill_values)
+        self._perf_add("planned_gpu_cache_prefill_ms", (perf_counter() - t_prefill_start) * 1e3)
+        self._perf_add("planned_gpu_cache_prefill_batches", 1.0)
+        self._perf_add("planned_gpu_cache_prefill_ids", float(prefill_ids.numel()))
+        if self._fused_prefetch_slots:
+            self._fused_prefetch_slots.pop(0)
+        self._sync_fused_prefetch_slot_state()
+        return True
+
     def forward(self, features: KeyedJaggedTensor) -> KeyedTensor:
         setattr(self, "_single_node_forward_profile", {})
         # Determine if we can enable fused single-call path safely
@@ -717,6 +792,10 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             all_embeddings: torch.Tensor
             used_fused_prefetch = False
             if use_local_shm_direct_fast_path:
+                self._prefill_gpu_cache_from_fused_prefetch(
+                    fused_values_all,
+                    compute_device=compute_device,
+                )
                 all_embeddings = self._lookup_fused_embeddings_shared_local_shm_single_table(
                     fused_values_all,
                     compute_device=compute_device,

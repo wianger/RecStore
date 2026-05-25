@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fstream>
 #include <future>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -51,6 +52,10 @@ using recstoreps::UpdateParameterRequest;
 using recstoreps::UpdateParameterResponse;
 
 DEFINE_string(config_path, "", "config file path");
+DEFINE_int32(grpc_local_shard_id,
+             -1,
+             "Only start the specified shard in multi-shard gRPC mode; "
+             "-1 means start all configured shards");
 
 namespace {
 
@@ -80,6 +85,31 @@ void AppendShardSuffixToNestedFilePaths(nlohmann::json& node, int shard_id) {
       AppendShardSuffixToNestedFilePaths(item, shard_id);
     }
   }
+}
+
+std::vector<nlohmann::json>
+SelectGRPCShardConfigs(const nlohmann::json& cache_ps_config,
+                       const std::optional<int>& local_shard_id) {
+  std::vector<nlohmann::json> selected;
+  if (!cache_ps_config.contains("servers") ||
+      !cache_ps_config["servers"].is_array()) {
+    return selected;
+  }
+
+  for (const auto& server_config : cache_ps_config["servers"]) {
+    if (!local_shard_id.has_value()) {
+      selected.push_back(server_config);
+      continue;
+    }
+    if (!server_config.contains("shard") ||
+        !server_config["shard"].is_number_integer()) {
+      continue;
+    }
+    if (server_config["shard"].get<int>() == *local_shard_id) {
+      selected.push_back(server_config);
+    }
+  }
+  return selected;
 }
 
 } // namespace
@@ -515,6 +545,10 @@ public:
     if (config_["cache_ps"].contains("num_shards")) {
       num_shards = config_["cache_ps"]["num_shards"];
     }
+    const std::optional<int> local_shard_id =
+        FLAGS_grpc_local_shard_id >= 0
+            ? std::make_optional(FLAGS_grpc_local_shard_id)
+            : std::nullopt;
 
     if (num_shards > 1) {
       // Multi-server startup
@@ -527,10 +561,24 @@ public:
         return;
       }
 
-      auto servers = config_["cache_ps"]["servers"];
-      if (servers.size() != num_shards) {
-        LOG(FATAL) << "servers count (" << servers.size()
+      const auto& cache_ps_config = config_["cache_ps"];
+      auto servers = SelectGRPCShardConfigs(cache_ps_config, local_shard_id);
+      const auto configured_servers = cache_ps_config["servers"];
+      if (configured_servers.size() != num_shards) {
+        LOG(FATAL) << "servers count (" << configured_servers.size()
                    << ") does not match num_shards (" << num_shards << ")";
+        return;
+      }
+      if (local_shard_id.has_value() && servers.empty()) {
+        LOG(FATAL) << "grpc_local_shard_id=" << *local_shard_id
+                   << " is not present in cache_ps.servers";
+        return;
+      }
+      if (!local_shard_id.has_value() &&
+          servers.size() != configured_servers.size()) {
+        LOG(FATAL) << "Selected shard count (" << servers.size()
+                   << ") does not match configured server count ("
+                   << configured_servers.size() << ")";
         return;
       }
 

@@ -60,46 +60,9 @@ target_link_libraries(test_extendible_hash PUBLIC
 )
 add_test(NAME test_extendible_hash COMMAND test_extendible_hash)
 
-add_executable(test_engine_extendible_hash test_engine_extendible_hash.cpp)
-target_link_libraries(test_engine_extendible_hash PUBLIC
-    extendible_hash
-    base
-    base_memory
-    ps_common
-    kv_engine
-    gtest
-    gtest_main
-    pthread
-    TBB::tbb
-)
-add_test(NAME test_engine_extendible_hash COMMAND test_engine_extendible_hash)
-
-add_executable(test_cceh test_cceh.cpp)
-target_link_libraries(test_cceh PUBLIC
-    cceh
-    base
-    gtest
-    gtest_main
-    pthread
-)
-add_test(NAME test_cceh COMMAND test_cceh)
-
-add_executable(test_engine_cceh test_engine_cceh.cpp)
-target_link_libraries(test_engine_cceh PUBLIC
-    cceh
-    base
-    base_memory
-    ps_common
-    kv_engine
-    gtest
-    gtest_main
-    pthread
-)
-add_test(NAME test_engine_cceh COMMAND test_engine_cceh)
-
 add_executable(test_io_backend test_io_backend.cpp)
 target_link_libraries(test_io_backend PUBLIC
-    cceh
+    io_backend
     base
     gtest
     gtest_main
@@ -136,7 +99,36 @@ target_link_libraries(test_config PUBLIC
 )
 add_test(NAME test_config COMMAND test_config)
 
+add_executable(test_shm_file test_shm_file.cpp)
+target_link_libraries(test_shm_file PUBLIC
+    base
+    base_memory
+    gtest
+    gtest_main
+    pthread
+)
+add_test(NAME test_shm_file COMMAND test_shm_file)
+
+add_executable(test_concurrent_slab_memory_pool test_concurrent_slab_memory_pool.cpp)
+target_link_libraries(test_concurrent_slab_memory_pool PUBLIC
+    base
+    base_memory
+    gtest
+    gtest_main
+    pthread
+)
+add_test(NAME test_concurrent_slab_memory_pool COMMAND test_concurrent_slab_memory_pool)
+
+set(RECSTORE_KVENGINE_TEST_DEFS)
+if(TARGET fasterkv_backend)
+    list(APPEND RECSTORE_KVENGINE_TEST_DEFS RECSTORE_TEST_ENABLE_FASTERKV_ENGINE)
+endif()
+if(TARGET hps_backend_support)
+    list(APPEND RECSTORE_KVENGINE_TEST_DEFS RECSTORE_TEST_ENABLE_HPS_ENGINE)
+endif()
+
 add_executable(test_kvengine test_kvengine.cpp)
+target_compile_definitions(test_kvengine PRIVATE ${RECSTORE_KVENGINE_TEST_DEFS})
 target_link_libraries(test_kvengine PUBLIC
     extendible_hash
     base

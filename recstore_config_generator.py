@@ -32,13 +32,13 @@ base_path = "/dev/shm/recstore_kv"
 
 config["cache_ps"]["base_kv_config"] = {
     "capacity": capacity,
-    "index": {"type": "DRAM_EXTENDIBLE_HASH"},
+    "index": {"type": "DRAM_PET_HASH"},
     "value": {
         "type": "DRAM_VALUE_STORE",
         "path": f"{base_path}/value",
         "default_value_size_hint": value_size,
         "dram_allocator": {
-            "type": "PERSIST_LOOP_SLAB",
+            "type": "CONCURRENT_SLAB_MEMORY_POOL",
             "capacity_bytes": capacity * value_size,
         },
     },

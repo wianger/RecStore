@@ -1,5 +1,8 @@
 #pragma once
+#include <algorithm>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "base/factory.h"
 #include "base_kv.h"
@@ -10,15 +13,19 @@ DECLARE_int32(prefetch_method);
 class KVEnginePetKV : public BaseKV {
 public:
   explicit KVEnginePetKV(const BaseKVConfig& config) : BaseKV(config) {
-    std::string shm_path = config.json_config_["path"];
-    const int shard_num  = 16;
-    shm_kv               = std::make_unique<base::PetMultiKV>(
-        shm_path,
-        shard_num,
-        config.json_config_.at("value_size").get<int>() *
-            config.json_config_.at("capacity").get<int>() / shard_num,
-        config.json_config_.at("capacity").get<int>() / shard_num,
-        0);
+    const std::string shm_path = config.json_config_["path"];
+    const int shard_num        = config.json_config_.value("shard_num", 16);
+    const int value_size = config.json_config_.at("value_size").get<int>();
+    const int capacity   = config.json_config_.at("capacity").get<int>();
+    constexpr int64_t kMinShardMemory = 2LL * 1024 * 1024;
+    const int64_t value_capacity =
+        config.json_config_.at("value_capacity").get<int64_t>();
+    const int shard_capacity =
+        std::max(1, (capacity + shard_num - 1) / shard_num);
+    const int64_t shard_memory =
+        std::max<int64_t>(kMinShardMemory, value_capacity / shard_num);
+    shm_kv = std::make_unique<base::PetMultiKV>(
+        shm_path, shard_num, shard_memory, shard_capacity, value_size);
   }
 
   void Get(const uint64_t key, std::string& value, unsigned t) override {

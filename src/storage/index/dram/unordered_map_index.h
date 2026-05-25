@@ -17,10 +17,13 @@ public:
     pointer = (it == map_.end()) ? NONE : it->second;
   }
 
-  void Put(Key_t key, Value_t pointer, unsigned tid) override {
+  Value_t Put(Key_t key, Value_t pointer, unsigned tid) override {
     (void)tid;
     std::unique_lock<std::shared_mutex> lock(mu_);
+    auto it            = map_.find(key);
+    Value_t old_handle = (it == map_.end()) ? kValueHandleNone : it->second;
     map_[key] = pointer;
+    return old_handle;
   }
 
   void BatchGet(base::ConstArray<Key_t> keys,

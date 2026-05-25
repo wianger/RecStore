@@ -26,6 +26,7 @@ class RunConfig:
     init_rows: int = 50000
     read_before_update: bool = True
     read_mode: str = "prefetch"
+    prefetch_depth: int = 0
     start_server: bool = True
     server_host: str = "127.0.0.1"
     server_port0: int | None = None
@@ -57,11 +58,13 @@ class RunConfig:
     single_node_owner_policy: str = "hash_mod_world_size"
     enable_gpu_cache: bool = False
     gpu_cache_capacity: int = 0
+    disable_gpu_cache_lookup_bypass: bool = False
     master_addr: str = "127.0.0.1"
     master_port: int = 29500
     rdzv_backend: str = "c10d"
     rdzv_id: str = ""
     ps_type: str = "BRPC"
+    recstore_index_type: str = "DRAM_EXTENDIBLE_HASH"
     torchrec_profiler: bool = False
     torchrec_dist_mode: str = "replicated"
     torchrec_memory_mode: str = "hbm"
@@ -118,6 +121,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=0,
         help="Number of embedding rows to keep in the RecStore GPU cache.",
     )
+    parser.add_argument(
+        "--disable-gpu-cache-lookup-bypass",
+        action="store_true",
+        default=False,
+        help=(
+            "Keep querying the RecStore GPU cache for large low-hit lookups. "
+            "Useful for planned/lookahead cache experiments."
+        ),
+    )
     parser.add_argument("--master-addr", type=str, default="127.0.0.1")
     parser.add_argument("--master-port", type=int, default=29500)
     parser.add_argument("--rdzv-backend", type=str, default="c10d")
@@ -129,6 +141,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default="BRPC",
         choices=["BRPC", "GRPC", "LOCAL_SHM"],
+    )
+    parser.add_argument(
+        "--recstore-index-type",
+        type=str,
+        default="DRAM_EXTENDIBLE_HASH",
+        choices=["DRAM_UNORDERED_MAP", "DRAM_EXTENDIBLE_HASH", "DRAM_PET_HASH"],
     )
     parser.add_argument("--num-embeddings", type=int, default=200000)
     parser.add_argument("--embedding-dim", type=int, default=128)
@@ -146,6 +164,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="prefetch",
         choices=["prefetch", "direct"],
         help="read path mode when read-before-update is enabled",
+    )
+    parser.add_argument(
+        "--prefetch-depth",
+        type=int,
+        default=0,
+        help=(
+            "Number of future batches to issue fused embedding prefetches ahead. "
+            "0 keeps the legacy issue-and-immediate-wait path."
+        ),
     )
     parser.add_argument("--start-server", action="store_true", default=True)
     parser.add_argument("--no-start-server", action="store_true")
@@ -276,6 +303,8 @@ def validate_recstore_config(cfg: RunConfig) -> None:
         raise RuntimeError(
             "--gpu-cache-capacity must be positive when --enable-gpu-cache is set"
         )
+    if cfg.prefetch_depth < 0:
+        raise RuntimeError("--prefetch-depth must be non-negative")
     if cfg.enable_single_node_distributed_fast_path:
         if cfg.nnodes != 1:
             raise RuntimeError(

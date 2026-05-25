@@ -102,6 +102,26 @@ class TestRecstoreConfigSchema(unittest.TestCase):
             }
         )
 
+    def test_accepts_external_fasterkv_ssd_config(self) -> None:
+        base_kv_properties = self.schema["$defs"]["baseKvConfig"]["properties"]
+        self.assertIn("fasterkv", base_kv_properties)
+
+        self.validate_config(
+            {
+                "external_engine_type": "KVEngineFasterKV",
+                "path": "/tmp/fasterkv_data",
+                "capacity": 1000000,
+                "value_size": 512,
+                "fasterkv": {
+                    "storage": "ssd",
+                    "log_path": "/data/fasterkv/hlog",
+                    "hlog_memory_bytes": 1073741824,
+                    "mutable_fraction": 0.9,
+                    "read_cache_bytes": 268435456,
+                },
+            }
+        )
+
     def test_accepts_external_hps_rocksdb_config(self) -> None:
         self.validate_config(
             {

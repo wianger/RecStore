@@ -14,6 +14,7 @@
 - 强制开启本地结构化上报（JSONL）
 - 自动调用 `analyze_embupdate_stages.py` 导出 CSV
 - `read_before_update` 默认走 `emb_prefetch + emb_wait_result` 稳定读路径（避免同步读路径在部分环境下崩溃）
+- 可用 `--prefetch-depth` 控制 fused embedding lookahead 预取幅度；`0` 保持同 batch issue+wait 路径，`1+` 会提前发起未来 batch 的预取并在后续 batch 消费。
 
 ## 2. 快速运行
 
@@ -52,6 +53,46 @@ python3 model_zoo/rs_demo/run_mock_stress.py \
   --batch-size 4096 \
   --no-start-server
 ```
+
+## 3. 预取幅度实验
+
+用于验证当前预取是否真正产生 overlap，并统计不同 lookahead 幅度的收益：
+
+```bash
+for depth in 0 1 2 4 8 16; do
+  python3 model_zoo/rs_demo/run_mock_stress.py \
+    --backend recstore \
+    --steps 80 \
+    --warmup-steps 5 \
+    --batch-size 4096 \
+    --num-embeddings 200000 \
+    --embedding-dim 128 \
+    --read-mode prefetch \
+    --prefetch-depth "${depth}" \
+    --run-id "recstore-prefetch-depth-${depth}" \
+    --output-root /nas/home/shq/docker/rs_demo
+done
+```
+
+重点看 `recstore_main.csv` 和 `recstore_main_agg.csv` 中这些列：
+
+- `prefetch_depth`
+- `prefetch_issued_batches`
+- `prefetch_consumed_batches`
+- `prefetch_pending_batches`
+- `prefetch_total_ids`
+- `prefetch_issue_ms`
+- `lookup_wait_ms`
+- `embed_lookup_local_ms`
+- `step_total_ms`
+
+判断方式：
+
+- `--prefetch-depth 0` 是 legacy 同 batch issue+wait，对 overlap 没有证明力。
+- `--prefetch-depth 1+` 如果实现有效，`prefetch_consumed_batches` 应从第 `depth` 个 batch 后变为 1，`lookup_wait_ms` 应随 depth 增大下降，直到平台期。
+- 同时开启 `--enable-gpu-cache --gpu-cache-capacity <rows>` 时，对比 `lookup_gpu_cache_*` 字段，判断 GPU cache 查询开销是否抵消了 lookahead 预取收益。
+
+GPU cache 与预取结合的推荐解释是：lookahead 负责把未来 batch 的 embedding 提前拉近，GPU cache 负责保留未来会复用的 embedding。当前实现还没有把预取结果直接异步填入 GPU cache；因此现阶段应把它作为组合实验观察项，而不是宣称 Bagpipe 式 oracle cache 已完成。
 
 单机单进程 TorchRec UVM caching（embedding 主存放在 host/UVM，GPU 侧使用 TorchRec/FBGEMM cache）：
 

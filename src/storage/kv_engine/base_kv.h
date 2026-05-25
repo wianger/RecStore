@@ -40,7 +40,7 @@ value stores use value.dram_allocator.path/value.ssd_allocator.path.
 
 class BaseKV {
 public:
-  virtual ~BaseKV() { std::cout << "exit BaseKV" << std::endl; }
+  virtual ~BaseKV() { }
 
   explicit BaseKV(const BaseKVConfig& config){};
 

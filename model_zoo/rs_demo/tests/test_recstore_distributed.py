@@ -68,10 +68,23 @@ class _FakeOpsWithGpuCache(_FakeOps):
     def __init__(self) -> None:
         super().__init__()
         self.gpu_cache_calls: list[tuple[int, int]] = []
+        self.bypass_enabled = True
 
     def enable_gpu_cache(self, capacity: int, embedding_dim: int) -> bool:
         self.gpu_cache_calls.append((int(capacity), int(embedding_dim)))
         return True
+
+    def set_gpu_cache_lookup_bypass_enabled(self, enabled: bool) -> None:
+        self.bypass_enabled = bool(enabled)
+
+    def is_gpu_cache_lookup_bypass_enabled(self) -> bool:
+        return self.bypass_enabled
+
+    def is_gpu_cache_lookup_bypassed(self) -> bool:
+        return not self.bypass_enabled
+
+    def reset_gpu_cache_bypass_state(self) -> None:
+        self.bypass_enabled = True
 
 
 class _FakeClient:
@@ -149,6 +162,7 @@ class _FakeClientWithGpuCache(_FakeClient):
             "gpu_cache_update_ms": 4.0,
             "gpu_cache_hit_count": 5.0,
         }
+        self.bypass_enabled = True
 
     def enable_gpu_cache(self, capacity: int, embedding_dim: int) -> bool:
         self.gpu_cache_calls.append((int(capacity), int(embedding_dim)))
@@ -156,6 +170,12 @@ class _FakeClientWithGpuCache(_FakeClient):
 
     def get_last_gpu_cache_profile(self) -> dict[str, float]:
         return self.gpu_cache_profile
+
+    def set_gpu_cache_lookup_bypass_enabled(self, enabled: bool) -> None:
+        self.bypass_enabled = bool(enabled)
+
+    def is_gpu_cache_lookup_bypass_enabled(self) -> bool:
+        return self.bypass_enabled
 
 
 class _FakeClientWithOpsGpuCache(_FakeClient):
@@ -637,6 +657,8 @@ class TestShardedRecstoreClient(unittest.TestCase):
             client.get_last_gpu_cache_profile()["gpu_cache_backend_lookup_ms"],
             2.0,
         )
+        client.set_gpu_cache_lookup_bypass_enabled(False)
+        self.assertFalse(client.is_gpu_cache_lookup_bypass_enabled())
 
     def test_gpu_cache_enable_falls_back_to_underlying_ops(self) -> None:
         runtime_dir = self._make_runtime_dir()
@@ -644,8 +666,13 @@ class TestShardedRecstoreClient(unittest.TestCase):
         client = ShardedRecstoreClient(fake_client, runtime_dir)
 
         self.assertTrue(client.enable_gpu_cache(2048, 8))
+        client.set_gpu_cache_lookup_bypass_enabled(False)
 
         self.assertEqual(fake_client.ops.gpu_cache_calls, [(2048, 8)])
+        self.assertFalse(fake_client.ops.bypass_enabled)
+        self.assertTrue(client.is_gpu_cache_lookup_bypassed())
+        client.reset_gpu_cache_bypass_state()
+        self.assertTrue(fake_client.ops.bypass_enabled)
 
     def test_gpu_cache_enable_requires_underlying_support(self) -> None:
         runtime_dir = self._make_runtime_dir()

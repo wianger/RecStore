@@ -12,17 +12,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BENCHMARK_BIN = ROOT / "build/bin/benchmark_kv_engine"
 DEFAULT_DRAM_ROOT = Path("/dev/shm/recstore")
-DEFAULT_SSD_ROOT = Path("/mnt/nvme5n1_recstore")
+DEFAULT_SSD_ROOT = Path("/mnt/nvme1n1_recstore/recstore")
 ENGINE_LABELS = {
+    "petkv": "KVEnginePetKV",
     "dram_eh_dram": "DRAM_EH+DRAM",
     "dram_map_dram": "DRAM_MAP+DRAM",
     "dram_pet_dram": "DRAM_PET+DRAM",
     "dram_pet_ssd": "DRAM_PET+SSD",
+    "dram_pet_tiered": "DRAM_PET+TIERED",
     "dram_eh_ssd": "DRAM_EH+SSD",
     "dram_eh_tiered": "DRAM_EH+TIERED",
-    "ssd_eh_ssd": "SSD_EH+SSD",
-    "KVEngineExtendibleHash": "KVEngineExtendibleHash",
-    "KVEngineCCEH": "KVEngineCCEH",
 }
 DEFAULT_ENGINE_ORDER = list(ENGINE_LABELS.keys())
 DISTRIBUTION_LABELS = {
@@ -39,24 +38,13 @@ class EngineSpec:
 
 
 KVENGINE_ALIASES: dict[str, EngineSpec] = {
+    "petkv": EngineSpec("DRAM_PET_HASH", "DRAM_VALUE_STORE", "KVEnginePetKV"),
     "dram_eh_dram": EngineSpec("DRAM_EXTENDIBLE_HASH", "DRAM_VALUE_STORE"),
-    # "dram_map_dram": EngineSpec("DRAM_UNORDERED_MAP", "DRAM_VALUE_STORE"),
     "dram_pet_dram": EngineSpec("DRAM_PET_HASH", "DRAM_VALUE_STORE"),
     "dram_eh_ssd": EngineSpec("DRAM_EXTENDIBLE_HASH", "SSD_VALUE_STORE"),
     "dram_pet_ssd": EngineSpec("DRAM_PET_HASH", "SSD_VALUE_STORE"),
     "dram_eh_tiered": EngineSpec("DRAM_EXTENDIBLE_HASH", "TIERED_VALUE_STORE"),
-    # "ssd_eh_ssd": EngineSpec("SSD_EXTENDIBLE_HASH", "SSD_VALUE_STORE"),
-    # Run specific engine implementations directly.
-    "KVEngineExtendibleHash": EngineSpec(
-        "DRAM_EXTENDIBLE_HASH",
-        "DRAM_VALUE_STORE",
-        "KVEngineExtendibleHash",
-    ),
-    "KVEngineCCEH": EngineSpec(
-        "SSD_EXTENDIBLE_HASH",
-        "SSD_VALUE_STORE",
-        "KVEngineCCEH",
-    ),
+    "dram_pet_tiered": EngineSpec("DRAM_PET_HASH", "TIERED_VALUE_STORE"),
 }
 
 SUMMARY_FIELDS = [
@@ -121,6 +109,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--value-size", type=int, default=128)
     parser.add_argument("--read-mode", choices=["exists", "get"], default="get")
+    parser.add_argument("--bulk-load", action="store_true")
     parser.add_argument("--dram-allocator", default="PERSIST_LOOP_SLAB")
     parser.add_argument("--ssd-io-backend", default="IOURING")
     parser.add_argument("--ssd-queue-depth", type=int, default=512)
@@ -223,6 +212,7 @@ def benchmark_command(
         gflag("running_seconds", args.runtime_seconds),
         gflag("value_size", args.value_size),
         gflag("read_mode", args.read_mode),
+        gflag("bulk_load", str(args.bulk_load).lower()),
         gflag("load", str(not args.skip_load).lower()),
         gflag("run", str(not args.skip_run).lower()),
         gflag("dram_allocator", args.dram_allocator),

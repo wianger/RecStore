@@ -17,9 +17,6 @@
 
 using boost::coroutines2::coroutine;
 
-thread_local int pending = 0;
-thread_local std::vector<std::unique_ptr<coroutine<void>::pull_type>> coros;
-
 namespace {
 constexpr const char* kSpdkPcieAddress = "0000:c2:00.0";
 

@@ -1,7 +1,14 @@
+import sys
 import unittest
+from pathlib import Path
+
 import torch
 
-from ...torchrec_kv.EmbeddingBag import RecStoreEmbeddingBagCollection
+_PYTHON_ROOT = Path(__file__).resolve().parents[3]
+if str(_PYTHON_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PYTHON_ROOT))
+
+from pytorch.torchrec_kv.EmbeddingBag import RecStoreEmbeddingBagCollection
 from model_zoo.rs_demo.data.dlrm_source import build_sparse_features
 
 
@@ -55,6 +62,9 @@ class _FakeKVClient:
     def __init__(self, ops: _FakeOps) -> None:
         self.ops = ops
         self._tensor_meta = {}
+        self.prefill_calls = []
+        self.local_lookup_calls = []
+        self.use_prefill_values_for_local_lookup = False
 
     def init_data(self, name, shape, dtype, base_offset: int = 0):
         self._tensor_meta[name] = {
@@ -67,6 +77,17 @@ class _FakeKVClient:
         embedding_dim = int(self._tensor_meta[name]["shape"][1])
         return self.ops.emb_read(ids, embedding_dim)
 
+    def local_lookup_flat(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+        embedding_dim = int(self._tensor_meta[name]["shape"][1])
+        self.local_lookup_calls.append((name, ids.clone()))
+        if self.use_prefill_values_for_local_lookup and self.prefill_calls:
+            prefill_name, prefill_ids, prefill_values = self.prefill_calls[-1]
+            self.assert_name = prefill_name
+            index = {int(v.item()): i for i, v in enumerate(prefill_ids.cpu())}
+            rows = [prefill_values[index[int(v.item())]] for v in ids.cpu()]
+            return torch.stack(rows, dim=0).to(ids.device)
+        return self.ops.emb_read(ids, embedding_dim).to(ids.device)
+
     def prefetch(self, ids: torch.Tensor) -> int:
         return int(self.ops.emb_prefetch(ids))
 
@@ -75,6 +96,12 @@ class _FakeKVClient:
         if device.type == "cuda":
             out = out.to(device)
         return out
+
+    def prefill_gpu_cache(self, name: str, ids: torch.Tensor, values: torch.Tensor) -> None:
+        self.prefill_calls.append((name, ids.detach().clone(), values.detach().clone()))
+
+    def is_shared_local_shm_table(self) -> bool:
+        return False
 
 
 class TestFusedPrefetch(unittest.TestCase):
@@ -130,6 +157,52 @@ class TestFusedPrefetch(unittest.TestCase):
 
         stats = ebc.report_prefetch_stats(reset=True)
         self.assertGreaterEqual(stats.get("batches_prefetched", 0), 1)
+
+    @unittest.skipUnless(torch.cuda.is_available(), "CUDA is required for GPU cache prefill")
+    def test_fused_prefetch_prefills_gpu_cache_before_local_lookup(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClient(fake)
+        fake_client.use_prefill_values_for_local_lookup = True
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        ebc.enable_single_node_distributed_fast_path = True
+        ebc.single_node_distributed_mode = "single_node"
+        fake_client.is_shared_local_shm_table = lambda: True
+        for idx, cfg in enumerate(configs):
+            base_offset = (idx << 30)
+            n, d = cfg["num_embeddings"], cfg["embedding_dim"]
+            keys = torch.arange(n, dtype=torch.int64) + base_offset
+            vals = torch.arange(n * d, dtype=torch.float32).view(n, d) + idx * 1000
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        values = features._values.to("cuda")
+        lengths = features._lengths.to("cuda")
+        features = build_sparse_features(features.keys(), values, lengths)
+        ebc.issue_fused_prefetch(features)
+        out = ebc(features)
+
+        self.assertEqual(len(fake_client.prefill_calls), 1)
+        self.assertEqual(len(fake_client.local_lookup_calls), 1)
+        name, prefill_ids, prefill_values = fake_client.prefill_calls[0]
+        self.assertEqual(name, "t0")
+        self.assertEqual(prefill_ids.dtype, torch.int64)
+        self.assertEqual(prefill_values.dtype, torch.float32)
+        self.assertEqual(prefill_ids.device.type, prefill_values.device.type)
+        looked_up_ids = fake_client.local_lookup_calls[0][1]
+        self.assertTrue(set(looked_up_ids.cpu().tolist()).issubset(set(prefill_ids.cpu().tolist())))
+        self.assertEqual(out.values().shape, (2, 8))
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertEqual(perf["planned_gpu_cache_prefill_batches"], 1.0)
+        self.assertGreater(perf["planned_gpu_cache_prefill_ids"], 0.0)
 
 
 if __name__ == "__main__":

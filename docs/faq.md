@@ -109,7 +109,7 @@
 
 ## Runtime Errors
 
-??? failure "E20260117 01:49:19.761556 970021 engine_extendible_hash.h:88] shm malloc failed (OOM?), key: 93068 size: 512"
+??? failure "shm malloc failed (OOM?), key: ... size: ..."
     通常是 `cache_ps.base_kv_config` 的容量预算过小导致。优先检查并调大以下字段之一：
 
     - `ENTRY_CAPACITY`

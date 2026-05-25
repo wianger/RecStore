@@ -6,6 +6,7 @@
 #include <deque>
 #include <fstream>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <set>
@@ -33,16 +34,19 @@ public:
 
     meta_data_memory_size_ = memory_size_ / slab_size_ * sizeof(uint64_t);
 
-    if (!shm_file_.Initialize(filename, memory_size + meta_data_memory_size_)) {
+    shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+        "DRAM", filename, memory_size + meta_data_memory_size_));
+    if (!shm_file_) {
       file_exists = false;
       CHECK(base::file_util::Delete(filename, false));
-      CHECK(
-          shm_file_.Initialize(filename, memory_size + meta_data_memory_size_))
+      shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+          "DRAM", filename, memory_size + meta_data_memory_size_));
+      CHECK(shm_file_)
           << filename << " " << memory_size;
     }
     Initialize();
-    meta_data_block_ = (uint64_t*)shm_file_.Data();
-    data_            = shm_file_.Data() + meta_data_memory_size_;
+    meta_data_block_ = (uint64_t*)shm_file_->Data();
+    data_            = shm_file_->Data() + meta_data_memory_size_;
     if (!file_exists) {
       LOG(INFO) << "PersistSimpleMalloc: first initialization.";
     } else {
@@ -114,7 +118,7 @@ public:
   }
 
 private:
-  ShmFile shm_file_;
+  std::unique_ptr<ShmFile> shm_file_;
   std::atomic<uint64_t> allocated_{0};
   std::atomic<uint64_t> nr_malloc_{0};
   char* data_;
@@ -294,10 +298,14 @@ public:
                     const std::vector<int>& slab_sizes)
       : allocated_slab_sizes_(slab_sizes.begin(), slab_sizes.end()) {
     bool file_exists = base::file_util::PathExists(filename);
-    if (!shm_file_.Initialize(filename, memory_size)) {
+    shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+        "DRAM", filename, memory_size));
+    if (!shm_file_) {
       file_exists = false;
       CHECK(base::file_util::Delete(filename, false));
-      CHECK(shm_file_.Initialize(filename, memory_size))
+      shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
+          "DRAM", filename, memory_size));
+      CHECK(shm_file_)
           << filename << " " << memory_size;
     }
 
@@ -307,7 +315,7 @@ public:
     CHECK_GE(nr_chunks_, slab_sizes.size());
 
     for (int64 i = 0; i < nr_chunks_; i++) {
-      chunks_.push_back(new Chunk(shm_file_.Data() + i * kChunkSize, i));
+      chunks_.push_back(new Chunk(shm_file_->Data() + i * kChunkSize, i));
     }
 
     for (auto slab : slab_sizes) {
@@ -423,7 +431,7 @@ public:
     std::vector<char*> mallocs_data;
     GetMallocsAppend(&mallocs_data);
     for (auto each : mallocs_data) {
-      mallocs_offset->push_back(each - shm_file_.Data());
+      mallocs_offset->push_back(each - shm_file_->Data());
     }
   }
   void Initialize() override {}
@@ -446,7 +454,7 @@ public:
   }
 
   char* GetMallocData(int64 offset) const override {
-    return shm_file_.Data() + offset;
+    return shm_file_->Data() + offset;
   }
 
   int GetMallocSize(int64 offset) const override {
@@ -454,7 +462,7 @@ public:
   }
 
   int64 GetMallocOffset(const char* data) const override {
-    auto ret = data - shm_file_.Data();
+    auto ret = data - shm_file_->Data();
     // see cache.SetShmMallocOffset
     CHECK_EQ((ret >> 3) << 3, ret);
     return ret;
@@ -486,13 +494,13 @@ public:
 private:
   int64 GetChunkID(void* data) const { return GetChunkID((const char*)data); }
   int64 GetChunkID(const char* data) const {
-    return GetChunkID(data - shm_file_.Data());
+    return GetChunkID(data - shm_file_->Data());
   }
 
   int64 GetChunkID(int64 offset) const { return offset / kChunkSize; }
 
 private:
-  ShmFile shm_file_;
+  std::unique_ptr<ShmFile> shm_file_;
   int64 nr_chunks_;
   std::vector<Chunk*> chunks_;
   std::deque<Chunk*> free_chunks_;
@@ -506,6 +514,18 @@ private:
 
   base::Lock lock_;
   // different slab
+};
+
+// Factory wrapper for DramValueStore; matches PetKV PersistMemoryPool<false> slabs.
+class PersistMemoryPoolMalloc : public PersistMemoryPool<false> {
+public:
+  PersistMemoryPoolMalloc(const std::string& filename,
+                          int64 memory_size,
+                          const std::string& /*medium*/)
+      : PersistMemoryPool<false>(
+            filename,
+            memory_size,
+            {8 + 32, 8 + 64, 8 + 128, 8 + 512, 8 + 1024}) {}
 };
 
 class PersistLoopShmMalloc : public MallocApi {
@@ -548,7 +568,7 @@ public:
   // 一共分配了多少块内存, 和 GetUsedBlockAppend 对应
   uint64 total_malloc() const { return total_malloc_; }
   bool Healthy() const { return total_used_ <= healthy_used_; }
-  int64 DataBaseOffset() const { return data_ - shm_file_.Data(); }
+  int64 DataBaseOffset() const { return data_ - shm_file_->Data(); }
   char* GetMallocData(int64 offset) const {
     if (offset < 8 || (offset & 7) != 0 || offset > block_num_ * 8L)
       return NULL;
@@ -592,7 +612,7 @@ private:
   void FreeBlock(int64 index) {
     used_bits_[index >> 6] &= ~(1ul << (index & 63));
   }
-  ShmFile shm_file_;
+  std::unique_ptr<ShmFile> shm_file_;
   base::Lock lock_;
   uint64* used_bits_;
   char* data_;
@@ -620,6 +640,12 @@ FACTORY_REGISTER(MallocApi,
 FACTORY_REGISTER(MallocApi,
                  PERSIST_LOOP_SLAB,
                  PersistLoopShmMalloc,
+                 const std::string&,
+                 int64,
+                 const std::string&);
+FACTORY_REGISTER(MallocApi,
+                 PERSIST_MEMORY_POOL,
+                 PersistMemoryPoolMalloc,
                  const std::string&,
                  int64,
                  const std::string&);

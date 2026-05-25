@@ -22,8 +22,8 @@ public:
     impl_->Get(sink, index, key, pointer, tid);
   }
 
-  void Put(Key_t key, Value_t pointer, unsigned tid) override {
-    impl_->Put(key, pointer, tid);
+  Value_t Put(Key_t key, Value_t pointer, unsigned tid) override {
+    return impl_->Put(key, pointer, tid);
   }
 
   void BatchGet(base::ConstArray<Key_t> keys,

@@ -26,6 +26,7 @@ public:
   virtual uint64_t AllocAndWrite(const void* data, size_t size)        = 0;
   virtual size_t Read(uint64_t handle, void* out_buf, size_t buf_size) = 0;
   virtual void Free(uint64_t handle)                                   = 0;
+  virtual void Retire(uint64_t handle) { Free(handle); }
   virtual const char* DirectPtr(uint64_t handle) const { return nullptr; }
   virtual size_t SlotCapacity(uint64_t handle) const = 0;
   virtual void BatchWrite(const std::vector<uint64_t>& handles,

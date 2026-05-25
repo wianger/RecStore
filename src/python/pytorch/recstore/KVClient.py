@@ -396,6 +396,62 @@ class RecStoreClient:
         clear()
         self._gpu_cache_table_name = None
 
+    def prefill_gpu_cache(self, name: str, ids: torch.Tensor, values: torch.Tensor) -> None:
+        if name not in self._tensor_meta:
+            raise RuntimeError(f"Tensor '{name}' has not been initialized.")
+        prefill = getattr(self.ops, "prefill_gpu_cache", None)
+        if not callable(prefill):
+            raise RuntimeError(
+                "prefill_gpu_cache requires a RecStore ops library exposing "
+                "prefill_gpu_cache()."
+            )
+        self._ensure_gpu_cache_table(name)
+        ids = self._normalize_ids(ids, preserve_device=True)
+        values = self._normalize_grads(values, preserve_device=True)
+        if values.dim() != 2:
+            raise ValueError("values must be a 2-dimensional tensor")
+        if ids.size(0) != values.size(0):
+            raise ValueError("ids and values must have the same number of rows")
+        if ids.device.type == "cpu":
+            self._reject_gpu_cache_reserved_ids(ids)
+        prefill(ids, values)
+
+    def set_gpu_cache_lookup_bypass_enabled(self, enabled: bool) -> None:
+        setter = getattr(self.ops, "set_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(setter):
+            raise RuntimeError(
+                "set_gpu_cache_lookup_bypass_enabled requires a RecStore ops library "
+                "exposing set_gpu_cache_lookup_bypass_enabled()."
+            )
+        setter(bool(enabled))
+
+    def is_gpu_cache_lookup_bypass_enabled(self) -> bool:
+        getter = getattr(self.ops, "is_gpu_cache_lookup_bypass_enabled", None)
+        if not callable(getter):
+            raise RuntimeError(
+                "is_gpu_cache_lookup_bypass_enabled requires a RecStore ops library "
+                "exposing is_gpu_cache_lookup_bypass_enabled()."
+            )
+        return bool(getter())
+
+    def is_gpu_cache_lookup_bypassed(self) -> bool:
+        getter = getattr(self.ops, "is_gpu_cache_lookup_bypassed", None)
+        if not callable(getter):
+            raise RuntimeError(
+                "is_gpu_cache_lookup_bypassed requires a RecStore ops library "
+                "exposing is_gpu_cache_lookup_bypassed()."
+            )
+        return bool(getter())
+
+    def reset_gpu_cache_bypass_state(self) -> None:
+        reset = getattr(self.ops, "reset_gpu_cache_bypass_state", None)
+        if not callable(reset):
+            raise RuntimeError(
+                "reset_gpu_cache_bypass_state requires a RecStore ops library "
+                "exposing reset_gpu_cache_bypass_state()."
+            )
+        reset()
+
     def _clear_gpu_cache_if_available(self) -> None:
         clear = getattr(self.ops, "clear_gpu_cache", None)
         if callable(clear):
