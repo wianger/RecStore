@@ -51,6 +51,16 @@ target_link_libraries(ps_transport_benchmark PUBLIC
     OpenMP::OpenMP_CXX
 )
 
+add_executable(rdma_rc_transport_benchmark
+    rdma_rc_transport_benchmark.cc
+)
+target_link_libraries(rdma_rc_transport_benchmark PUBLIC
+    base
+    ${warp_wq_ps_client}
+    Folly::folly
+    OpenMP::OpenMP_CXX
+)
+
 add_executable(recstore_mixed_benchmark
     recstore_mixed_benchmark.cc
     ${PROJECT_SOURCE_DIR}/src/framework/common/ps_client_config_adapter.cc

@@ -206,12 +206,12 @@ int PetPSClient::SubmitRpcLocked(
   auto& qp = qps_.at(static_cast<std::size_t>(qp_index));
   ResetStatusWord(qp.view.status, descriptor->seq);
   transport_->SubmitRequest(qp.view, *descriptor, payload, payload_bytes);
-  LOG(INFO) << "component=rdma_rc_client event=submit shard=" << shard_
-            << " client_id=" << client_id_ << " qp=" << qp_index
-            << " slot=" << qp.view.slot_index << " seq=" << descriptor->seq
-            << " op=" << descriptor->op << " key_count=" << key_count
-            << " payload_bytes=" << payload_bytes
-            << " response_bytes=" << response_bytes;
+  VLOG(1) << "component=rdma_rc_client event=submit shard=" << shard_
+          << " client_id=" << client_id_ << " qp=" << qp_index
+          << " slot=" << qp.view.slot_index << " seq=" << descriptor->seq
+          << " op=" << descriptor->op << " key_count=" << key_count
+          << " payload_bytes=" << payload_bytes
+          << " response_bytes=" << response_bytes;
 
   const int rpc_id = next_rpc_id_.fetch_add(1);
   pending_rpcs_.emplace(
@@ -324,10 +324,10 @@ void PetPSClient::WaitRPCFinish(int rpc_id) {
 
   auto& qp = qps_.at(static_cast<std::size_t>(pending.qp_index));
   const std::int32_t status_code = WaitStatus(qp.view.status, pending.seq);
-  LOG(INFO) << "component=rdma_rc_client event=done shard=" << shard_
-            << " client_id=" << client_id_ << " qp=" << pending.qp_index
-            << " seq=" << pending.seq << " status=" << status_code
-            << " response_bytes=" << pending.response_bytes;
+  VLOG(1) << "component=rdma_rc_client event=done shard=" << shard_
+          << " client_id=" << client_id_ << " qp=" << pending.qp_index
+          << " seq=" << pending.seq << " status=" << status_code
+          << " response_bytes=" << pending.response_bytes;
   if (pending.response_bytes > 0) {
     std::memcpy(
         pending.recv_buffer, qp.view.response_payload, pending.response_bytes);

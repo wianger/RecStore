@@ -1,6 +1,7 @@
 #include <folly/init/Init.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
@@ -13,6 +14,8 @@
 #include "ps/rdma/rdma_protocol.h"
 
 DECLARE_int32(value_size);
+DECLARE_int32(global_id);
+DECLARE_int32(num_server_processes);
 DECLARE_int32(rdma_rc_qps_per_client_per_shard);
 
 namespace {
@@ -190,6 +193,137 @@ TEST(PetPSIntegrationTest, ExhaustedQpPoolFailsLoudly) {
   for (int rpc_id : rpc_ids) {
     client.WaitRPCFinish(rpc_id);
     client.RevokeRPCResource(rpc_id);
+  }
+}
+
+TEST(PetPSIntegrationTest, RepeatedPutGetStressSingleShard) {
+  const int embedding_dim = FLAGS_value_size / sizeof(float);
+  auto& client            = SingleShardClient();
+  const int client_id     = FLAGS_global_id - FLAGS_num_server_processes;
+  ASSERT_GE(client_id, 0);
+
+  for (int round = 0; round < 50; ++round) {
+    std::vector<std::uint64_t> keys;
+    keys.reserve(8);
+    const std::uint64_t base =
+        1000000ULL + static_cast<std::uint64_t>(client_id) * 100000ULL +
+        static_cast<std::uint64_t>(round) * 100ULL;
+    for (std::uint64_t i = 0; i < 8; ++i) {
+      keys.push_back(base + i);
+    }
+    auto values = MakeValues(keys, embedding_dim);
+
+    ASSERT_EQ(client.PutParameter(keys, values), 0) << "round=" << round;
+
+    void* recv_buffer =
+        client.GetReceiveBuffer(client.ResponseBufferBytes(keys.size()));
+    int rpc_id = client.GetParameter(
+        base::ConstArray<std::uint64_t>(keys),
+        static_cast<float*>(recv_buffer),
+        false);
+    client.WaitRPCFinish(rpc_id);
+
+    ExpectFlatSlots(static_cast<float*>(recv_buffer), values, embedding_dim);
+    client.RevokeRPCResource(rpc_id);
+  }
+}
+
+TEST(PetPSIntegrationTest, RepeatedPutGetStressMultiShard) {
+  const int embedding_dim = FLAGS_value_size / sizeof(float);
+  const int client_id     = FLAGS_global_id - FLAGS_num_server_processes;
+  ASSERT_GE(client_id, 0);
+
+  auto shard0 = std::make_unique<petps::PetPSClient>("127.0.0.1", 1234, 0);
+  auto shard1 = std::make_unique<petps::PetPSClient>("127.0.0.1", 1234, 1);
+  shard0->InitThread();
+  shard1->InitThread();
+
+  std::vector<BaseParameterClient*> clients = {shard0.get(), shard1.get()};
+  AllShardsParameterClientWrapper wrapper(clients, 2);
+
+  for (int round = 0; round < 50; ++round) {
+    std::vector<std::uint64_t> keys;
+    keys.reserve(16);
+    const std::uint64_t base =
+        2000000ULL + static_cast<std::uint64_t>(client_id) * 100000ULL +
+        static_cast<std::uint64_t>(round) * 100ULL;
+    for (std::uint64_t i = 0; i < 16; ++i) {
+      keys.push_back(base + i);
+    }
+    auto values = MakeValues(keys, embedding_dim);
+
+    ASSERT_EQ(wrapper.PutParameter(keys, values), 0) << "round=" << round;
+
+    std::vector<float> output(keys.size() * embedding_dim + 1, 0.0f);
+    int rpc_id = wrapper.GetParameter(
+        base::ConstArray<std::uint64_t>(keys), output.data(), false, 0);
+    wrapper.WaitRPCFinish(rpc_id);
+
+    ExpectFlatSlots(output.data(), values, embedding_dim);
+    wrapper.RevokeRPCResource(rpc_id);
+  }
+}
+
+TEST(PetPSIntegrationTest, AsyncGetPrefetchStressSingleShard) {
+  const int embedding_dim = FLAGS_value_size / sizeof(float);
+  auto& client            = SingleShardClient();
+  const int client_id     = FLAGS_global_id - FLAGS_num_server_processes;
+  ASSERT_GE(client_id, 0);
+
+  const int prefetch_count =
+      std::min(FLAGS_rdma_rc_qps_per_client_per_shard, 8);
+  ASSERT_GT(prefetch_count, 1);
+
+  std::vector<std::vector<std::uint64_t>> request_keys;
+  std::vector<std::vector<std::vector<float>>> expected_values;
+  request_keys.reserve(static_cast<std::size_t>(prefetch_count));
+  expected_values.reserve(static_cast<std::size_t>(prefetch_count));
+
+  for (int request = 0; request < prefetch_count; ++request) {
+    std::vector<std::uint64_t> keys;
+    keys.reserve(4);
+    const std::uint64_t base =
+        3000000ULL + static_cast<std::uint64_t>(client_id) * 100000ULL +
+        static_cast<std::uint64_t>(request) * 100ULL;
+    for (std::uint64_t i = 0; i < 4; ++i) {
+      keys.push_back(base + i);
+    }
+    auto values = MakeValues(keys, embedding_dim);
+    ASSERT_EQ(client.PutParameter(keys, values), 0) << "request=" << request;
+    request_keys.push_back(std::move(keys));
+    expected_values.push_back(std::move(values));
+  }
+
+  std::vector<std::vector<float>> recv_buffers;
+  std::vector<int> rpc_ids;
+  recv_buffers.reserve(static_cast<std::size_t>(prefetch_count));
+  rpc_ids.reserve(static_cast<std::size_t>(prefetch_count));
+
+  for (int request = 0; request < prefetch_count; ++request) {
+    recv_buffers.emplace_back(
+        request_keys[static_cast<std::size_t>(request)].size() *
+                static_cast<std::size_t>(embedding_dim) +
+            1,
+        0.0f);
+    rpc_ids.push_back(client.GetParameter(
+        base::ConstArray<std::uint64_t>(
+            request_keys[static_cast<std::size_t>(request)]),
+        recv_buffers.back().data(),
+        true));
+  }
+
+  for (int request = 0; request < prefetch_count; ++request) {
+    client.WaitRPCFinish(rpc_ids[request]);
+    ExpectFlatSlots(recv_buffers[static_cast<std::size_t>(request)].data(),
+                    expected_values[static_cast<std::size_t>(request)],
+                    embedding_dim);
+    const auto* status = reinterpret_cast<const std::int32_t*>(
+        reinterpret_cast<const char*>(
+            recv_buffers[static_cast<std::size_t>(request)].data()) +
+        request_keys[static_cast<std::size_t>(request)].size() *
+            static_cast<std::size_t>(FLAGS_value_size));
+    EXPECT_EQ(*status, static_cast<std::int32_t>(petps::RpcStatus::kOk));
+    client.RevokeRPCResource(rpc_ids[request]);
   }
 }
 

@@ -56,6 +56,7 @@ class PetPSClusterRunner:
         rdma_put_v2_push_region_offset=None,
         rdma_put_client_send_arena_bytes=None,
         rdma_put_server_scratch_bytes=None,
+        rdma_rc_qps_per_client_per_shard=None,
         rdma_wait_timeout_ms=None,
         validate_routing=False,
     ):
@@ -99,6 +100,7 @@ class PetPSClusterRunner:
         self.rdma_put_v2_push_region_offset = rdma_put_v2_push_region_offset
         self.rdma_put_client_send_arena_bytes = rdma_put_client_send_arena_bytes
         self.rdma_put_server_scratch_bytes = rdma_put_server_scratch_bytes
+        self.rdma_rc_qps_per_client_per_shard = rdma_rc_qps_per_client_per_shard
         self.rdma_wait_timeout_ms = rdma_wait_timeout_ms
         self.validate_routing = validate_routing
         self.processes = []
@@ -199,6 +201,11 @@ class PetPSClusterRunner:
                 "--rdma_put_v2_push_region_offset="
                 f"{self.rdma_put_v2_push_region_offset}"
             )
+        if self.rdma_rc_qps_per_client_per_shard is not None:
+            cmd.append(
+                "--rdma_rc_qps_per_client_per_shard="
+                f"{self.rdma_rc_qps_per_client_per_shard}"
+            )
         return cmd
 
     def build_client_cmd(self, argv, client_index=0):
@@ -251,6 +258,11 @@ class PetPSClusterRunner:
             cmd.append(
                 "--rdma_put_client_send_arena_bytes="
                 f"{self.rdma_put_client_send_arena_bytes}"
+            )
+        if self.rdma_rc_qps_per_client_per_shard is not None:
+            cmd.append(
+                "--rdma_rc_qps_per_client_per_shard="
+                f"{self.rdma_rc_qps_per_client_per_shard}"
             )
         if self.rdma_wait_timeout_ms is not None:
             cmd.append(f"--rdma_wait_timeout_ms={self.rdma_wait_timeout_ms}")

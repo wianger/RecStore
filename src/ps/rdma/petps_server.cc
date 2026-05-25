@@ -253,7 +253,17 @@ private:
                 transport_->config().request_slot_bytes,
                 transport_->config().response_slot_bytes,
                 &error)) {
-          LOG(ERROR) << "invalid RC request descriptor: " << error;
+          LOG(ERROR)
+              << "component=rdma_rc_server event=invalid_descriptor"
+              << " shard=" << shard_id_ << " slot=" << slot
+              << " thread_id=" << thread_id << " seq=" << seq
+              << " descriptor_seq=" << descriptor->seq
+              << " client_id=" << descriptor->client_id
+              << " qp=" << descriptor->qp_index << " op=" << descriptor->op
+              << " key_count=" << descriptor->key_count
+              << " payload_bytes=" << descriptor->payload_bytes
+              << " response_bytes=" << descriptor->response_bytes << " error=\""
+              << error << "\"";
           last_seq_[static_cast<std::size_t>(slot)] = seq;
           commit->state.store(0, std::memory_order_release);
           continue;
@@ -262,18 +272,24 @@ private:
         auto response = transport_->OpenClientResponse(
             descriptor->client_id, descriptor->qp_index);
         const char* payload = transport_->RequestPayloadAt(slot);
-        LOG(INFO) << "component=rdma_rc_server event=consume shard="
-                  << shard_id_ << " slot=" << slot << " client_id="
-                  << descriptor->client_id << " qp=" << descriptor->qp_index
-                  << " seq=" << seq << " op=" << descriptor->op
-                  << " key_count=" << descriptor->key_count
-                  << " payload_bytes=" << descriptor->payload_bytes
-                  << " response_bytes=" << descriptor->response_bytes;
+        VLOG(1) << "component=rdma_rc_server event=consume shard=" << shard_id_
+                << " slot=" << slot << " client_id=" << descriptor->client_id
+                << " qp=" << descriptor->qp_index << " seq=" << seq << " op="
+                << descriptor->op << " key_count=" << descriptor->key_count
+                << " payload_bytes=" << descriptor->payload_bytes
+                << " response_bytes=" << descriptor->response_bytes;
         response.status->status =
             static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
         response.status->response_bytes = 0;
 
         if (descriptor->shard_id != static_cast<std::uint32_t>(shard_id_)) {
+          LOG(ERROR) << "component=rdma_rc_server event=wrong_shard"
+                     << " expected_shard=" << shard_id_ << " actual_shard="
+                     << descriptor->shard_id << " slot=" << slot
+                     << " client_id=" << descriptor->client_id
+                     << " qp=" << descriptor->qp_index << " seq=" << seq
+                     << " op=" << descriptor->op
+                     << " key_count=" << descriptor->key_count;
           response.status->status =
               static_cast<std::int32_t>(petps::RpcStatus::kWrongShard);
         } else if (descriptor->op ==
@@ -293,11 +309,11 @@ private:
         std::atomic_thread_fence(std::memory_order_release);
         transport_->CompleteResponse(
             descriptor->client_id, descriptor->qp_index, response, seq);
-        LOG(INFO) << "component=rdma_rc_server event=complete shard="
-                  << shard_id_ << " slot=" << slot << " client_id="
-                  << descriptor->client_id << " qp=" << descriptor->qp_index
-                  << " seq=" << seq << " status=" << response.status->status
-                  << " response_bytes=" << response.status->response_bytes;
+        VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
+                << " slot=" << slot << " client_id=" << descriptor->client_id
+                << " qp=" << descriptor->qp_index << " seq=" << seq
+                << " status=" << response.status->status
+                << " response_bytes=" << response.status->response_bytes;
         last_seq_[static_cast<std::size_t>(slot)] = seq;
       }
       std::this_thread::yield();

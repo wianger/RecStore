@@ -83,4 +83,40 @@ add_test(
             TIMEOUT 60
             LABELS "rdma_integration"
     )
+
+    add_test(
+        NAME petps_multiclient_stress_test
+        COMMAND ${Python3_EXECUTABLE}
+                ${PROJECT_SOURCE_DIR}/src/test/scripts/run_petps_multiclient_stress.py
+                --server-count 1
+                --client-count 2
+                --config-path ${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.rdma_test.json
+                --test-binary $<TARGET_FILE:petps_integration_test>
+                --gtest-filter=PetPSIntegrationTest.RepeatedPutGetStressSingleShard:PetPSIntegrationTest.AsyncGetPrefetchStressSingleShard
+    )
+    set_tests_properties(
+        petps_multiclient_stress_test
+        PROPERTIES
+            SKIP_RETURN_CODE 77
+            TIMEOUT 90
+            LABELS "rdma_integration"
+    )
+
+    add_test(
+        NAME petps_multishard_multiclient_stress_test
+        COMMAND ${Python3_EXECUTABLE}
+                ${PROJECT_SOURCE_DIR}/src/test/scripts/run_petps_multiclient_stress.py
+                --server-count 2
+                --client-count 2
+                --config-path ${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.rdma_multishard_test.json
+                --test-binary $<TARGET_FILE:petps_integration_test>
+                --gtest-filter=PetPSIntegrationTest.RepeatedPutGetStressMultiShard
+    )
+    set_tests_properties(
+        petps_multishard_multiclient_stress_test
+        PROPERTIES
+            SKIP_RETURN_CODE 77
+            TIMEOUT 120
+            LABELS "rdma_integration"
+    )
 endif()

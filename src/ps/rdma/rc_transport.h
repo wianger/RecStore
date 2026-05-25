@@ -62,6 +62,7 @@ private:
         verbs; // RC QP and registered memory for this lane.
     void* response_slot   = nullptr; // Local registered response slot.
     void* request_staging = nullptr; // Local registered request staging slot.
+    bool submit_completion_pending = false;
   };
 
   Lane& LaneAt(int qp_index);
@@ -106,6 +107,7 @@ private:
     void* request_slots = nullptr; // Local registered slots for all clients.
     std::vector<void*>
         response_staging; // Per-client registered response staging slots.
+    std::vector<std::uint8_t> response_completion_pending;
   };
 
   Lane& LaneAt(int qp_index);

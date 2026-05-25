@@ -97,13 +97,16 @@ class TestPetPSClusterRunner(unittest.TestCase):
             rdma_server_ready_timeout_sec=45,
             rdma_server_ready_poll_ms=3,
             rdma_client_receive_arena_bytes=134217728,
+            rdma_rc_qps_per_client_per_shard=4,
         )
         server_cmd = runner.build_server_cmd(0)
         client_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"])
         self.assertIn("--rdma_per_thread_response_limit_bytes=2097152", server_cmd)
+        self.assertIn("--rdma_rc_qps_per_client_per_shard=4", server_cmd)
         self.assertIn("--rdma_server_ready_timeout_sec=45", client_cmd)
         self.assertIn("--rdma_server_ready_poll_ms=3", client_cmd)
         self.assertIn("--rdma_client_receive_arena_bytes=134217728", client_cmd)
+        self.assertIn("--rdma_rc_qps_per_client_per_shard=4", client_cmd)
 
     @mock.patch("petps_cluster_runner.os.geteuid", return_value=0)
     @mock.patch("petps_cluster_runner.shutil.which", return_value="/usr/bin/memcached")
