@@ -4,13 +4,36 @@ if(ENABLE_RDMA_INTEGRATION_TESTS)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 endif()
 
-add_library(wq_ps_client petps_client.cc allshards_ps_client.cc raw_verbs_transport.cc)
+add_library(wq_ps_client
+    petps_client.cc
+    allshards_ps_client.cc
+    rc_options.cc
+    rc_transport.cc
+    raw_verbs_transport.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/base/parameters.cpp
+)
                          
-target_link_libraries(wq_ps_client PUBLIC base ps_common mayfly)
+target_link_libraries(wq_ps_client PUBLIC base ps_common mayfly Folly::folly pthread rt)
 set(warp_wq_ps_client -Wl,--whole-archive wq_ps_client -Wl,--no-whole-archive CACHE INTERNAL "wq_ps_client")
 
-add_executable(petps_server petps_server.cc raw_verbs_transport.cc)
-target_link_libraries(petps_server PUBLIC base ps_base kv_engine ps_common mayfly TBB::tbb Folly::folly)
+add_executable(petps_server
+    petps_server.cc
+    rc_options.cc
+    rc_transport.cc
+    raw_verbs_transport.cc
+)
+target_link_libraries(petps_server PUBLIC
+    base
+    ps_base
+    kv_engine
+    sparse_tensor
+    ps_common
+    mayfly
+    TBB::tbb
+    Folly::folly
+    pthread
+    rt
+)
 
 add_executable(
     petps_integration_test

@@ -274,6 +274,32 @@ target_link_libraries(test_ps_client_factory PUBLIC
 target_link_options(test_ps_client_factory PUBLIC -Wl,--no-as-needed)
 add_test(NAME test_ps_client_factory COMMAND test_ps_client_factory)
 
+add_executable(test_rdmaps_client_adapter test_rdmaps_client_adapter.cpp)
+target_sources(test_rdmaps_client_adapter PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/framework/common/ps_client_config_adapter.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/client_factory.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/rdma_ps_client_adapter.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/allshards_ps_client.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/petps_client.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/rc_transport.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/rc_options.cc
+)
+target_link_libraries(test_rdmaps_client_adapter PUBLIC
+    base
+    wq_ps_client
+    grpc_ps_client
+    brpc_ps_client
+    local_shm_ps_client
+    Folly::folly
+    gflags
+    glog
+    gtest
+    gtest_main
+    pthread
+)
+target_link_options(test_rdmaps_client_adapter PUBLIC -Wl,--no-as-needed)
+add_test(NAME test_rdmaps_client_adapter COMMAND test_rdmaps_client_adapter)
+
 add_executable(test_local_shm_protocol test_local_shm_protocol.cpp)
 target_link_libraries(test_local_shm_protocol PUBLIC
     base
@@ -563,6 +589,19 @@ target_link_libraries(test_allshards_ps_client PUBLIC
     pthread
 )
 add_test(NAME test_allshards_ps_client COMMAND test_allshards_ps_client)
+
+add_executable(test_rdma_rc_protocol test_rdma_rc_protocol.cpp)
+target_sources(test_rdma_rc_protocol PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/ps/base/parameters.cpp
+)
+target_link_libraries(test_rdma_rc_protocol PUBLIC
+    base
+    ps_common
+    gtest
+    gtest_main
+    pthread
+)
+add_test(NAME test_rdma_rc_protocol COMMAND test_rdma_rc_protocol)
 
 add_executable(test_ps_transport_benchmark test_ps_transport_benchmark.cpp)
 target_link_libraries(test_ps_transport_benchmark PUBLIC

@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <vector>
 #include <string>
 
 #include "base/array.h"
@@ -35,6 +36,20 @@ public:
 
   virtual int PutParameter(const std::vector<uint64_t>& keys,
                            const std::vector<std::vector<float>>& values) = 0;
+
+  virtual int InitEmbeddingTable(const std::string& table_name,
+                                 std::uint64_t num_embeddings,
+                                 std::uint64_t embedding_dim) {
+    LOG(FATAL) << "not Implement";
+    return -1;
+  }
+
+  virtual int UpdateParameter(const std::string& table_name,
+                              base::ConstArray<uint64_t> keys,
+                              const std::vector<std::vector<float>>* grads) {
+    LOG(FATAL) << "not Implement";
+    return -1;
+  }
 
   virtual int FakePutParameter(base::ConstArray<uint64_t> keys, float* values) {
     LOG(FATAL) << "not Implement";

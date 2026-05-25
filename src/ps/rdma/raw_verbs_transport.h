@@ -24,16 +24,17 @@ inline int SelectRawVerbsDeviceIndex(int numa_id, int device_count) {
 }
 
 struct RawVerbsConfig {
-  int global_id                         = 0;
-  int local_lane                        = 0;
-  int remote_lane                       = 0;
-  int num_servers                       = 1;
-  int num_clients                       = 1;
-  int numa_id                           = 0;
-  bool connect_to_servers               = true;
-  bool connect_to_clients               = true;
-  std::size_t local_region_bytes        = 128 * 1024 * 1024;
-  std::uint64_t local_base_addr         = 0;
+  int global_id                  = 0;
+  int local_lane                 = 0;
+  int remote_lane                = 0;
+  int only_node_id               = -1; // Optional single peer node filter.
+  int num_servers                = 1;
+  int num_clients                = 1;
+  int numa_id                    = 0;
+  bool connect_to_servers        = true;
+  bool connect_to_clients        = true;
+  std::size_t local_region_bytes = 128 * 1024 * 1024;
+  std::uint64_t local_base_addr  = 0;
   std::uint64_t allocation_start_offset = 0;
   std::uint64_t reserved_region_offset  = 0;
   std::uint64_t reserved_region_bytes   = 0;
@@ -56,6 +57,9 @@ ShouldRawVerbsConnectToNode(const RawVerbsConfig& config, int node_id) {
     return false;
   }
   if (node_id < 0 || node_id >= config.num_servers + config.num_clients) {
+    return false;
+  }
+  if (config.only_node_id >= 0 && node_id != config.only_node_id) {
     return false;
   }
   const bool is_server = node_id < config.num_servers;

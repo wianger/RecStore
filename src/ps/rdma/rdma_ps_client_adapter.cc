@@ -1,5 +1,6 @@
 #include "ps/rdma/rdma_ps_client_adapter.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -18,9 +19,7 @@ DECLARE_int32(global_id);
 DECLARE_int32(num_server_processes);
 DECLARE_int32(num_client_processes);
 DECLARE_string(rdma_transport_mode);
-DEFINE_string(rdma_transport_mode,
-              "raw_message",
-              "RDMA transport mode: raw_message");
+DEFINE_string(rdma_transport_mode, "rc_write", "RDMA transport mode: rc_write");
 
 namespace recstore {
 
@@ -133,21 +132,29 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
     }
 
     std::vector<BaseParameterClient*> raw_clients;
+    std::vector<int> shard_ids;
     raw_clients.reserve(servers_it->size());
+    shard_ids.reserve(servers_it->size());
     CHECK_EQ(static_cast<int>(servers_it->size()), num_shards)
         << "RDMA distributed_client.servers size must equal num_shards";
-    for (std::size_t shard_idx = 0; shard_idx < servers_it->size();
-         ++shard_idx) {
-      const auto& server = (*servers_it)[shard_idx];
-      const int shard    = server.value("shard", static_cast<int>(shard_idx));
+    for (const auto& server : *servers_it) {
+      const int shard = server.value("shard", -1);
+      if (shard < 0) {
+        throw std::runtime_error(
+            "RDMA distributed_client.servers[].shard must be explicit");
+      }
       shard_clients_.push_back(std::make_unique<petps::PetPSClient>(
           server.value("host", std::string("127.0.0.1")),
           server.value("port", 25000),
           shard));
       raw_clients.push_back(shard_clients_.back().get());
+      shard_ids.push_back(shard);
     }
     multi_client_ = std::make_unique<AllShardsParameterClientWrapper>(
-        raw_clients, num_shards);
+        raw_clients,
+        num_shards,
+        dist_cfg.value("hash_method", "city_hash"),
+        shard_ids);
     client_ = multi_client_.get();
   }
 
@@ -265,19 +272,11 @@ int RDMAPSClientAdapter::UpdateParameter(
   if (grads->empty()) {
     return 0;
   }
-
-  const int64_t embedding_dim = static_cast<int64_t>(grads->front().size());
-  std::vector<float> flat;
-  flat.reserve(grads->size() * static_cast<std::size_t>(embedding_dim));
-  for (const auto& row : *grads) {
-    flat.insert(flat.end(), row.begin(), row.end());
+  EnsureThreadInitialized();
+  if (client_ == nullptr) {
+    return -1;
   }
-  return UpdateParameterFlat(
-      table_name,
-      keys,
-      flat.data(),
-      static_cast<int64_t>(grads->size()),
-      embedding_dim);
+  return client_->UpdateParameter(table_name, keys, grads);
 }
 
 int RDMAPSClientAdapter::UpdateParameterFlat(
@@ -290,15 +289,12 @@ int RDMAPSClientAdapter::UpdateParameterFlat(
   if (num_rows == 0) {
     return 0;
   }
-
-  std::vector<float> current(
-      static_cast<std::size_t>(num_rows) *
-          static_cast<std::size_t>(embedding_dim),
-      0.0f);
-  if (GetParameter(keys, current.data()) != 0) {
+  if (grads == nullptr) {
     return -1;
   }
-
+  if (keys.Size() != static_cast<std::size_t>(num_rows)) {
+    return -1;
+  }
   std::vector<std::vector<float>> updated;
   updated.reserve(static_cast<std::size_t>(num_rows));
   for (int64_t row = 0; row < num_rows; ++row) {
@@ -306,17 +302,30 @@ int RDMAPSClientAdapter::UpdateParameterFlat(
     for (int64_t col = 0; col < embedding_dim; ++col) {
       const std::size_t idx =
           static_cast<std::size_t>(row * embedding_dim + col);
-      values[static_cast<std::size_t>(col)] =
-          current[idx] - (kRdmaUpdateLearningRate * grads[idx]);
+      values[static_cast<std::size_t>(col)] = grads[idx];
     }
     updated.push_back(std::move(values));
   }
 
-  return PutParameter(keys, updated);
+  EnsureThreadInitialized();
+  if (client_ == nullptr) {
+    return -1;
+  }
+  return client_->UpdateParameter(table_name, keys, &updated);
 }
 
 int RDMAPSClientAdapter::InitEmbeddingTable(
     const std::string& table_name, const EmbeddingTableConfig& config) {
+  EnsureThreadInitialized();
+  if (client_ == nullptr) {
+    return -1;
+  }
+  const int init_rc = client_->InitEmbeddingTable(
+      table_name, config.num_embeddings, config.embedding_dim);
+  if (init_rc != 0) {
+    return init_rc;
+  }
+
   std::lock_guard<std::mutex> guard(state_mu_);
   const auto [it, inserted] = tables_.emplace(table_name, TableState{config});
   if (!inserted) {
@@ -335,7 +344,11 @@ int RDMAPSClientAdapter::AsyncGetParameter(const base::ConstArray<uint64_t>&,
 }
 
 void RDMAPSClientAdapter::Command(PSCommand) {
-  throw std::runtime_error("RDMA adapter Command not implemented yet");
+  EnsureThreadInitialized();
+  if (client_ == nullptr) {
+    throw std::runtime_error("RDMA adapter has no initialized client");
+  }
+  client_->Barrier("rdma_command", 0);
 }
 
 uint64_t
