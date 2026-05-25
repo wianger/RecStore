@@ -1,6 +1,8 @@
-# BaseKV 与配置
+# BaseKV 与 KV Engine
 
-`BaseKV` 是参数服务器看到的 KV 接口。内置组合式存储挂在这个接口下，上层代码不需要知道索引和值的存放位置。
+`BaseKV` 是 RecStore 存储层对参数服务器的统一 KV 抽象。`CachePS` 只依赖该接口；索引在 DRAM 还是 SSD、是否 tiered、是否走第三方库，均由 `engine_type` 选择的实现决定。
+
+存储层总览见 [index.md](./index.md)。**默认实现**为可组合的 `KVEngineComposite`，其 `index` / `value` / allocator 配置见 [composite_kvengine.md](./composite_kvengine.md)。
 
 ## 接口语义
 
@@ -15,90 +17,125 @@ class BaseKV {
   virtual void BatchPut(base::ConstArray<uint64_t> keys,
                         std::vector<base::ConstArray<float>>* values,
                         unsigned tid);
+  virtual bool ApplySgdUpdateFlat(...);  // 部分引擎实现
+  virtual void BulkLoad(base::ConstArray<uint64_t> keys, const void* value);
+  virtual void clear();
+  // Exists, DebugInfo, Util, 协程 BatchGet/BatchPut 等见 base_kv.h
 };
 ```
 
-`Get` 未命中时清空 `value`。`BatchGet` 的返回值是 `ConstArray<float>` 视图：DRAM value 可能直接指向底层内存，SSD value 先读到线程局部 buffer。调用方不能把这些视图跨调用长期保存。
+| 方法 | 约定 |
+|------|------|
+| `Get` | 未命中时清空 `value` |
+| `BatchGet` | 未命中项为空的 `ConstArray<float>`；DRAM 可能返回底层内存视图，**不得跨调用长期持有** |
+| `Put` / `BatchPut` | `KVEngineComposite` 支持变长 value；FasterKV / HPS 等常为固定 `value_size` |
+| `BulkLoad` | 需配置固定 value 字节数（Composite 用 `value.default_value_size_hint`） |
+| `tid` | 保留给调用方；Composite 主要依赖组件内部同步，勿假设 `tid` 全局唯一 |
 
-`tid` 保留在接口里，但 `KVEngineComposite` 主要依赖 key stripe lock 和组件内部同步。新增实现不能假设 `tid` 全局唯一。
+## 配置与创建
 
-## 配置入口
-
-服务端配置通常写在 `cache_ps.base_kv_config`：
-
-??? example "服务端配置示例"
-
-    ```json
-    {
-      "cache_ps": {
-        "num_threads": 32,
-        "base_kv_config": {
-          "capacity": 1000000,
-          "index": {
-            "type": "DRAM_EXTENDIBLE_HASH"
-          },
-          "value": {
-            "type": "DRAM_VALUE_STORE",
-            "default_value_size_hint": 512,
-            "path": "/dev/shm/recstore_data/value",
-            "dram_allocator": {
-              "type": "PERSIST_LOOP_SLAB",
-              "capacity_bytes": 512000000
-            }
-          }
-        }
-      }
-    }
-    ```
-
-`CachePS` 把 `num_threads` 写入 `BaseKVConfig::num_threads_`，把 `base_kv_config` 写入 `BaseKVConfig::json_config_`，调用：
+`BaseKVConfig` 含 `num_threads_` 与 `json_config_`（即 `cache_ps.base_kv_config` 对象）。
 
 ```cpp
 auto resolved = base::ResolveEngine(kv_config);
-auto* kv = base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
-    resolved.engine, resolved.cfg);
+base_kv_.reset(base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
+    resolved.engine, resolved.cfg));
 ```
 
-嵌套配置解析为 `KVEngineComposite`。旧的顶层字段会被拒绝，包括 `path`、`index_type`、`value_type`、`value_size`、`io_backend_type`、`file_path`。
+`ResolveEngine`（`engine_selector.h`）只做两件事：读取 `engine_type`（缺省为 `KVEngineComposite`），校验名称在已知集合内。**不**解析 `index` / `value` 嵌套字段；具体校验在引擎或 `ValueStore` / `Index` 构造时完成。
 
-## 必填字段
+已移除 `external_engine_type`；配置中若仍出现该字段会抛出 `invalid_argument`。
 
-| 字段 | 说明 |
-|------|------|
-| `capacity` | 索引容量或容量估计。`DRAM_PET_HASH` 会直接用它分配 hash 表。 |
-| `index.type` | 索引实现名。合法值见 [kv_engines.md](./kv_engines.md)。 |
-| `value.type` | value store 实现名。合法值见 [kv_engines.md](./kv_engines.md)。 |
-| `value.default_value_size_hint` | `BulkLoad` 所需的固定 value 字节数。`Put` / `BatchPut` 可写变长值。 |
+### 已知 `engine_type`
 
-路径规则由 `ResolveEngine` 检查：
+| `engine_type` | 实现 | 配置形态 | 文档 |
+|---------------|------|----------|------|
+| `KVEngineComposite`（默认） | `engine_composite.h` | 嵌套 `index` + `value` | [composite_kvengine.md](./composite_kvengine.md) |
+| `KVEnginePetKV` | `engine_petkv.h` | 顶层 `path`、`capacity`、`value_size`、`value_capacity` | 下文 |
+| `KVEngineFasterKV` | `external/fasterkv/` | 顶层 `capacity`、`value_size`；可选 `fasterkv` 块 | 下文 |
+| `KVEngineHPSHashMap` | `external/hps/` | 顶层 `capacity`、`value_size`；无 `path` | 下文 |
+| `KVEngineHPSRocksDB` | `external/hps/` | 同上 + 必填 `path` | 下文 |
 
-| 配置 | 路径要求 |
-|------|----------|
-| `DRAM_VALUE_STORE` | `ResolveEngine` 允许 `value.path` 为空或以 `/dev/shm` 开头；`DramValueStore` 构造函数目前需要非空路径，示例使用 `/dev/shm/...`。 |
-| `SSD_VALUE_STORE` | `value.path` 必填且非空。 |
-| `TIERED_VALUE_STORE` | 不允许 `value.path`；DRAM 路径写在 `value.dram_allocator.path`，SSD 路径写在 `value.ssd_allocator.path`。 |
-| SSD index | `index.path` 必填且非空。 |
+---
 
-## 外部引擎
+## KVEngineComposite（摘要）
 
-`external_engine_type` 只用于显式选择外部 KV 适配层：
+省略 `engine_type` 或显式写 `KVEngineComposite` 时使用嵌套配置：
 
 ```json
 {
-  "external_engine_type": "KVEngineHPSRocksDB",
-  "path": "/data/rocksdb",
   "capacity": 1000000,
-  "value_size": 512
+  "index": { "type": "DRAM_EXTENDIBLE_HASH" },
+  "value": {
+    "type": "DRAM_VALUE_STORE",
+    "default_value_size_hint": 512,
+    "path": "/dev/shm/recstore_data/value",
+    "dram_allocator": {
+      "type": "PERSIST_LOOP_SLAB",
+      "capacity_bytes": 512000000
+    }
+  }
 }
 ```
 
-允许的显式外部引擎是 `KVEngineFasterKV`、`KVEngineHPSHashMap`、`KVEngineHPSRocksDB`。它们不走 `KVEngineComposite` 的 `index/value` 组合规则。
+常用顶层字段：
 
-`KVEngineFasterKV` 可以额外配置可选的 `fasterkv` 块，用来选择 FasterKV 自身的 memory 或 SSD 后端：
+| 字段 | 说明 |
+|------|------|
+| `capacity` | 容量估计；`DRAM_PET_HASH` 直接用于表大小 |
+| `index.type` | 见 [composite_kvengine.md](./composite_kvengine.md) |
+| `value.type` | `DRAM_VALUE_STORE` / `SSD_VALUE_STORE` / `TIERED_VALUE_STORE` |
+| `value.default_value_size_hint` | `BulkLoad` 固定 value 大小；`Put` 可变长 |
+
+路径与 allocator 细则、组合矩阵、扩展 Index/ValueStore 的步骤均在 [composite_kvengine.md](./composite_kvengine.md)。
+
+---
+
+## KVEnginePetKV
+
+基于 `base::PetMultiKV` 的共享内存 KV，面向**固定** `value_size` 与 RDMA 内存注册（`RegisterPMAddr`）。
+
+| 字段 | 说明 |
+|------|------|
+| `path` | shm 根目录（必填） |
+| `capacity` | key 容量估计 |
+| `value_size` | 每条 value 字节数（必填） |
+| `value_capacity` | value 区域总字节预算（必填） |
+| `shard_num` | 分片数（默认 16） |
 
 ```json
 {
-  "external_engine_type": "KVEngineFasterKV",
+  "engine_type": "KVEnginePetKV",
+  "path": "/dev/shm/pet_kv",
+  "capacity": 1000000,
+  "value_size": 512,
+  "value_capacity": 536870912,
+  "shard_num": 16
+}
+```
+
+`BatchGet` 行为受 gflag `prefetch_method` 控制：`0` 逐 key `Get`，`1` 走 `PetMultiKV::BatchGet`。
+
+---
+
+## KVEngineFasterKV
+
+Microsoft FASTER 单表适配；由 FASTER 内部管理。
+
+| 字段 | 说明 |
+|------|------|
+| `capacity` | 表容量 |
+| `value_size` 或 `value.default_value_size_hint` | 固定 value 大小；`Put` 必须等长 |
+| `path` | 工作目录 hint；SSD 时可用于推导 log 路径 |
+| `fasterkv.storage` | `memory`（默认，`NullDisk`）或 `ssd`（`FileSystemDisk`） |
+| `fasterkv.log_path` | SSD hybrid log；缺省时可为 `{path}/fasterkv-log` |
+| `fasterkv.hlog_memory_bytes` | 可选内存 log 容量 |
+| `fasterkv.mutable_fraction` | (0, 1] |
+| `fasterkv.read_cache_bytes` | 大于 0 时启用 read cache（按 FASTER 页对齐） |
+
+```json
+{
+  "engine_type": "KVEngineFasterKV",
   "path": "/tmp/fasterkv_data",
   "capacity": 1000000,
   "value_size": 512,
@@ -112,6 +149,41 @@ auto* kv = base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
 }
 ```
 
-`fasterkv.storage` 可取 `memory` 或 `ssd`，默认是 `memory`，保持 FasterKV `NullDisk` 行为。`ssd` 使用 FasterKV `FileSystemDisk`，FasterKV 的 hash index 仍在内存中，hybrid log/value 可落到 `log_path`。如果未显式设置 `log_path`，`KVEngineFasterKV` 会使用顶层 `path` 下的 `fasterkv-log`；`storage=ssd` 时必须至少提供非空的 `log_path` 或顶层 `path`。`hlog_memory_bytes` 是可选的内存 log 容量，`mutable_fraction` 必须大于 0 且不超过 1，`read_cache_bytes` 大于 0 时启用 FasterKV read cache，实际分配会按 FasterKV page 约束向上取整。
+构建需启用对应 CMake 目标；测试见 `test_external_kv_engine` / `RECSTORE_TEST_ENABLE_FASTERKV_ENGINE`。
 
-旧字段 `engine_type` 仍作为兼容别名被接受，但新配置应使用 `external_engine_type`。如果两个字段同时出现，值必须一致。
+---
+
+## KVEngineHPSHashMap / KVEngineHPSRocksDB
+
+HugeCTR `DatabaseBackend` 适配，固定 float 对齐的 `value_size`。
+
+| 字段 | `HPSHashMap` | `HPSRocksDB` |
+|------|:------------:|:------------:|
+| `path` | 可选 | **必填** |
+| `capacity` | 容量 hint | 同左 |
+| `value_size` | 必填 | 必填 |
+| `max_batch_size` | 默认 65536 | 同左 |
+| `num_threads` | 并发（或由 `CachePS.num_threads` 推导） | 同左 |
+| `table_name` | 默认 `default` | 同左 |
+| `rocksdb_path` | — | 可选，默认 `{path}/hps_rocksdb` |
+
+```json
+{
+  "engine_type": "KVEngineHPSRocksDB",
+  "path": "/data/rocksdb",
+  "capacity": 1000000,
+  "value_size": 512
+}
+```
+
+纯内存对比：
+
+```json
+{
+  "engine_type": "KVEngineHPSHashMap",
+  "capacity": 1000000,
+  "value_size": 512
+}
+```
+
+---

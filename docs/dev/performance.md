@@ -222,7 +222,7 @@ tensorboard --logdir=./logs --port=6006
     | | `OP.EmbRead.ToCPUKeys` | Embedding Key 从 GPU 拷贝到 CPU 的耗时 | |
     | **gRPC Client** | `Client.GetParameter.Total` | RPC 请求总耗时 | `src/ps/grpc/dist_grpc_ps_client.cpp` |
     | | `Client.GetParameter.AsyncWait` | 异步等待网络回包的耗时（反映服务端处理+网络延迟） | |
-    | **Server** | `KV BatchGet` | 底层 KV 引擎批量读取耗时 | `src/storage/kv_engines.md` |
+    | **Server** | `KV BatchGet` | 底层 KV 引擎批量读取耗时 | `docs/storage/composite_kvengine.md` |
 
     ??? tip "什么是 Timer?"
         `xmh::Timer` 是一个高性能的 C++ 计时器工具类。它通过 `Timer::Start("Name")` 和 `Timer::Stop("Name")` 记录代码块耗时，并自动统计 P50、P99 等分位数值，定期输出到日志文件中。

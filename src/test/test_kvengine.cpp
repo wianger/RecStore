@@ -86,9 +86,9 @@ protected:
   void SetUp() override {
     const char *idx_c, *val_c, *allocator_c;
     std::tie(idx_c, val_c, allocator_c) = GetParam();
-    index_type_                  = idx_c;
-    value_type_                  = val_c;
-    allocator_type_              = allocator_c;
+    index_type_                         = idx_c;
+    value_type_                         = val_c;
+    allocator_type_                     = allocator_c;
 
     const auto* test_info =
         ::testing::UnitTest::GetInstance()->current_test_info();
@@ -108,7 +108,7 @@ protected:
 
     base::PMMmapRegisterCenter::GetConfig().backend =
         base::PMMmapRegisterCenter::Backend::kAnonymousDram;
-    base::PMMmapRegisterCenter::GetConfig().numa_id  = 0;
+    base::PMMmapRegisterCenter::GetConfig().numa_id = 0;
 
     cfg_.num_threads_     = 8;
     const size_t capacity = 1000000;
@@ -201,42 +201,42 @@ private:
   }
 
   json BuildConfig(size_t capacity, int value_sz) const {
-    json j = {{"capacity", capacity},
+    json j = {{"engine_type", "KVEngineComposite"},
+              {"capacity", capacity},
               {"index", {{"type", index_type_}}},
               {"value",
-               {{"type", value_type_},
-                {"default_value_size_hint", value_sz}}}};
+               {{"type", value_type_}, {"default_value_size_hint", value_sz}}}};
     if (value_type_ == "DRAM_VALUE_STORE") {
-      j["value"]["path"] = dram_test_dir_ + "/value";
-      j["value"]["dram_allocator"] =
-          {{"type", allocator_type_},
-           {"capacity_bytes", capacity * static_cast<size_t>(value_sz)}};
+      j["value"]["path"]           = dram_test_dir_ + "/value";
+      j["value"]["dram_allocator"] = {
+          {"type", allocator_type_},
+          {"capacity_bytes", capacity * static_cast<size_t>(value_sz)}};
     } else if (value_type_ == "SSD_VALUE_STORE") {
-      j["value"]["ssd_allocator"] =
-          {{"type", "SSD_BUDDY"},
-           {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
-           {"min_block_size", 128},
-           {"max_block_size", 65536},
-           {"io",
-            {{"type", "IOURING"},
-             {"queue_depth", 512},
-             {"base_offset_bytes", 4096}}}};
+      j["value"]["ssd_allocator"] = {
+          {"type", "SSD_BUDDY"},
+          {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
+          {"min_block_size", 128},
+          {"max_block_size", 65536},
+          {"io",
+           {{"type", "IOURING"},
+            {"queue_depth", 512},
+            {"base_offset_bytes", 4096}}}};
       j["value"]["path"] = ssd_test_dir_ + "/value_pages.db";
     } else if (value_type_ == "TIERED_VALUE_STORE") {
-      j["value"]["dram_allocator"] =
-          {{"type", allocator_type_},
-           {"capacity_bytes", capacity * static_cast<size_t>(value_sz) / 2},
-           {"path", dram_test_dir_ + "/dram"}};
-      j["value"]["ssd_allocator"] =
-          {{"type", "SSD_BUDDY"},
-           {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
-           {"min_block_size", 128},
-           {"max_block_size", 65536},
-           {"path", ssd_test_dir_ + "/tiered_value_pages.db"},
-           {"io",
-            {{"type", "IOURING"},
-             {"queue_depth", 512},
-             {"base_offset_bytes", 4096}}}};
+      j["value"]["dram_allocator"] = {
+          {"type", allocator_type_},
+          {"capacity_bytes", capacity * static_cast<size_t>(value_sz) / 2},
+          {"path", dram_test_dir_ + "/dram"}};
+      j["value"]["ssd_allocator"] = {
+          {"type", "SSD_BUDDY"},
+          {"capacity_bytes", capacity * static_cast<size_t>(value_sz)},
+          {"min_block_size", 128},
+          {"max_block_size", 65536},
+          {"path", ssd_test_dir_ + "/tiered_value_pages.db"},
+          {"io",
+           {{"type", "IOURING"},
+            {"queue_depth", 512},
+            {"base_offset_bytes", 4096}}}};
       j["value"]["tiering"] = {{"cache_policy", "LRU"}};
     }
     return j;
@@ -368,20 +368,19 @@ TEST_P(KVEngineCartesianTest, BatchGetMixedKeys) {
 
 TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
   const std::vector<uint64_t> keys = {7001, 7002, 7003, 7004};
-  std::vector<std::vector<float>> initial_values(keys.size(),
-                                                 std::vector<float>(16, 1.0f));
+  std::vector<std::vector<float>> initial_values(
+      keys.size(), std::vector<float>(16, 1.0f));
   std::vector<base::ConstArray<float>> initial_slices;
   initial_slices.reserve(keys.size());
   for (size_t i = 0; i < keys.size(); ++i) {
     for (size_t j = 0; j < initial_values[i].size(); ++j) {
       initial_values[i][j] = static_cast<float>(i * 10 + j);
     }
-    initial_slices.emplace_back(initial_values[i].data(),
-                                static_cast<int>(initial_values[i].size()));
+    initial_slices.emplace_back(
+        initial_values[i].data(), static_cast<int>(initial_values[i].size()));
   }
-  kv_engine_->BatchPut(base::ConstArray<uint64_t>(keys.data(), keys.size()),
-                       &initial_slices,
-                       0);
+  kv_engine_->BatchPut(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()), &initial_slices, 0);
 
   std::vector<std::vector<float>> updated_values(keys.size());
   updated_values[0].resize(16); // overwrite path
@@ -396,17 +395,15 @@ TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
   std::vector<base::ConstArray<float>> updated_slices;
   updated_slices.reserve(keys.size());
   for (size_t i = 0; i < updated_values.size(); ++i) {
-    updated_slices.emplace_back(updated_values[i].data(),
-                                static_cast<int>(updated_values[i].size()));
+    updated_slices.emplace_back(
+        updated_values[i].data(), static_cast<int>(updated_values[i].size()));
   }
-  kv_engine_->BatchPut(base::ConstArray<uint64_t>(keys.data(), keys.size()),
-                       &updated_slices,
-                       0);
+  kv_engine_->BatchPut(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()), &updated_slices, 0);
 
   std::vector<base::ConstArray<float>> out_values;
-  kv_engine_->BatchGet(base::ConstArray<uint64_t>(keys.data(), keys.size()),
-                       &out_values,
-                       0);
+  kv_engine_->BatchGet(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()), &out_values, 0);
   ASSERT_EQ(out_values.size(), keys.size());
   for (size_t i = 0; i < keys.size(); ++i) {
     ASSERT_EQ(out_values[i].Size(), static_cast<int>(updated_values[i].size()));
@@ -418,7 +415,7 @@ TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
 }
 
 TEST_P(KVEngineCartesianTest, BatchGetRepeatedKeysKeepsConsistentValues) {
-  std::vector<uint64_t> put_keys = {8101, 8102};
+  std::vector<uint64_t> put_keys                  = {8101, 8102};
   std::vector<std::vector<float>> put_values_data = {
       std::vector<float>(32, 0.0f), std::vector<float>(32, 0.0f)};
   for (int i = 0; i < 32; ++i) {
@@ -426,15 +423,21 @@ TEST_P(KVEngineCartesianTest, BatchGetRepeatedKeysKeepsConsistentValues) {
     put_values_data[1][i] = static_cast<float>(200 + i);
   }
   std::vector<base::ConstArray<float>> put_values = {
-      base::ConstArray<float>(put_values_data[0].data(), put_values_data[0].size()),
-      base::ConstArray<float>(put_values_data[1].data(), put_values_data[1].size())};
+      base::ConstArray<float>(
+          put_values_data[0].data(), put_values_data[0].size()),
+      base::ConstArray<float>(
+          put_values_data[1].data(), put_values_data[1].size())};
   kv_engine_->BatchPut(
-      base::ConstArray<uint64_t>(put_keys.data(), put_keys.size()), &put_values, 0);
+      base::ConstArray<uint64_t>(put_keys.data(), put_keys.size()),
+      &put_values,
+      0);
 
   std::vector<uint64_t> get_keys = {8102, 8101, 8102, 8101, 8101};
   std::vector<base::ConstArray<float>> out_values;
   kv_engine_->BatchGet(
-      base::ConstArray<uint64_t>(get_keys.data(), get_keys.size()), &out_values, 0);
+      base::ConstArray<uint64_t>(get_keys.data(), get_keys.size()),
+      &out_values,
+      0);
   ASSERT_EQ(out_values.size(), get_keys.size());
 
   for (size_t i = 0; i < get_keys.size(); ++i) {
@@ -449,7 +452,7 @@ TEST_P(KVEngineCartesianTest, BatchGetRepeatedKeysKeepsConsistentValues) {
 }
 
 TEST_P(KVEngineCartesianTest, BulkLoadThenGetAndBatchGet) {
-  constexpr int kRows = 8;
+  constexpr int kRows         = 8;
   constexpr int kFloatsPerRow = 32;
   std::vector<uint64_t> keys;
   keys.reserve(kRows);
@@ -457,35 +460,31 @@ TEST_P(KVEngineCartesianTest, BulkLoadThenGetAndBatchGet) {
   for (int row = 0; row < kRows; ++row) {
     keys.push_back(static_cast<uint64_t>(9001 + row));
     for (int col = 0; col < kFloatsPerRow; ++col) {
-      values[row * kFloatsPerRow + col] =
-          static_cast<float>(row * 100 + col);
+      values[row * kFloatsPerRow + col] = static_cast<float>(row * 100 + col);
     }
   }
 
-  kv_engine_->BulkLoad(base::ConstArray<uint64_t>(keys.data(), keys.size()),
-                       values.data());
+  kv_engine_->BulkLoad(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()), values.data());
 
   for (int row = 0; row < kRows; ++row) {
     std::string out;
     kv_engine_->Get(keys[row], out, 0);
     ASSERT_EQ(out.size(), kFloatsPerRow * sizeof(float));
-    EXPECT_EQ(std::memcmp(out.data(),
-                          values.data() + row * kFloatsPerRow,
-                          out.size()),
+    EXPECT_EQ(std::memcmp(
+                  out.data(), values.data() + row * kFloatsPerRow, out.size()),
               0)
         << "row=" << row;
   }
 
   std::vector<base::ConstArray<float>> out_values;
-  kv_engine_->BatchGet(base::ConstArray<uint64_t>(keys.data(), keys.size()),
-                       &out_values,
-                       0);
+  kv_engine_->BatchGet(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()), &out_values, 0);
   ASSERT_EQ(out_values.size(), keys.size());
   for (int row = 0; row < kRows; ++row) {
     ASSERT_EQ(out_values[row].Size(), kFloatsPerRow);
     for (int col = 0; col < kFloatsPerRow; ++col) {
-      EXPECT_FLOAT_EQ(out_values[row][col],
-                      values[row * kFloatsPerRow + col])
+      EXPECT_FLOAT_EQ(out_values[row][col], values[row * kFloatsPerRow + col])
           << "row=" << row << " col=" << col;
     }
   }
@@ -587,8 +586,8 @@ TEST_P(KVEngineCartesianTest, PerformanceTest) {
   auto get_duration = std::chrono::duration_cast<std::chrono::microseconds>(
       get_end_time - insert_end_time);
 
-  std::cout << "KVEngineComposite Performance Results for "
-            << num_operations << " operations:\n";
+  std::cout << "KVEngineComposite Performance Results for " << num_operations
+            << " operations:\n";
   std::cout << "Insert time: " << insert_duration.count() << " microseconds\n";
   std::cout << "Get time: " << get_duration.count() << " microseconds\n";
   std::cout << "Insert throughput: "
@@ -605,7 +604,7 @@ TEST_P(KVEngineCartesianTest, StressTest) {
   for (int i = 0; i < num_operations; i++) {
     std::string base_value = "stress_test_value_" + std::to_string(i) + "_" +
                              std::string(20, 'x'); // 较长的值
-    std::string value = CreateFixedLengthValue(base_value);
+    std::string value      = CreateFixedLengthValue(base_value);
     kv_engine_->Put(i, value, 0);
   }
 
@@ -758,7 +757,7 @@ TEST_P(KVEngineCartesianTest, ConcurrentReadWriteTest) {
               if (is_put) {
                 std::string base_value = "mixed_thread_" + std::to_string(t) +
                                          "_value_" + std::to_string(i);
-                std::string value = CreateFixedLengthValue(base_value);
+                std::string value      = CreateFixedLengthValue(base_value);
                 kv_engine_->Put(key, value, 0);
                 successful_operations++;
               } else {
@@ -896,10 +895,11 @@ TEST_P(KVEngineCartesianTest, DataConsistencyTest) {
   EXPECT_GT(total_updates.load(), 0);
 }
 
-#if defined(RECSTORE_TEST_ENABLE_FASTERKV_ENGINE) || \
+#if defined(RECSTORE_TEST_ENABLE_FASTERKV_ENGINE) ||                           \
     defined(RECSTORE_TEST_ENABLE_HPS_ENGINE)
 
-class KVEngineExternalEngineTest : public ::testing::TestWithParam<const char*> {
+class KVEngineExternalEngineTest
+    : public ::testing::TestWithParam<const char*> {
 public:
   static std::string Sanitize(std::string s) {
     for (char& c : s)
@@ -918,18 +918,19 @@ protected:
   void SetUp() override {
     engine_type_ = GetParam();
     test_dir_    = "/tmp/test_kv_engine_external_" + engine_type_ + "_" +
-                std::to_string(getpid());
+                   std::to_string(getpid());
     std::filesystem::remove_all(test_dir_);
     std::filesystem::create_directories(test_dir_);
 
     cfg_.num_threads_ = 8;
-    cfg_.json_config_ = {{"external_engine_type", engine_type_},
-                         {"path", test_dir_},
-                         {"capacity", 1000000},
-                         {"value_size", 128}};
+    cfg_.json_config_ = {
+        {"engine_type", engine_type_},
+        {"path", test_dir_},
+        {"capacity", 1000000},
+        {"value_size", 128}};
 
-    auto resolved  = base::ResolveEngine(cfg_);
-    engine_name_   = resolved.engine;
+    auto resolved = base::ResolveEngine(cfg_);
+    engine_name_  = resolved.engine;
     ASSERT_EQ(engine_name_, engine_type_);
 
     try {
@@ -971,7 +972,7 @@ TEST_P(KVEngineExternalEngineTest, GetNonExistentKey) {
 }
 
 TEST_P(KVEngineExternalEngineTest, KeyOverwrite) {
-  uint64_t key = 456;
+  uint64_t key       = 456;
   std::string value1 = CreateFixedLengthValue("external_value1");
   std::string value2 = CreateFixedLengthValue("external_value2");
   std::string retrieved_value;
@@ -985,11 +986,13 @@ TEST_P(KVEngineExternalEngineTest, KeyOverwrite) {
 TEST_P(KVEngineExternalEngineTest, MultiplePutAndGet) {
   const int num_keys = 100;
   for (int i = 0; i < num_keys; i++) {
-    std::string value = CreateFixedLengthValue("external_key_" + std::to_string(i));
+    std::string value =
+        CreateFixedLengthValue("external_key_" + std::to_string(i));
     kv_engine_->Put(i, value, 0);
   }
   for (int i = 0; i < num_keys; i++) {
-    std::string expected = CreateFixedLengthValue("external_key_" + std::to_string(i));
+    std::string expected =
+        CreateFixedLengthValue("external_key_" + std::to_string(i));
     std::string retrieved;
     kv_engine_->Get(i, retrieved, 0);
     EXPECT_EQ(retrieved, expected) << "Mismatch for key " << i;
@@ -1023,8 +1026,8 @@ TEST_P(KVEngineExternalEngineTest, BulkLoadThenGetAndBatchGet) {
   for (int i = 0; i < num_keys; i++) {
     keys[i]   = i + 1000;
     values[i] = CreateFixedLengthValue("bulk_" + std::to_string(i));
-    std::memcpy(bulk_data.data() + static_cast<size_t>(i) * 128, values[i].data(),
-                128);
+    std::memcpy(
+        bulk_data.data() + static_cast<size_t>(i) * 128, values[i].data(), 128);
   }
 
   base::ConstArray<uint64_t> key_view(keys.data(), keys.size());
@@ -1041,41 +1044,37 @@ TEST_P(KVEngineExternalEngineTest, BulkLoadThenGetAndBatchGet) {
   ASSERT_EQ(batch_values.size(), keys.size());
 }
 
-#ifdef RECSTORE_TEST_ENABLE_FASTERKV_ENGINE
+#  ifdef RECSTORE_TEST_ENABLE_FASTERKV_ENGINE
 INSTANTIATE_TEST_SUITE_P(
     FasterKV,
     KVEngineExternalEngineTest,
     ::testing::Values("KVEngineFasterKV"),
-    [](const testing::TestParamInfo<KVEngineExternalEngineTest::ParamType>& info) {
-      return KVEngineExternalEngineTest::Sanitize(info.param);
-    });
-#endif
+    [](const testing::TestParamInfo<KVEngineExternalEngineTest::ParamType>&
+           info) { return KVEngineExternalEngineTest::Sanitize(info.param); });
+#  endif
 
-#ifdef RECSTORE_TEST_ENABLE_HPS_ENGINE
+#  ifdef RECSTORE_TEST_ENABLE_HPS_ENGINE
 INSTANTIATE_TEST_SUITE_P(
     HPSRocksDB,
     KVEngineExternalEngineTest,
     ::testing::Values("KVEngineHPSRocksDB"),
-    [](const testing::TestParamInfo<KVEngineExternalEngineTest::ParamType>& info) {
-      return KVEngineExternalEngineTest::Sanitize(info.param);
-    });
-#endif
+    [](const testing::TestParamInfo<KVEngineExternalEngineTest::ParamType>&
+           info) { return KVEngineExternalEngineTest::Sanitize(info.param); });
+#  endif
 
-#endif  // RECSTORE_TEST_ENABLE_FASTERKV_ENGINE || RECSTORE_TEST_ENABLE_HPS_ENGINE
+#endif // RECSTORE_TEST_ENABLE_FASTERKV_ENGINE ||
+       // RECSTORE_TEST_ENABLE_HPS_ENGINE
 
 INSTANTIATE_TEST_SUITE_P(
     AllCombos,
     KVEngineCartesianTest,
     ::testing::Combine(
-        ::testing::Values("DRAM_EXTENDIBLE_HASH",
-                          "DRAM_UNORDERED_MAP",
-                          "DRAM_PET_HASH"),
-        ::testing::Values("DRAM_VALUE_STORE",
-                          "SSD_VALUE_STORE",
-                          "TIERED_VALUE_STORE"),
-        ::testing::Values("PERSIST_LOOP_SLAB",
-                          "R2_SLAB",
-                          "CONCURRENT_SLAB_MEMORY_POOL")),
+        ::testing::Values(
+            "DRAM_EXTENDIBLE_HASH", "DRAM_UNORDERED_MAP", "DRAM_PET_HASH"),
+        ::testing::Values(
+            "DRAM_VALUE_STORE", "SSD_VALUE_STORE", "TIERED_VALUE_STORE"),
+        ::testing::Values(
+            "PERSIST_LOOP_SLAB", "R2_SLAB", "CONCURRENT_SLAB_MEMORY_POOL")),
     [](const testing::TestParamInfo<KVEngineCartesianTest::ParamType>& info) {
       auto idx = std::get<0>(info.param);
       auto val = std::get<1>(info.param);
@@ -1096,6 +1095,7 @@ TEST(KVEngineNestedConfigTest, DramIndexDramValueSmoke) {
   BaseKVConfig cfg;
   cfg.num_threads_ = 4;
   cfg.json_config_ = {
+      {"engine_type", "KVEngineComposite"},
       {"capacity", 1024},
       {"index", {{"type", "DRAM_UNORDERED_MAP"}}},
       {"value",
@@ -1129,9 +1129,32 @@ TEST(KVEngineNestedConfigTest, DramIndexDramValueSmoke) {
   std::filesystem::remove_all(test_dir);
 }
 
-TEST(KVEngineResolveEnginePathPolicyTest, DramValueStoreAllowsAnonymousPath) {
+namespace {
+
+std::unique_ptr<BaseKV> CreateCompositeEngine(const BaseKVConfig& cfg) {
+  auto resolved = base::ResolveEngine(cfg);
+  EXPECT_EQ(resolved.engine, "KVEngineComposite");
+  return std::unique_ptr<BaseKV>(
+      base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
+          resolved.engine, resolved.cfg));
+}
+
+} // namespace
+
+TEST(KVEngineCompositeConfigTest,
+     ResolveEngineDefaultsToCompositeWithoutEngineType) {
+  BaseKVConfig cfg;
+  cfg.json_config_ = {{"capacity", 1024},
+                      {"index", {{"type", "DRAM_EXTENDIBLE_HASH"}}},
+                      {"value", {{"type", "DRAM_VALUE_STORE"}}}};
+  auto resolved    = base::ResolveEngine(cfg);
+  EXPECT_EQ(resolved.engine, "KVEngineComposite");
+}
+
+TEST(KVEngineCompositeConfigTest, DramValueStoreAllowsAnonymousPathInSelector) {
   BaseKVConfig cfg;
   cfg.json_config_ = {
+      {"engine_type", "KVEngineComposite"},
       {"capacity", 1024},
       {"index", {{"type", "DRAM_EXTENDIBLE_HASH"}}},
       {"value",
@@ -1141,30 +1164,14 @@ TEST(KVEngineResolveEnginePathPolicyTest, DramValueStoreAllowsAnonymousPath) {
         {"dram_allocator",
          {{"type", "PERSIST_LOOP_SLAB"}, {"capacity_bytes", 1024 * 128}}}}}};
 
-  EXPECT_NO_THROW({
-    auto resolved = base::ResolveEngine(cfg);
-    EXPECT_EQ(resolved.engine, "KVEngineComposite");
-  });
+  EXPECT_NO_THROW(base::ResolveEngine(cfg));
+  EXPECT_THROW(CreateCompositeEngine(cfg), std::invalid_argument);
 }
 
-TEST(KVEngineResolveEnginePathPolicyTest, DramValueStoreRejectsNonDevShmPath) {
+TEST(KVEngineCompositeConfigTest, DramValueStoreAcceptsDevShmPath) {
   BaseKVConfig cfg;
   cfg.json_config_ = {
-      {"capacity", 1024},
-      {"index", {{"type", "DRAM_EXTENDIBLE_HASH"}}},
-      {"value",
-       {{"type", "DRAM_VALUE_STORE"},
-        {"path", "/tmp/kv/value"},
-        {"default_value_size_hint", 128},
-        {"dram_allocator",
-         {{"type", "PERSIST_LOOP_SLAB"}, {"capacity_bytes", 1024 * 128}}}}}};
-
-  EXPECT_THROW(base::ResolveEngine(cfg), std::invalid_argument);
-}
-
-TEST(KVEngineResolveEnginePathPolicyTest, DramValueStoreAcceptsDevShmPath) {
-  BaseKVConfig cfg;
-  cfg.json_config_ = {
+      {"engine_type", "KVEngineComposite"},
       {"capacity", 1024},
       {"index", {{"type", "DRAM_EXTENDIBLE_HASH"}}},
       {"value",
@@ -1174,35 +1181,6 @@ TEST(KVEngineResolveEnginePathPolicyTest, DramValueStoreAcceptsDevShmPath) {
         {"dram_allocator",
          {{"type", "PERSIST_LOOP_SLAB"}, {"capacity_bytes", 1024 * 128}}}}}};
 
-  EXPECT_NO_THROW({
-    auto resolved = base::ResolveEngine(cfg);
-    EXPECT_EQ(resolved.engine, "KVEngineComposite");
-  });
+  EXPECT_NO_THROW(CreateCompositeEngine(cfg));
 }
 
-TEST(KVEngineResolveEnginePathPolicyTest,
-     TieredValueStoreRejectsNonDevShmDramAllocatorPath) {
-  BaseKVConfig cfg;
-  cfg.json_config_ = {
-      {"capacity", 1024},
-      {"index", {{"type", "DRAM_EXTENDIBLE_HASH"}}},
-      {"value",
-       {{"type", "TIERED_VALUE_STORE"},
-        {"default_value_size_hint", 128},
-        {"dram_allocator",
-         {{"type", "PERSIST_LOOP_SLAB"},
-          {"capacity_bytes", 1024 * 64},
-          {"path", "/tmp/kv/dram"}}},
-        {"ssd_allocator",
-         {{"type", "SSD_BUDDY"},
-          {"capacity_bytes", 1024 * 128},
-          {"min_block_size", 128},
-          {"max_block_size", 4096},
-          {"path", "/mnt/nvme5n1_recstore/kv/ssd.db"},
-          {"io",
-           {{"type", "IOURING"},
-            {"queue_depth", 512},
-            {"base_offset_bytes", 4096}}}}}}}};
-
-  EXPECT_THROW(base::ResolveEngine(cfg), std::invalid_argument);
-}
