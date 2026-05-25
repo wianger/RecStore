@@ -13,17 +13,6 @@ ROOT = Path(__file__).resolve().parents[2]
 BENCHMARK_BIN = ROOT / "build/bin/benchmark_kv_engine"
 DEFAULT_DRAM_ROOT = Path("/dev/shm/recstore")
 DEFAULT_SSD_ROOT = Path("/mnt/nvme1n1_recstore/recstore")
-ENGINE_LABELS = {
-    "petkv": "KVEnginePetKV",
-    "dram_eh_dram": "DRAM_EH+DRAM",
-    "dram_map_dram": "DRAM_MAP+DRAM",
-    "dram_pet_dram": "DRAM_PET+DRAM",
-    "dram_pet_ssd": "DRAM_PET+SSD",
-    "dram_pet_tiered": "DRAM_PET+TIERED",
-    "dram_eh_ssd": "DRAM_EH+SSD",
-    "dram_eh_tiered": "DRAM_EH+TIERED",
-}
-DEFAULT_ENGINE_ORDER = list(ENGINE_LABELS.keys())
 DISTRIBUTION_LABELS = {
     "uniform": "uniform",
     "zipfian": "zipfian(alpha=0.9)",
@@ -35,17 +24,45 @@ class EngineSpec:
     index_type: str
     value_store_type: str
     engine_class: str = "KVEngine"
+    benchmark_args: tuple[tuple[str, object], ...] = ()
 
 
 KVENGINE_ALIASES: dict[str, EngineSpec] = {
-    "petkv": EngineSpec("DRAM_PET_HASH", "DRAM_VALUE_STORE", "KVEnginePetKV"),
-    "dram_eh_dram": EngineSpec("DRAM_EXTENDIBLE_HASH", "DRAM_VALUE_STORE"),
+    "petkv": EngineSpec("None", "None", "KVEnginePetKV"),
     "dram_pet_dram": EngineSpec("DRAM_PET_HASH", "DRAM_VALUE_STORE"),
+    "dram_eh_dram": EngineSpec("DRAM_EXTENDIBLE_HASH", "DRAM_VALUE_STORE"),
     "dram_eh_ssd": EngineSpec("DRAM_EXTENDIBLE_HASH", "SSD_VALUE_STORE"),
     "dram_pet_ssd": EngineSpec("DRAM_PET_HASH", "SSD_VALUE_STORE"),
     "dram_eh_tiered": EngineSpec("DRAM_EXTENDIBLE_HASH", "TIERED_VALUE_STORE"),
     "dram_pet_tiered": EngineSpec("DRAM_PET_HASH", "TIERED_VALUE_STORE"),
+    "fasterkv": EngineSpec(
+        "None",
+        "None",
+        "KVEngineFasterKV",
+        (("fasterkv_storage", "memory"),),
+    ),
+    "fasterkv_ssd": EngineSpec(
+        "None",
+        "None",
+        "KVEngineFasterKV",
+        (("fasterkv_storage", "ssd"),),
+    ),
+    "hps_rocksdb": EngineSpec(
+        "None",
+        "None",
+        "KVEngineHPSRocksDB",
+    ),
 }
+DEFAULT_ENGINE_ORDER = [
+    "petkv",
+    "dram_pet_dram",
+    "fasterkv",
+    # "dram_eh_dram",
+    # "dram_eh_ssd",
+    # "dram_pet_ssd",
+    # "dram_eh_tiered",
+    # "dram_pet_tiered",
+]
 
 SUMMARY_FIELDS = [
     "workload",
@@ -84,8 +101,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--engines",
         nargs="+",
-        default=list(KVENGINE_ALIASES.keys()),
-        help="KV engines to run. Defaults to all known engines.",
+        default=list(DEFAULT_ENGINE_ORDER),
+        help=(
+            "KV engines to run. Built-in RecStore combos default to "
+            f"{DEFAULT_ENGINE_ORDER}; external engines: fasterkv, "
+            "fasterkv_ssd, hps_rocksdb."
+        ),
     )
     parser.add_argument("--workloads", nargs="+", default=["a","b", "c"])
     parser.add_argument(
@@ -110,7 +131,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--value-size", type=int, default=128)
     parser.add_argument("--read-mode", choices=["exists", "get"], default="get")
     parser.add_argument("--bulk-load", action="store_true")
-    parser.add_argument("--dram-allocator", default="PERSIST_LOOP_SLAB")
+    parser.add_argument("--dram-allocator", default="CONCURRENT_SLAB_MEMORY_POOL")
     parser.add_argument("--ssd-io-backend", default="IOURING")
     parser.add_argument("--ssd-queue-depth", type=int, default=512)
     parser.add_argument("--dram-capacity-bytes", type=int, default=0)
@@ -136,6 +157,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Draw-only mode: only render aggregate CSV/chart from existing summary.csv.",
     )
+    parser.add_argument(
+        "--fasterkv-storage",
+        choices=["memory", "ssd"],
+        default=None,
+        help="Override fasterkv_storage for fasterkv/fasterkv_ssd engines.",
+    )
+    parser.add_argument("--fasterkv-log-path", default="")
+    parser.add_argument("--fasterkv-hlog-memory-bytes", type=int, default=0)
+    parser.add_argument("--fasterkv-mutable-fraction", type=float, default=0.0)
+    parser.add_argument("--fasterkv-read-cache-bytes", type=int, default=0)
     return parser.parse_args()
 
 
@@ -212,7 +243,6 @@ def benchmark_command(
         gflag("running_seconds", args.runtime_seconds),
         gflag("value_size", args.value_size),
         gflag("read_mode", args.read_mode),
-        gflag("bulk_load", str(args.bulk_load).lower()),
         gflag("load", str(not args.skip_load).lower()),
         gflag("run", str(not args.skip_run).lower()),
         gflag("dram_allocator", args.dram_allocator),
@@ -223,6 +253,26 @@ def benchmark_command(
         cmd.append(gflag("dram_capacity_bytes", args.dram_capacity_bytes))
     if args.ssd_capacity_bytes:
         cmd.append(gflag("ssd_capacity_bytes", args.ssd_capacity_bytes))
+    benchmark_args = dict(spec.benchmark_args)
+    if spec.engine_class == "KVEngineFasterKV" and args.fasterkv_storage is not None:
+        benchmark_args["fasterkv_storage"] = args.fasterkv_storage
+    for key, value in benchmark_args.items():
+        cmd.append(gflag(key, value))
+    if spec.engine_class == "KVEngineFasterKV":
+        if args.fasterkv_log_path:
+            cmd.append(gflag("fasterkv_log_path", args.fasterkv_log_path))
+        if args.fasterkv_hlog_memory_bytes:
+            cmd.append(
+                gflag("fasterkv_hlog_memory_bytes", args.fasterkv_hlog_memory_bytes)
+            )
+        if args.fasterkv_mutable_fraction > 0.0:
+            cmd.append(
+                gflag("fasterkv_mutable_fraction", args.fasterkv_mutable_fraction)
+            )
+        if args.fasterkv_read_cache_bytes:
+            cmd.append(
+                gflag("fasterkv_read_cache_bytes", args.fasterkv_read_cache_bytes)
+            )
     for prop in engine_props:
         key, value = prop.split("=", 1)
         cmd.append(gflag(key, value))
@@ -371,7 +421,7 @@ def write_aggregate(rows: list[dict[str, object]], path: Path) -> list[dict[str,
                 "distribution_label": DISTRIBUTION_LABELS.get(distribution, distribution),
                 "workload": workload,
                 "engine": engine,
-                "engine_label": ENGINE_LABELS.get(engine, engine),
+                "engine_label": engine,
                 "runs": len(group),
                 "successes": len(ok),
                 "avg_load_ops_sec": sum(load_values) / len(load_values) if load_values else "",
@@ -444,7 +494,7 @@ def render_chart(rows: list[dict[str, object]], svg_path: Path) -> None:
             [pos + offset for pos in x],
             heights,
             width=width,
-            label=ENGINE_LABELS.get(engine, engine),
+            label=engine,
             color=colors[idx % len(colors)],
         )
         ax.bar_label(

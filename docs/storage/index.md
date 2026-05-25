@@ -1,68 +1,106 @@
 # RecStore 存储层
 
-存储层通过本地 KV 实现参数服务器中的请求：`uint64_t key -> embedding bytes`。
+存储层为参数服务器提供本地键值语义：`uint64_t key -> embedding 字节`。请求由 `CachePS` 经 `BaseKV` 接口下发；具体落盘/落内存策略由 `engine_type` 选择的 KV 引擎决定。
 
-主要由 `KVEngineComposite` 实现：索引仅记录 key 到 value handle 的映射，value store 保存实际字节；当 value 存储在 SSD 上时，`IOBackend` 负责页级读写。
-
-## 代码入口
-
-| 目的 | 文件 |
-|------|------|
-| 上层创建 KV | `src/ps/base/cache_ps_impl.h` |
-| KV 抽象接口 | `src/storage/kv_engine/base_kv.h` |
-| 配置解析 | `src/storage/kv_engine/engine_selector.h` |
-| composite KV | `src/storage/kv_engine/engine_composite.h` |
-| 索引接口 | `src/storage/index/index.h` |
-| value store 接口 | `src/storage/value_store/value_store.h` |
-| SSD IO 接口 | `src/storage/io_backend/io_backend.h` |
-
-配置说明见 [basekv.md](./basekv.md)，组合和扩展点见 [kv_engines.md](./kv_engines.md)。
-
-## 运行时分层
+## 在系统中的位置
 
 ```mermaid
 graph TD
-    Client[PSClient] --> Server[ParameterService]
-    Server --> CachePS[CachePS]
+    Client[PSClient / Trainer] --> RPC[brpc / gRPC / RDMA / LocalShm]
+    RPC --> PS[ParameterService]
+    PS --> CachePS[CachePS]
     CachePS --> BaseKV[BaseKV]
-    BaseKV --> Composite[KVEngineComposite]
-    Composite --> Index[Index]
-    Composite --> ValueStore[ValueStore]
-    ValueStore --> Allocator[DRAM/SSD allocator]
-    ValueStore --> IOBackend[IOBackend]
+    BaseKV --> E1[KVEngineComposite]
+    BaseKV --> E2[KVEnginePetKV]
+    BaseKV --> E3[KVEngineFasterKV / HPS ...]
+    E1 --> Index[Index]
+    E1 --> VS[ValueStore]
+    VS --> Mem[memory/ allocators]
+    VS --> IO[IOBackend]
 ```
 
-`CachePS` 从 `cache_ps.base_kv_config` 构造 `BaseKVConfig`，调用 `base::ResolveEngine`，用工厂创建 `BaseKV`。嵌套配置解析成 `KVEngineComposite`。外部引擎可用 `external_engine_type` 显式选择，见 [basekv.md](./basekv.md)。
+- **参数服务**（`src/ps/`）：协议、分片、压缩、优化器；不直接操作 `Index` / `ValueStore`。
+- **KV 引擎**（`src/storage/kv_engine/`）：实现 `BaseKV`，对外隐藏索引与 value 布局。
+- **可组合组件**（`src/storage/index/`、`value_store/`、`io_backend/`、`allocator/`）：主要由 `KVEngineComposite` 组装；也可被测试或后续引擎单独使用。
+- **外部与遗留适配**（`src/storage/external/`、`src/storage/nvm/pet_kv/`）：FasterKV、HugeCTR HPS、PetKV 等整包实现。
 
-## 读写路径
+引擎选择与 `BaseKV` 接口说明见 [basekv.md](./basekv.md)。默认生产路径为 **`KVEngineComposite`**，组件与配置见 [composite_kvengine.md](./composite_kvengine.md)。
 
-写入：
+## 代码目录
 
-1. `CachePS::PutSingleParameter` 或 `PutDenseParameterBatch` 收到 key 和 float 数据。
-2. 上层调用 `BaseKV::Put` 或 `BaseKV::BatchPut`。
-3. `KVEngineComposite` 查 `Index`，判断 key 是否已有 handle。
-4. 旧 slot 容量足够时原地覆盖；否则在 `ValueStore` 重新分配、写入，更新 `Index`。
-5. 旧 handle 在索引更新后释放。
+| 目录 / 文件 | 职责 |
+|-------------|------|
+| `src/ps/base/cache_ps_impl.h` | 从 `cache_ps.base_kv_config` 构造 `BaseKV` |
+| `src/storage/kv_engine/base_kv.h` | `BaseKV` / `BaseKVConfig` 抽象 |
+| `src/storage/kv_engine/engine_selector.h` | `ResolveEngine`：`engine_type` 解析 |
+| `src/storage/kv_engine/engine_composite.h` | 默认组合引擎 |
+| `src/storage/kv_engine/engine_petkv.h` | PetKV 引擎 |
+| `src/storage/kv_engine/kv_engine_register.cc` | 链接 IO 后端等注册单元 |
+| `src/storage/index/` | `Index`：key → value handle |
+| `src/storage/value_store/` | `ValueStore`：handle → 字节 |
+| `src/storage/io_backend/` | 页级 SSD 读写（io_uring / SPDK） |
+| `src/storage/allocator/ssd/` | SSD slab / buddy |
+| `src/memory/allocators/` | DRAM `MallocApi`（PersistLoop、R2 等） |
+| `src/storage/external/` | FasterKV、HPS 适配 |
 
-读取：
+服务端 JSON 字段总表见 [config.md](../config.md) 的 `base_kv_config` 一节。
 
-1. 上层调用 `BaseKV::Get` 或 `BaseKV::BatchGet`。
-2. `KVEngineComposite` 从 `Index` 找到 value handle。
-3. `ValueStore::DirectPtr` 可用时直接返回内存视图；SSD 或 tiered 的 SSD 部分调用 `Read` / `BatchRead`。
-4. 未命中的 key 返回空值。
+## CachePS 与 BaseKV
 
-`KVEngineComposite` 用 4096 个 key stripe lock 保护读写。批量写入按 key 去重；同一批次存在重复 key 时退回逐条写入，避免覆盖顺序不清。
+`CachePS` 在构造时读取 `cache_ps` 配置：
 
-## 开发入口
+```cpp
+BaseKVConfig kv_config;
+kv_config.num_threads_ = config["num_threads"];
+kv_config.json_config_ = config["base_kv_config"];
+auto resolved = base::ResolveEngine(kv_config);
+base_kv_.reset(base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
+    resolved.engine, resolved.cfg));
+```
 
-=== "新增 Index"
+- `num_threads_` 传入引擎，供批量与组件内部并行使用。
+- `json_config_` 原样交给具体引擎；**字段合法性由各引擎及其子组件构造时检查**。
+- 省略 `engine_type` 时，`ResolveEngine` 默认 `KVEngineComposite`。
 
-    实现 `Index`，注册到 `Factory<Index, const BaseKVConfig&>`，把新 `index.type` 加入 `ResolveEngine` 的合法集合。
+典型调用链：
 
-=== "新增 ValueStore"
+| CachePS 操作 | BaseKV 方法 |
+|--------------|-------------|
+| 单条读写 | `Put` / `Get` |
+| 批量 embedding | `BatchPut` / `BatchGet` |
+| 表初始化 / 优化器 | `optimizer_->Init(..., base_kv_.get())` |
+| 清空 | `clear()` |
 
-    实现 `ValueStore`，注册工厂，在 `ResolveEngine` 中写清楚必填字段和非法组合。索引语义应留在 `Index`。
+## KVEngineComposite 读写路径（默认）
 
-=== "新增 IOBackend"
+写入（`Put` / `BatchPut`）：
 
-    实现 `IOBackend`，注册工厂，确认 `AllocateBuffer` 返回页对齐缓冲。value store 和 SSD index 将嵌套配置转换成 `file_path`、`queue_cnt`、`page_id_offset` 后创建后端。
+1. `CachePS` 收到 key 与 float 数据，调用 `BaseKV::Put` 或 `BatchPut`。
+2. `KVEngineComposite` 在 `ValueStore` 上 `AllocAndWrite` 新 slot。
+3. `Index::Put` 更新 key 的 handle，返回旧 handle。
+4. 对旧 handle 调用 `ValueStore::Retire`（延迟回收）。
+
+读取（`Get` / `BatchGet`）：
+
+1. `Index` 解析 key → handle；未命中为 `kValueHandleNone`，对外表现为空值。
+2. 若 `ValueStore::DirectPtr` 可用（DRAM），`BatchGet` 可返回指向底层存储的 `ConstArray<float>` 视图。
+3. 否则 `Read` / `BatchRead`（SSD 或 tiered 的 SSD 部分）拷贝到线程局部 buffer。
+
+`BatchPut` 对同一批次内重复 key 会退回逐条 `Put`，避免覆盖顺序不确定。其他引擎的语义以各自实现为准，见 [basekv.md](./basekv.md)。
+
+## 文档索引
+
+| 文档 | 内容 |
+|------|------|
+| [basekv.md](./basekv.md) | `BaseKV` 接口、工厂创建、全部 `engine_type` 与外部引擎配置 |
+| [composite_kvengine.md](./composite_kvengine.md) | `KVEngineComposite` 的 Index / ValueStore / IO / allocator 与扩展指南 |
+| [config.md](../config.md) | `recstore_config.json` 中 `base_kv_config` 字段 |
+
+## 验证与基准
+
+| 范围 | 命令 / 位置 |
+|------|-------------|
+| Composite 组合 | `ctest -R test_kvengine` |
+| 外部引擎 | `test_external_kv_engine` / `KVEngineExternalEngineTest`（需对应 CMake 宏） |
+| SSD IO | `test_io_backend` |
+| YCSB 对比 | `.agents/skills/kvengine-ycsb/SKILL.md` |

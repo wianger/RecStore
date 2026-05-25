@@ -35,20 +35,21 @@ RecStore 配置采用 JSON 格式，位于根目录。当前仓库默认包含�
 
 ### 1.3 base_kv_config 配置
 
-`base_kv_config` 定义底层键值存储引擎的配置，由 [src/storage/kv_engine/engine_selector.h](../src/storage/kv_engine/engine_selector.h) 的 `ResolveEngine` 按 `index.type` 和 `value.type` 校验并解析。
+`base_kv_config` 定义底层键值存储引擎的配置，由 [src/storage/kv_engine/engine_selector.h](../src/storage/kv_engine/engine_selector.h) 的 `ResolveEngine` 解析 `engine_type`；具体字段校验在对应引擎构造时完成。
 
 #### 通用必填字段（非 HYBRID 模式）
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
+| `engine_type` | string | 否 | 省略时默认为 `KVEngineComposite`；全部引擎见 [basekv.md](./storage/basekv.md) |
 | `capacity` | integer | 是 | 预估存储条目数 |
-| `index` | object | 是 | 索引配置，必须包含 `index.type`；SSD 索引还需要 `index.path` 与 `index.io` |
-| `value` | object | 是 | 值存储配置，必须包含 `value.type` 与 `value.default_value_size_hint`；按类型提供 `value.path`、`value.dram_allocator` 或 `value.ssd_allocator` |
+| `index` | object | Composite | 索引配置，见 [composite_kvengine.md](./storage/composite_kvengine.md) |
+| `value` | object | Composite | 值存储配置，见 [composite_kvengine.md](./storage/composite_kvengine.md) |
 
 作用位置：字段最终进入 `BaseKVConfig.json_config_`，在 [src/storage/kv_engine/engine_selector.h](../src/storage/kv_engine/engine_selector.h) 中推导引擎类型，并在 [src/storage/kv_engine/base_kv.h](../src/storage/kv_engine/base_kv.h) 及对应引擎实现中用于容量预分配与值大小约束。
 
 ???+ note "注意"
-    `ResolveEngine` 当前拒绝顶层 legacy 字段，例如 `path`、`index_type`、`value_type`、`value_size`、`value_memory_management`、`shmcapacity`、`ssdcapacity`。请使用 `index` / `value` 嵌套结构。
+    Composite 配置请使用嵌套 `index` / `value`，不要混用已废弃的顶层 `index_type`、`value_type`、`value_memory_management` 等字段。组件类型与 allocator 明细见 [composite_kvengine.md](./storage/composite_kvengine.md)。
 
 #### value 配置结构
 
@@ -61,9 +62,9 @@ RecStore 配置采用 JSON 格式，位于根目录。当前仓库默认包含�
 | `value.ssd_allocator` | object | `SSD_VALUE_STORE`、`TIERED_VALUE_STORE` | SSD 分配器配置，常用字段为 `type`、`capacity_bytes`、`min_block_size`、`max_block_size`、`io`；`SSD_VALUE_STORE` 的文件路径放在 `value.path`，不放在 `ssd_allocator.path` |
 | `value.ssd_allocator.path` | string | `TIERED_VALUE_STORE` | TIERED 模式的 SSD 层文件路径 |
 
-#### 引擎类型自动推导规则
+#### 引擎类型选择
 
-`base::ResolveEngine` 根据 `index.type` 和 `value.type` 组合解析引擎：
+`base::ResolveEngine` 读取 `engine_type`，缺省为 `KVEngineComposite`。`KVEngineComposite` 根据 `index.type` 和 `value.type` 组装组件：
 
 - `index.type` 取值：`DRAM_EXTENDIBLE_HASH` / `DRAM_UNORDERED_MAP` / `DRAM_PET_HASH` / `SSD` / `SSD_EXTENDIBLE_HASH`
 - `value.type` 取值：`DRAM_VALUE_STORE` / `SSD_VALUE_STORE` / `TIERED_VALUE_STORE`
@@ -230,7 +231,7 @@ RecStore 配置采用 JSON 格式，位于根目录。当前仓库默认包含�
     }
     ```
 
-    推导引擎类型：`KVEngineComposite`
+    `"engine_type": "KVEngineComposite"`
 
 ??? example "SSD 索引 + SSD 值配置"
     ```json

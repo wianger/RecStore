@@ -31,6 +31,7 @@ value_size = 512
 base_path = "/dev/shm/recstore_kv"
 
 config["cache_ps"]["base_kv_config"] = {
+    "engine_type": "KVEngineComposite",
     "capacity": capacity,
     "index": {"type": "DRAM_PET_HASH"},
     "value": {

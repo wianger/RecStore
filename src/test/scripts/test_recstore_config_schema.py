@@ -61,10 +61,9 @@ class TestRecstoreConfigSchema(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.Draft202012Validator(self.schema).validate(config)
 
-    def test_accepts_nested_local_kv_config(self) -> None:
+    def test_accepts_nested_local_kv_config_without_engine_type(self) -> None:
         self.validate_config(
             {
-                "path": "/tmp/recstore_data",
                 "capacity": 1024,
                 "index": {"type": "DRAM_EXTENDIBLE_HASH"},
                 "value": {
@@ -78,9 +77,10 @@ class TestRecstoreConfigSchema(unittest.TestCase):
             }
         )
 
-    def test_accepts_legacy_dram_ssd_kv_config(self) -> None:
-        self.validate_config(
+    def test_rejects_legacy_flat_kv_config(self) -> None:
+        self.assert_invalid_config(
             {
+                "engine_type": "KVEngineComposite",
                 "path": "/tmp/recstore_data",
                 "capacity": 1024,
                 "index_type": "DRAM",
@@ -91,10 +91,22 @@ class TestRecstoreConfigSchema(unittest.TestCase):
             }
         )
 
+    def test_accepts_petkv_config(self) -> None:
+        self.validate_config(
+            {
+                "engine_type": "KVEnginePetKV",
+                "path": "/dev/shm/recstore_petkv",
+                "capacity": 1000000,
+                "value_size": 512,
+                "value_capacity": 536870912,
+                "shard_num": 16,
+            }
+        )
+
     def test_accepts_external_fasterkv_config(self) -> None:
         self.validate_config(
             {
-                "external_engine_type": "KVEngineFasterKV",
+                "engine_type": "KVEngineFasterKV",
                 "path": "/tmp/fasterkv_data",
                 "capacity": 1024,
                 "value_size": 128,
@@ -108,7 +120,7 @@ class TestRecstoreConfigSchema(unittest.TestCase):
 
         self.validate_config(
             {
-                "external_engine_type": "KVEngineFasterKV",
+                "engine_type": "KVEngineFasterKV",
                 "path": "/tmp/fasterkv_data",
                 "capacity": 1000000,
                 "value_size": 512,
@@ -125,7 +137,7 @@ class TestRecstoreConfigSchema(unittest.TestCase):
     def test_accepts_external_hps_rocksdb_config(self) -> None:
         self.validate_config(
             {
-                "external_engine_type": "KVEngineHPSRocksDB",
+                "engine_type": "KVEngineHPSRocksDB",
                 "path": "/tmp/hps_data",
                 "rocksdb_path": "/tmp/hps_rocksdb",
                 "capacity": 1024,
@@ -134,21 +146,11 @@ class TestRecstoreConfigSchema(unittest.TestCase):
             }
         )
 
-    def test_accepts_deprecated_external_engine_alias(self) -> None:
-        self.validate_config(
-            {
-                "engine_type": "KVEngineFasterKV",
-                "path": "/tmp/fasterkv_data",
-                "capacity": 1024,
-                "value_size": 128,
-            }
-        )
-
-    def test_rejects_conflicting_external_engine_aliases(self) -> None:
+    def test_rejects_removed_external_engine_type_field(self) -> None:
         self.assert_invalid_config(
             {
                 "external_engine_type": "KVEngineFasterKV",
-                "engine_type": "KVEngineHPSRocksDB",
+                "engine_type": "KVEngineFasterKV",
                 "path": "/tmp/fasterkv_data",
                 "capacity": 1024,
                 "value_size": 128,
