@@ -22,10 +22,10 @@ namespace {
 using petps::Exchange;
 using petps::NowNs;
 
-constexpr std::uint64_t kSubmitDescriptorWrId = 1;
-constexpr std::uint64_t kSubmitCommitWrId     = 2;
-constexpr std::uint64_t kResponsePayloadWrId  = 3;
-constexpr std::uint64_t kResponseStatusWrId   = 4;
+enum class TrackedWrKind : std::uint64_t {
+  kSubmitCommit   = 1,
+  kResponseStatus = 2,
+};
 
 struct RcTransportProfileCounters {
   std::atomic<std::uint64_t> submit_request_count{0};
@@ -109,30 +109,50 @@ void MaybeReportTransportProfile(const RcTransportConfig& config,
       << std::endl;
 }
 
-std::size_t ServerLaneBytes(const RcTransportConfig& config) {
-  return static_cast<std::size_t>(config.num_clients) *
-         config.request_slot_bytes;
+std::size_t TotalClientSlotsPerShard(const RcTransportConfig& config) {
+  return static_cast<std::size_t>(config.qps_per_client_per_shard) *
+         static_cast<std::size_t>(config.slots_per_qp);
+}
+
+std::size_t ClientSlotBytes(const RcTransportConfig& config) {
+  return config.response_slot_bytes + config.request_slot_bytes;
 }
 
 std::size_t ClientLaneBytes(const RcTransportConfig& config) {
-  return config.response_slot_bytes + config.request_slot_bytes;
+  return static_cast<std::size_t>(config.slots_per_qp) *
+         ClientSlotBytes(config);
+}
+
+std::size_t ServerLaneBytes(const RcTransportConfig& config) {
+  return static_cast<std::size_t>(config.num_clients) *
+         static_cast<std::size_t>(config.slots_per_qp) *
+         config.request_slot_bytes;
 }
 
 std::size_t ClientShardLaneOffset(const RcTransportConfig& config) {
   return static_cast<std::size_t>(config.shard_id) * ClientLaneBytes(config);
 }
 
+std::size_t ClientSlotOffset(const RcTransportConfig& config, int slot_in_qp) {
+  return static_cast<std::size_t>(slot_in_qp) * ClientSlotBytes(config);
+}
+
+std::size_t ServerRequestOffset(
+    const RcTransportConfig& config, int client_id, int slot_in_qp) {
+  return (static_cast<std::size_t>(client_id) *
+              static_cast<std::size_t>(config.slots_per_qp) +
+          static_cast<std::size_t>(slot_in_qp)) *
+         config.request_slot_bytes;
+}
+
 std::size_t
-ServerRequestOffset(const RcTransportConfig& config, int client_id) {
-  return static_cast<std::size_t>(client_id) * config.request_slot_bytes;
+ClientResponseOffset(const RcTransportConfig& config, int slot_in_qp) {
+  return ClientShardLaneOffset(config) + ClientSlotOffset(config, slot_in_qp);
 }
 
-std::size_t ClientResponseOffset(const RcTransportConfig& config) {
-  return ClientShardLaneOffset(config);
-}
-
-std::size_t ClientRequestStagingOffset(const RcTransportConfig& config) {
-  return ClientShardLaneOffset(config) + config.response_slot_bytes;
+std::size_t
+ClientRequestStagingOffset(const RcTransportConfig& config, int slot_in_qp) {
+  return ClientResponseOffset(config, slot_in_qp) + config.response_slot_bytes;
 }
 
 std::uint64_t RequestCommitOffset(const RcTransportConfig& config) {
@@ -143,83 +163,152 @@ std::uint64_t ResponseStatusOffset(const RcTransportConfig& config) {
   return config.response_slot_bytes - Align64(sizeof(StatusWord));
 }
 
-RawVerbsConfig MakeRawConfig(
+int GlobalSlotIndex(const RcTransportConfig& config,
+                    int client_id,
+                    int qp_index,
+                    int slot_in_qp) {
+  return static_cast<int>(
+      (static_cast<std::size_t>(client_id) * TotalClientSlotsPerShard(config)) +
+      (static_cast<std::size_t>(qp_index) *
+       static_cast<std::size_t>(config.slots_per_qp)) +
+      static_cast<std::size_t>(slot_in_qp));
+}
+
+void DecodeGlobalSlotIndex(
     const RcTransportConfig& config,
-    int local_lane,
-    std::size_t local_region_bytes,
-    bool is_client,
-    int only_node_id) {
-  RawVerbsConfig raw;
-  raw.global_id          = FLAGS_global_id;
-  raw.local_lane         = local_lane;
-  raw.remote_lane        = local_lane;
-  raw.only_node_id       = only_node_id;
-  raw.num_servers        = FLAGS_num_server_processes;
-  raw.num_clients        = FLAGS_num_client_processes;
-  raw.connect_to_servers = is_client;
-  raw.connect_to_clients = !is_client;
-  raw.local_region_bytes = local_region_bytes;
-  (void)config;
-  return raw;
-}
-
-void PollWrite(RawVerbsTransport* verbs,
-               std::uint64_t wr_id,
-               const std::string& context) {
-  RawVerbsCompletion completion;
-  if (!verbs->Poll(&completion, FLAGS_rdma_wait_timeout_ms)) {
-    throw std::runtime_error("RC verbs write completion timeout " + context +
-                             " expected_wr_id=" + std::to_string(wr_id));
+    int slot_index,
+    int* client_id,
+    int* qp_index,
+    int* slot_in_qp) {
+  if (slot_index < 0) {
+    throw std::runtime_error("slot_index out of range");
   }
-  if (completion.wr_id != wr_id) {
-    throw std::runtime_error(
-        "unexpected RC verbs write completion " + context +
-        " expected_wr_id=" + std::to_string(wr_id) +
-        " actual_wr_id=" + std::to_string(completion.wr_id));
+  const std::size_t slots_per_client = TotalClientSlotsPerShard(config);
+  if (slots_per_client == 0) {
+    throw std::runtime_error("slots_per_client is zero");
+  }
+  const std::size_t slot = static_cast<std::size_t>(slot_index);
+  if (client_id != nullptr) {
+    *client_id = static_cast<int>(slot / slots_per_client);
+  }
+  const std::size_t slot_in_client = slot % slots_per_client;
+  if (qp_index != nullptr) {
+    *qp_index = static_cast<int>(
+        slot_in_client / static_cast<std::size_t>(config.slots_per_qp));
+  }
+  if (slot_in_qp != nullptr) {
+    *slot_in_qp = static_cast<int>(
+        slot_in_client % static_cast<std::size_t>(config.slots_per_qp));
   }
 }
 
-void DrainPendingWrite(RawVerbsTransport* verbs,
-                       bool* pending,
-                       std::uint64_t wr_id,
-                       const std::string& context) {
-  if (pending == nullptr || !*pending) {
-    return;
-  }
-  PollWrite(verbs, wr_id, context);
-  *pending = false;
+int ResponseSlotOrdinal(
+    const RcTransportConfig& config, int client_id, int slot_in_qp) {
+  return client_id * config.slots_per_qp + slot_in_qp;
 }
 
-void DrainPendingWrite(RawVerbsTransport* verbs,
-                       std::uint8_t* pending,
-                       std::uint64_t wr_id,
-                       const std::string& context) {
-  if (pending == nullptr || *pending == 0) {
-    return;
-  }
-  PollWrite(verbs, wr_id, context);
-  *pending = 0;
+std::uint64_t MakeTrackedWrId(TrackedWrKind kind, int slot_ordinal) {
+  return (static_cast<std::uint64_t>(kind) << 32) |
+         static_cast<std::uint32_t>(slot_ordinal);
 }
 
-template <typename PendingT>
-void DrainPendingWriteTracked(
+int DecodeTrackedWrId(
+    TrackedWrKind kind, std::uint64_t wr_id, std::size_t expected_slots) {
+  const std::uint64_t kind_bits = wr_id >> 32;
+  if (kind_bits != static_cast<std::uint64_t>(kind)) {
+    throw std::runtime_error("unexpected tracked RC WR kind");
+  }
+  const std::uint32_t slot_ordinal = static_cast<std::uint32_t>(wr_id);
+  if (slot_ordinal >= expected_slots) {
+    throw std::runtime_error("tracked RC WR slot ordinal out of range");
+  }
+  return static_cast<int>(slot_ordinal);
+}
+
+void WaitForTrackedCompletion(
     RawVerbsTransport* verbs,
-    PendingT* pending,
-    std::uint64_t wr_id,
+    std::vector<std::uint8_t>* ready,
+    TrackedWrKind kind,
+    int slot_ordinal,
+    const std::string& context) {
+  if (verbs == nullptr || ready == nullptr) {
+    throw std::runtime_error("tracked completion state is null");
+  }
+  auto& ready_flags = *ready;
+  if (slot_ordinal < 0 ||
+      static_cast<std::size_t>(slot_ordinal) >= ready_flags.size()) {
+    throw std::runtime_error("tracked completion slot ordinal out of range");
+  }
+  if (ready_flags[static_cast<std::size_t>(slot_ordinal)] != 0) {
+    ready_flags[static_cast<std::size_t>(slot_ordinal)] = 0;
+    return;
+  }
+
+  while (true) {
+    RawVerbsCompletion completion;
+    if (!verbs->Poll(&completion, FLAGS_rdma_wait_timeout_ms)) {
+      throw std::runtime_error(
+          "RC verbs write completion timeout " + context + " expected_wr_id=" +
+          std::to_string(MakeTrackedWrId(kind, slot_ordinal)));
+    }
+    const int completed_slot =
+        DecodeTrackedWrId(kind, completion.wr_id, ready_flags.size());
+    if (completed_slot == slot_ordinal) {
+      return;
+    }
+    ready_flags[static_cast<std::size_t>(completed_slot)] = 1;
+  }
+}
+
+void DrainTrackedPendingWrite(
+    RawVerbsTransport* verbs,
+    std::vector<std::uint8_t>* pending,
+    std::vector<std::uint8_t>* ready,
+    TrackedWrKind kind,
+    int slot_ordinal,
+    const std::string& context) {
+  if (pending == nullptr || ready == nullptr) {
+    return;
+  }
+  auto& pending_flags = *pending;
+  if (slot_ordinal < 0 ||
+      static_cast<std::size_t>(slot_ordinal) >= pending_flags.size()) {
+    throw std::runtime_error("tracked pending slot ordinal out of range");
+  }
+  if (pending_flags[static_cast<std::size_t>(slot_ordinal)] == 0) {
+    return;
+  }
+  WaitForTrackedCompletion(verbs, ready, kind, slot_ordinal, context);
+  pending_flags[static_cast<std::size_t>(slot_ordinal)] = 0;
+}
+
+void DrainTrackedPendingWrite(
+    RawVerbsTransport* verbs,
+    std::vector<std::uint8_t>* pending,
+    std::vector<std::uint8_t>* ready,
+    TrackedWrKind kind,
+    int slot_ordinal,
     const std::string& context,
     bool profile_enabled,
     std::atomic<std::uint64_t>* drain_count,
     std::atomic<std::uint64_t>* drain_ns) {
-  if (pending == nullptr || !*pending) {
+  if (pending == nullptr || ready == nullptr || drain_count == nullptr ||
+      drain_ns == nullptr) {
+    return;
+  }
+  if (slot_ordinal < 0 ||
+      static_cast<std::size_t>(slot_ordinal) >= pending->size() ||
+      pending->at(static_cast<std::size_t>(slot_ordinal)) == 0) {
     return;
   }
   if (!profile_enabled) {
-    DrainPendingWrite(verbs, pending, wr_id, context);
+    DrainTrackedPendingWrite(
+        verbs, pending, ready, kind, slot_ordinal, context);
     return;
   }
 
   const std::uint64_t drain_start_ns = NowNs();
-  DrainPendingWrite(verbs, pending, wr_id, context);
+  DrainTrackedPendingWrite(verbs, pending, ready, kind, slot_ordinal, context);
   drain_count->fetch_add(1, std::memory_order_relaxed);
   drain_ns->fetch_add(NowNs() - drain_start_ns, std::memory_order_relaxed);
 }
@@ -228,15 +317,16 @@ std::string WriteContext(
     const RcTransportConfig& config,
     int client_id,
     int qp_index,
+    int slot_in_qp,
     std::uint64_t seq,
     std::uint64_t remote_offset,
     int remote_node,
     const char* phase) {
   return "phase=" + std::string(phase) +
-         " shard=" + std::to_string(config.shard_id) +
-         " client_id=" + std::to_string(client_id) +
-         " qp=" + std::to_string(qp_index) + " seq=" + std::to_string(seq) +
-         " remote_node=" + std::to_string(remote_node) +
+         " shard=" + std::to_string(config.shard_id) + " client_id=" +
+         std::to_string(client_id) + " qp=" + std::to_string(qp_index) +
+         " slot_in_qp=" + std::to_string(slot_in_qp) + " seq=" +
+         std::to_string(seq) + " remote_node=" + std::to_string(remote_node) +
          " remote_offset=" + std::to_string(remote_offset);
 }
 
@@ -246,11 +336,44 @@ void ValidateClientId(const RcTransportConfig& config, int client_id) {
   }
 }
 
+void ValidateSlotInQp(const RcTransportConfig& config, int slot_in_qp) {
+  if (slot_in_qp < 0 || slot_in_qp >= config.slots_per_qp) {
+    throw std::runtime_error("slot_in_qp out of range");
+  }
+}
+
+RawVerbsConfig MakeRawConfig(
+    const RcTransportConfig& config,
+    int local_lane,
+    std::size_t local_region_bytes,
+    bool is_client,
+    int only_node_id) {
+  RawVerbsConfig raw;
+  raw.global_id    = FLAGS_global_id;
+  raw.local_lane   = local_lane;
+  raw.remote_lane  = local_lane;
+  raw.only_node_id = only_node_id;
+  raw.num_servers  = FLAGS_num_server_processes;
+  raw.num_clients  = FLAGS_num_client_processes;
+  raw.numa_id =
+      is_client ? FLAGS_rdma_rc_client_numa_id : FLAGS_rdma_rc_server_numa_id;
+  raw.max_inline_data =
+      static_cast<std::uint32_t>(std::max(0, FLAGS_rdma_rc_inline_bytes));
+  raw.connect_to_servers = is_client;
+  raw.connect_to_clients = !is_client;
+  raw.local_region_bytes = local_region_bytes;
+  (void)config;
+  return raw;
+}
+
 } // namespace
 
 RcShardClientTransport::RcShardClientTransport(const RcTransportConfig& config)
     : config_(config), server_node_id_(config.shard_id) {
   ValidateClientId(config_, config_.client_id);
+  if (config_.slots_per_qp <= 0) {
+    throw std::runtime_error("slots_per_qp must be positive");
+  }
   if (server_node_id_ < 0 || server_node_id_ >= FLAGS_num_server_processes) {
     throw std::runtime_error("server shard id out of global node range");
   }
@@ -265,16 +388,15 @@ RcShardClientTransport::RcShardClientTransport(const RcTransportConfig& config)
     raw.reserved_region_offset = ClientShardLaneOffset(config_);
     raw.reserved_region_bytes  = ClientLaneBytes(config_);
     lane.verbs                 = std::make_unique<RawVerbsTransport>(raw);
-    lane.response_slot         = lane.verbs->LocalPointer(GlobalAddress{
+    lane.lane_base             = lane.verbs->LocalPointer(GlobalAddress{
         static_cast<std::uint16_t>(FLAGS_global_id),
-        static_cast<std::uint64_t>(ClientResponseOffset(config_)),
+        static_cast<std::uint64_t>(ClientShardLaneOffset(config_)),
     });
-    lane.request_staging       = lane.verbs->LocalPointer(GlobalAddress{
-        static_cast<std::uint16_t>(FLAGS_global_id),
-        static_cast<std::uint64_t>(ClientRequestStagingOffset(config_)),
-    });
-    std::memset(lane.response_slot, 0, config_.response_slot_bytes);
-    std::memset(lane.request_staging, 0, config_.request_slot_bytes);
+    std::memset(lane.lane_base, 0, ClientLaneBytes(config_));
+    lane.submit_completion_pending.assign(
+        static_cast<std::size_t>(config_.slots_per_qp), 0);
+    lane.submit_completion_ready.assign(
+        static_cast<std::size_t>(config_.slots_per_qp), 0);
     lane.verbs->PublishAndConnect();
     lanes_.push_back(std::move(lane));
   }
@@ -284,22 +406,28 @@ RcShardClientTransport::~RcShardClientTransport() {
   try {
     for (std::size_t qp = 0; qp < lanes_.size(); ++qp) {
       Lane& lane = lanes_[qp];
-      if (!lane.submit_completion_pending || !lane.verbs) {
+      if (!lane.verbs) {
         continue;
       }
-      DrainPendingWrite(
-          lane.verbs.get(),
-          &lane.submit_completion_pending,
-          kSubmitCommitWrId,
-          WriteContext(
-              config_,
-              config_.client_id,
-              static_cast<int>(qp),
-              0,
-              ServerRequestOffset(config_, config_.client_id) +
-                  RequestCommitOffset(config_),
-              server_node_id_,
-              "shutdown_submit_commit"));
+      for (int slot_in_qp = 0; slot_in_qp < config_.slots_per_qp;
+           ++slot_in_qp) {
+        DrainTrackedPendingWrite(
+            lane.verbs.get(),
+            &lane.submit_completion_pending,
+            &lane.submit_completion_ready,
+            TrackedWrKind::kSubmitCommit,
+            slot_in_qp,
+            WriteContext(
+                config_,
+                config_.client_id,
+                static_cast<int>(qp),
+                slot_in_qp,
+                0,
+                ServerRequestOffset(config_, config_.client_id, slot_in_qp) +
+                    RequestCommitOffset(config_),
+                server_node_id_,
+                "shutdown_submit_commit"));
+      }
     }
   } catch (...) {
   }
@@ -321,23 +449,31 @@ RcShardClientTransport::LaneAt(int qp_index) const {
 }
 
 RcClientQpView RcShardClientTransport::OpenQp(int qp_index) {
-  const Lane& lane   = LaneAt(qp_index);
-  auto* request_slot = static_cast<char*>(lane.request_staging);
+  return OpenSlot(qp_index, 0);
+}
+
+RcClientQpView RcShardClientTransport::OpenSlot(int qp_index, int slot_in_qp) {
+  ValidateSlotInQp(config_, slot_in_qp);
+  const Lane& lane = LaneAt(qp_index);
+  auto* slot_base  = static_cast<char*>(lane.lane_base) +
+                    ClientSlotOffset(config_, slot_in_qp);
+  auto* response_slot    = static_cast<void*>(slot_base);
+  auto* response_payload = slot_base;
+  auto* status           = reinterpret_cast<StatusWord*>(
+      response_payload + config_.response_slot_bytes -
+      Align64(sizeof(StatusWord)));
+
+  auto* request_slot = slot_base + config_.response_slot_bytes;
   auto* descriptor   = reinterpret_cast<RequestDescriptor*>(request_slot);
   auto* payload      = request_slot + Align64(sizeof(RequestDescriptor));
   auto* commit       = reinterpret_cast<CommitWord*>(
       request_slot + config_.request_slot_bytes - Align64(sizeof(CommitWord)));
-
-  auto* response_slot    = static_cast<char*>(lane.response_slot);
-  auto* response_payload = response_slot;
-  auto* status           = reinterpret_cast<StatusWord*>(
-      response_payload + config_.response_slot_bytes -
-      Align64(sizeof(StatusWord)));
   const int slot_index =
-      config_.client_id * config_.qps_per_client_per_shard + qp_index;
+      GlobalSlotIndex(config_, config_.client_id, qp_index, slot_in_qp);
 
   return RcClientQpView{
       qp_index,
+      slot_in_qp,
       slot_index,
       request_slot,
       descriptor,
@@ -356,25 +492,31 @@ void RcShardClientTransport::SubmitRequest(
     std::size_t payload_bytes) {
   const bool profile_enabled   = FLAGS_rdma_rc_profile_interval_ms > 0;
   const std::uint64_t start_ns = profile_enabled ? NowNs() : 0;
-  Lane& lane                   = LaneAt(view.qp_index);
+  ValidateSlotInQp(config_, view.slot_in_qp);
+  Lane& lane = LaneAt(view.qp_index);
   const std::uint64_t remote_request_offset =
-      ServerRequestOffset(config_, config_.client_id);
+      ServerRequestOffset(config_, config_.client_id, view.slot_in_qp);
   auto& counters = TransportProfile();
-  DrainPendingWriteTracked(
+  DrainTrackedPendingWrite(
       lane.verbs.get(),
       &lane.submit_completion_pending,
-      kSubmitCommitWrId,
-      WriteContext(config_,
-                   config_.client_id,
-                   view.qp_index,
-                   descriptor.seq - 1,
-                   remote_request_offset + RequestCommitOffset(config_),
-                   server_node_id_,
-                   "previous_submit_commit"),
+      &lane.submit_completion_ready,
+      TrackedWrKind::kSubmitCommit,
+      view.slot_in_qp,
+      WriteContext(
+          config_,
+          config_.client_id,
+          view.qp_index,
+          view.slot_in_qp,
+          descriptor.seq - 1,
+          remote_request_offset + RequestCommitOffset(config_),
+          server_node_id_,
+          "previous_submit_commit"),
       profile_enabled,
       &counters.drain_pending_submit_count,
       &counters.drain_pending_submit_ns);
-  auto* request_slot     = static_cast<char*>(lane.request_staging);
+
+  auto* request_slot     = static_cast<char*>(view.request_slot);
   auto* local_descriptor = reinterpret_cast<RequestDescriptor*>(request_slot);
   auto* local_payload    = request_slot + Align64(sizeof(RequestDescriptor));
   auto* local_commit     = reinterpret_cast<CommitWord*>(
@@ -393,7 +535,7 @@ void RcShardClientTransport::SubmitRequest(
           remote_request_offset,
       },
       Align64(sizeof(RequestDescriptor)) + payload_bytes,
-      kSubmitDescriptorWrId,
+      /*wr_id=*/0,
       false);
   if (profile_enabled) {
     TransportProfile().submit_descriptor_write_count.fetch_add(
@@ -407,14 +549,14 @@ void RcShardClientTransport::SubmitRequest(
           remote_request_offset + RequestCommitOffset(config_),
       },
       sizeof(CommitWord),
-      kSubmitCommitWrId,
+      MakeTrackedWrId(TrackedWrKind::kSubmitCommit, view.slot_in_qp),
       true);
-  lane.submit_completion_pending = true;
+  lane.submit_completion_pending[static_cast<std::size_t>(view.slot_in_qp)] = 1;
   if (profile_enabled) {
-    auto& counters = TransportProfile();
-    counters.submit_request_count.fetch_add(1, std::memory_order_relaxed);
-    counters.submit_commit_write_count.fetch_add(1, std::memory_order_relaxed);
-    counters.submit_request_ns.fetch_add(
+    auto& profile = TransportProfile();
+    profile.submit_request_count.fetch_add(1, std::memory_order_relaxed);
+    profile.submit_commit_write_count.fetch_add(1, std::memory_order_relaxed);
+    profile.submit_request_ns.fetch_add(
         NowNs() - start_ns, std::memory_order_relaxed);
     MaybeReportTransportProfile(config_, "client");
   }
@@ -430,26 +572,31 @@ RcShardServerTransport::RcShardServerTransport(const RcTransportConfig& config)
   if (FLAGS_global_id < 0 || FLAGS_global_id >= FLAGS_num_server_processes) {
     throw std::runtime_error("server global_id out of range");
   }
+  if (config_.slots_per_qp <= 0) {
+    throw std::runtime_error("slots_per_qp must be positive");
+  }
   lanes_.reserve(static_cast<std::size_t>(config_.qps_per_client_per_shard));
   for (int qp = 0; qp < config_.qps_per_client_per_shard; ++qp) {
     Lane lane;
+    const int response_slots = config_.num_clients * config_.slots_per_qp;
     const std::size_t local_bytes =
         ServerLaneBytes(config_) +
-        static_cast<std::size_t>(config_.num_clients) *
-            config_.response_slot_bytes;
+        static_cast<std::size_t>(response_slots) * config_.response_slot_bytes;
     lane.verbs = std::make_unique<RawVerbsTransport>(
         MakeRawConfig(config_, qp, local_bytes, false, -1));
     lane.request_slots =
         lane.verbs->AllocateRegistered(ServerLaneBytes(config_));
     std::memset(lane.request_slots, 0, ServerLaneBytes(config_));
-    lane.response_staging.reserve(
-        static_cast<std::size_t>(config_.num_clients));
+    lane.response_staging.reserve(static_cast<std::size_t>(response_slots));
     lane.response_completion_pending.assign(
-        static_cast<std::size_t>(config_.num_clients), false);
-    for (int client = 0; client < config_.num_clients; ++client) {
-      void* slot = lane.verbs->AllocateRegistered(config_.response_slot_bytes);
-      std::memset(slot, 0, config_.response_slot_bytes);
-      lane.response_staging.push_back(slot);
+        static_cast<std::size_t>(response_slots), 0);
+    lane.response_completion_ready.assign(
+        static_cast<std::size_t>(response_slots), 0);
+    for (int slot = 0; slot < response_slots; ++slot) {
+      void* response_slot =
+          lane.verbs->AllocateRegistered(config_.response_slot_bytes);
+      std::memset(response_slot, 0, config_.response_slot_bytes);
+      lane.response_staging.push_back(response_slot);
     }
     lane.verbs->PublishAndConnect();
     lanes_.push_back(std::move(lane));
@@ -463,21 +610,28 @@ RcShardServerTransport::~RcShardServerTransport() {
       if (!lane.verbs) {
         continue;
       }
-      for (std::size_t client = 0;
-           client < lane.response_completion_pending.size();
-           ++client) {
-        DrainPendingWrite(
-            lane.verbs.get(),
-            &lane.response_completion_pending[client],
-            kResponseStatusWrId,
-            WriteContext(
-                config_,
-                static_cast<int>(client),
-                static_cast<int>(qp),
-                0,
-                ClientResponseOffset(config_) + ResponseStatusOffset(config_),
-                FLAGS_num_server_processes + static_cast<int>(client),
-                "shutdown_response_status"));
+      for (int client = 0; client < config_.num_clients; ++client) {
+        for (int slot_in_qp = 0; slot_in_qp < config_.slots_per_qp;
+             ++slot_in_qp) {
+          const int response_slot =
+              ResponseSlotOrdinal(config_, client, slot_in_qp);
+          DrainTrackedPendingWrite(
+              lane.verbs.get(),
+              &lane.response_completion_pending,
+              &lane.response_completion_ready,
+              TrackedWrKind::kResponseStatus,
+              response_slot,
+              WriteContext(
+                  config_,
+                  client,
+                  static_cast<int>(qp),
+                  slot_in_qp,
+                  0,
+                  ClientResponseOffset(config_, slot_in_qp) +
+                      ResponseStatusOffset(config_),
+                  FLAGS_num_server_processes + client,
+                  "shutdown_response_status"));
+        }
       }
     }
   } catch (...) {
@@ -500,18 +654,36 @@ RcShardServerTransport::LaneAt(int qp_index) const {
 }
 
 int RcShardServerTransport::TotalSlots() const {
-  return config_.num_clients * config_.qps_per_client_per_shard;
+  return static_cast<int>(static_cast<std::size_t>(config_.num_clients) *
+                          TotalClientSlotsPerShard(config_));
 }
 
-void* RcShardServerTransport::RequestSlot(int slot_index) const {
+int RcShardServerTransport::SlotIndex(
+    int client_id, int qp_index, int slot_in_qp) const {
+  ValidateClientId(config_, client_id);
+  ValidateSlotInQp(config_, slot_in_qp);
+  if (qp_index < 0 || qp_index >= config_.qps_per_client_per_shard) {
+    throw std::runtime_error("qp_index out of range");
+  }
+  return GlobalSlotIndex(config_, client_id, qp_index, slot_in_qp);
+}
+
+void RcShardServerTransport::DecodeSlotIndex(
+    int slot_index, int* client_id, int* qp_index, int* slot_in_qp) const {
   if (slot_index < 0 || slot_index >= TotalSlots()) {
     throw std::runtime_error("slot_index out of range");
   }
-  const int client_id = slot_index / config_.qps_per_client_per_shard;
-  const int qp_index  = slot_index % config_.qps_per_client_per_shard;
-  const Lane& lane    = LaneAt(qp_index);
+  DecodeGlobalSlotIndex(config_, slot_index, client_id, qp_index, slot_in_qp);
+}
+
+void* RcShardServerTransport::RequestSlot(int slot_index) const {
+  int client_id  = -1;
+  int qp_index   = -1;
+  int slot_in_qp = -1;
+  DecodeSlotIndex(slot_index, &client_id, &qp_index, &slot_in_qp);
+  const Lane& lane = LaneAt(qp_index);
   return static_cast<char*>(lane.request_slots) +
-         ServerRequestOffset(config_, client_id);
+         ServerRequestOffset(config_, client_id, slot_in_qp);
 }
 
 RequestDescriptor*
@@ -530,12 +702,14 @@ CommitWord* RcShardServerTransport::RequestCommitAt(int slot_index) const {
       RequestCommitOffset(config_));
 }
 
-RcShardServerTransport::ResponseView
-RcShardServerTransport::OpenClientResponse(int client_id, int qp_index) {
+RcShardServerTransport::ResponseView RcShardServerTransport::OpenClientResponse(
+    int client_id, int qp_index, int slot_in_qp) {
   ValidateClientId(config_, client_id);
+  ValidateSlotInQp(config_, slot_in_qp);
   Lane& lane = LaneAt(qp_index);
-  auto* slot = static_cast<char*>(
-      lane.response_staging.at(static_cast<std::size_t>(client_id)));
+  auto* slot =
+      static_cast<char*>(lane.response_staging.at(static_cast<std::size_t>(
+          ResponseSlotOrdinal(config_, client_id, slot_in_qp))));
   auto* payload = static_cast<char*>(slot);
   auto* status =
       reinterpret_cast<StatusWord*>(payload + ResponseStatusOffset(config_));
@@ -545,26 +719,31 @@ RcShardServerTransport::OpenClientResponse(int client_id, int qp_index) {
 void RcShardServerTransport::CompleteResponse(
     int client_id,
     int qp_index,
+    int slot_in_qp,
     const ResponseView& response,
     std::uint64_t seq) {
   const bool profile_enabled   = FLAGS_rdma_rc_profile_interval_ms > 0;
   const std::uint64_t start_ns = profile_enabled ? NowNs() : 0;
   ValidateClientId(config_, client_id);
-  Lane& lane = LaneAt(qp_index);
-  auto& pending =
-      lane.response_completion_pending.at(static_cast<std::size_t>(client_id));
+  ValidateSlotInQp(config_, slot_in_qp);
+  Lane& lane              = LaneAt(qp_index);
+  const int response_slot = ResponseSlotOrdinal(config_, client_id, slot_in_qp);
   const int client_node_id = FLAGS_num_server_processes + client_id;
   auto& counters           = TransportProfile();
-  DrainPendingWriteTracked(
+  DrainTrackedPendingWrite(
       lane.verbs.get(),
-      &pending,
-      kResponseStatusWrId,
+      &lane.response_completion_pending,
+      &lane.response_completion_ready,
+      TrackedWrKind::kResponseStatus,
+      response_slot,
       WriteContext(
           config_,
           client_id,
           qp_index,
+          slot_in_qp,
           seq - 1,
-          ClientResponseOffset(config_) + ResponseStatusOffset(config_),
+          ClientResponseOffset(config_, slot_in_qp) +
+              ResponseStatusOffset(config_),
           client_node_id,
           "previous_response_status"),
       profile_enabled,
@@ -574,7 +753,8 @@ void RcShardServerTransport::CompleteResponse(
   response.status->state.store(kRcSlotDone, std::memory_order_release);
 
   if (response.status->response_bytes > 0) {
-    const std::uint64_t response_payload_offset = ClientResponseOffset(config_);
+    const std::uint64_t response_payload_offset =
+        ClientResponseOffset(config_, slot_in_qp);
     lane.verbs->Write(
         response.payload,
         GlobalAddress{
@@ -582,19 +762,19 @@ void RcShardServerTransport::CompleteResponse(
             response_payload_offset,
         },
         response.status->response_bytes,
-        kResponsePayloadWrId,
+        /*wr_id=*/0,
         false);
     if (profile_enabled) {
-      auto& counters = TransportProfile();
-      counters.response_payload_write_count.fetch_add(
+      auto& profile = TransportProfile();
+      profile.response_payload_write_count.fetch_add(
           1, std::memory_order_relaxed);
-      counters.response_payload_bytes.fetch_add(
+      profile.response_payload_bytes.fetch_add(
           response.status->response_bytes, std::memory_order_relaxed);
     }
   }
 
   const std::uint64_t response_status_offset =
-      ClientResponseOffset(config_) + ResponseStatusOffset(config_);
+      ClientResponseOffset(config_, slot_in_qp) + ResponseStatusOffset(config_);
   lane.verbs->Write(
       response.status,
       GlobalAddress{
@@ -602,15 +782,14 @@ void RcShardServerTransport::CompleteResponse(
           response_status_offset,
       },
       sizeof(StatusWord),
-      kResponseStatusWrId,
+      MakeTrackedWrId(TrackedWrKind::kResponseStatus, response_slot),
       true);
-  pending = true;
+  lane.response_completion_pending[static_cast<std::size_t>(response_slot)] = 1;
   if (profile_enabled) {
-    auto& counters = TransportProfile();
-    counters.complete_response_count.fetch_add(1, std::memory_order_relaxed);
-    counters.response_status_write_count.fetch_add(
-        1, std::memory_order_relaxed);
-    counters.complete_response_ns.fetch_add(
+    auto& profile = TransportProfile();
+    profile.complete_response_count.fetch_add(1, std::memory_order_relaxed);
+    profile.response_status_write_count.fetch_add(1, std::memory_order_relaxed);
+    profile.complete_response_ns.fetch_add(
         NowNs() - start_ns, std::memory_order_relaxed);
     MaybeReportTransportProfile(config_, "server");
   }

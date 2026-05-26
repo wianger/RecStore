@@ -157,12 +157,18 @@ void ValidateFlags() {
       throw std::runtime_error(
           "--rdma_rc_qps_per_client_per_shard must be positive");
     }
-    if (FLAGS_rdma_rc_qps_per_client_per_shard < FLAGS_async_depth) {
+    if (FLAGS_rdma_rc_slots_per_qp <= 0) {
+      throw std::runtime_error("--rdma_rc_slots_per_qp must be positive");
+    }
+    const int capacity =
+        FLAGS_rdma_rc_qps_per_client_per_shard * FLAGS_rdma_rc_slots_per_qp;
+    if (capacity < FLAGS_async_depth) {
       throw std::runtime_error(
-          "async_stream requires --rdma_rc_qps_per_client_per_shard >= "
-          "--async_depth to avoid exhausting the client QP pool at startup "
-          "(qps_per_client_per_shard=" +
+          "async_stream requires --rdma_rc_qps_per_client_per_shard * "
+          "--rdma_rc_slots_per_qp >= --async_depth to avoid exhausting the "
+          "client slot pool at startup (qps_per_client_per_shard=" +
           std::to_string(FLAGS_rdma_rc_qps_per_client_per_shard) +
+          ", slots_per_qp=" + std::to_string(FLAGS_rdma_rc_slots_per_qp) +
           ", async_depth=" + std::to_string(FLAGS_async_depth) + ")");
     }
   }

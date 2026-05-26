@@ -119,6 +119,7 @@ public:
     config.shard_id                 = shard_id_;
     config.num_clients              = FLAGS_num_client_processes;
     config.qps_per_client_per_shard = FLAGS_rdma_rc_qps_per_client_per_shard;
+    config.slots_per_qp             = FLAGS_rdma_rc_slots_per_qp;
     config.request_slot_bytes =
         static_cast<std::size_t>(FLAGS_rdma_rc_request_slot_bytes);
     config.response_slot_bytes =
@@ -374,14 +375,13 @@ private:
     base::auto_bind_core();
     LOG(INFO) << "component=rdma_server event=polling_thread_ready thread_id="
               << thread_id;
-    const int total_slots = transport_->TotalSlots();
     const int coroutines_per_thread =
         std::max(1, FLAGS_rdma_rc_server_coroutines_per_thread);
     LOG(INFO) << "component=rdma_rc_server event=polling_thread_mode"
               << " thread_id=" << thread_id
               << " coroutines_per_thread=" << coroutines_per_thread;
     if (coroutines_per_thread > 1) {
-      RunCoroutinePollingThread(thread_id, total_slots, coroutines_per_thread);
+      RunCoroutinePollingThread(thread_id, coroutines_per_thread);
       return;
     }
     while (true) {
@@ -389,12 +389,13 @@ private:
       const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
       std::uint64_t scanned_slots       = 0;
       std::uint64_t ready_slots         = 0;
-      for (int slot = thread_id; slot < total_slots; slot += thread_count_) {
-        ++scanned_slots;
-        if (ProcessSlot(slot, thread_id, profile_enabled)) {
-          ++ready_slots;
-        }
-      }
+      ScanAssignedSlots(
+          thread_id,
+          /*worker_id=*/0,
+          /*worker_count=*/1,
+          profile_enabled,
+          &scanned_slots,
+          &ready_slots);
       if (profile_enabled) {
         profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
         profile_.scanned_slots.fetch_add(
@@ -411,6 +412,10 @@ private:
   }
 
   bool ProcessSlot(int slot, int thread_id, bool profile_enabled) {
+    int client_id  = -1;
+    int qp_index   = -1;
+    int slot_in_qp = -1;
+    transport_->DecodeSlotIndex(slot, &client_id, &qp_index, &slot_in_qp);
     auto* commit = transport_->RequestCommitAt(slot);
     if (commit->state.load(std::memory_order_acquire) != petps::kRcSlotReady) {
       return false;
@@ -447,9 +452,24 @@ private:
       commit->state.store(0, std::memory_order_release);
       return true;
     }
+    if (descriptor->client_id != static_cast<std::uint32_t>(client_id) ||
+        descriptor->qp_index != static_cast<std::uint32_t>(qp_index)) {
+      LOG(ERROR) << "component=rdma_rc_server event=slot_descriptor_mismatch"
+                 << " shard=" << shard_id_ << " slot=" << slot
+                 << " thread_id=" << thread_id
+                 << " slot_client_id=" << client_id << " slot_qp=" << qp_index
+                 << " descriptor_client_id=" << descriptor->client_id
+                 << " descriptor_qp=" << descriptor->qp_index << " seq=" << seq;
+      if (profile_enabled) {
+        profile_.invalid_descriptor.fetch_add(1, std::memory_order_relaxed);
+      }
+      last_seq_[static_cast<std::size_t>(slot)] = seq;
+      commit->state.store(0, std::memory_order_release);
+      return true;
+    }
 
-    auto response = transport_->OpenClientResponse(
-        descriptor->client_id, descriptor->qp_index);
+    auto response =
+        transport_->OpenClientResponse(client_id, qp_index, slot_in_qp);
     const char* payload = transport_->RequestPayloadAt(slot);
     VLOG(1) << "component=rdma_rc_server event=consume shard=" << shard_id_
             << " slot=" << slot << " client_id=" << descriptor->client_id
@@ -514,7 +534,7 @@ private:
     std::atomic_thread_fence(std::memory_order_release);
     const std::uint64_t complete_start_ns = profile_enabled ? NowNs() : 0;
     transport_->CompleteResponse(
-        descriptor->client_id, descriptor->qp_index, response, seq);
+        client_id, qp_index, slot_in_qp, response, seq);
     if (profile_enabled) {
       profile_.complete_response_ns.fetch_add(
           NowNs() - complete_start_ns, std::memory_order_relaxed);
@@ -528,23 +548,50 @@ private:
     return true;
   }
 
+  void ScanAssignedSlots(
+      int thread_id,
+      int worker_id,
+      int worker_count,
+      bool profile_enabled,
+      std::uint64_t* scanned_slots,
+      std::uint64_t* ready_slots) {
+    const int qp_count     = transport_->config().qps_per_client_per_shard;
+    const int slots_per_qp = transport_->config().slots_per_qp;
+    const int num_clients  = transport_->config().num_clients;
+    const int lane_slots   = num_clients * slots_per_qp;
+    for (int qp_index = thread_id; qp_index < qp_count;
+         qp_index += thread_count_) {
+      for (int lane_slot = worker_id; lane_slot < lane_slots;
+           lane_slot += worker_count) {
+        const int client_id  = lane_slot / slots_per_qp;
+        const int slot_in_qp = lane_slot % slots_per_qp;
+        const int slot_index =
+            transport_->SlotIndex(client_id, qp_index, slot_in_qp);
+        ++(*scanned_slots);
+        if (ProcessSlot(slot_index, thread_id, profile_enabled)) {
+          ++(*ready_slots);
+        }
+      }
+    }
+  }
+
   void CoroutineSlotScanner(
       boost::coroutines2::coroutine<void>::push_type& sink,
       int thread_id,
       int worker_id,
-      int worker_count,
-      int total_slots) {
+      int worker_count) {
     while (true) {
       const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
       const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
       std::uint64_t scanned_slots       = 0;
       std::uint64_t ready_slots         = 0;
-      for (int slot = worker_id; slot < total_slots; slot += worker_count) {
-        ++scanned_slots;
-        if (ProcessSlot(slot, thread_id, profile_enabled)) {
-          ++ready_slots;
-        }
-      }
+      ScanAssignedSlots(
+          thread_id,
+          worker_id,
+          worker_count,
+          profile_enabled,
+          &scanned_slots,
+          &ready_slots);
       if (profile_enabled) {
         profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
         profile_.scanned_slots.fetch_add(
@@ -559,20 +606,17 @@ private:
     }
   }
 
-  void RunCoroutinePollingThread(
-      int thread_id, int total_slots, int coroutines_per_thread) {
-    using Coroutine        = boost::coroutines2::coroutine<void>;
-    const int worker_count = thread_count_ * coroutines_per_thread;
+  void RunCoroutinePollingThread(int thread_id, int coroutines_per_thread) {
+    using Coroutine = boost::coroutines2::coroutine<void>;
     std::vector<std::unique_ptr<Coroutine::pull_type>> coroutines;
     coroutines.reserve(static_cast<std::size_t>(coroutines_per_thread));
     for (int coroutine_id = 0; coroutine_id < coroutines_per_thread;
          ++coroutine_id) {
-      const int worker_id = thread_id * coroutines_per_thread + coroutine_id;
       coroutines.emplace_back(std::make_unique<Coroutine::pull_type>(
-          [this, thread_id, worker_id, worker_count, total_slots](
+          [this, thread_id, coroutine_id, coroutines_per_thread](
               Coroutine::push_type& sink) {
             CoroutineSlotScanner(
-                sink, thread_id, worker_id, worker_count, total_slots);
+                sink, thread_id, coroutine_id, coroutines_per_thread);
           }));
     }
     while (true) {

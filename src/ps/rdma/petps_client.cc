@@ -94,6 +94,7 @@ void PetPSClient::InitializeTransport() {
   config_.client_id                = client_id_;
   config_.num_clients              = FLAGS_num_client_processes;
   config_.qps_per_client_per_shard = FLAGS_rdma_rc_qps_per_client_per_shard;
+  config_.slots_per_qp             = FLAGS_rdma_rc_slots_per_qp;
   config_.request_slot_bytes =
       static_cast<std::size_t>(FLAGS_rdma_rc_request_slot_bytes);
   config_.response_slot_bytes =
@@ -104,7 +105,14 @@ void PetPSClient::InitializeTransport() {
   qps_.clear();
   qps_.reserve(static_cast<std::size_t>(config_.qps_per_client_per_shard));
   for (int qp = 0; qp < config_.qps_per_client_per_shard; ++qp) {
-    qps_.push_back(QpContext{transport_->OpenQp(qp), 1, false});
+    QpContext context;
+    context.qp_index = qp;
+    context.slots.reserve(static_cast<std::size_t>(config_.slots_per_qp));
+    for (int slot_in_qp = 0; slot_in_qp < config_.slots_per_qp; ++slot_in_qp) {
+      context.slots.push_back(
+          SlotContext{transport_->OpenSlot(qp, slot_in_qp), 1, false});
+    }
+    qps_.push_back(std::move(context));
   }
 }
 
@@ -126,20 +134,38 @@ void* PetPSClient::GetReceiveBuffer(size_t size) {
   return receive_buffers_.back().data();
 }
 
-int PetPSClient::AcquireIdleQp() {
+PetPSClient::SlotHandle PetPSClient::AcquireIdleSlot() {
   if (FLAGS_rdma_rc_profile_interval_ms > 0) {
     profile_.acquire_qp_count.fetch_add(1, std::memory_order_relaxed);
   }
-  for (std::size_t i = 0; i < qps_.size(); ++i) {
-    if (!qps_[i].busy) {
-      qps_[i].busy = true;
-      return static_cast<int>(i);
+  for (std::size_t qp_index = 0; qp_index < qps_.size(); ++qp_index) {
+    auto& qp = qps_[qp_index];
+    for (std::size_t slot_in_qp = 0; slot_in_qp < qp.slots.size();
+         ++slot_in_qp) {
+      if (!qp.slots[slot_in_qp].busy) {
+        qp.slots[slot_in_qp].busy = true;
+        return SlotHandle{
+            static_cast<int>(qp_index),
+            static_cast<int>(slot_in_qp),
+        };
+      }
     }
   }
   if (FLAGS_rdma_rc_profile_interval_ms > 0) {
     profile_.acquire_qp_failures.fetch_add(1, std::memory_order_relaxed);
   }
-  throw std::runtime_error("no idle RC write QP available");
+  throw std::runtime_error("no idle RC write slot available");
+}
+
+PetPSClient::SlotContext& PetPSClient::SlotAt(int qp_index, int slot_in_qp) {
+  auto& qp = qps_.at(static_cast<std::size_t>(qp_index));
+  return qp.slots.at(static_cast<std::size_t>(slot_in_qp));
+}
+
+const PetPSClient::SlotContext&
+PetPSClient::SlotAt(int qp_index, int slot_in_qp) const {
+  const auto& qp = qps_.at(static_cast<std::size_t>(qp_index));
+  return qp.slots.at(static_cast<std::size_t>(slot_in_qp));
 }
 
 void PetPSClient::MaybeReportProfile() {
@@ -251,28 +277,30 @@ void PetPSClient::FillInitTableDescriptor(
 }
 
 int PetPSClient::SubmitRpcLocked(
-    int qp_index,
-    RequestDescriptor* descriptor,
+    SlotContext* slot,
+    const RequestDescriptor& descriptor,
     const void* payload,
     std::size_t payload_bytes,
     float* recv_buffer,
     std::size_t key_count,
     std::size_t response_bytes,
     bool is_async) {
-  auto& qp = qps_.at(static_cast<std::size_t>(qp_index));
-  ResetStatusWord(qp.view.status, descriptor->seq);
+  if (slot == nullptr) {
+    throw std::runtime_error("slot context is null");
+  }
+  ResetStatusWord(slot->view.status, descriptor.seq);
   const bool profile_enabled          = FLAGS_rdma_rc_profile_interval_ms > 0;
   const std::uint64_t submit_start_ns = profile_enabled ? NowNs() : 0;
-  transport_->SubmitRequest(qp.view, *descriptor, payload, payload_bytes);
+  transport_->SubmitRequest(slot->view, descriptor, payload, payload_bytes);
   if (profile_enabled) {
     profile_.submit_rpc_count.fetch_add(1, std::memory_order_relaxed);
     profile_.submit_request_ns.fetch_add(
         NowNs() - submit_start_ns, std::memory_order_relaxed);
   }
   VLOG(1) << "component=rdma_rc_client event=submit shard=" << shard_
-          << " client_id=" << client_id_ << " qp=" << qp_index
-          << " slot=" << qp.view.slot_index << " seq=" << descriptor->seq
-          << " op=" << descriptor->op << " key_count=" << key_count
+          << " client_id=" << client_id_ << " qp=" << slot->view.qp_index
+          << " slot=" << slot->view.slot_index << " seq=" << descriptor.seq
+          << " op=" << descriptor.op << " key_count=" << key_count
           << " payload_bytes=" << payload_bytes
           << " response_bytes=" << response_bytes;
 
@@ -280,8 +308,10 @@ int PetPSClient::SubmitRpcLocked(
   pending_rpcs_.emplace(
       rpc_id,
       PendingRpc{
-          qp_index,
-          descriptor->seq,
+          slot->view.qp_index,
+          slot->view.slot_in_qp,
+          slot->view.slot_index,
+          descriptor.seq,
           recv_buffer,
           key_count,
           response_bytes,
@@ -345,21 +375,21 @@ int PetPSClient::GetParameter(
           "single-shard GET batch exceeds RC response budget");
     }
 
-    const int qp_index = AcquireIdleQp();
-    auto& qp           = qps_[static_cast<std::size_t>(qp_index)];
+    const SlotHandle slot_handle = AcquireIdleSlot();
+    auto& slot = SlotAt(slot_handle.qp_index, slot_handle.slot_in_qp);
     RequestDescriptor descriptor;
     const std::size_t response_bytes = GetResponseBytes(
         keys.Size(), static_cast<std::size_t>(FLAGS_value_size));
     FillGetDescriptor(
-        &descriptor, qp.next_seq++, keys.Size(), response_bytes, qp.view);
+        &descriptor, slot.next_seq++, keys.Size(), response_bytes, slot.view);
     if (descriptor.payload_bytes >
         PutPayloadBudget(config_.request_slot_bytes)) {
-      qp.busy = false;
+      slot.busy = false;
       throw std::runtime_error("GET request exceeds RC request slot");
     }
     rpc_id = SubmitRpcLocked(
-        qp_index,
-        &descriptor,
+        &slot,
+        descriptor,
         keys.Data(),
         descriptor.payload_bytes,
         values,
@@ -379,8 +409,8 @@ bool PetPSClient::QueryRPCFinished(int rpc_id) {
   if (it == pending_rpcs_.end()) {
     return true;
   }
-  const auto& qp = qps_.at(static_cast<std::size_t>(it->second.qp_index));
-  return StatusWordDone(*qp.view.status, it->second.seq);
+  const auto& slot = SlotAt(it->second.qp_index, it->second.slot_in_qp);
+  return StatusWordDone(*slot.view.status, it->second.seq);
 }
 
 void PetPSClient::WaitRPCFinish(int rpc_id) {
@@ -394,10 +424,10 @@ void PetPSClient::WaitRPCFinish(int rpc_id) {
     pending = it->second;
   }
 
-  auto& qp = qps_.at(static_cast<std::size_t>(pending.qp_index));
-  const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
+  auto& slot                 = SlotAt(pending.qp_index, pending.slot_in_qp);
+  const bool profile_enabled = FLAGS_rdma_rc_profile_interval_ms > 0;
   const std::uint64_t wait_start_ns = profile_enabled ? NowNs() : 0;
-  const std::int32_t status_code    = WaitStatus(qp.view.status, pending.seq);
+  const std::int32_t status_code    = WaitStatus(slot.view.status, pending.seq);
   if (profile_enabled) {
     profile_.wait_rpc_count.fetch_add(1, std::memory_order_relaxed);
     profile_.wait_status_ns.fetch_add(
@@ -405,14 +435,15 @@ void PetPSClient::WaitRPCFinish(int rpc_id) {
   }
   VLOG(1) << "component=rdma_rc_client event=done shard=" << shard_
           << " client_id=" << client_id_ << " qp=" << pending.qp_index
-          << " seq=" << pending.seq << " status=" << status_code
+          << " slot=" << pending.slot_index << " seq=" << pending.seq
+          << " status=" << status_code
           << " response_bytes=" << pending.response_bytes;
   const std::size_t actual_response_bytes = std::min<std::size_t>(
-      qp.view.status->response_bytes, pending.response_bytes);
+      slot.view.status->response_bytes, pending.response_bytes);
   if (actual_response_bytes > 0 && !FLAGS_rdma_rc_skip_client_copy) {
     const std::uint64_t copy_start_ns = profile_enabled ? NowNs() : 0;
     std::memcpy(
-        pending.recv_buffer, qp.view.response_payload, actual_response_bytes);
+        pending.recv_buffer, slot.view.response_payload, actual_response_bytes);
     if (profile_enabled) {
       profile_.copy_response_ns.fetch_add(
           NowNs() - copy_start_ns, std::memory_order_relaxed);
@@ -434,9 +465,9 @@ void PetPSClient::RevokeRPCResource(int rpc_id) {
   }
   const bool profile_enabled          = FLAGS_rdma_rc_profile_interval_ms > 0;
   const std::uint64_t revoke_start_ns = profile_enabled ? NowNs() : 0;
-  auto& qp = qps_.at(static_cast<std::size_t>(it->second.qp_index));
-  transport_->ClearRequestSlot(qp.view);
-  qp.busy = false;
+  auto& slot = SlotAt(it->second.qp_index, it->second.slot_in_qp);
+  transport_->ClearRequestSlot(slot.view);
+  slot.busy = false;
   pending_rpcs_.erase(it);
   if (profile_enabled) {
     profile_.revoke_rpc_count.fetch_add(1, std::memory_order_relaxed);
@@ -481,28 +512,25 @@ int PetPSClient::PutParameter(const std::vector<uint64_t>& keys,
         throw std::runtime_error(
             "PetPSClient::InitThread must be called first");
       }
-      const int qp_index = AcquireIdleQp();
-      auto& qp           = qps_[static_cast<std::size_t>(qp_index)];
+      const SlotHandle slot_handle = AcquireIdleSlot();
+      auto& slot = SlotAt(slot_handle.qp_index, slot_handle.slot_in_qp);
       RequestDescriptor descriptor;
       FillPutDescriptor(
-          &descriptor, qp.next_seq++, key_slice.size(), payload_bytes, qp.view);
+          &descriptor,
+          slot.next_seq++,
+          key_slice.size(),
+          payload_bytes,
+          slot.view);
       if (Align64(sizeof(RequestDescriptor)) + payload_bytes +
               Align64(sizeof(CommitWord)) >
           config_.request_slot_bytes) {
-        qp.busy = false;
+        slot.busy = false;
         throw std::runtime_error("PUT request exceeds RC request slot");
       }
       receive_buffers_.emplace_back(sizeof(std::int32_t), 0);
       recv   = reinterpret_cast<float*>(receive_buffers_.back().data());
       rpc_id = SubmitRpcLocked(
-          qp_index,
-          &descriptor,
-          payload.data(),
-          payload_bytes,
-          recv,
-          0,
-          0,
-          true);
+          &slot, descriptor, payload.data(), payload_bytes, recv, 0, 0, true);
     }
     WaitRPCFinish(rpc_id);
     const auto* status = reinterpret_cast<const std::int32_t*>(recv);
@@ -531,21 +559,22 @@ int PetPSClient::InitEmbeddingTable(const std::string& table_name,
     if (!thread_initialized_) {
       throw std::runtime_error("PetPSClient::InitThread must be called first");
     }
-    const int qp_index = AcquireIdleQp();
-    auto& qp           = qps_[static_cast<std::size_t>(qp_index)];
+    const SlotHandle slot_handle = AcquireIdleSlot();
+    auto& slot = SlotAt(slot_handle.qp_index, slot_handle.slot_in_qp);
     RequestDescriptor descriptor;
-    FillInitTableDescriptor(&descriptor, qp.next_seq++, table_name, qp.view);
+    FillInitTableDescriptor(
+        &descriptor, slot.next_seq++, table_name, slot.view);
     if (Align64(sizeof(RequestDescriptor)) + descriptor.payload_bytes +
             Align64(sizeof(CommitWord)) >
         config_.request_slot_bytes) {
-      qp.busy = false;
+      slot.busy = false;
       throw std::runtime_error("INIT request exceeds RC request slot");
     }
     receive_buffers_.emplace_back(sizeof(std::int32_t), 0);
     recv   = reinterpret_cast<float*>(receive_buffers_.back().data());
     rpc_id = SubmitRpcLocked(
-        qp_index,
-        &descriptor,
+        &slot,
+        descriptor,
         payload_words.data(),
         descriptor.payload_bytes,
         recv,
@@ -601,33 +630,26 @@ int PetPSClient::UpdateParameter(const std::string& table_name,
             "PetPSClient::InitThread must be called first");
       }
 
-      const int qp_index = AcquireIdleQp();
-      auto& qp           = qps_[static_cast<std::size_t>(qp_index)];
+      const SlotHandle slot_handle = AcquireIdleSlot();
+      auto& slot = SlotAt(slot_handle.qp_index, slot_handle.slot_in_qp);
       RequestDescriptor descriptor;
       FillUpdateDescriptor(
           &descriptor,
-          qp.next_seq++,
+          slot.next_seq++,
           key_slice.size(),
           payload_bytes,
           table_name,
-          qp.view);
+          slot.view);
       if (Align64(sizeof(RequestDescriptor)) + payload_bytes +
               Align64(sizeof(CommitWord)) >
           config_.request_slot_bytes) {
-        qp.busy = false;
+        slot.busy = false;
         throw std::runtime_error("UPDATE request exceeds RC request slot");
       }
       receive_buffers_.emplace_back(sizeof(std::int32_t), 0);
       recv   = reinterpret_cast<float*>(receive_buffers_.back().data());
       rpc_id = SubmitRpcLocked(
-          qp_index,
-          &descriptor,
-          payload.data(),
-          payload_bytes,
-          recv,
-          0,
-          0,
-          true);
+          &slot, descriptor, payload.data(), payload_bytes, recv, 0, 0, true);
     }
 
     WaitRPCFinish(rpc_id);

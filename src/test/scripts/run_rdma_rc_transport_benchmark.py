@@ -213,6 +213,8 @@ def build_benchmark_cmd(args):
             "--rdma_rc_qps_per_client_per_shard="
             f"{args.qps_per_client_per_shard}"
         )
+    if args.slots_per_qp is not None:
+        cmd.append("--rdma_rc_slots_per_qp=" f"{args.slots_per_qp}")
     if args.rdma_wait_timeout_ms is not None:
         cmd.append(f"--rdma_wait_timeout_ms={args.rdma_wait_timeout_ms}")
     if args.profile_interval_ms is not None:
@@ -220,12 +222,30 @@ def build_benchmark_cmd(args):
             "--rdma_rc_profile_interval_ms="
             f"{args.profile_interval_ms}"
         )
+    if args.inline_bytes is not None:
+        cmd.append("--rdma_rc_inline_bytes=" f"{args.inline_bytes}")
+    if args.client_numa_id is not None:
+        cmd.append("--rdma_rc_client_numa_id=" f"{args.client_numa_id}")
+    if args.server_numa_id is not None:
+        cmd.append("--rdma_rc_server_numa_id=" f"{args.server_numa_id}")
     if args.verify_values:
         cmd.append("--verify_values=true")
         cmd.append(
             f"--verify_value_row_stride={args.verify_value_row_stride}"
         )
     return cmd
+
+
+def parse_client_numa_ids(value, client_count):
+    if value is None:
+        return None
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    ids = [int(part) for part in parts]
+    if len(ids) != client_count:
+        raise ValueError(
+            "--client-numa-ids must provide exactly one device id per client"
+        )
+    return ids
 
 
 def write_runtime_config(args, source_config_path, runtime_dir):
@@ -460,6 +480,12 @@ def main():
         dest="qps_per_client_per_shard",
         type=int,
     )
+    parser.add_argument(
+        "--slots-per-qp",
+        "--rdma-rc-slots-per-qp",
+        dest="slots_per_qp",
+        type=int,
+    )
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
     parser.add_argument(
         "--profile-interval-ms",
@@ -471,6 +497,29 @@ def main():
         "--server-coroutines-per-thread",
         "--rdma-rc-server-coroutines-per-thread",
         dest="server_coroutines_per_thread",
+        type=int,
+    )
+    parser.add_argument(
+        "--inline-bytes",
+        "--rdma-rc-inline-bytes",
+        dest="inline_bytes",
+        type=int,
+    )
+    parser.add_argument(
+        "--client-numa-id",
+        "--rdma-rc-client-numa-id",
+        dest="client_numa_id",
+        type=int,
+    )
+    parser.add_argument(
+        "--client-numa-ids",
+        dest="client_numa_ids",
+        help="comma-separated RDMA device ids, one per client process",
+    )
+    parser.add_argument(
+        "--server-numa-id",
+        "--rdma-rc-server-numa-id",
+        dest="server_numa_id",
         type=int,
     )
     parser.add_argument(
@@ -499,6 +548,21 @@ def main():
         raise ValueError("--server-count must be positive")
     if args.client_count <= 0:
         raise ValueError("--client-count must be positive")
+    if args.client_numa_id is not None and args.client_numa_ids is not None:
+        raise ValueError(
+            "--client-numa-id and --client-numa-ids are mutually exclusive"
+        )
+    if args.slots_per_qp is not None and args.slots_per_qp <= 0:
+        raise ValueError("--slots-per-qp must be positive")
+    client_numa_ids = parse_client_numa_ids(args.client_numa_ids, args.client_count)
+    if args.op == "async_stream" and args.qps_per_client_per_shard is not None:
+        slots_per_qp = args.slots_per_qp if args.slots_per_qp is not None else 1
+        capacity = args.qps_per_client_per_shard * slots_per_qp
+        if capacity < args.async_depth:
+            raise ValueError(
+                "async_stream requires qps_per_client_per_shard * slots_per_qp "
+                ">= async_depth"
+            )
 
     source_config_path = resolve_rdma_integration_config(
         args.server_count, args.config_path
@@ -531,9 +595,14 @@ def main():
             show_status_logs=args.show_runner_logs,
             show_memcached_logs=args.show_runner_logs,
             rdma_qps_per_client_per_shard=args.qps_per_client_per_shard,
+            rdma_slots_per_qp=args.slots_per_qp,
             rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
             rdma_profile_interval_ms=args.profile_interval_ms,
             rdma_server_coroutines_per_thread=args.server_coroutines_per_thread,
+            rdma_inline_bytes=args.inline_bytes,
+            rdma_client_numa_id=args.client_numa_id,
+            rdma_client_numa_ids=client_numa_ids,
+            rdma_server_numa_id=args.server_numa_id,
             rdma_fake_get_mode=args.fake_get_mode,
             rdma_skip_client_copy=args.skip_client_copy,
         )

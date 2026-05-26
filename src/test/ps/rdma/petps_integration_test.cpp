@@ -18,6 +18,7 @@ DECLARE_int32(value_size);
 DECLARE_int32(global_id);
 DECLARE_int32(num_server_processes);
 DECLARE_int32(rdma_rc_qps_per_client_per_shard);
+DECLARE_int32(rdma_rc_slots_per_qp);
 
 namespace {
 
@@ -223,15 +224,16 @@ TEST(PetPSIntegrationTest, ExhaustedQpPoolFailsLoudly) {
   auto values                     = MakeValues(keys, embedding_dim);
   ASSERT_EQ(client.PutParameter(keys, values), 0);
 
-  const int qp_count = FLAGS_rdma_rc_qps_per_client_per_shard;
-  ASSERT_GT(qp_count, 0);
+  const int slot_count =
+      FLAGS_rdma_rc_qps_per_client_per_shard * FLAGS_rdma_rc_slots_per_qp;
+  ASSERT_GT(slot_count, 0);
 
   std::vector<void*> recv_buffers;
   std::vector<int> rpc_ids;
-  recv_buffers.reserve(static_cast<std::size_t>(qp_count));
-  rpc_ids.reserve(static_cast<std::size_t>(qp_count));
+  recv_buffers.reserve(static_cast<std::size_t>(slot_count));
+  rpc_ids.reserve(static_cast<std::size_t>(slot_count));
 
-  for (int i = 0; i < qp_count; ++i) {
+  for (int i = 0; i < slot_count; ++i) {
     void* recv_buffer =
         client.GetReceiveBuffer(client.ResponseBufferBytes(keys.size()));
     recv_buffers.push_back(recv_buffer);
@@ -328,8 +330,8 @@ TEST(PetPSIntegrationTest, AsyncGetPrefetchStressSingleShard) {
   const int client_id     = FLAGS_global_id - FLAGS_num_server_processes;
   ASSERT_GE(client_id, 0);
 
-  const int prefetch_count =
-      std::min(FLAGS_rdma_rc_qps_per_client_per_shard, 8);
+  const int prefetch_count = std::min(
+      FLAGS_rdma_rc_qps_per_client_per_shard * FLAGS_rdma_rc_slots_per_qp, 8);
   ASSERT_GT(prefetch_count, 1);
 
   std::vector<std::vector<std::uint64_t>> request_keys;

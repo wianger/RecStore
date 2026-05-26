@@ -17,8 +17,9 @@ struct RcTransportConfig {
   int shard_id    = 0;  // Logical shard served by this transport.
   int client_id   = -1; // Logical client id for response slot selection.
   int num_clients = 1;  // Total client count expected by the server.
-  int qps_per_client_per_shard    = 32; // Number of lanes per client per shard.
-  std::size_t request_slot_bytes  = 1 << 20; // Bytes per server request slot.
+  int qps_per_client_per_shard   = 32; // Number of lanes per client per shard.
+  int slots_per_qp               = 1; // Logical slots multiplexed on each lane.
+  std::size_t request_slot_bytes = 1 << 20;  // Bytes per server request slot.
   std::size_t response_slot_bytes = 1 << 20; // Bytes per client response slot.
   std::string namespace_token =
       "default"; // Shared-memory namespace for this run.
@@ -26,6 +27,7 @@ struct RcTransportConfig {
 
 struct RcClientQpView {
   int qp_index                  = 0; // Lane index local to the client.
+  int slot_in_qp                = 0; // Logical slot index within the lane.
   int slot_index                = 0; // Global request slot index on the server.
   void* request_slot            = nullptr; // Base address of the request slot.
   RequestDescriptor* descriptor = nullptr;
@@ -45,6 +47,7 @@ public:
   RcShardClientTransport& operator=(const RcShardClientTransport&) = delete;
 
   RcClientQpView OpenQp(int qp_index);
+  RcClientQpView OpenSlot(int qp_index, int slot_in_qp);
   void SubmitRequest(const RcClientQpView& view,
                      const RequestDescriptor& descriptor,
                      const void* payload,
@@ -60,9 +63,10 @@ private:
   struct Lane {
     std::unique_ptr<RawVerbsTransport>
         verbs; // RC QP and registered memory for this lane.
-    void* response_slot   = nullptr; // Local registered response slot.
-    void* request_staging = nullptr; // Local registered request staging slot.
-    bool submit_completion_pending = false;
+    void* lane_base =
+        nullptr; // Local registered region for all slots in this lane.
+    std::vector<std::uint8_t> submit_completion_pending;
+    std::vector<std::uint8_t> submit_completion_ready;
   };
 
   Lane& LaneAt(int qp_index);
@@ -82,6 +86,9 @@ public:
   RcShardServerTransport& operator=(const RcShardServerTransport&) = delete;
 
   int TotalSlots() const;
+  int SlotIndex(int client_id, int qp_index, int slot_in_qp) const;
+  void DecodeSlotIndex(
+      int slot_index, int* client_id, int* qp_index, int* slot_in_qp) const;
   void* RequestSlot(int slot_index) const;
   RequestDescriptor* RequestDescriptorAt(int slot_index) const;
   char* RequestPayloadAt(int slot_index) const;
@@ -93,9 +100,10 @@ public:
     StatusWord* status = nullptr; // Final completion word for this response.
   };
 
-  ResponseView OpenClientResponse(int client_id, int qp_index);
+  ResponseView OpenClientResponse(int client_id, int qp_index, int slot_in_qp);
   void CompleteResponse(int client_id,
                         int qp_index,
+                        int slot_in_qp,
                         const ResponseView& response,
                         std::uint64_t seq);
   const RcTransportConfig& config() const { return config_; }
@@ -105,9 +113,10 @@ private:
     std::unique_ptr<RawVerbsTransport>
         verbs;                     // RC QP and registered memory for this lane.
     void* request_slots = nullptr; // Local registered slots for all clients.
-    std::vector<void*>
-        response_staging; // Per-client registered response staging slots.
+    std::vector<void*> response_staging; // Per-client-per-slot registered
+                                         // response staging slots.
     std::vector<std::uint8_t> response_completion_pending;
+    std::vector<std::uint8_t> response_completion_ready;
   };
 
   Lane& LaneAt(int qp_index);

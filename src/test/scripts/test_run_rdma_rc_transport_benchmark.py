@@ -10,6 +10,7 @@ from run_rdma_rc_transport_benchmark import (  # noqa: E402
     _stream_process_output,
     build_benchmark_cmd,
     collect_summary_rows,
+    parse_client_numa_ids,
 )
 
 
@@ -69,8 +70,12 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
             async_depth=2,
             report_mode="summary",
             qps_per_client_per_shard=32,
+            slots_per_qp=4,
             rdma_wait_timeout_ms=5000,
             profile_interval_ms=250,
+            inline_bytes=64,
+            client_numa_id=1,
+            server_numa_id=2,
             verify_values=False,
             verify_value_row_stride=1,
         )
@@ -78,7 +83,11 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
         cmd = build_benchmark_cmd(args)
 
         self.assertIn("--rdma_rc_qps_per_client_per_shard=32", cmd)
+        self.assertIn("--rdma_rc_slots_per_qp=4", cmd)
         self.assertIn("--rdma_rc_profile_interval_ms=250", cmd)
+        self.assertIn("--rdma_rc_inline_bytes=64", cmd)
+        self.assertIn("--rdma_rc_client_numa_id=1", cmd)
+        self.assertIn("--rdma_rc_server_numa_id=2", cmd)
 
     def test_help_exposes_normalized_rdma_rc_arguments(self):
         script = Path(__file__).resolve().parent / "run_rdma_rc_transport_benchmark.py"
@@ -91,10 +100,20 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0)
         self.assertIn("--qps-per-client-per-shard", completed.stdout)
+        self.assertIn("--slots-per-qp", completed.stdout)
         self.assertIn("--profile-interval-ms", completed.stdout)
         self.assertIn("--server-coroutines-per-thread", completed.stdout)
+        self.assertIn("--inline-bytes", completed.stdout)
+        self.assertIn("--client-numa-id", completed.stdout)
+        self.assertIn("--client-numa-ids", completed.stdout)
+        self.assertIn("--server-numa-id", completed.stdout)
         self.assertIn("--fake-get-mode", completed.stdout)
         self.assertIn("--skip-client-copy", completed.stdout)
+
+    def test_parse_client_numa_ids_requires_one_id_per_client(self):
+        self.assertEqual(parse_client_numa_ids("0,1", 2), [0, 1])
+        with self.assertRaises(ValueError):
+            parse_client_numa_ids("0,1", 3)
 
 
 if __name__ == "__main__":

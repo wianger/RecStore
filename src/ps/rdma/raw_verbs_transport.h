@@ -31,6 +31,7 @@ struct RawVerbsConfig {
   int num_servers                = 1;
   int num_clients                = 1;
   int numa_id                    = 0;
+  std::uint32_t max_inline_data  = 0;
   bool connect_to_servers        = true;
   bool connect_to_clients        = true;
   std::size_t local_region_bytes = 128 * 1024 * 1024;
@@ -245,6 +246,7 @@ public:
   void SendDoorbell(
       std::uint16_t node_id, std::uint32_t imm_data, std::uint64_t wr_id);
   bool Poll(RawVerbsCompletion* completion, int timeout_ms);
+  std::uint32_t max_inline_data(std::uint16_t node_id) const;
 
 private:
   struct Impl;

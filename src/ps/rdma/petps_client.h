@@ -51,14 +51,21 @@ public:
   int FakePutParameter(base::ConstArray<uint64_t> keys, float* values) override;
 
 private:
-  struct QpContext {
-    RcClientQpView view;            // Local slot view for one client-side lane.
+  struct SlotContext {
+    RcClientQpView view;            // Local request/response slot view.
     std::uint64_t next_seq = 1;     // Monotonic request sequence for this lane.
     bool busy              = false; // True while one RPC is in flight.
   };
 
+  struct QpContext {
+    int qp_index = 0;
+    std::vector<SlotContext> slots;
+  };
+
   struct PendingRpc {
     int qp_index               = -1;      // Lane used for this pending RPC.
+    int slot_in_qp             = -1;      // Logical slot within the lane.
+    int slot_index             = -1;      // Global request slot index.
     std::uint64_t seq          = 0;       // Sequence number written into slot.
     float* recv_buffer         = nullptr; // User-visible response buffer.
     std::size_t key_count      = 0;       // Number of keys in this RPC.
@@ -81,7 +88,13 @@ private:
   };
 
   void InitializeTransport();
-  int AcquireIdleQp();
+  struct SlotHandle {
+    int qp_index   = -1;
+    int slot_in_qp = -1;
+  };
+  SlotHandle AcquireIdleSlot();
+  SlotContext& SlotAt(int qp_index, int slot_in_qp);
+  const SlotContext& SlotAt(int qp_index, int slot_in_qp) const;
   void MaybeReportProfile();
   void FillGetDescriptor(RequestDescriptor* descriptor,
                          std::uint64_t seq,
@@ -105,8 +118,8 @@ private:
                                const std::string& table_name,
                                const RcClientQpView& view) const;
   int SubmitRpcLocked(
-      int qp_index,
-      RequestDescriptor* descriptor,
+      SlotContext* slot,
+      const RequestDescriptor& descriptor,
       const void* payload,
       std::size_t payload_bytes,
       float* recv_buffer,
@@ -118,7 +131,7 @@ private:
   int client_id_ = -1;          // Logical client id derived from global id.
   RcTransportConfig config_;    // Transport slot sizing and shard config.
   std::unique_ptr<RcShardClientTransport> transport_; // Slot transport owner.
-  std::vector<QpContext> qps_; // One context per client-side lane.
+  std::vector<QpContext> qps_; // One context per client-side QP lane.
   std::vector<std::vector<char>>
       receive_buffers_; // Heap-backed response buffers.
   std::unordered_map<int, PendingRpc> pending_rpcs_; // In-flight RPC table.

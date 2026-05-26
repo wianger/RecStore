@@ -130,6 +130,7 @@ struct RawVerbsTransport::Impl {
   std::vector<RawVerbsNodeMeta> metas;
   std::vector<RawVerbsRemoteMemory> remotes;
   std::vector<ibv_qp*> qps;
+  std::vector<std::uint32_t> max_inline_data_per_node;
   ibv_wc wc_batch[kRawVerbsPollBatchSize] = {};
   RawVerbsCompletionBatchCursor batch_cursor;
 };
@@ -172,6 +173,8 @@ RawVerbsTransport::RawVerbsTransport(const RawVerbsConfig& config)
 
   const int node_count = config.num_servers + config.num_clients;
   impl_->qps.resize(static_cast<std::size_t>(node_count), nullptr);
+  impl_->max_inline_data_per_node.assign(
+      static_cast<std::size_t>(node_count), 0);
   for (int node = 0; node < node_count; ++node) {
     if (!ShouldRawVerbsConnectToNode(config, node)) {
       continue;
@@ -184,12 +187,14 @@ RawVerbsTransport::RawVerbsTransport(const RawVerbsConfig& config)
     init_attr.cap.max_recv_wr     = kRawVerbsRecvDepth;
     init_attr.cap.max_send_sge    = 1;
     init_attr.cap.max_recv_sge    = 1;
-    init_attr.cap.max_inline_data = 64;
+    init_attr.cap.max_inline_data = config.max_inline_data;
     ibv_qp* qp                    = ibv_create_qp(impl_->pd, &init_attr);
     if (qp == nullptr) {
       throw std::runtime_error(QpCreateError(config, node));
     }
     impl_->qps[static_cast<std::size_t>(node)] = qp;
+    impl_->max_inline_data_per_node[static_cast<std::size_t>(node)] =
+        init_attr.cap.max_inline_data;
   }
 }
 
@@ -373,8 +378,13 @@ void RawVerbsTransport::Write(
   wr.wr_id      = wr_id;
   wr.opcode     = IBV_WR_RDMA_WRITE;
   wr.send_flags = signaled ? IBV_SEND_SIGNALED : 0;
-  wr.sg_list    = &sge;
-  wr.num_sge    = 1;
+  if (bytes > 0 &&
+      bytes <= impl_->max_inline_data_per_node[static_cast<std::size_t>(
+                   remote.nodeID)]) {
+    wr.send_flags |= IBV_SEND_INLINE;
+  }
+  wr.sg_list = &sge;
+  wr.num_sge = 1;
   wr.wr.rdma.remote_addr =
       impl_->remotes[remote.nodeID].base_addr + remote.offset;
   wr.wr.rdma.rkey     = impl_->remotes[remote.nodeID].rkey;
@@ -404,8 +414,13 @@ void RawVerbsTransport::WriteWithImm(
   wr.opcode     = IBV_WR_RDMA_WRITE_WITH_IMM;
   wr.imm_data   = htonl(imm_data);
   wr.send_flags = signaled ? IBV_SEND_SIGNALED : 0;
-  wr.sg_list    = &sge;
-  wr.num_sge    = 1;
+  if (bytes > 0 &&
+      bytes <= impl_->max_inline_data_per_node[static_cast<std::size_t>(
+                   remote.nodeID)]) {
+    wr.send_flags |= IBV_SEND_INLINE;
+  }
+  wr.sg_list = &sge;
+  wr.num_sge = 1;
   wr.wr.rdma.remote_addr =
       impl_->remotes[remote.nodeID].base_addr + remote.offset;
   wr.wr.rdma.rkey     = impl_->remotes[remote.nodeID].rkey;
@@ -508,6 +523,13 @@ bool RawVerbsTransport::Poll(RawVerbsCompletion* completion, int timeout_ms) {
     }
     return true;
   }
+}
+
+std::uint32_t RawVerbsTransport::max_inline_data(std::uint16_t node_id) const {
+  if (node_id >= impl_->max_inline_data_per_node.size()) {
+    throw std::runtime_error("raw verbs inline query remote node out of range");
+  }
+  return impl_->max_inline_data_per_node[static_cast<std::size_t>(node_id)];
 }
 
 } // namespace petps

@@ -98,37 +98,72 @@ class TestPetPSClusterRunner(unittest.TestCase):
             rdma_server_ready_poll_ms=3,
             rdma_client_receive_arena_bytes=134217728,
             rdma_qps_per_client_per_shard=4,
+            rdma_slots_per_qp=6,
             rdma_server_coroutines_per_thread=3,
+            rdma_inline_bytes=64,
+            rdma_client_numa_id=1,
+            rdma_server_numa_id=2,
         )
         server_cmd = runner.build_server_cmd(0)
         client_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"])
         self.assertIn("--rdma_per_thread_response_limit_bytes=2097152", server_cmd)
         self.assertIn("--rdma_rc_qps_per_client_per_shard=4", server_cmd)
+        self.assertIn("--rdma_rc_slots_per_qp=6", server_cmd)
         self.assertIn("--rdma_rc_server_coroutines_per_thread=3", server_cmd)
+        self.assertIn("--rdma_rc_inline_bytes=64", server_cmd)
+        self.assertIn("--rdma_rc_server_numa_id=2", server_cmd)
         self.assertIn("--rdma_server_ready_timeout_sec=45", client_cmd)
         self.assertIn("--rdma_server_ready_poll_ms=3", client_cmd)
         self.assertIn("--rdma_client_receive_arena_bytes=134217728", client_cmd)
         self.assertIn("--rdma_rc_qps_per_client_per_shard=4", client_cmd)
+        self.assertIn("--rdma_rc_slots_per_qp=6", client_cmd)
+        self.assertIn("--rdma_rc_inline_bytes=64", client_cmd)
+        self.assertIn("--rdma_rc_client_numa_id=1", client_cmd)
+
+    def test_build_client_command_supports_per_client_numa_ids(self):
+        runner = PetPSClusterRunner(
+            num_servers=1,
+            num_clients=2,
+            rdma_client_numa_ids=[0, 1],
+        )
+        client0_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"], client_index=0)
+        client1_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"], client_index=1)
+        self.assertIn("--rdma_rc_client_numa_id=0", client0_cmd)
+        self.assertIn("--rdma_rc_client_numa_id=1", client1_cmd)
 
     def test_build_commands_accept_legacy_rdma_aliases(self):
         runner = PetPSClusterRunner(
             rdma_rc_qps_per_client_per_shard=8,
+            rdma_rc_slots_per_qp=5,
             rdma_rc_profile_interval_ms=250,
             rdma_rc_server_coroutines_per_thread=2,
+            rdma_rc_inline_bytes=48,
+            rdma_rc_client_numa_id=1,
+            rdma_rc_server_numa_id=2,
             rdma_rc_fake_get_mode="status_only",
             rdma_rc_skip_client_copy=True,
         )
         server_cmd = runner.build_server_cmd(0)
         client_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"])
         self.assertEqual(runner.rdma_qps_per_client_per_shard, 8)
+        self.assertEqual(runner.rdma_slots_per_qp, 5)
         self.assertEqual(runner.rdma_profile_interval_ms, 250)
         self.assertEqual(runner.rdma_server_coroutines_per_thread, 2)
+        self.assertEqual(runner.rdma_inline_bytes, 48)
+        self.assertEqual(runner.rdma_client_numa_id, 1)
+        self.assertEqual(runner.rdma_server_numa_id, 2)
         self.assertEqual(runner.rdma_fake_get_mode, "status_only")
         self.assertTrue(runner.rdma_skip_client_copy)
         self.assertIn("--rdma_rc_qps_per_client_per_shard=8", server_cmd)
+        self.assertIn("--rdma_rc_slots_per_qp=5", server_cmd)
         self.assertIn("--rdma_rc_profile_interval_ms=250", server_cmd)
         self.assertIn("--rdma_rc_server_coroutines_per_thread=2", server_cmd)
+        self.assertIn("--rdma_rc_inline_bytes=48", server_cmd)
+        self.assertIn("--rdma_rc_server_numa_id=2", server_cmd)
         self.assertIn("--rdma_rc_fake_get_mode=status_only", server_cmd)
+        self.assertIn("--rdma_rc_slots_per_qp=5", client_cmd)
+        self.assertIn("--rdma_rc_inline_bytes=48", client_cmd)
+        self.assertIn("--rdma_rc_client_numa_id=1", client_cmd)
         self.assertIn("--rdma_rc_skip_client_copy=true", client_cmd)
 
     @mock.patch("petps_cluster_runner.os.geteuid", return_value=0)

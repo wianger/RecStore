@@ -57,14 +57,23 @@ class PetPSClusterRunner:
         rdma_put_client_send_arena_bytes=None,
         rdma_put_server_scratch_bytes=None,
         rdma_rc_qps_per_client_per_shard=None,
+        rdma_rc_slots_per_qp=None,
         rdma_rc_profile_interval_ms=None,
         rdma_rc_server_coroutines_per_thread=None,
+        rdma_rc_inline_bytes=None,
+        rdma_rc_client_numa_id=None,
+        rdma_rc_server_numa_id=None,
         rdma_rc_fake_get_mode=None,
         rdma_rc_skip_client_copy=None,
         rdma_qps_per_client_per_shard=None,
+        rdma_slots_per_qp=None,
         rdma_wait_timeout_ms=None,
         rdma_profile_interval_ms=None,
         rdma_server_coroutines_per_thread=None,
+        rdma_inline_bytes=None,
+        rdma_client_numa_id=None,
+        rdma_client_numa_ids=None,
+        rdma_server_numa_id=None,
         rdma_fake_get_mode=None,
         rdma_skip_client_copy=None,
         validate_routing=False,
@@ -115,6 +124,11 @@ class PetPSClusterRunner:
             rdma_rc_qps_per_client_per_shard,
         )
         self.rdma_wait_timeout_ms = rdma_wait_timeout_ms
+        self.rdma_slots_per_qp = self._coalesce_optional_values(
+            "rdma_slots_per_qp",
+            rdma_slots_per_qp,
+            rdma_rc_slots_per_qp,
+        )
         self.rdma_profile_interval_ms = self._coalesce_optional_values(
             "rdma_profile_interval_ms",
             rdma_profile_interval_ms,
@@ -126,6 +140,33 @@ class PetPSClusterRunner:
                 rdma_server_coroutines_per_thread,
                 rdma_rc_server_coroutines_per_thread,
             )
+        )
+        self.rdma_inline_bytes = self._coalesce_optional_values(
+            "rdma_inline_bytes",
+            rdma_inline_bytes,
+            rdma_rc_inline_bytes,
+        )
+        self.rdma_client_numa_id = self._coalesce_optional_values(
+            "rdma_client_numa_id",
+            rdma_client_numa_id,
+            rdma_rc_client_numa_id,
+        )
+        self.rdma_client_numa_ids = (
+            list(rdma_client_numa_ids) if rdma_client_numa_ids is not None else None
+        )
+        if self.rdma_client_numa_ids is not None:
+            if len(self.rdma_client_numa_ids) != self.num_clients:
+                raise ValueError(
+                    "rdma_client_numa_ids length must match num_clients"
+                )
+            if self.rdma_client_numa_id is not None:
+                raise ValueError(
+                    "rdma_client_numa_id and rdma_client_numa_ids are mutually exclusive"
+                )
+        self.rdma_server_numa_id = self._coalesce_optional_values(
+            "rdma_server_numa_id",
+            rdma_server_numa_id,
+            rdma_rc_server_numa_id,
         )
         self.rdma_fake_get_mode = self._coalesce_optional_values(
             "rdma_fake_get_mode",
@@ -141,10 +182,15 @@ class PetPSClusterRunner:
         self.rdma_rc_qps_per_client_per_shard = (
             self.rdma_qps_per_client_per_shard
         )
+        self.rdma_rc_slots_per_qp = self.rdma_slots_per_qp
         self.rdma_rc_profile_interval_ms = self.rdma_profile_interval_ms
         self.rdma_rc_server_coroutines_per_thread = (
             self.rdma_server_coroutines_per_thread
         )
+        self.rdma_rc_inline_bytes = self.rdma_inline_bytes
+        self.rdma_rc_client_numa_id = self.rdma_client_numa_id
+        self.rdma_rc_client_numa_ids = self.rdma_client_numa_ids
+        self.rdma_rc_server_numa_id = self.rdma_server_numa_id
         self.rdma_rc_fake_get_mode = self.rdma_fake_get_mode
         self.rdma_rc_skip_client_copy = self.rdma_skip_client_copy
         self.validate_routing = validate_routing
@@ -260,6 +306,8 @@ class PetPSClusterRunner:
                 "--rdma_rc_qps_per_client_per_shard="
                 f"{self.rdma_qps_per_client_per_shard}"
             )
+        if self.rdma_slots_per_qp is not None:
+            cmd.append("--rdma_rc_slots_per_qp=" f"{self.rdma_slots_per_qp}")
         if self.rdma_profile_interval_ms is not None:
             cmd.append(
                 "--rdma_rc_profile_interval_ms="
@@ -270,6 +318,10 @@ class PetPSClusterRunner:
                 "--rdma_rc_server_coroutines_per_thread="
                 f"{self.rdma_server_coroutines_per_thread}"
             )
+        if self.rdma_inline_bytes is not None:
+            cmd.append("--rdma_rc_inline_bytes=" f"{self.rdma_inline_bytes}")
+        if self.rdma_server_numa_id is not None:
+            cmd.append("--rdma_rc_server_numa_id=" f"{self.rdma_server_numa_id}")
         if self.rdma_fake_get_mode is not None:
             cmd.append(f"--rdma_rc_fake_get_mode={self.rdma_fake_get_mode}")
         return cmd
@@ -330,6 +382,8 @@ class PetPSClusterRunner:
                 "--rdma_rc_qps_per_client_per_shard="
                 f"{self.rdma_qps_per_client_per_shard}"
             )
+        if self.rdma_slots_per_qp is not None:
+            cmd.append("--rdma_rc_slots_per_qp=" f"{self.rdma_slots_per_qp}")
         if self.rdma_wait_timeout_ms is not None:
             cmd.append(f"--rdma_wait_timeout_ms={self.rdma_wait_timeout_ms}")
         if self.rdma_profile_interval_ms is not None:
@@ -337,6 +391,13 @@ class PetPSClusterRunner:
                 "--rdma_rc_profile_interval_ms="
                 f"{self.rdma_profile_interval_ms}"
             )
+        if self.rdma_inline_bytes is not None:
+            cmd.append("--rdma_rc_inline_bytes=" f"{self.rdma_inline_bytes}")
+        client_numa_id = self.rdma_client_numa_id
+        if self.rdma_client_numa_ids is not None:
+            client_numa_id = self.rdma_client_numa_ids[client_index]
+        if client_numa_id is not None:
+            cmd.append("--rdma_rc_client_numa_id=" f"{client_numa_id}")
         if self.rdma_skip_client_copy is not None:
             cmd.append(
                 "--rdma_rc_skip_client_copy="
