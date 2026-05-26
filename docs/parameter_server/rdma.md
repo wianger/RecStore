@@ -77,6 +77,7 @@ Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 ```bash
 cmake --build ./build --target \
   ps_transport_benchmark \
+  rdma_rc_transport_benchmark \
   petps_server \
   petps_integration_test \
   recstore_torch_ops \
@@ -84,7 +85,7 @@ cmake --build ./build --target \
   -j
 ```
 
-如果刚改过 `src/ps/rdma/*`、`src/test/scripts/*rdma*` 或 op-layer 相关代码，先重编对应目标再判断行为。旧的 `petps_server` / `recstore_torch_ops` 二进制很容易造成“源码已改但测试仍卡住”的假象。
+如果刚改过 `src/ps/rdma/*`、`src/test/scripts/*rdma*` 或 op-layer 相关代码，先重编对应目标再判断行为。旧的 `petps_server`、`ps_transport_benchmark`、`rdma_rc_transport_benchmark` 或 `recstore_torch_ops` 二进制很容易造成“源码已改但测试仍卡住”的假象。
 
 ## 4. 参数说明
 
@@ -199,7 +200,22 @@ cmake --build ./build --target \
 
 ## 6. Benchmark 建议
 
-### 6.1 推荐入口
+### 6.1 Benchmark 入口选择
+
+当前有两个 benchmark 二进制，它们不是重复目标：
+
+| 目标 | Runner | 适用场景 |
+|------|--------|----------|
+| `ps_transport_benchmark` | `src/test/scripts/run_rdma_transport_benchmarks.py` | 通用 PS transport 对比入口，可跑 RDMA / gRPC / bRPC；RDMA 模式主要用于验证 PUT-v2 `read` 和 `push` 两条路径。 |
+| `rdma_rc_transport_benchmark` | `src/test/scripts/run_rdma_rc_transport_benchmark.py` | RDMA RC 专项压测入口，支持 `client-count`、`async_stream`、QP 池、server coroutine、fake get、skip client copy 等 RC 诊断参数。 |
+
+选择规则：
+
+- 想比较 RDMA 和 gRPC / bRPC，或验证 PUT-v2 `read` / `push` 传输模式，用 `ps_transport_benchmark`。
+- 想测 RDMA RC 本身的单 shard、多 client、低负载上限或 async pipeline，用 `rdma_rc_transport_benchmark`。
+- 不要把两个入口的参数混用。`--rdma-put-v2-transfer-mode` 属于通用入口；`--qps-per-client-per-shard`、`--async-depth`、`--client-count` 属于 RC 专项入口。
+
+### 6.2 通用 PS Transport 入口
 
 建议先跑 PetPS RC-write correctness 基线，再做 benchmark：
 
@@ -223,7 +239,61 @@ python3 src/test/scripts/run_rdma_transport_benchmarks.py \
 
 summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read` 和 `push` 的结果不能直接混比。
 
-### 6.2 当前更重要的 benchmark 目标
+### 6.3 RDMA RC 专项入口
+
+最小真实 RDMA RC 闭环命令：
+
+```bash
+python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+  --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
+  --server-count 1 \
+  --client-count 1 \
+  --thread-num 1 \
+  --iterations 2 \
+  --rounds 1 \
+  --warmup-rounds 0 \
+  --batch-keys 4 \
+  --value-size 16 \
+  --op get \
+  --report-mode summary \
+  --qps-per-client-per-shard 1 \
+  --rdma-wait-timeout-ms 20000 \
+  --client-timeout 60 \
+  --cluster-timeout 30 \
+  --use-local-memcached auto
+```
+
+多 client 最小解析验证：
+
+```bash
+python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+  --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
+  --server-count 1 \
+  --client-count 2 \
+  --thread-num 1 \
+  --iterations 2 \
+  --rounds 1 \
+  --warmup-rounds 0 \
+  --batch-keys 4 \
+  --value-size 16 \
+  --op get \
+  --report-mode summary \
+  --qps-per-client-per-shard 1 \
+  --rdma-wait-timeout-ms 20000 \
+  --client-timeout 60 \
+  --cluster-timeout 30 \
+  --use-local-memcached auto \
+  --quiet
+```
+
+判定标准：
+
+- 输出必须包含 `phase=measure summary`。
+- 单 client 表必须出现 `RDMA RC Benchmark Summary` 和 `RDMA RC Aggregate Summary`。
+- 多 client `--quiet` 模式至少要在 aggregate 表中看到 `clients` 等于实际 client 数。
+- 如果只看到原始 benchmark 行但没有 summary 表，优先检查 runner 的 summary 正则和多 client stdout 行边界。
+
+### 6.4 当前更重要的 benchmark 目标
 
 现在的重点不是继续把 `client-count` 往上堆，而是：
 
@@ -239,7 +309,7 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 - 小到中等 `async-depth`
 - `client-count=1/2`
 
-### 6.3 低负载上限测试建议
+### 6.5 低负载上限测试建议
 
 建议把这些参数固定住，只改一个维度：
 
@@ -259,35 +329,65 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 
 ## 7. 最近一次矩阵
 
-下面这组数据是对齐原先 benchmark 脚本后的本地矩阵，参数尽量保持和 `run_rdma_rc_transport_benchmark.sh` 一致：
+下面是最近一次确认可正常闭环的 RDMA RC 压测，使用的是 `src/test/scripts/run_rdma_rc_transport_benchmark.py`。为了先把流程跑通，这次采用的是单 shard、多 client 的高并发配置，而不是旧的通用 RDMA 入口。
 
-- `server-count = 1`
-- `client-count = 8`
-- `thread-num = 32`
-- `iterations = 20`
-- `rounds = 30`
-- `warmup-rounds = 10`
-- `batch-keys = 500`
-- `value-size = 512`
-- `op = async_stream`
-- `async-depth = 128`
-- 每个点串行跑 3 次，取三次平均
+### 7.1 运行命令
 
-| qps-per-client-per-shard | server-coroutines-per-thread | avg agg key ops/s | avg agg ops/s | avg mean req us |
-|--------------------------|------------------------------|------------------:|--------------:|----------------:|
-| 256 | 1 | 29,294,390.00 | 58,588.80 | 137.66 |
-| 256 | 4 | 36,370,846.67 | 72,741.68 | 114.91 |
+```bash
+python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+  --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
+  --server-count 1 \
+  --client-count 8 \
+  --thread-num 32 \
+  --iterations 20 \
+  --rounds 30 \
+  --warmup-rounds 10 \
+  --batch-keys 500 \
+  --value-size 512 \
+  --op async_stream \
+  --async-depth 128 \
+  --report-mode summary \
+  --qps-per-client-per-shard 256 \
+  --client-timeout 1800 \
+  --cluster-timeout 120 \
+  --use-local-memcached auto \
+  --show-runner-logs
+```
 
-这组矩阵用于和原先的 benchmark 口径对齐，`async-depth=128` 是当前更合适的参考值。
+### 7.2 实测结果
 
-在这套参数下，`qps-per-client-per-shard=64` 会因为 `no idle RC write QP available` 直接失败，因此这里只保留能闭环的原脚本基线 `qps=256`。
+这次压测成功输出了 8 个 client 的 `warmup summary` 和 `measure summary`，没有出现 `no idle RC write QP available`、超时或启动失败。
 
-从这轮数据看，`server-coroutines-per-thread=4` 的聚合吞吐高于 `1`，说明在 `async-depth=128` 和 `client-count=8` 这组负载下，适度增加 server 侧协程有收益。
+对 `phase=measure` 的单 client 结果，代表性区间如下：
 
-这组结果只说明一个事实：
+| client | mean req us | p50 req us | p95 req us | p99 req us | key ops/s |
+|--------|-------------:|-----------:|-----------:|-----------:|----------:|
+| 0 | 309.74 | 306.19 | 329.22 | 351.37 | 4,132,500.00 |
+| 1 | 309.39 | 306.85 | 328.52 | 340.55 | 4,137,220.00 |
+| 2 | 308.48 | 306.02 | 328.81 | 336.88 | 4,149,330.00 |
+| 3 | 309.66 | 306.74 | 334.73 | 334.95 | 4,133,560.00 |
+| 4 | 309.78 | 305.93 | 330.45 | 348.73 | 4,131,970.00 |
+| 5 | 308.61 | 306.27 | 331.01 | 331.47 | 4,147,680.00 |
+| 6 | 310.02 | 306.36 | 332.10 | 333.69 | 4,128,760.00 |
+| 7 | 309.58 | 306.47 | 332.93 | 333.76 | 4,134,620.00 |
 
-- 在当前实现里，server 侧轮询 / 扫描模式是一个明显的可优化点
-- 但它不能证明更高层架构一定更快
+按 8 个 client 粗略聚合，`key_ops/s` 约为 `33M`。这个结果说明当前 RC runner 在高并发下可以稳定闭环，并且 summary 解析链路已经能正常收集到 measure 结果。
+
+### 7.3 日志位置
+
+- `results/rdma_rc_stress_0526/run.log`
+
+### 7.4 说明
+
+这次结果只说明一件事:
+
+- 当前 `run_rdma_rc_transport_benchmark.py` 可以正常驱动高并发 RDMA RC 压测
+
+它不说明:
+
+- 任何更高层模型路径一定更快
+- 任何其他 `qps` 或 `server-coroutines-per-thread` 组合都会得到同样的结果
+- 这个结果可以直接和旧的通用 RDMA 入口混为一谈
 
 ## 8. 当前路线图
 
@@ -473,9 +573,15 @@ runner 参数拼接：
 ```bash
 python3 -m unittest src/test/scripts/test_petps_cluster_runner.py
 python3 -m unittest src/test/scripts/test_run_rdma_rc_transport_benchmark.py
+python3 -m unittest src/test/scripts/test_run_rdma_transport_benchmarks.py
 ```
 
-这些测试不证明 RDMA 数据面可用，只证明协议编码、分片 wrapper 和脚本 plumbing 没有明显回归。
+这些测试不证明 RDMA 数据面可用，只证明协议编码、分片 wrapper 和脚本 plumbing 没有明显回归。其中 `test_run_rdma_rc_transport_benchmark.py` 覆盖：
+
+- `--quiet` 模式只输出 summary / aggregate，不输出 progress 噪声。
+- 多 client 流式 stdout 保留行边界，避免多条 `phase=measure summary` 粘连后只解析到第一条。
+
+真实 RDMA 数据面至少跑一个最小 benchmark 闭环，推荐先用 `6.3` 的单 client 命令，再用 2-client `--quiet` 命令确认聚合表中的 `clients=2`。
 
 ## 12. 排障顺序
 
@@ -490,7 +596,7 @@ python3 -m unittest src/test/scripts/test_run_rdma_rc_transport_benchmark.py
 最小日常验证顺序：
 
 ```bash
-cmake --build ./build --target ps_transport_benchmark petps_server recstore_torch_ops -j
+cmake --build ./build --target ps_transport_benchmark rdma_rc_transport_benchmark petps_server recstore_torch_ops -j
 python3 src/test/scripts/run_petps_integration.py \
   --server-count 1 \
   --config-path ./src/test/configs/recstore_config.rdma_test.json \

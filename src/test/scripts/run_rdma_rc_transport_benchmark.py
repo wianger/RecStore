@@ -9,7 +9,7 @@ import tempfile
 import time
 import threading
 
-from petps_cluster_runner import PetPSClusterRunner, REPO_ROOT, _to_text
+from petps_cluster_runner import PetPSClusterRunner, REPO_ROOT
 from ps_server_helpers import RDMA_SKIP_EXIT_CODE, get_rdma_skip_reason
 from ps_test_config import (
     DEFAULT_RDMA_MULTI_SHARD_CONFIG,
@@ -46,8 +46,14 @@ def is_memcached_noise_line(line):
     return any(pattern in line for pattern in MEMCACHED_NOISE_PATTERNS)
 
 
-def print_filtered_output(text, show_runner_logs):
+def is_summary_line(line):
+    return " phase=measure summary " in line or " phase=warmup summary " in line
+
+
+def print_filtered_output(text, show_runner_logs, quiet):
     for line in text.splitlines():
+        if quiet and not is_summary_line(line):
+            continue
         if not show_runner_logs and is_memcached_noise_line(line):
             continue
         print(line)
@@ -281,9 +287,9 @@ def _stream_process_output(
     try:
         for raw_line in iter(stream.readline, ""):
             line = raw_line.rstrip()
-            sink.append(line)
+            sink.append(raw_line)
             if log_handle is not None:
-                log_handle.write(line + "\n")
+                log_handle.write(raw_line)
                 log_handle.flush()
             if show_runner_logs:
                 print(prefix + line)
@@ -300,8 +306,8 @@ def run_benchmark_clients(runner, args):
             stream_output=args.show_runner_logs,
         )
         if not args.show_runner_logs:
-            print_filtered_output(completed.stdout, args.show_runner_logs)
-            print_filtered_output(completed.stderr, args.show_runner_logs)
+            print_filtered_output(completed.stdout, args.show_runner_logs, args.quiet)
+            print_filtered_output(completed.stderr, args.show_runner_logs, args.quiet)
         rows = collect_summary_rows(completed.stdout)
         for row in rows:
             row["client_index"] = 0
@@ -312,10 +318,7 @@ def run_benchmark_clients(runner, args):
     stdout_buffers = {}
     stderr_buffers = {}
     stream_threads = []
-    log_dir = None
-    if args.client_count > 1:
-        log_dir = tempfile.mkdtemp(prefix="rdma_rc_client_logs_")
-        print(f"[rdma-rc-log] writing multi-client logs to {log_dir}")
+    log_dir = tempfile.mkdtemp(prefix="rdma_rc_client_logs_")
     deadline = time.monotonic() + args.client_timeout
     for client_index in range(args.client_count):
         cmd = runner.build_client_cmd(
@@ -332,89 +335,66 @@ def run_benchmark_clients(runner, args):
         processes.append((client_index, process))
         stdout_buffers[client_index] = []
         stderr_buffers[client_index] = []
-        stdout_log_path = None
-        stderr_log_path = None
-        if log_dir is not None:
-            stdout_log_path = os.path.join(log_dir, f"client_{client_index}.stdout.log")
-            stderr_log_path = os.path.join(log_dir, f"client_{client_index}.stderr.log")
-        if args.show_runner_logs or log_dir is not None:
-            stdout_thread = threading.Thread(
-                target=_stream_process_output,
-                args=(
-                    client_index,
-                    process.stdout,
-                    stdout_buffers[client_index],
-                    args.show_runner_logs,
-                    False,
-                    stdout_log_path,
-                ),
-                daemon=True,
-            )
-            stderr_thread = threading.Thread(
-                target=_stream_process_output,
-                args=(
-                    client_index,
-                    process.stderr,
-                    stderr_buffers[client_index],
-                    args.show_runner_logs,
-                    True,
-                    stderr_log_path,
-                ),
-                daemon=True,
-            )
-            stdout_thread.start()
-            stderr_thread.start()
-            stream_threads.extend([stdout_thread, stderr_thread])
+        stdout_log_path = os.path.join(log_dir, f"client_{client_index}.stdout.log")
+        stderr_log_path = os.path.join(log_dir, f"client_{client_index}.stderr.log")
+        stdout_thread = threading.Thread(
+            target=_stream_process_output,
+            args=(
+                client_index,
+                process.stdout,
+                stdout_buffers[client_index],
+                args.show_runner_logs,
+                False,
+                stdout_log_path,
+            ),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=_stream_process_output,
+            args=(
+                client_index,
+                process.stderr,
+                stderr_buffers[client_index],
+                args.show_runner_logs,
+                True,
+                stderr_log_path,
+            ),
+            daemon=True,
+        )
+        stdout_thread.start()
+        stderr_thread.start()
+        stream_threads.extend([stdout_thread, stderr_thread])
 
-    rows = []
-    results = []
+    exit_codes = {}
     timed_out = False
     for client_index, process in processes:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             timed_out = True
             break
-        if args.show_runner_logs:
-            try:
-                process.wait(timeout=remaining)
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                stdout = "".join(stdout_buffers.get(client_index, []))
-                stderr = "".join(stderr_buffers.get(client_index, []))
-                results.append((client_index, 124, stdout, stderr))
-                break
-            stdout = "".join(stdout_buffers.get(client_index, []))
-            stderr = "".join(stderr_buffers.get(client_index, []))
-            results.append((client_index, process.returncode, stdout, stderr))
-        else:
-            try:
-                stdout, stderr = process.communicate(timeout=remaining)
-            except subprocess.TimeoutExpired as exc:
-                timed_out = True
-                stdout = _to_text(exc.stdout)
-                stderr = _to_text(exc.stderr)
-                results.append((client_index, 124, stdout, stderr))
-                break
-            results.append((client_index, process.returncode, stdout, stderr))
+        try:
+            process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            break
+        exit_codes[client_index] = process.returncode
 
     if timed_out:
         for _client_index, process in processes:
             terminate_process(process)
-        seen = {client_index for client_index, *_rest in results}
-        for client_index, process in processes:
-            if client_index not in seen:
-                if args.show_runner_logs:
-                    stdout = "".join(stdout_buffers.get(client_index, []))
-                    stderr = "".join(stderr_buffers.get(client_index, []))
-                else:
-                    stdout, stderr = process.communicate()
-                results.append((client_index, 124, stdout, stderr))
 
+    for thread in stream_threads:
+        thread.join(timeout=5)
+
+    rows = []
     return_code = 124 if timed_out else 0
-    for client_index, rc, stdout, stderr in results:
+    for client_index, _process in processes:
+        stdout = "".join(stdout_buffers.get(client_index, []))
+        stderr = "".join(stderr_buffers.get(client_index, []))
+        rc = exit_codes.get(client_index, 124 if timed_out else 0)
         if not args.show_runner_logs:
-            print_filtered_output(stdout, args.show_runner_logs)
-            print_filtered_output(stderr, args.show_runner_logs)
+            print_filtered_output(stdout, args.show_runner_logs, args.quiet)
+            print_filtered_output(stderr, args.show_runner_logs, args.quiet)
         parsed = collect_summary_rows(stdout)
         for row in parsed:
             row["client_index"] = client_index
@@ -508,6 +488,11 @@ def main():
     parser.add_argument("--verify-values", action="store_true")
     parser.add_argument("--verify-value-row-stride", type=int, default=1)
     parser.add_argument("--show-runner-logs", action="store_true")
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress progress logs and print only the final aggregate summary",
+    )
     args = parser.parse_args()
 
     if args.server_count <= 0:
@@ -560,8 +545,11 @@ def main():
             if returncode != 0:
                 return returncode
 
-    print_summary_table(summary_rows)
-    print_aggregate_table(summary_rows)
+    if not args.quiet:
+        print_summary_table(summary_rows)
+        print_aggregate_table(summary_rows)
+    else:
+        print_aggregate_table(summary_rows)
     return 0
 
 
