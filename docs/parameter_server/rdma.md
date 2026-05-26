@@ -1,29 +1,37 @@
 # RDMA 模块运行手册
 
-本文档只记录当前 RDMA 路径的边界、构建、运行和验证入口。默认工作目录为仓库根目录：
+本文档整理当前 RecStore RDMA 主路径的边界、参数、验证入口、已知限制和下一步路线图。默认工作目录为仓库根目录：
 
 ```bash
 cd /app/RecStore
 ```
 
-## 当前边界
+## 1. 适用范围
 
-RecStore 目前有两层 RDMA 入口：
+当前文档只覆盖 Parameter Server 里的 RDMA 主路径，不讨论 gRPC / bRPC 的通用网络栈。
+
+RecStore 现在有两条 RDMA 入口：
 
 | 层级 | 入口 | 用途 |
 |------|------|------|
 | PetPS RDMA | `petps_server` + `PetPSClient` | RDMA 数据面、协议验证、transport benchmark |
 | Op-layer RDMA | `RDMAPSClientAdapter` + `KVClientOp` | 通过统一 op 接口验证 RDMA 后端 |
 
-两层复用 PetPS/RDMA 数据面，但初始化方式不同：
+两条入口复用同一套 RDMA 传输，但初始化和调用方式不同：
 
 - PetPS integration 和 benchmark 主要通过 C++ gflags 传参。
 - Op-layer / Python client 主要通过环境变量和测试配置传参。
 - 不要把脚本参数、C++ gflag 和环境变量混用到错误入口。
 
-Op-layer RDMA 还不是 gRPC/bRPC 的完整替代：`AsyncGetParameter` 和 `Command` 未实现，`UpdateParameter` 走同步 read-modify-write，当前更适合作为 correctness / integration 路径。
+Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 
-## Transport Mode
+- `AsyncGetParameter` 和 `Command` 还未实现。
+- `UpdateParameter` 走同步 read-modify-write。
+- 更适合作为 correctness / integration 路径，而不是完整性能替代路径。
+
+## 2. 当前 RDMA 架构
+
+### 2.1 传输模式
 
 当前 PetPS RDMA 入口使用 RC-write slot transport：
 
@@ -32,11 +40,37 @@ Op-layer RDMA 还不是 gRPC/bRPC 的完整替代：`AsyncGetParameter` 和 `Com
 - server 处理后先写 client response payload。
 - `StatusWord` 最后写回，client 通过轮询 status word 判断完成。
 
-当前 `src/ps/rdma/rc_transport.*` 已经不是 `shm_open + mmap` baseline，而是直接复用 `raw_verbs_transport.*` 的真实 verbs RC 写入路径。`RawVerbsTransport` 负责设备打开、MR 注册、QP 建立、memcached metadata 交换和 RDMA write completion 轮询；`rc_transport.*` 负责固定 slot 布局、shard/client/lane offset 计算和 request/response 提交流程。
+### 2.2 代码分工
 
-PetPS server、PetPS client 和 op-layer RDMA 目前不再暴露可切换的 transport mode 配置。旧文档或旧路径里的 `raw_message` / `RECSTORE_RDMA_TRANSPORT_MODE` 不代表当前 PetPS RC write transport。
+`src/ps/rdma/raw_verbs_transport.*` 已经不再是 `shm_open + mmap` baseline，而是直接走真实 verbs RC 路径：
 
-## 构建
+- 打开 RDMA 设备
+- 注册本地 MR
+- 创建 QP / CQ
+- 交换 memcached metadata
+- 轮询 RDMA write completion
+
+`src/ps/rdma/rc_transport.*` 负责：
+
+- 固定 slot 布局
+- shard / client / lane offset 计算
+- request / response 提交流程
+- 连接和回写的 profile 统计
+
+`src/ps/rdma/petps_client.*` 和 `src/ps/rdma/petps_server.*` 负责：
+
+- 把 RDMA slot 映射成 PetPS 的 request / response
+- client QP 选择与 in-flight 管理
+- server slot 扫描、协议处理、response 完成
+
+### 2.3 现在的关键约束
+
+- `qps-per-client-per-shard` 不是“吞吐参数”，而是 client 侧可同时挂起请求的 QP 池规模。
+- `async_stream` 下，`qps-per-client-per-shard` 不能小于 `async-depth`。
+- 如果硬件 QP 资源不足，即使参数合法，`RawVerbsTransport` 也会在 client 初始化阶段直接报错并拒绝启动。
+- 这比“跑到一半再卡住”更容易定位，也更符合当前的 fail-fast 目标。
+
+## 3. 构建
 
 常用 RDMA 目标：
 
@@ -52,9 +86,122 @@ cmake --build ./build --target \
 
 如果刚改过 `src/ps/rdma/*`、`src/test/scripts/*rdma*` 或 op-layer 相关代码，先重编对应目标再判断行为。旧的 `petps_server` / `recstore_torch_ops` 二进制很容易造成“源码已改但测试仍卡住”的假象。
 
-## Benchmark
+## 4. 参数说明
 
-推荐先跑 PetPS RC-write correctness 基线，再做 benchmark：
+下面这张表只列 RDMA benchmark 和 runtime 中最常见、最容易误解的参数。
+
+| 参数 | 含义 | 备注 |
+|------|------|------|
+| `--iterations` | 每个 round 内执行的请求次数 | 影响单轮总请求数，通常和 `batch-keys` 一起看 |
+| `--rounds` | 计入统计的测量轮数 | 最终吞吐由这些轮次聚合得到 |
+| `--warmup-rounds` / `--rdma-warmup-rounds` | 热身轮数 | 不计入结果，只用于预热连接、缓存和内存路径 |
+| `--batch-keys` / `--batch_keys` | 每次请求携带的 key 数 | 决定单次 RPC 的负载大小 |
+| `--thread-num` / `--rdma-thread-num` | server 侧 RDMA polling thread 数 | 影响 server 轮询和并发处理能力 |
+| `--client-count` | benchmark client 进程数 | 仅 `rdma_rc_transport_benchmark` 支持多 client |
+| `--server-count` / `--num_shards` | server / shard 数量 | 多分片时要保证配置和路由一致 |
+| `--qps-per-client-per-shard` | 每个 client 到每个 shard 的 QP 数 | 只影响 RC 并发度，不等价于吞吐；也会消耗资源 |
+| `--async-depth` | `async_stream` 里单 client 的在途请求深度 | 低负载上限测试的关键参数 |
+| `--rdma-put-protocol-version` | PUT 协议版本 | `1` 是 legacy，`2` 是当前主路径 |
+| `--rdma-put-v2-transfer-mode` | PUT-v2 payload 传输方式 | `read` 表示 server 读 payload，`push` 表示 client 主动写 payload |
+| `--rdma-wait-timeout-ms` | RDMA 请求等待超时 | 过短会导致 benchmark 误判为超时失败 |
+| `--profile-interval-ms` | RDMA RC 统计输出间隔 | `0` 表示不做周期性 profiling，仅输出 benchmark 结果 |
+| `--server-coroutines-per-thread` | 每个 polling thread 上的 server 协程数 | 值越大越偏向 coop 扫描，不代表一定更快 |
+| `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`payload_memset` |
+| `--skip-client-copy` | 是否跳过 client 端 GET payload 拷贝 | 只用于 benchmark 排查，不适合作为默认配置 |
+
+### 4.1 重要解读
+
+- `batch-keys` 是请求粒度，不是总样本数。
+- `iterations * rounds * batch-keys` 才是测量期的 key 总量。
+- `read` 和 `push` 的结果不能直接混成一个吞吐结论。
+- `qps-per-client-per-shard` 变大通常会增加连接并发，但也会增加资源占用和初始化成本。
+- `profile-interval-ms` 只影响周期性统计输出，不应和吞吐提升直接画等号。
+
+### 4.2 启动前硬约束
+
+当前 benchmark 已经加入启动前校验：
+
+- `async_stream` 要求 `qps-per-client-per-shard >= async-depth`
+- 否则直接拒绝启动，避免把 client QP 池打满后在运行中报 `no idle RC write QP available`
+
+如果你要做低负载上限测试，建议先确保这个约束满足，再看真实瓶颈。
+
+## 5. Profile 统计怎么读
+
+当前 RDMA profile 已经拆成三层，足够定位大部分低负载瓶颈。
+
+### 5.1 Client 侧
+
+来自 `component=rdma_rc_client_profile`，重点看这些字段：
+
+- `submit_request_ns`
+- `wait_status_ns`
+- `copy_response_ns`
+- `revoke_resource_ns`
+- `pending_rpc_peak`
+- `acquire_qp_count`
+- `acquire_qp_failures`
+
+解读方式：
+
+- `submit_request_ns` 高，说明一次请求发出去的固定开销重。
+- `wait_status_ns` 高，说明 completion / 回写链路慢，或者 server 处理慢。
+- `copy_response_ns` 高，说明 response copy 成为低负载瓶颈。
+- `pending_rpc_peak` 高，说明在途请求池压力大。
+- `acquire_qp_failures` 不是“慢”，而是“资源不够”。
+
+### 5.2 Server 侧
+
+来自 `component=rdma_rc_server_profile`，重点看这些字段：
+
+- `poll_loop_ns`
+- `scan_rounds`
+- `scanned_slots`
+- `ready_slots`
+- `empty_scan_rounds`
+- `handle_get_ns`
+- `get_batch_get_ns`
+- `get_zero_fill_ns`
+- `get_row_copy_ns`
+- `handle_put_ns`
+- `handle_update_ns`
+- `handle_init_ns`
+- `complete_response_ns`
+
+解读方式：
+
+- `poll_loop_ns` 高，通常说明空轮询太多，是低负载上限的第一嫌疑。
+- `empty_scan_rounds` 高，说明扫描很多次但没命中请求。
+- `get_batch_get_ns` 高，说明 batch 查找本身重。
+- `get_zero_fill_ns` 高，说明缺失值或响应缓冲清零成本偏高。
+- `get_row_copy_ns` 高，说明数据搬运是瓶颈。
+- `complete_response_ns` 高，说明回写完成链路重。
+
+### 5.3 Transport 侧
+
+来自 `component=rdma_rc_transport_profile`，重点看这些字段：
+
+- `submit_request_ns`
+- `drain_pending_submit_ns`
+- `complete_response_ns`
+- `drain_pending_response_ns`
+- `submit_descriptor_write_count`
+- `submit_commit_write_count`
+- `response_payload_write_count`
+- `response_status_write_count`
+
+解读方式：
+
+- `submit_request_ns` 高，说明 client 侧 verbs 提交开销偏大。
+- `drain_pending_submit_ns` 高，说明上一笔请求没有及时完成，出现提交背压。
+- `complete_response_ns` 高，说明 server 侧回写成本偏大。
+- `drain_pending_response_ns` 高，说明 response path 也有背压。
+
+## 6. Benchmark 建议
+
+### 6.1 推荐入口
+
+建议先跑 PetPS RC-write correctness 基线，再做 benchmark：
 
 ```bash
 python3 src/test/scripts/run_rdma_transport_benchmarks.py \
@@ -74,20 +221,167 @@ python3 src/test/scripts/run_rdma_transport_benchmarks.py \
   --use-local-memcached auto
 ```
 
-summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read` 和 `push` 的结果不能直接混比。benchmark 仍然需要按同口径参数解释，不能只凭控制面差异推断收益。
+summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read` 和 `push` 的结果不能直接混比。
 
-真实 RDMA 路径通常会输出类似：
+### 6.2 当前更重要的 benchmark 目标
 
-```text
-I open mlx5_0 :)
-I connect server 0
-transport=RDMA op=put phase=measure ...
-transport=RDMA op=get phase=measure ...
+现在的重点不是继续把 `client-count` 往上堆，而是：
+
+- 低负载下提高单 shard 的 req qps 上限
+- 看清哪些是固定开销，哪些是资源上限
+- 找出可以稳定提升上限的最小改动
+
+因此，建议优先用这些组合看上限：
+
+- `op=get`
+- `op=async_get`
+- 小 `batch-keys`
+- 小到中等 `async-depth`
+- `client-count=1/2`
+
+### 6.3 低负载上限测试建议
+
+建议把这些参数固定住，只改一个维度：
+
+- `value_size`
+- `batch-keys`
+- `iterations`
+- `rounds`
+- `thread-num`
+- `server-count`
+
+优先扫描的维度：
+
+- `async-depth`
+- `server-coroutines-per-thread`
+- `qps-per-client-per-shard`
+- `profile-interval-ms`
+
+## 7. 最近一次矩阵
+
+下面这组数据是对齐原先 benchmark 脚本后的本地矩阵，参数尽量保持和 `run_rdma_rc_transport_benchmark.sh` 一致：
+
+- `server-count = 1`
+- `client-count = 8`
+- `thread-num = 32`
+- `iterations = 20`
+- `rounds = 30`
+- `warmup-rounds = 10`
+- `batch-keys = 500`
+- `value-size = 512`
+- `op = async_stream`
+- `async-depth = 128`
+- 每个点串行跑 3 次，取三次平均
+
+| qps-per-client-per-shard | server-coroutines-per-thread | avg agg key ops/s | avg agg ops/s | avg mean req us |
+|--------------------------|------------------------------|------------------:|--------------:|----------------:|
+| 256 | 1 | 29,294,390.00 | 58,588.80 | 137.66 |
+| 256 | 4 | 36,370,846.67 | 72,741.68 | 114.91 |
+
+这组矩阵用于和原先的 benchmark 口径对齐，`async-depth=128` 是当前更合适的参考值。
+
+在这套参数下，`qps-per-client-per-shard=64` 会因为 `no idle RC write QP available` 直接失败，因此这里只保留能闭环的原脚本基线 `qps=256`。
+
+从这轮数据看，`server-coroutines-per-thread=4` 的聚合吞吐高于 `1`，说明在 `async-depth=128` 和 `client-count=8` 这组负载下，适度增加 server 侧协程有收益。
+
+这组结果只说明一个事实：
+
+- 在当前实现里，server 侧轮询 / 扫描模式是一个明显的可优化点
+- 但它不能证明更高层架构一定更快
+
+## 8. 当前路线图
+
+目标是提升低负载下的 req qps 上限，而不是单纯追更高并发。
+
+### 8.1 第一优先级：减少 server 空转
+
+先看 `petps_server` 的：
+
+- `poll_loop_ns`
+- `empty_scan_rounds`
+- `scan_hit_pct`
+
+如果低负载下空扫太多，说明当前轮询模式过重。优先方向是：
+
+- 减少无效扫描
+- 让“没有活跃请求”的时候更轻
+- 避免 polling thread 大量空转抢 CPU
+
+### 8.2 第二优先级：压低 client 提交和等待成本
+
+再看 `PetPSClient` 的：
+
+- `submit_request_ns`
+- `wait_status_ns`
+- `copy_response_ns`
+- `pending_rpc_peak`
+
+如果低负载下这些值仍然偏高，说明单请求固定开销太大。优先方向是：
+
+- 减少锁争用
+- 减少 QP 选择和状态维护开销
+- 减少 response copy 和 slot 清理成本
+
+### 8.3 第三优先级：压薄 transport 提交/完成路径
+
+再看 `rc_transport` 的：
+
+- `submit_avg_ns`
+- `complete_avg_ns`
+- `drain_submit_avg_ns`
+- `drain_response_avg_ns`
+
+如果这里高，说明 verbs 提交 / 完成本身已经是瓶颈。优先方向是：
+
+- 减少不必要的 write / complete 往返
+- 让提交和完成路径更短
+- 避免让背压在低负载下提前出现
+
+### 8.4 不作为主路线的方向
+
+- 继续加 `client-count`
+- 继续抬高 `async-depth` 到超过 QP 池承受范围
+- 把吞吐增长归因于“更多并发”而不是“更低的固定开销”
+
+## 9. 已知限制和失败模式
+
+### 9.1 QP 资源不足
+
+如果 `client-count` 或 `qps-per-client-per-shard` 太大，可能出现：
+
+- `ibv_create_qp failed`
+- `no idle RC write QP available`
+- client 初始化阶段直接报错退出
+
+这是资源不足，不是正常性能退化。
+
+### 9.2 参数不合法
+
+`async_stream` 下如果 `qps-per-client-per-shard < async-depth`，benchmark 会直接拒绝启动。
+
+### 9.3 旧二进制
+
+如果看到了看似“不对劲”的行为，先确认 binary 是最新构建的目标。RDMA 这条链路对旧二进制非常敏感。
+
+### 9.4 memcached 依赖
+
+RDMA 脚本通过 memcached 交换元数据。常用建议是：
+
+```bash
+--use-local-memcached auto
 ```
 
-当前 RC write slot path 的 correctness 验证优先级高于 benchmark。性能数据需要单独记录硬件、QP 数、batch size、value size 和 server poll thread 数。
+含义：
 
-## PetPS Integration
+| 值 | 行为 |
+|----|------|
+| `auto` | 优先复用外部 memcached；不可用时启动本地 memcached |
+| `always` | 总是启动本地 memcached |
+| `never` | 只使用已经存在的外部 memcached |
+
+## 10. 验证入口
+
+### 10.1 PetPS Integration
 
 单分片：
 
@@ -118,7 +412,13 @@ python3 src/test/scripts/run_petps_integration.py \
   --cluster-timeout=45
 ```
 
-多分片排障时优先检查 `distributed_client.num_shards`、`distributed_client.servers`、`server-count`、`num_server_processes` 和 key 到 shard 的路由是否一致。
+多分片排障时优先检查：
+
+- `distributed_client.num_shards`
+- `distributed_client.servers`
+- `server-count`
+- `num_server_processes`
+- key 到 shard 的路由是否一致
 
 最近一次真实 verbs 验证结果：
 
@@ -126,7 +426,7 @@ python3 src/test/scripts/run_petps_integration.py \
 - `UpdateGetRoundTripSingleShard` 通过。
 - `PutGetRoundTripMultiShard` 通过。
 
-## Op-layer RDMA
+### 10.2 Op-layer RDMA
 
 Op-layer RDMA 使用配置：
 
@@ -160,7 +460,7 @@ python3 src/test/framework/pytorch/test_client.py ./build/lib/lib_recstore_ops.s
 - `pytorch_client_test_rdma_basic` 通过，覆盖 PyTorch custom op 到 RDMA backend 的 init/write/read。
 - `pytorch_client_test_rdma` 通过，覆盖 PyTorch custom op 到 `RDMAPSClientAdapter -> PetPSClient -> verbs RC` 的 init/write/read、prefetch 和 table-aware update roundtrip。
 
-## Unit 和脚本测试
+## 11. 单测和脚本测试
 
 协议 helper 和 wrapper：
 
@@ -172,45 +472,19 @@ runner 参数拼接：
 
 ```bash
 python3 -m unittest src/test/scripts/test_petps_cluster_runner.py
-python3 -m unittest src/test/scripts/test_run_rdma_transport_benchmarks.py
+python3 -m unittest src/test/scripts/test_run_rdma_rc_transport_benchmark.py
 ```
 
 这些测试不证明 RDMA 数据面可用，只证明协议编码、分片 wrapper 和脚本 plumbing 没有明显回归。
 
-## memcached
-
-RDMA 脚本通过 memcached 交换 Mayfly/DSM 元数据。推荐使用：
-
-```bash
---use-local-memcached auto
-```
-
-| 值 | 行为 |
-|----|------|
-| `auto` | 优先复用外部 memcached；不可用时启动本地 memcached |
-| `always` | 总是启动本地 memcached |
-| `never` | 只使用已经存在的外部 memcached |
-
-手工启动：
-
-```bash
-memcached -u root -l 127.0.0.1 -p 21211 -c 10000
-```
-
-检查端口：
-
-```bash
-ss -ltnp | grep ':21211'
-```
-
-## 排障顺序
+## 12. 排障顺序
 
 1. 确认二进制是最新构建的目标，尤其是 `petps_server`、`ps_transport_benchmark`、`petps_integration_test` 和 `recstore_torch_ops`。
 2. 确认参数传到了正确入口：runner 用 RDMA 专项参数，C++ binary 读对应 gflags，op-layer 读 `RECSTORE_CONFIG` 和相关环境变量。
 3. 确认 RDMA 设备和 memcached 可用：检查 `/dev/infiniband`、`ibv_devices`、`ss -ltnp | grep ':21211'`。
 4. 如果 runner 卡在 `memcached-wait` 或 `startup-wait`，先看 runner 捕获的 server 日志。
 5. 如果看到 `unknown command line flag 'rdma_transport_mode'`，通常是跑到了旧 binary，或者当前目标没有链接 RDMA client 相关对象。
-6. 如果看到 `messeage size too large`，先把 `batch-keys` 降到 500 或更小建立稳定基线。
+6. 如果看到 `message size too large`，先把 `batch-keys` 降到 500 或更小建立稳定基线。
 7. 如果 RDMA 路径卡住，重点检查 raw verbs buffer 是否注册、QP metadata 是否按 shard/lane 匹配、CQ 是否被错误线程消费、server/client mode 是否一致。
 
 最小日常验证顺序：

@@ -14,6 +14,7 @@
 #include "benchmark/rdma_rc_transport_benchmark_values.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
+#include "ps/rdma/rc_options.h"
 
 DEFINE_int32(num_shards, 1, "number of RDMA RC shards");
 DEFINE_int32(iterations, 100, "number of iterations per round");
@@ -91,6 +92,37 @@ bool ShouldPrintSummary(const std::string& mode) {
   return mode == "summary" || mode == "both";
 }
 
+void MaybePrintAsyncProgress(
+    bool is_warmup,
+    int round,
+    int warmup_rounds,
+    int measure_rounds,
+    const char* stage,
+    int completed,
+    int requests_per_round,
+    int submitted,
+    std::chrono::steady_clock::time_point start) {
+  const int progress_step   = std::max(1, requests_per_round / 10);
+  const int completed_count = completed + 1;
+  if (completed_count != requests_per_round &&
+      (completed_count % progress_step) != 0) {
+    return;
+  }
+
+  const auto now = std::chrono::steady_clock::now();
+  const int64_t elapsed_us =
+      std::chrono::duration_cast<std::chrono::microseconds>(now - start)
+          .count();
+  std::cout << "transport=" << kTransportName << " op=async_stream progress"
+            << " stage=" << stage
+            << " phase=" << (is_warmup ? "warmup" : "measure") << " round="
+            << (is_warmup ? (round + 1) : (round - warmup_rounds + 1)) << "/"
+            << (is_warmup ? warmup_rounds : measure_rounds)
+            << " completed=" << completed_count << "/" << requests_per_round
+            << " submitted=" << submitted
+            << " elapsed_ms=" << (elapsed_us / 1000.0) << std::endl;
+}
+
 bool MixedIterationIsGet(int iteration) {
   if (FLAGS_get_ratio == 100) {
     return true;
@@ -120,6 +152,20 @@ void ValidateFlags() {
         FLAGS_report_mode == "both")
       << "Invalid --report_mode: " << FLAGS_report_mode;
   CHECK_GT(FLAGS_verify_value_row_stride, 0);
+  if (FLAGS_op == "async_stream") {
+    if (FLAGS_rdma_rc_qps_per_client_per_shard <= 0) {
+      throw std::runtime_error(
+          "--rdma_rc_qps_per_client_per_shard must be positive");
+    }
+    if (FLAGS_rdma_rc_qps_per_client_per_shard < FLAGS_async_depth) {
+      throw std::runtime_error(
+          "async_stream requires --rdma_rc_qps_per_client_per_shard >= "
+          "--async_depth to avoid exhausting the client QP pool at startup "
+          "(qps_per_client_per_shard=" +
+          std::to_string(FLAGS_rdma_rc_qps_per_client_per_shard) +
+          ", async_depth=" + std::to_string(FLAGS_async_depth) + ")");
+    }
+  }
 }
 
 void VerifyFlatOutput(const BenchmarkInput& input,
@@ -294,6 +340,17 @@ void RunAsyncStreamOperation(BaseParameterClient* client,
           true,
           0);
       request_ids[static_cast<std::size_t>(slot)] = submitted;
+
+      MaybePrintAsyncProgress(
+          is_warmup,
+          round,
+          FLAGS_warmup_rounds,
+          FLAGS_rounds,
+          "submit",
+          submitted,
+          requests_per_round,
+          submitted + 1,
+          start);
     }
 
     for (int completed = 0; completed < requests_per_round; ++completed) {
@@ -317,6 +374,17 @@ void RunAsyncStreamOperation(BaseParameterClient* client,
         request_ids[static_cast<std::size_t>(slot)] = submitted;
         ++submitted;
       }
+
+      MaybePrintAsyncProgress(
+          is_warmup,
+          round,
+          FLAGS_warmup_rounds,
+          FLAGS_rounds,
+          "complete",
+          completed,
+          requests_per_round,
+          submitted,
+          start);
     }
 
     const auto end = std::chrono::steady_clock::now();
@@ -373,86 +441,94 @@ private:
 } // namespace
 
 int main(int argc, char** argv) {
-  folly::Init init(&argc, &argv);
-  ValidateFlags();
+  try {
+    folly::Init init(&argc, &argv);
+    ValidateFlags();
 
-  BenchmarkInput input = MakeInput();
-  BenchmarkClient benchmark_client(FLAGS_num_shards);
-  BaseParameterClient* client = benchmark_client.get();
-  CHECK_NE(client, nullptr);
+    BenchmarkInput input = MakeInput();
+    BenchmarkClient benchmark_client(FLAGS_num_shards);
+    BaseParameterClient* client = benchmark_client.get();
+    CHECK_NE(client, nullptr);
 
-  CHECK_EQ(client->PutParameter(input.keys, input.values), 0)
-      << "initial RDMA RC PutParameter failed";
+    CHECK_EQ(client->PutParameter(input.keys, input.values), 0)
+        << "initial RDMA RC PutParameter failed";
 
-  if (ShouldRunOp(FLAGS_op, "put")) {
-    RunOperation(
-        "put",
-        [&](int iteration) {
-          CHECK_EQ(client->PutParameter(input.keys, input.values), 0)
-              << "RDMA RC put failed at iteration=" << iteration;
-        },
-        input.keys.size());
-  }
+    if (ShouldRunOp(FLAGS_op, "put")) {
+      RunOperation(
+          "put",
+          [&](int iteration) {
+            CHECK_EQ(client->PutParameter(input.keys, input.values), 0)
+                << "RDMA RC put failed at iteration=" << iteration;
+          },
+          input.keys.size());
+    }
 
-  if (ShouldRunOp(FLAGS_op, "get")) {
-    const int dim = FLAGS_value_size / sizeof(float);
-    std::vector<float> output(
-        input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
-    RunOperation(
-        "get",
-        [&](int iteration) {
-          int rpc_id =
-              client->GetParameter(input.key_array, output.data(), false, 0);
-          client->WaitRPCFinish(rpc_id);
-          VerifyFlatOutput(input, output, "get", iteration);
-          client->RevokeRPCResource(rpc_id);
-          (void)iteration;
-        },
-        input.keys.size());
-  }
-
-  if (ShouldRunOp(FLAGS_op, "async_get")) {
-    const int dim = FLAGS_value_size / sizeof(float);
-    std::vector<float> output(
-        input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
-    RunOperation(
-        "async_get",
-        [&](int iteration) {
-          int rpc_id =
-              client->GetParameter(input.key_array, output.data(), true, 0);
-          client->WaitRPCFinish(rpc_id);
-          VerifyFlatOutput(input, output, "async_get", iteration);
-          client->RevokeRPCResource(rpc_id);
-          (void)iteration;
-        },
-        input.keys.size());
-  }
-
-  if (ShouldRunOp(FLAGS_op, "async_stream")) {
-    RunAsyncStreamOperation(client, input);
-  }
-
-  if (ShouldRunOp(FLAGS_op, "mixed")) {
-    const int dim = FLAGS_value_size / sizeof(float);
-    std::vector<float> output(
-        input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
-    RunOperation(
-        "mixed_get" + std::to_string(FLAGS_get_ratio) + "_put" +
-            std::to_string(100 - FLAGS_get_ratio),
-        [&](int iteration) {
-          if (MixedIterationIsGet(iteration)) {
+    if (ShouldRunOp(FLAGS_op, "get")) {
+      const int dim = FLAGS_value_size / sizeof(float);
+      std::vector<float> output(
+          input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
+      RunOperation(
+          "get",
+          [&](int iteration) {
             int rpc_id =
                 client->GetParameter(input.key_array, output.data(), false, 0);
             client->WaitRPCFinish(rpc_id);
-            VerifyFlatOutput(input, output, "mixed", iteration);
+            VerifyFlatOutput(input, output, "get", iteration);
             client->RevokeRPCResource(rpc_id);
-          } else {
-            CHECK_EQ(client->PutParameter(input.keys, input.values), 0)
-                << "RDMA RC mixed put failed at iteration=" << iteration;
-          }
-        },
-        input.keys.size());
-  }
+            (void)iteration;
+          },
+          input.keys.size());
+    }
 
-  return 0;
+    if (ShouldRunOp(FLAGS_op, "async_get")) {
+      const int dim = FLAGS_value_size / sizeof(float);
+      std::vector<float> output(
+          input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
+      RunOperation(
+          "async_get",
+          [&](int iteration) {
+            int rpc_id =
+                client->GetParameter(input.key_array, output.data(), true, 0);
+            client->WaitRPCFinish(rpc_id);
+            VerifyFlatOutput(input, output, "async_get", iteration);
+            client->RevokeRPCResource(rpc_id);
+            (void)iteration;
+          },
+          input.keys.size());
+    }
+
+    if (ShouldRunOp(FLAGS_op, "async_stream")) {
+      RunAsyncStreamOperation(client, input);
+    }
+
+    if (ShouldRunOp(FLAGS_op, "mixed")) {
+      const int dim = FLAGS_value_size / sizeof(float);
+      std::vector<float> output(
+          input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
+      RunOperation(
+          "mixed_get" + std::to_string(FLAGS_get_ratio) + "_put" +
+              std::to_string(100 - FLAGS_get_ratio),
+          [&](int iteration) {
+            if (MixedIterationIsGet(iteration)) {
+              int rpc_id = client->GetParameter(
+                  input.key_array, output.data(), false, 0);
+              client->WaitRPCFinish(rpc_id);
+              VerifyFlatOutput(input, output, "mixed", iteration);
+              client->RevokeRPCResource(rpc_id);
+            } else {
+              CHECK_EQ(client->PutParameter(input.keys, input.values), 0)
+                  << "RDMA RC mixed put failed at iteration=" << iteration;
+            }
+          },
+          input.keys.size());
+    }
+
+    return 0;
+  } catch (const std::exception& ex) {
+    std::cerr << ex.what() << std::endl;
+    return 1;
+  } catch (...) {
+    std::cerr << "unknown error" << std::endl;
+    return 1;
+  }
 }
