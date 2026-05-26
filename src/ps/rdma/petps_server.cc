@@ -21,6 +21,7 @@
 #include "base/log.h"
 #include "base/timer.h"
 #include "memory/shm_file.h"
+#include "ps/rdma/rdma_common.h"
 #include "ps/base/cache_ps_impl.h"
 #include "ps/rdma/rc_options.h"
 #include "ps/rdma/rc_transport.h"
@@ -38,6 +39,10 @@ DEFINE_bool(use_dram, false, "unused compatibility flag");
 DEFINE_int32(numa_id, 0, "NUMA node id for mmap and core binding");
 
 namespace {
+
+using petps::Exchange;
+using petps::NamespaceToken;
+using petps::NowNs;
 
 bool ShouldTraceRdmaGet() {
   static const bool enabled = [] {
@@ -60,31 +65,10 @@ std::uint64_t RdmaGetTraceInterval() {
   return interval;
 }
 
-std::uint64_t RdmaRcNowNs() {
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
-}
-
-std::uint64_t Exchange(std::atomic<std::uint64_t>* value) {
-  return value->exchange(0, std::memory_order_relaxed);
-}
-
 std::string TimestampNow() {
   const auto now = std::chrono::system_clock::now().time_since_epoch();
   return std::to_string(
       std::chrono::duration_cast<std::chrono::microseconds>(now).count());
-}
-
-std::string NamespaceToken() {
-  if (!FLAGS_rdma_rc_namespace.empty()) {
-    return FLAGS_rdma_rc_namespace;
-  }
-  if (const char* env = std::getenv("RECSTORE_MEMCACHED_NAMESPACE")) {
-    return env;
-  }
-  return "default";
 }
 
 int ResolveShardId(const nlohmann::json& config) {
@@ -182,7 +166,7 @@ private:
     if (FLAGS_rdma_rc_profile_interval_ms <= 0 || thread_id != 0) {
       return;
     }
-    const std::uint64_t now = RdmaRcNowNs();
+    const std::uint64_t now = NowNs();
     const std::uint64_t interval =
         static_cast<std::uint64_t>(FLAGS_rdma_rc_profile_interval_ms) * 1000000;
     std::uint64_t expected =
@@ -402,7 +386,7 @@ private:
     }
     while (true) {
       const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
-      const std::uint64_t poll_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
       std::uint64_t scanned_slots       = 0;
       std::uint64_t ready_slots         = 0;
       for (int slot = thread_id; slot < total_slots; slot += thread_count_) {
@@ -419,7 +403,7 @@ private:
           profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
         }
         profile_.poll_loop_ns.fetch_add(
-            RdmaRcNowNs() - poll_start_ns, std::memory_order_relaxed);
+            NowNs() - poll_start_ns, std::memory_order_relaxed);
         MaybeReportProfile(thread_id);
       }
       std::this_thread::yield();
@@ -491,49 +475,49 @@ private:
           static_cast<std::int32_t>(petps::RpcStatus::kWrongShard);
     } else if (descriptor->op ==
                static_cast<std::uint16_t>(petps::RcOp::kGet)) {
-      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
       HandleGet(*descriptor, payload, &response, thread_id);
       if (profile_enabled) {
         profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
         profile_.handle_get_ns.fetch_add(
-            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
       }
     } else if (descriptor->op ==
                static_cast<std::uint16_t>(petps::RcOp::kPut)) {
-      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
       HandlePut(*descriptor, payload, &response, thread_id);
       if (profile_enabled) {
         profile_.handled_put.fetch_add(1, std::memory_order_relaxed);
         profile_.handle_put_ns.fetch_add(
-            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
       }
     } else if (descriptor->op ==
                static_cast<std::uint16_t>(petps::RcOp::kUpdate)) {
-      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
       HandleUpdate(*descriptor, payload, &response, thread_id);
       if (profile_enabled) {
         profile_.handled_update.fetch_add(1, std::memory_order_relaxed);
         profile_.handle_update_ns.fetch_add(
-            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
       }
     } else if (descriptor->op ==
                static_cast<std::uint16_t>(petps::RcOp::kInitTable)) {
-      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
       HandleInitTable(*descriptor, payload, &response);
       if (profile_enabled) {
         profile_.handled_init.fetch_add(1, std::memory_order_relaxed);
         profile_.handle_init_ns.fetch_add(
-            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
       }
     }
 
     std::atomic_thread_fence(std::memory_order_release);
-    const std::uint64_t complete_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+    const std::uint64_t complete_start_ns = profile_enabled ? NowNs() : 0;
     transport_->CompleteResponse(
         descriptor->client_id, descriptor->qp_index, response, seq);
     if (profile_enabled) {
       profile_.complete_response_ns.fetch_add(
-          RdmaRcNowNs() - complete_start_ns, std::memory_order_relaxed);
+          NowNs() - complete_start_ns, std::memory_order_relaxed);
     }
     VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
             << " slot=" << slot << " client_id=" << descriptor->client_id
@@ -552,7 +536,7 @@ private:
       int total_slots) {
     while (true) {
       const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
-      const std::uint64_t poll_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
       std::uint64_t scanned_slots       = 0;
       std::uint64_t ready_slots         = 0;
       for (int slot = worker_id; slot < total_slots; slot += worker_count) {
@@ -569,7 +553,7 @@ private:
           profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
         }
         profile_.poll_loop_ns.fetch_add(
-            RdmaRcNowNs() - poll_start_ns, std::memory_order_relaxed);
+            NowNs() - poll_start_ns, std::memory_order_relaxed);
       }
       sink();
     }

@@ -1,7 +1,6 @@
 #include "ps/rdma/petps_client.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -10,6 +9,7 @@
 
 #include <folly/portability/GFlags.h>
 
+#include "ps/rdma/rdma_common.h"
 #include "ps/rdma/rc_options.h"
 
 DECLARE_int32(global_id);
@@ -21,26 +21,9 @@ DECLARE_int32(max_kv_num_per_request);
 namespace petps {
 namespace {
 
-std::uint64_t RdmaRcNowNs() {
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
-}
-
-std::uint64_t Exchange(std::atomic<std::uint64_t>* value) {
-  return value->exchange(0, std::memory_order_relaxed);
-}
-
-std::string NamespaceToken() {
-  if (!FLAGS_rdma_rc_namespace.empty()) {
-    return FLAGS_rdma_rc_namespace;
-  }
-  if (const char* env = std::getenv("RECSTORE_MEMCACHED_NAMESPACE")) {
-    return env;
-  }
-  return "default";
-}
+using petps::Exchange;
+using petps::NamespaceToken;
+using petps::NowNs;
 
 std::size_t ComputeMaxGetKeysPerRpc() {
   return GetKeysPerRpcByResponseBudget(
@@ -140,7 +123,7 @@ void PetPSClient::MaybeReportProfile() {
   if (FLAGS_rdma_rc_profile_interval_ms <= 0) {
     return;
   }
-  const std::uint64_t now = RdmaRcNowNs();
+  const std::uint64_t now = NowNs();
   const std::uint64_t interval =
       static_cast<std::uint64_t>(FLAGS_rdma_rc_profile_interval_ms) * 1000000;
   std::uint64_t expected =
@@ -270,12 +253,12 @@ int PetPSClient::SubmitRpcLocked(
   auto& qp = qps_.at(static_cast<std::size_t>(qp_index));
   ResetStatusWord(qp.view.status, descriptor->seq);
   const bool profile_enabled          = FLAGS_rdma_rc_profile_interval_ms > 0;
-  const std::uint64_t submit_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+  const std::uint64_t submit_start_ns = profile_enabled ? NowNs() : 0;
   transport_->SubmitRequest(qp.view, *descriptor, payload, payload_bytes);
   if (profile_enabled) {
     profile_.submit_rpc_count.fetch_add(1, std::memory_order_relaxed);
     profile_.submit_request_ns.fetch_add(
-        RdmaRcNowNs() - submit_start_ns, std::memory_order_relaxed);
+        NowNs() - submit_start_ns, std::memory_order_relaxed);
   }
   VLOG(1) << "component=rdma_rc_client event=submit shard=" << shard_
           << " client_id=" << client_id_ << " qp=" << qp_index
@@ -405,12 +388,12 @@ void PetPSClient::WaitRPCFinish(int rpc_id) {
 
   auto& qp = qps_.at(static_cast<std::size_t>(pending.qp_index));
   const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
-  const std::uint64_t wait_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+  const std::uint64_t wait_start_ns = profile_enabled ? NowNs() : 0;
   const std::int32_t status_code    = WaitStatus(qp.view.status, pending.seq);
   if (profile_enabled) {
     profile_.wait_rpc_count.fetch_add(1, std::memory_order_relaxed);
     profile_.wait_status_ns.fetch_add(
-        RdmaRcNowNs() - wait_start_ns, std::memory_order_relaxed);
+        NowNs() - wait_start_ns, std::memory_order_relaxed);
   }
   VLOG(1) << "component=rdma_rc_client event=done shard=" << shard_
           << " client_id=" << client_id_ << " qp=" << pending.qp_index
@@ -419,12 +402,12 @@ void PetPSClient::WaitRPCFinish(int rpc_id) {
   const std::size_t actual_response_bytes = std::min<std::size_t>(
       qp.view.status->response_bytes, pending.response_bytes);
   if (actual_response_bytes > 0 && !FLAGS_rdma_rc_skip_client_copy) {
-    const std::uint64_t copy_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+    const std::uint64_t copy_start_ns = profile_enabled ? NowNs() : 0;
     std::memcpy(
         pending.recv_buffer, qp.view.response_payload, actual_response_bytes);
     if (profile_enabled) {
       profile_.copy_response_ns.fetch_add(
-          RdmaRcNowNs() - copy_start_ns, std::memory_order_relaxed);
+          NowNs() - copy_start_ns, std::memory_order_relaxed);
       profile_.response_bytes_copied.fetch_add(
           actual_response_bytes, std::memory_order_relaxed);
     }
@@ -443,7 +426,7 @@ void PetPSClient::RevokeRPCResource(int rpc_id) {
     return;
   }
   const bool profile_enabled          = FLAGS_rdma_rc_profile_interval_ms > 0;
-  const std::uint64_t revoke_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+  const std::uint64_t revoke_start_ns = profile_enabled ? NowNs() : 0;
   auto& qp = qps_.at(static_cast<std::size_t>(it->second.qp_index));
   transport_->ClearRequestSlot(qp.view);
   qp.busy = false;
@@ -451,7 +434,7 @@ void PetPSClient::RevokeRPCResource(int rpc_id) {
   if (profile_enabled) {
     profile_.revoke_rpc_count.fetch_add(1, std::memory_order_relaxed);
     profile_.revoke_resource_ns.fetch_add(
-        RdmaRcNowNs() - revoke_start_ns, std::memory_order_relaxed);
+        NowNs() - revoke_start_ns, std::memory_order_relaxed);
     MaybeReportProfile();
   }
 }

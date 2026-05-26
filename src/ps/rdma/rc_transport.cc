@@ -9,6 +9,7 @@
 
 #include <folly/portability/GFlags.h>
 
+#include "ps/rdma/rdma_common.h"
 #include "ps/rdma/rc_options.h"
 
 DECLARE_int32(global_id);
@@ -18,21 +19,13 @@ DECLARE_int32(num_client_processes);
 namespace petps {
 namespace {
 
+using petps::Exchange;
+using petps::NowNs;
+
 constexpr std::uint64_t kSubmitDescriptorWrId = 1;
 constexpr std::uint64_t kSubmitCommitWrId     = 2;
 constexpr std::uint64_t kResponsePayloadWrId  = 3;
 constexpr std::uint64_t kResponseStatusWrId   = 4;
-
-std::uint64_t NowNs() {
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
-}
-
-std::uint64_t Exchange(std::atomic<std::uint64_t>* value) {
-  return value->exchange(0, std::memory_order_relaxed);
-}
 
 struct RcTransportProfileCounters {
   std::atomic<std::uint64_t> submit_request_count{0};

@@ -1,0 +1,36 @@
+#pragma once
+
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <string>
+
+#include <folly/portability/GFlags.h>
+
+DECLARE_string(rdma_rc_namespace);
+
+namespace petps {
+
+inline std::uint64_t NowNs() {
+  return static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+}
+
+inline std::uint64_t Exchange(std::atomic<std::uint64_t>* value) {
+  return value->exchange(0, std::memory_order_relaxed);
+}
+
+inline std::string NamespaceToken() {
+  if (!FLAGS_rdma_rc_namespace.empty()) {
+    return FLAGS_rdma_rc_namespace;
+  }
+  if (const char* env = std::getenv("RECSTORE_MEMCACHED_NAMESPACE")) {
+    return env;
+  }
+  return "default";
+}
+
+} // namespace petps
