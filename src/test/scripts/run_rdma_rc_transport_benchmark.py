@@ -7,6 +7,7 @@ import re
 import subprocess
 import tempfile
 import time
+import threading
 
 from petps_cluster_runner import PetPSClusterRunner, REPO_ROOT, _to_text
 from ps_server_helpers import RDMA_SKIP_EXIT_CODE, get_rdma_skip_reason
@@ -201,17 +202,17 @@ def build_benchmark_cmd(args):
         f"--async_depth={args.async_depth}",
         f"--report_mode={args.report_mode}",
     ]
-    if args.rdma_rc_qps_per_client_per_shard is not None:
+    if args.qps_per_client_per_shard is not None:
         cmd.append(
             "--rdma_rc_qps_per_client_per_shard="
-            f"{args.rdma_rc_qps_per_client_per_shard}"
+            f"{args.qps_per_client_per_shard}"
         )
     if args.rdma_wait_timeout_ms is not None:
         cmd.append(f"--rdma_wait_timeout_ms={args.rdma_wait_timeout_ms}")
-    if args.rdma_rc_profile_interval_ms is not None:
+    if args.profile_interval_ms is not None:
         cmd.append(
             "--rdma_rc_profile_interval_ms="
-            f"{args.rdma_rc_profile_interval_ms}"
+            f"{args.profile_interval_ms}"
         )
     if args.verify_values:
         cmd.append("--verify_values=true")
@@ -265,6 +266,32 @@ def terminate_process(process):
         process.wait(timeout=5)
 
 
+def _stream_process_output(
+    client_index,
+    stream,
+    sink,
+    show_runner_logs,
+    is_stderr,
+    log_path=None,
+):
+    prefix = f"[rdma-rc-client:{client_index}] "
+    if is_stderr:
+        prefix = f"[rdma-rc-client:{client_index}:stderr] "
+    log_handle = open(log_path, "a", encoding="utf-8") if log_path else None
+    try:
+        for raw_line in iter(stream.readline, ""):
+            line = raw_line.rstrip()
+            sink.append(line)
+            if log_handle is not None:
+                log_handle.write(line + "\n")
+                log_handle.flush()
+            if show_runner_logs:
+                print(prefix + line)
+    finally:
+        if log_handle is not None:
+            log_handle.close()
+
+
 def run_benchmark_clients(runner, args):
     if args.client_count == 1:
         completed = runner.run_client(
@@ -282,24 +309,62 @@ def run_benchmark_clients(runner, args):
 
     env = runner.build_env()
     processes = []
+    stdout_buffers = {}
+    stderr_buffers = {}
+    stream_threads = []
+    log_dir = None
+    if args.client_count > 1:
+        log_dir = tempfile.mkdtemp(prefix="rdma_rc_client_logs_")
+        print(f"[rdma-rc-log] writing multi-client logs to {log_dir}")
     deadline = time.monotonic() + args.client_timeout
     for client_index in range(args.client_count):
         cmd = runner.build_client_cmd(
             build_benchmark_cmd(args), client_index=client_index
         )
-        processes.append(
-            (
-                client_index,
-                subprocess.Popen(
-                    cmd,
-                    cwd=str(REPO_ROOT),
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    env=env,
-                ),
-            )
+        process = subprocess.Popen(
+            cmd,
+            cwd=str(REPO_ROOT),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
         )
+        processes.append((client_index, process))
+        stdout_buffers[client_index] = []
+        stderr_buffers[client_index] = []
+        stdout_log_path = None
+        stderr_log_path = None
+        if log_dir is not None:
+            stdout_log_path = os.path.join(log_dir, f"client_{client_index}.stdout.log")
+            stderr_log_path = os.path.join(log_dir, f"client_{client_index}.stderr.log")
+        if args.show_runner_logs or log_dir is not None:
+            stdout_thread = threading.Thread(
+                target=_stream_process_output,
+                args=(
+                    client_index,
+                    process.stdout,
+                    stdout_buffers[client_index],
+                    args.show_runner_logs,
+                    False,
+                    stdout_log_path,
+                ),
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=_stream_process_output,
+                args=(
+                    client_index,
+                    process.stderr,
+                    stderr_buffers[client_index],
+                    args.show_runner_logs,
+                    True,
+                    stderr_log_path,
+                ),
+                daemon=True,
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            stream_threads.extend([stdout_thread, stderr_thread])
 
     rows = []
     results = []
@@ -309,15 +374,28 @@ def run_benchmark_clients(runner, args):
         if remaining <= 0:
             timed_out = True
             break
-        try:
-            stdout, stderr = process.communicate(timeout=remaining)
-        except subprocess.TimeoutExpired as exc:
-            timed_out = True
-            stdout = _to_text(exc.stdout)
-            stderr = _to_text(exc.stderr)
-            results.append((client_index, 124, stdout, stderr))
-            break
-        results.append((client_index, process.returncode, stdout, stderr))
+        if args.show_runner_logs:
+            try:
+                process.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                stdout = "".join(stdout_buffers.get(client_index, []))
+                stderr = "".join(stderr_buffers.get(client_index, []))
+                results.append((client_index, 124, stdout, stderr))
+                break
+            stdout = "".join(stdout_buffers.get(client_index, []))
+            stderr = "".join(stderr_buffers.get(client_index, []))
+            results.append((client_index, process.returncode, stdout, stderr))
+        else:
+            try:
+                stdout, stderr = process.communicate(timeout=remaining)
+            except subprocess.TimeoutExpired as exc:
+                timed_out = True
+                stdout = _to_text(exc.stdout)
+                stderr = _to_text(exc.stderr)
+                results.append((client_index, 124, stdout, stderr))
+                break
+            results.append((client_index, process.returncode, stdout, stderr))
 
     if timed_out:
         for _client_index, process in processes:
@@ -325,7 +403,11 @@ def run_benchmark_clients(runner, args):
         seen = {client_index for client_index, *_rest in results}
         for client_index, process in processes:
             if client_index not in seen:
-                stdout, stderr = process.communicate()
+                if args.show_runner_logs:
+                    stdout = "".join(stdout_buffers.get(client_index, []))
+                    stderr = "".join(stderr_buffers.get(client_index, []))
+                else:
+                    stdout, stderr = process.communicate()
                 results.append((client_index, 124, stdout, stderr))
 
     return_code = 124 if timed_out else 0
@@ -392,15 +474,37 @@ def main():
     )
     parser.add_argument("--memcached-host", default="127.0.0.1")
     parser.add_argument("--memcached-port", type=int, default=21211)
-    parser.add_argument("--rdma-rc-qps-per-client-per-shard", type=int)
-    parser.add_argument("--rdma-wait-timeout-ms", type=int)
-    parser.add_argument("--rdma-rc-profile-interval-ms", type=int)
-    parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
     parser.add_argument(
+        "--qps-per-client-per-shard",
+        "--rdma-rc-qps-per-client-per-shard",
+        dest="qps_per_client_per_shard",
+        type=int,
+    )
+    parser.add_argument("--rdma-wait-timeout-ms", type=int)
+    parser.add_argument(
+        "--profile-interval-ms",
+        "--rdma-rc-profile-interval-ms",
+        dest="profile_interval_ms",
+        type=int,
+    )
+    parser.add_argument(
+        "--server-coroutines-per-thread",
+        "--rdma-rc-server-coroutines-per-thread",
+        dest="server_coroutines_per_thread",
+        type=int,
+    )
+    parser.add_argument(
+        "--fake-get-mode",
         "--rdma-rc-fake-get-mode",
+        dest="fake_get_mode",
         choices=["none", "status_only", "payload_memset"],
     )
-    parser.add_argument("--rdma-rc-skip-client-copy", action="store_true")
+    parser.add_argument(
+        "--skip-client-copy",
+        "--rdma-rc-skip-client-copy",
+        dest="skip_client_copy",
+        action="store_true",
+    )
     parser.add_argument("--verify-values", action="store_true")
     parser.add_argument("--verify-value-row-stride", type=int, default=1)
     parser.add_argument("--show-runner-logs", action="store_true")
@@ -441,16 +545,12 @@ def main():
             verbose=args.show_runner_logs,
             show_status_logs=args.show_runner_logs,
             show_memcached_logs=args.show_runner_logs,
-            rdma_rc_qps_per_client_per_shard=(
-                args.rdma_rc_qps_per_client_per_shard
-            ),
+            rdma_qps_per_client_per_shard=args.qps_per_client_per_shard,
             rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
-            rdma_rc_profile_interval_ms=args.rdma_rc_profile_interval_ms,
-            rdma_rc_server_coroutines_per_thread=(
-                args.rdma_rc_server_coroutines_per_thread
-            ),
-            rdma_rc_fake_get_mode=args.rdma_rc_fake_get_mode,
-            rdma_rc_skip_client_copy=args.rdma_rc_skip_client_copy,
+            rdma_profile_interval_ms=args.profile_interval_ms,
+            rdma_server_coroutines_per_thread=args.server_coroutines_per_thread,
+            rdma_fake_get_mode=args.fake_get_mode,
+            rdma_skip_client_copy=args.skip_client_copy,
         )
 
         summary_rows = []

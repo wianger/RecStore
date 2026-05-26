@@ -201,22 +201,30 @@ void DrainPendingWrite(RawVerbsTransport* verbs,
   *pending = 0;
 }
 
-std::string ClientWriteContext(
-    const RcTransportConfig& config,
-    int qp_index,
-    std::uint64_t seq,
-    std::uint64_t remote_offset,
-    int remote_node,
-    const char* phase) {
-  return "phase=" + std::string(phase) +
-         " shard=" + std::to_string(config.shard_id) +
-         " client_id=" + std::to_string(config.client_id) +
-         " qp=" + std::to_string(qp_index) + " seq=" + std::to_string(seq) +
-         " remote_node=" + std::to_string(remote_node) +
-         " remote_offset=" + std::to_string(remote_offset);
+template <typename PendingT>
+void DrainPendingWriteTracked(
+    RawVerbsTransport* verbs,
+    PendingT* pending,
+    std::uint64_t wr_id,
+    const std::string& context,
+    bool profile_enabled,
+    std::atomic<std::uint64_t>* drain_count,
+    std::atomic<std::uint64_t>* drain_ns) {
+  if (pending == nullptr || !*pending) {
+    return;
+  }
+  if (!profile_enabled) {
+    DrainPendingWrite(verbs, pending, wr_id, context);
+    return;
+  }
+
+  const std::uint64_t drain_start_ns = NowNs();
+  DrainPendingWrite(verbs, pending, wr_id, context);
+  drain_count->fetch_add(1, std::memory_order_relaxed);
+  drain_ns->fetch_add(NowNs() - drain_start_ns, std::memory_order_relaxed);
 }
 
-std::string ServerWriteContext(
+std::string WriteContext(
     const RcTransportConfig& config,
     int client_id,
     int qp_index,
@@ -283,8 +291,9 @@ RcShardClientTransport::~RcShardClientTransport() {
           lane.verbs.get(),
           &lane.submit_completion_pending,
           kSubmitCommitWrId,
-          ClientWriteContext(
+          WriteContext(
               config_,
+              config_.client_id,
               static_cast<int>(qp),
               0,
               ServerRequestOffset(config_, config_.client_id) +
@@ -350,36 +359,21 @@ void RcShardClientTransport::SubmitRequest(
   Lane& lane                   = LaneAt(view.qp_index);
   const std::uint64_t remote_request_offset =
       ServerRequestOffset(config_, config_.client_id);
-  if (profile_enabled && lane.submit_completion_pending) {
-    const std::uint64_t drain_start_ns = NowNs();
-    DrainPendingWrite(
-        lane.verbs.get(),
-        &lane.submit_completion_pending,
-        kSubmitCommitWrId,
-        ClientWriteContext(
-            config_,
-            view.qp_index,
-            descriptor.seq - 1,
-            remote_request_offset + RequestCommitOffset(config_),
-            server_node_id_,
-            "previous_submit_commit"));
-    auto& counters = TransportProfile();
-    counters.drain_pending_submit_count.fetch_add(1, std::memory_order_relaxed);
-    counters.drain_pending_submit_ns.fetch_add(
-        NowNs() - drain_start_ns, std::memory_order_relaxed);
-  } else {
-    DrainPendingWrite(
-        lane.verbs.get(),
-        &lane.submit_completion_pending,
-        kSubmitCommitWrId,
-        ClientWriteContext(
-            config_,
-            view.qp_index,
-            descriptor.seq - 1,
-            remote_request_offset + RequestCommitOffset(config_),
-            server_node_id_,
-            "previous_submit_commit"));
-  }
+  auto& counters = TransportProfile();
+  DrainPendingWriteTracked(
+      lane.verbs.get(),
+      &lane.submit_completion_pending,
+      kSubmitCommitWrId,
+      WriteContext(config_,
+                   config_.client_id,
+                   view.qp_index,
+                   descriptor.seq - 1,
+                   remote_request_offset + RequestCommitOffset(config_),
+                   server_node_id_,
+                   "previous_submit_commit"),
+      profile_enabled,
+      &counters.drain_pending_submit_count,
+      &counters.drain_pending_submit_ns);
   auto* request_slot     = static_cast<char*>(lane.request_staging);
   auto* local_descriptor = reinterpret_cast<RequestDescriptor*>(request_slot);
   auto* local_payload    = request_slot + Align64(sizeof(RequestDescriptor));
@@ -476,7 +470,7 @@ RcShardServerTransport::~RcShardServerTransport() {
             lane.verbs.get(),
             &lane.response_completion_pending[client],
             kResponseStatusWrId,
-            ServerWriteContext(
+            WriteContext(
                 config_,
                 static_cast<int>(client),
                 static_cast<int>(qp),
@@ -560,39 +554,22 @@ void RcShardServerTransport::CompleteResponse(
   auto& pending =
       lane.response_completion_pending.at(static_cast<std::size_t>(client_id));
   const int client_node_id = FLAGS_num_server_processes + client_id;
-  if (profile_enabled && pending != 0) {
-    const std::uint64_t drain_start_ns = NowNs();
-    DrainPendingWrite(
-        lane.verbs.get(),
-        &pending,
-        kResponseStatusWrId,
-        ServerWriteContext(
-            config_,
-            client_id,
-            qp_index,
-            seq - 1,
-            ClientResponseOffset(config_) + ResponseStatusOffset(config_),
-            client_node_id,
-            "previous_response_status"));
-    auto& counters = TransportProfile();
-    counters.drain_pending_response_count.fetch_add(
-        1, std::memory_order_relaxed);
-    counters.drain_pending_response_ns.fetch_add(
-        NowNs() - drain_start_ns, std::memory_order_relaxed);
-  } else {
-    DrainPendingWrite(
-        lane.verbs.get(),
-        &pending,
-        kResponseStatusWrId,
-        ServerWriteContext(
-            config_,
-            client_id,
-            qp_index,
-            seq - 1,
-            ClientResponseOffset(config_) + ResponseStatusOffset(config_),
-            client_node_id,
-            "previous_response_status"));
-  }
+  auto& counters           = TransportProfile();
+  DrainPendingWriteTracked(
+      lane.verbs.get(),
+      &pending,
+      kResponseStatusWrId,
+      WriteContext(
+          config_,
+          client_id,
+          qp_index,
+          seq - 1,
+          ClientResponseOffset(config_) + ResponseStatusOffset(config_),
+          client_node_id,
+          "previous_response_status"),
+      profile_enabled,
+      &counters.drain_pending_response_count,
+      &counters.drain_pending_response_ns);
   response.status->seq.store(seq, std::memory_order_release);
   response.status->state.store(kRcSlotDone, std::memory_order_release);
 

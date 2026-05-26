@@ -97,8 +97,8 @@ class TestPetPSClusterRunner(unittest.TestCase):
             rdma_server_ready_timeout_sec=45,
             rdma_server_ready_poll_ms=3,
             rdma_client_receive_arena_bytes=134217728,
-            rdma_rc_qps_per_client_per_shard=4,
-            rdma_rc_server_coroutines_per_thread=3,
+            rdma_qps_per_client_per_shard=4,
+            rdma_server_coroutines_per_thread=3,
         )
         server_cmd = runner.build_server_cmd(0)
         client_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"])
@@ -109,6 +109,27 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--rdma_server_ready_poll_ms=3", client_cmd)
         self.assertIn("--rdma_client_receive_arena_bytes=134217728", client_cmd)
         self.assertIn("--rdma_rc_qps_per_client_per_shard=4", client_cmd)
+
+    def test_build_commands_accept_legacy_rdma_aliases(self):
+        runner = PetPSClusterRunner(
+            rdma_rc_qps_per_client_per_shard=8,
+            rdma_rc_profile_interval_ms=250,
+            rdma_rc_server_coroutines_per_thread=2,
+            rdma_rc_fake_get_mode="status_only",
+            rdma_rc_skip_client_copy=True,
+        )
+        server_cmd = runner.build_server_cmd(0)
+        client_cmd = runner.build_client_cmd(["./build/bin/petps_integration_test"])
+        self.assertEqual(runner.rdma_qps_per_client_per_shard, 8)
+        self.assertEqual(runner.rdma_profile_interval_ms, 250)
+        self.assertEqual(runner.rdma_server_coroutines_per_thread, 2)
+        self.assertEqual(runner.rdma_fake_get_mode, "status_only")
+        self.assertTrue(runner.rdma_skip_client_copy)
+        self.assertIn("--rdma_rc_qps_per_client_per_shard=8", server_cmd)
+        self.assertIn("--rdma_rc_profile_interval_ms=250", server_cmd)
+        self.assertIn("--rdma_rc_server_coroutines_per_thread=2", server_cmd)
+        self.assertIn("--rdma_rc_fake_get_mode=status_only", server_cmd)
+        self.assertIn("--rdma_rc_skip_client_copy=true", client_cmd)
 
     @mock.patch("petps_cluster_runner.os.geteuid", return_value=0)
     @mock.patch("petps_cluster_runner.shutil.which", return_value="/usr/bin/memcached")

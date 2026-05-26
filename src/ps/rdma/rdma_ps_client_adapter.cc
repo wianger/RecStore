@@ -14,6 +14,7 @@
 
 #include "framework/common/ps_client_config_adapter.h"
 #include "ps/base/config.h"
+#include "ps/rdma/rdma_common.h"
 
 DECLARE_int32(global_id);
 DECLARE_int32(num_server_processes);
@@ -240,9 +241,8 @@ int RDMAPSClientAdapter::GetParameter(const base::ConstArray<uint64_t>& keys,
   int rpc_id = client_->GetParameter(keys, recv, false, 0);
   client_->RevokeRPCResource(rpc_id);
 
-  const auto* status_word = reinterpret_cast<const std::int32_t*>(
-      reinterpret_cast<const char*>(recv) +
-      keys.Size() * static_cast<std::size_t>(FLAGS_value_size));
+  const auto* status_word =
+      petps::FixedSlotStatusWord(recv, keys.Size(), FLAGS_value_size);
   if (*status_word != 0) {
     return -1;
   }
@@ -420,14 +420,11 @@ bool RDMAPSClientAdapter::GetPrefetchResult(
     return false;
   }
 
-  values->clear();
-  values->reserve(static_cast<std::size_t>(num_rows));
-  for (int64_t row = 0; row < num_rows; ++row) {
-    const auto begin =
-        flat.begin() + row * static_cast<int64_t>(state.embedding_dim);
-    values->emplace_back(
-        begin, begin + static_cast<int64_t>(state.embedding_dim));
-  }
+  petps::CopyFlatRowsToVectors(
+      flat.data(),
+      static_cast<std::size_t>(num_rows),
+      static_cast<std::size_t>(state.embedding_dim),
+      values);
   return true;
 }
 
@@ -446,10 +443,10 @@ bool RDMAPSClientAdapter::GetPrefetchResultFlat(
   }
 
   WaitForPrefetch(prefetch_id);
-  const auto* status_word = reinterpret_cast<const std::int32_t*>(
-      reinterpret_cast<const char*>(state.buffer) +
-      static_cast<std::size_t>(state.key_count) *
-          static_cast<std::size_t>(FLAGS_value_size));
+  const auto* status_word = petps::FixedSlotStatusWord(
+      state.buffer,
+      static_cast<std::size_t>(state.key_count),
+      FLAGS_value_size);
   if (*status_word != 0) {
     client_->RevokeRPCResource(state.rpc_id);
     MarkPrefetchConsumed(prefetch_id);

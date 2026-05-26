@@ -49,6 +49,29 @@ std::int32_t WaitStatus(const StatusWord* status, std::uint64_t seq) {
   return status->status;
 }
 
+void FillBaseDescriptor(
+    RequestDescriptor* descriptor,
+    std::uint64_t seq,
+    std::size_t key_count,
+    const RcClientQpView& view,
+    std::uint32_t shard_id,
+    std::uint32_t client_id) {
+  *descriptor            = RequestDescriptor{};
+  descriptor->seq        = seq;
+  descriptor->shard_id   = shard_id;
+  descriptor->client_id  = client_id;
+  descriptor->qp_index   = static_cast<std::uint32_t>(view.qp_index);
+  descriptor->key_count  = static_cast<std::uint32_t>(key_count);
+  descriptor->value_size = static_cast<std::uint32_t>(FLAGS_value_size);
+  descriptor->embedding_dim =
+      static_cast<std::uint32_t>(FLAGS_value_size / sizeof(float));
+  descriptor->payload_offset =
+      static_cast<std::uint32_t>(Align64(sizeof(RequestDescriptor)));
+  descriptor->client_response_addr =
+      reinterpret_cast<std::uint64_t>(view.response_payload);
+  descriptor->client_status_addr = reinterpret_cast<std::uint64_t>(view.status);
+}
+
 } // namespace
 
 PetPSClient::PetPSClient(const std::string& host, int port, int shard)
@@ -169,24 +192,17 @@ void PetPSClient::FillGetDescriptor(
     std::size_t key_count,
     std::size_t response_bytes,
     const RcClientQpView& view) const {
-  *descriptor            = RequestDescriptor{};
-  descriptor->op         = static_cast<std::uint16_t>(RcOp::kGet);
-  descriptor->seq        = seq;
-  descriptor->shard_id   = static_cast<std::uint32_t>(shard_);
-  descriptor->client_id  = static_cast<std::uint32_t>(client_id_);
-  descriptor->qp_index   = static_cast<std::uint32_t>(view.qp_index);
-  descriptor->key_count  = static_cast<std::uint32_t>(key_count);
-  descriptor->value_size = static_cast<std::uint32_t>(FLAGS_value_size);
-  descriptor->embedding_dim =
-      static_cast<std::uint32_t>(FLAGS_value_size / sizeof(float));
-  descriptor->payload_offset =
-      static_cast<std::uint32_t>(Align64(sizeof(RequestDescriptor)));
+  FillBaseDescriptor(
+      descriptor,
+      seq,
+      key_count,
+      view,
+      static_cast<std::uint32_t>(shard_),
+      static_cast<std::uint32_t>(client_id_));
+  descriptor->op = static_cast<std::uint16_t>(RcOp::kGet);
   descriptor->payload_bytes =
       static_cast<std::uint32_t>(GetRequestBytes(key_count));
   descriptor->response_bytes = static_cast<std::uint32_t>(response_bytes);
-  descriptor->client_response_addr =
-      reinterpret_cast<std::uint64_t>(view.response_payload);
-  descriptor->client_status_addr = reinterpret_cast<std::uint64_t>(view.status);
 }
 
 void PetPSClient::FillPutDescriptor(
@@ -195,23 +211,16 @@ void PetPSClient::FillPutDescriptor(
     std::size_t key_count,
     std::size_t payload_bytes,
     const RcClientQpView& view) const {
-  *descriptor            = RequestDescriptor{};
-  descriptor->op         = static_cast<std::uint16_t>(RcOp::kPut);
-  descriptor->seq        = seq;
-  descriptor->shard_id   = static_cast<std::uint32_t>(shard_);
-  descriptor->client_id  = static_cast<std::uint32_t>(client_id_);
-  descriptor->qp_index   = static_cast<std::uint32_t>(view.qp_index);
-  descriptor->key_count  = static_cast<std::uint32_t>(key_count);
-  descriptor->value_size = static_cast<std::uint32_t>(FLAGS_value_size);
-  descriptor->embedding_dim =
-      static_cast<std::uint32_t>(FLAGS_value_size / sizeof(float));
-  descriptor->payload_offset =
-      static_cast<std::uint32_t>(Align64(sizeof(RequestDescriptor)));
+  FillBaseDescriptor(
+      descriptor,
+      seq,
+      key_count,
+      view,
+      static_cast<std::uint32_t>(shard_),
+      static_cast<std::uint32_t>(client_id_));
+  descriptor->op             = static_cast<std::uint16_t>(RcOp::kPut);
   descriptor->payload_bytes  = static_cast<std::uint32_t>(payload_bytes);
   descriptor->response_bytes = 0;
-  descriptor->client_response_addr =
-      reinterpret_cast<std::uint64_t>(view.response_payload);
-  descriptor->client_status_addr = reinterpret_cast<std::uint64_t>(view.status);
 }
 
 void PetPSClient::FillUpdateDescriptor(
@@ -301,19 +310,18 @@ int PetPSClient::GetParameter(base::ConstArray<uint64_t> keys,
   }
   const int embedding_dim = FLAGS_value_size / sizeof(float);
   std::vector<float> flat(keys.Size() * embedding_dim + 1, 0.0f);
-  const int rpc_id   = GetParameter(keys, flat.data(), false, 0);
-  const auto* status = reinterpret_cast<const std::int32_t*>(
-      reinterpret_cast<const char*>(flat.data()) +
-      keys.Size() * static_cast<std::size_t>(FLAGS_value_size));
+  const int rpc_id = GetParameter(keys, flat.data(), false, 0);
+  const auto* status =
+      FixedSlotStatusWord(flat.data(), keys.Size(), FLAGS_value_size);
   if (*status != static_cast<std::int32_t>(RpcStatus::kOk)) {
     RevokeRPCResource(rpc_id);
     return -1;
   }
-  values->reserve(keys.Size());
-  for (int i = 0; i < keys.Size(); ++i) {
-    values->emplace_back(flat.begin() + i * embedding_dim,
-                         flat.begin() + (i + 1) * embedding_dim);
-  }
+  CopyFlatRowsToVectors(
+      flat.data(),
+      keys.Size(),
+      static_cast<std::size_t>(embedding_dim),
+      values);
   RevokeRPCResource(rpc_id);
   return 0;
 }
@@ -412,9 +420,8 @@ void PetPSClient::WaitRPCFinish(int rpc_id) {
           actual_response_bytes, std::memory_order_relaxed);
     }
   }
-  auto* user_status = reinterpret_cast<std::int32_t*>(
-      reinterpret_cast<char*>(pending.recv_buffer) +
-      pending.key_count * static_cast<std::size_t>(FLAGS_value_size));
+  auto* user_status = FixedSlotStatusWord(
+      pending.recv_buffer, pending.key_count, FLAGS_value_size);
   *user_status = status_code;
   MaybeReportProfile();
 }

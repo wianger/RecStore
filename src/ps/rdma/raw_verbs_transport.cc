@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
 #include "ps/base/Postoffice.h"
@@ -20,6 +21,18 @@ constexpr int kRawVerbsCqDepth       = 4096;
 constexpr int kRawVerbsRecvDepth     = 1024;
 
 std::string IbvError(const char* op) { return std::string(op) + " failed"; }
+
+std::string QpCreateError(const RawVerbsConfig& config, int node) {
+  return "ibv_create_qp failed: likely insufficient RDMA QP resources "
+         "(global_id=" +
+         std::to_string(config.global_id) +
+         ", local_lane=" + std::to_string(config.local_lane) +
+         ", remote_lane=" + std::to_string(config.remote_lane) +
+         ", node=" + std::to_string(node) +
+         ", num_servers=" + std::to_string(config.num_servers) +
+         ", num_clients=" + std::to_string(config.num_clients) +
+         "). Reduce --client-count or --qps-per-client-per-shard.";
+}
 
 ibv_context* OpenDeviceForNuma(int numa_id) {
   int device_count     = 0;
@@ -174,7 +187,7 @@ RawVerbsTransport::RawVerbsTransport(const RawVerbsConfig& config)
     init_attr.cap.max_inline_data = 64;
     ibv_qp* qp                    = ibv_create_qp(impl_->pd, &init_attr);
     if (qp == nullptr) {
-      throw std::runtime_error("ibv_create_qp failed");
+      throw std::runtime_error(QpCreateError(config, node));
     }
     impl_->qps[static_cast<std::size_t>(node)] = qp;
   }

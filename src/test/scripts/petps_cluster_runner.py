@@ -57,11 +57,16 @@ class PetPSClusterRunner:
         rdma_put_client_send_arena_bytes=None,
         rdma_put_server_scratch_bytes=None,
         rdma_rc_qps_per_client_per_shard=None,
-        rdma_wait_timeout_ms=None,
         rdma_rc_profile_interval_ms=None,
         rdma_rc_server_coroutines_per_thread=None,
         rdma_rc_fake_get_mode=None,
         rdma_rc_skip_client_copy=None,
+        rdma_qps_per_client_per_shard=None,
+        rdma_wait_timeout_ms=None,
+        rdma_profile_interval_ms=None,
+        rdma_server_coroutines_per_thread=None,
+        rdma_fake_get_mode=None,
+        rdma_skip_client_copy=None,
         validate_routing=False,
     ):
         self.server_path = Path(server_path)
@@ -104,20 +109,59 @@ class PetPSClusterRunner:
         self.rdma_put_v2_push_region_offset = rdma_put_v2_push_region_offset
         self.rdma_put_client_send_arena_bytes = rdma_put_client_send_arena_bytes
         self.rdma_put_server_scratch_bytes = rdma_put_server_scratch_bytes
-        self.rdma_rc_qps_per_client_per_shard = rdma_rc_qps_per_client_per_shard
-        self.rdma_wait_timeout_ms = rdma_wait_timeout_ms
-        self.rdma_rc_profile_interval_ms = rdma_rc_profile_interval_ms
-        self.rdma_rc_server_coroutines_per_thread = (
-            rdma_rc_server_coroutines_per_thread
+        self.rdma_qps_per_client_per_shard = self._coalesce_optional_values(
+            "rdma_qps_per_client_per_shard",
+            rdma_qps_per_client_per_shard,
+            rdma_rc_qps_per_client_per_shard,
         )
-        self.rdma_rc_fake_get_mode = rdma_rc_fake_get_mode
-        self.rdma_rc_skip_client_copy = rdma_rc_skip_client_copy
+        self.rdma_wait_timeout_ms = rdma_wait_timeout_ms
+        self.rdma_profile_interval_ms = self._coalesce_optional_values(
+            "rdma_profile_interval_ms",
+            rdma_profile_interval_ms,
+            rdma_rc_profile_interval_ms,
+        )
+        self.rdma_server_coroutines_per_thread = (
+            self._coalesce_optional_values(
+                "rdma_server_coroutines_per_thread",
+                rdma_server_coroutines_per_thread,
+                rdma_rc_server_coroutines_per_thread,
+            )
+        )
+        self.rdma_fake_get_mode = self._coalesce_optional_values(
+            "rdma_fake_get_mode",
+            rdma_fake_get_mode,
+            rdma_rc_fake_get_mode,
+        )
+        self.rdma_skip_client_copy = self._coalesce_optional_values(
+            "rdma_skip_client_copy",
+            rdma_skip_client_copy,
+            rdma_rc_skip_client_copy,
+        )
+        # Keep deprecated attribute names for callers that still read them.
+        self.rdma_rc_qps_per_client_per_shard = (
+            self.rdma_qps_per_client_per_shard
+        )
+        self.rdma_rc_profile_interval_ms = self.rdma_profile_interval_ms
+        self.rdma_rc_server_coroutines_per_thread = (
+            self.rdma_server_coroutines_per_thread
+        )
+        self.rdma_rc_fake_get_mode = self.rdma_fake_get_mode
+        self.rdma_rc_skip_client_copy = self.rdma_skip_client_copy
         self.validate_routing = validate_routing
         self.processes = []
         self.process_logs = {}
         self.memcached_process = None
         self.ready = set()
         self.ready_threads = {}
+
+    @staticmethod
+    def _coalesce_optional_values(name, primary, legacy):
+        present = [value for value in (primary, legacy) if value is not None]
+        if len(present) == 2 and present[0] != present[1]:
+            raise ValueError(
+                f"conflicting values provided for {name}: {primary!r} vs {legacy!r}"
+            )
+        return present[0] if present else None
 
     def _allocate_local_memcached_port(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -211,23 +255,23 @@ class PetPSClusterRunner:
                 "--rdma_put_v2_push_region_offset="
                 f"{self.rdma_put_v2_push_region_offset}"
             )
-        if self.rdma_rc_qps_per_client_per_shard is not None:
+        if self.rdma_qps_per_client_per_shard is not None:
             cmd.append(
                 "--rdma_rc_qps_per_client_per_shard="
-                f"{self.rdma_rc_qps_per_client_per_shard}"
+                f"{self.rdma_qps_per_client_per_shard}"
             )
-        if self.rdma_rc_profile_interval_ms is not None:
+        if self.rdma_profile_interval_ms is not None:
             cmd.append(
                 "--rdma_rc_profile_interval_ms="
-                f"{self.rdma_rc_profile_interval_ms}"
+                f"{self.rdma_profile_interval_ms}"
             )
-        if self.rdma_rc_server_coroutines_per_thread is not None:
+        if self.rdma_server_coroutines_per_thread is not None:
             cmd.append(
                 "--rdma_rc_server_coroutines_per_thread="
-                f"{self.rdma_rc_server_coroutines_per_thread}"
+                f"{self.rdma_server_coroutines_per_thread}"
             )
-        if self.rdma_rc_fake_get_mode is not None:
-            cmd.append(f"--rdma_rc_fake_get_mode={self.rdma_rc_fake_get_mode}")
+        if self.rdma_fake_get_mode is not None:
+            cmd.append(f"--rdma_rc_fake_get_mode={self.rdma_fake_get_mode}")
         return cmd
 
     def build_client_cmd(self, argv, client_index=0):
@@ -281,22 +325,22 @@ class PetPSClusterRunner:
                 "--rdma_put_client_send_arena_bytes="
                 f"{self.rdma_put_client_send_arena_bytes}"
             )
-        if self.rdma_rc_qps_per_client_per_shard is not None:
+        if self.rdma_qps_per_client_per_shard is not None:
             cmd.append(
                 "--rdma_rc_qps_per_client_per_shard="
-                f"{self.rdma_rc_qps_per_client_per_shard}"
+                f"{self.rdma_qps_per_client_per_shard}"
             )
         if self.rdma_wait_timeout_ms is not None:
             cmd.append(f"--rdma_wait_timeout_ms={self.rdma_wait_timeout_ms}")
-        if self.rdma_rc_profile_interval_ms is not None:
+        if self.rdma_profile_interval_ms is not None:
             cmd.append(
                 "--rdma_rc_profile_interval_ms="
-                f"{self.rdma_rc_profile_interval_ms}"
+                f"{self.rdma_profile_interval_ms}"
             )
-        if self.rdma_rc_skip_client_copy is not None:
+        if self.rdma_skip_client_copy is not None:
             cmd.append(
                 "--rdma_rc_skip_client_copy="
-                f"{str(self.rdma_rc_skip_client_copy).lower()}"
+                f"{str(self.rdma_skip_client_copy).lower()}"
             )
         return cmd
 

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "base/hash.h"
+#include "ps/rdma/rdma_common.h"
 
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
@@ -89,9 +90,8 @@ bool AllShardsParameterClientWrapper::FinalizeBatchIfNeeded(
 
   batch->status_code = static_cast<std::int32_t>(petps::RpcStatus::kOk);
   for (const auto& pending : batch->shard_rpcs) {
-    const auto* status_word = reinterpret_cast<const std::int32_t*>(
-        reinterpret_cast<const char*>(pending.recv_buffer) +
-        pending.key_count * static_cast<std::size_t>(FLAGS_value_size));
+    const auto* status_word = petps::FixedSlotStatusWord(
+        pending.recv_buffer, pending.key_count, FLAGS_value_size);
     if (*status_word != static_cast<std::int32_t>(petps::RpcStatus::kOk)) {
       batch->status_code = *status_word;
       break;
@@ -131,20 +131,18 @@ int AllShardsParameterClientWrapper::GetParameter(
   std::vector<float> flat(keys.Size() * embedding_dim + 1, 0.0f);
   int rpc_id = GetParameter(keys, flat.data(), false, 0);
   WaitRPCFinish(rpc_id);
-  const auto* status_word = reinterpret_cast<const std::int32_t*>(
-      reinterpret_cast<const char*>(flat.data()) +
-      keys.Size() * static_cast<std::size_t>(FLAGS_value_size));
+  const auto* status_word =
+      petps::FixedSlotStatusWord(flat.data(), keys.Size(), FLAGS_value_size);
   if (*status_word != static_cast<std::int32_t>(petps::RpcStatus::kOk)) {
     RevokeRPCResource(rpc_id);
     return -1;
   }
 
-  values->reserve(keys.Size());
-  for (int i = 0; i < keys.Size(); ++i) {
-    std::vector<float> row(embedding_dim);
-    std::memcpy(row.data(), flat.data() + i * embedding_dim, FLAGS_value_size);
-    values->push_back(std::move(row));
-  }
+  petps::CopyFlatRowsToVectors(
+      flat.data(),
+      keys.Size(),
+      static_cast<std::size_t>(embedding_dim),
+      values);
   RevokeRPCResource(rpc_id);
   return 0;
 }
@@ -155,11 +153,10 @@ int AllShardsParameterClientWrapper::GetParameter(
     bool isAsync,
     int async_req_id) {
   BatchRequest batch;
-  batch.user_buffer       = values;
-  batch.total_key_count   = keys.Size();
-  auto* batch_status_word = reinterpret_cast<std::int32_t*>(
-      reinterpret_cast<char*>(values) +
-      keys.Size() * static_cast<std::size_t>(FLAGS_value_size));
+  batch.user_buffer     = values;
+  batch.total_key_count = keys.Size();
+  auto* batch_status_word =
+      petps::FixedSlotStatusWord(values, keys.Size(), FLAGS_value_size);
   *batch_status_word = static_cast<std::int32_t>(petps::RpcStatus::kPending);
 
   for (const auto& chunk : BuildChunks(keys)) {
