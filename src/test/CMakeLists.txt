@@ -81,6 +81,15 @@ target_link_libraries(test_ssd_allocators PUBLIC
 )
 add_test(NAME test_ssd_allocators COMMAND test_ssd_allocators)
 
+add_executable(test_r2_allocator test_r2_allocator.cpp)
+target_link_libraries(test_r2_allocator PUBLIC
+    base_memory
+    gtest
+    gtest_main
+    pthread
+)
+add_test(NAME test_r2_allocator COMMAND test_r2_allocator)
+
 add_executable(test_io_uring_test_utils test_io_uring_test_utils.cpp)
 target_link_libraries(test_io_uring_test_utils PUBLIC
     gtest
