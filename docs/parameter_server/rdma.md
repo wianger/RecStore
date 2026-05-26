@@ -40,6 +40,8 @@ Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 - server 处理后先写 client response payload。
 - `StatusWord` 最后写回，client 通过轮询 status word 判断完成。
 
+当前实现还支持 `slots_per_qp` 这一层逻辑复用：同一条 QP lane 上可以挂多个逻辑 slot，实际的 in-flight 上限是 `qps-per-client-per-shard * slots-per-qp`，不是只看 QP 数。
+
 ### 2.2 代码分工
 
 `src/ps/rdma/raw_verbs_transport.*` 已经不再是 `shm_open + mmap` baseline，而是直接走真实 verbs RC 路径：
@@ -65,8 +67,9 @@ Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 
 ### 2.3 现在的关键约束
 
-- `qps-per-client-per-shard` 不是“吞吐参数”，而是 client 侧可同时挂起请求的 QP 池规模。
-- `async_stream` 下，`qps-per-client-per-shard` 不能小于 `async-depth`。
+- `qps-per-client-per-shard` 不是“吞吐参数”，而是 client 侧可用的 QP 池规模。
+- `slots-per-qp` 是每条 QP 上的逻辑 slot 数，默认是 `1`，主要用来扩展 in-flight 上限而不是增加 QP 数。
+- `async_stream` 下，`qps-per-client-per-shard * slots-per-qp` 不能小于 `async-depth`。
 - 如果硬件 QP 资源不足，即使参数合法，`RawVerbsTransport` 也会在 client 初始化阶段直接报错并拒绝启动。
 - 这比“跑到一半再卡住”更容易定位，也更符合当前的 fail-fast 目标。
 
@@ -100,7 +103,8 @@ cmake --build ./build --target \
 | `--thread-num` / `--rdma-thread-num` | server 侧 RDMA polling thread 数 | 影响 server 轮询和并发处理能力 |
 | `--client-count` | benchmark client 进程数 | 仅 `rdma_rc_transport_benchmark` 支持多 client |
 | `--server-count` / `--num_shards` | server / shard 数量 | 多分片时要保证配置和路由一致 |
-| `--qps-per-client-per-shard` | 每个 client 到每个 shard 的 QP 数 | 只影响 RC 并发度，不等价于吞吐；也会消耗资源 |
+| `--qps-per-client-per-shard` | 每个 client 到每个 shard 的 QP 数 | 单独只表示 QP 池规模；真实 in-flight 上限还要乘 `--slots-per-qp` |
+| `--slots-per-qp` | 每条 QP 上可复用的逻辑 slot 数 | 默认 `1`；适合在不增加 QP 数的情况下提高在途深度 |
 | `--async-depth` | `async_stream` 里单 client 的在途请求深度 | 低负载上限测试的关键参数 |
 | `--rdma-put-protocol-version` | PUT 协议版本 | `1` 是 legacy，`2` 是当前主路径 |
 | `--rdma-put-v2-transfer-mode` | PUT-v2 payload 传输方式 | `read` 表示 server 读 payload，`push` 表示 client 主动写 payload |
@@ -116,14 +120,15 @@ cmake --build ./build --target \
 - `iterations * rounds * batch-keys` 才是测量期的 key 总量。
 - `read` 和 `push` 的结果不能直接混成一个吞吐结论。
 - `qps-per-client-per-shard` 变大通常会增加连接并发，但也会增加资源占用和初始化成本。
+- `slots-per-qp` 变大通常会增加单条 QP 的并发深度，但也会增加每条 lane 的本地状态和回写压力。
 - `profile-interval-ms` 只影响周期性统计输出，不应和吞吐提升直接画等号。
 
 ### 4.2 启动前硬约束
 
 当前 benchmark 已经加入启动前校验：
 
-- `async_stream` 要求 `qps-per-client-per-shard >= async-depth`
-- 否则直接拒绝启动，避免把 client QP 池打满后在运行中报 `no idle RC write QP available`
+- `async_stream` 要求 `qps-per-client-per-shard * slots-per-qp >= async-depth`
+- 否则直接拒绝启动，避免把 client slot 池打满后在运行中报 `no idle RC write slot available`
 
 如果你要做低负载上限测试，建议先确保这个约束满足，再看真实瓶颈。
 
@@ -239,6 +244,8 @@ python3 src/test/scripts/run_rdma_transport_benchmarks.py \
 
 summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read` 和 `push` 的结果不能直接混比。
 
+如果你想在不继续增加 QP 数的情况下抬高 `async_stream` 深度，可以优先调 `--slots-per-qp`，再看 `qps-per-client-per-shard` 是否还需要一起放大。
+
 ### 6.3 RDMA RC 专项入口
 
 最小真实 RDMA RC 闭环命令：
@@ -327,67 +334,17 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - `qps-per-client-per-shard`
 - `profile-interval-ms`
 
-## 7. 最近一次矩阵
+## 7. 当前状态
 
-下面是最近一次确认可正常闭环的 RDMA RC 压测，使用的是 `src/test/scripts/run_rdma_rc_transport_benchmark.py`。为了先把流程跑通，这次采用的是单 shard、多 client 的高并发配置，而不是旧的通用 RDMA 入口。
+当前 RDMA RC 主路径已经不是“单 QP 单 slot”的旧模型了，而是按 `qp_index + slot_in_qp` 共同寻址：
 
-### 7.1 运行命令
+- client 侧会为每个 `qp_index` 分配一组逻辑 slot。
+- server 侧会按 `client_id / qp_index / slot_in_qp` 反解请求槽位。
+- `slots_per_qp` 已经贯通到 client、server、runner、测试和 benchmark 参数解析。
 
-```bash
-python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
-  --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
-  --server-count 1 \
-  --client-count 8 \
-  --thread-num 32 \
-  --iterations 20 \
-  --rounds 30 \
-  --warmup-rounds 10 \
-  --batch-keys 500 \
-  --value-size 512 \
-  --op async_stream \
-  --async-depth 128 \
-  --report-mode summary \
-  --qps-per-client-per-shard 256 \
-  --client-timeout 1800 \
-  --cluster-timeout 120 \
-  --use-local-memcached auto \
-  --show-runner-logs
-```
+这意味着文档里判断并发能力时，不能再只看 `qps-per-client-per-shard`，而要看 `qps-per-client-per-shard * slots-per-qp`。
 
-### 7.2 实测结果
-
-这次压测成功输出了 8 个 client 的 `warmup summary` 和 `measure summary`，没有出现 `no idle RC write QP available`、超时或启动失败。
-
-对 `phase=measure` 的单 client 结果，代表性区间如下：
-
-| client | mean req us | p50 req us | p95 req us | p99 req us | key ops/s |
-|--------|-------------:|-----------:|-----------:|-----------:|----------:|
-| 0 | 309.74 | 306.19 | 329.22 | 351.37 | 4,132,500.00 |
-| 1 | 309.39 | 306.85 | 328.52 | 340.55 | 4,137,220.00 |
-| 2 | 308.48 | 306.02 | 328.81 | 336.88 | 4,149,330.00 |
-| 3 | 309.66 | 306.74 | 334.73 | 334.95 | 4,133,560.00 |
-| 4 | 309.78 | 305.93 | 330.45 | 348.73 | 4,131,970.00 |
-| 5 | 308.61 | 306.27 | 331.01 | 331.47 | 4,147,680.00 |
-| 6 | 310.02 | 306.36 | 332.10 | 333.69 | 4,128,760.00 |
-| 7 | 309.58 | 306.47 | 332.93 | 333.76 | 4,134,620.00 |
-
-按 8 个 client 粗略聚合，`key_ops/s` 约为 `33M`。这个结果说明当前 RC runner 在高并发下可以稳定闭环，并且 summary 解析链路已经能正常收集到 measure 结果。
-
-### 7.3 日志位置
-
-- `results/rdma_rc_stress_0526/run.log`
-
-### 7.4 说明
-
-这次结果只说明一件事:
-
-- 当前 `run_rdma_rc_transport_benchmark.py` 可以正常驱动高并发 RDMA RC 压测
-
-它不说明:
-
-- 任何更高层模型路径一定更快
-- 任何其他 `qps` 或 `server-coroutines-per-thread` 组合都会得到同样的结果
-- 这个结果可以直接和旧的通用 RDMA 入口混为一谈
+如果你要补 benchmark 数字，建议把结果放到单独的 `results/` 目录，不要把一次临时跑出来的吞吐值长期固化在主文档里。
 
 ## 8. 当前路线图
 
@@ -450,14 +407,16 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 如果 `client-count` 或 `qps-per-client-per-shard` 太大，可能出现：
 
 - `ibv_create_qp failed`
-- `no idle RC write QP available`
+- `no idle RC write slot available`
 - client 初始化阶段直接报错退出
+
+如果是 `slots-per-qp` 太小，更常见的是启动前被 `async_stream` 的容量校验拦住，或者运行时更早触发 `no idle RC write slot available`。
 
 这是资源不足，不是正常性能退化。
 
 ### 9.2 参数不合法
 
-`async_stream` 下如果 `qps-per-client-per-shard < async-depth`，benchmark 会直接拒绝启动。
+`async_stream` 下如果 `qps-per-client-per-shard * slots-per-qp < async-depth`，benchmark 会直接拒绝启动。
 
 ### 9.3 旧二进制
 
@@ -520,11 +479,13 @@ python3 src/test/scripts/run_petps_integration.py \
 - `num_server_processes`
 - key 到 shard 的路由是否一致
 
-最近一次真实 verbs 验证结果：
+当前 integration 覆盖的场景：
 
-- `PutGetRoundTripSingleShard` 通过。
-- `UpdateGetRoundTripSingleShard` 通过。
-- `PutGetRoundTripMultiShard` 通过。
+- `PutGetRoundTripSingleShard`
+- `UpdateGetRoundTripSingleShard`
+- `PutGetRoundTripMultiShard`
+
+这些场景由 `run_petps_integration.py` 驱动，实际是否通过仍要看当次运行结果；文档这里只记录覆盖范围，不把一次运行结论长期固化在正文里。
 
 ### 10.2 Op-layer RDMA
 
@@ -553,12 +514,14 @@ python3 src/test/framework/pytorch/test_client.py ./build/lib/lib_recstore_ops.s
 
 这些测试的 `SKIP_RETURN_CODE` 是 `77`。skip 只说明 helper 的前置检查没有通过，不等价于真实 RDMA benchmark 一定不可运行。
 
-最近一次 op-layer RDMA 验证结果：
+当前 op-layer RDMA 覆盖：
 
-- `test_op_runtime_support` 通过。
-- `test_op` 通过。
-- `pytorch_client_test_rdma_basic` 通过，覆盖 PyTorch custom op 到 RDMA backend 的 init/write/read。
-- `pytorch_client_test_rdma` 通过，覆盖 PyTorch custom op 到 `RDMAPSClientAdapter -> PetPSClient -> verbs RC` 的 init/write/read、prefetch 和 table-aware update roundtrip。
+- `test_op_runtime_support`
+- `test_op`
+- `pytorch_client_test_rdma_basic`
+- `pytorch_client_test_rdma`
+
+这些测试覆盖 PyTorch custom op 到 `RDMAPSClientAdapter -> PetPSClient -> verbs RC` 的 init/write/read、prefetch 和 table-aware update roundtrip；如果 helper 前置条件不满足，`SKIP_RETURN_CODE` 仍然是 `77`。
 
 ## 11. 单测和脚本测试
 
