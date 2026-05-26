@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
+import os
 import re
 import subprocess
+import tempfile
 import time
 
 from petps_cluster_runner import PetPSClusterRunner, REPO_ROOT, _to_text
@@ -205,7 +208,50 @@ def build_benchmark_cmd(args):
         )
     if args.rdma_wait_timeout_ms is not None:
         cmd.append(f"--rdma_wait_timeout_ms={args.rdma_wait_timeout_ms}")
+    if args.rdma_rc_profile_interval_ms is not None:
+        cmd.append(
+            "--rdma_rc_profile_interval_ms="
+            f"{args.rdma_rc_profile_interval_ms}"
+        )
+    if args.verify_values:
+        cmd.append("--verify_values=true")
+        cmd.append(
+            f"--verify_value_row_stride={args.verify_value_row_stride}"
+        )
     return cmd
+
+
+def write_runtime_config(args, source_config_path, runtime_dir):
+    with open(source_config_path) as fh:
+        config = json.load(fh)
+
+    cache_ps = config.setdefault("cache_ps", {})
+    source_base_kv = cache_ps.get("base_kv_config", {})
+    capacity = int(source_base_kv.get("capacity", 1000000))
+    base_path = (
+        f"/dev/shm/recstore_rdma_rc_benchmark_{os.getpid()}_{time.time_ns()}"
+    )
+    cache_ps["base_kv_config"] = {
+        "capacity": capacity,
+        "index": {"type": "DRAM_PET_HASH"},
+        "value": {
+            "type": "DRAM_VALUE_STORE",
+            "path": f"{base_path}/value",
+            "default_value_size_hint": args.value_size,
+            "dram_allocator": {
+                "type": "CONCURRENT_SLAB_MEMORY_POOL",
+                "capacity_bytes": capacity * args.value_size,
+            },
+        },
+    }
+
+    runtime_config_path = (
+        f"{runtime_dir}/recstore_config.rdma_runtime.json"
+    )
+    with open(runtime_config_path, "w") as fh:
+        json.dump(config, fh, indent=2)
+        fh.write("\n")
+    return runtime_config_path
 
 
 def terminate_process(process):
@@ -318,7 +364,14 @@ def main():
     parser.add_argument("--value-size", type=int, default=16)
     parser.add_argument(
         "--op",
-        choices=["all", "put", "get", "async_get", "async_depth", "mixed"],
+        choices=[
+            "all",
+            "put",
+            "get",
+            "async_get",
+            "async_stream",
+            "mixed",
+        ],
         default="all",
     )
     parser.add_argument("--get-ratio", type=int, default=95)
@@ -341,6 +394,15 @@ def main():
     parser.add_argument("--memcached-port", type=int, default=21211)
     parser.add_argument("--rdma-rc-qps-per-client-per-shard", type=int)
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
+    parser.add_argument("--rdma-rc-profile-interval-ms", type=int)
+    parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
+    parser.add_argument(
+        "--rdma-rc-fake-get-mode",
+        choices=["none", "status_only", "payload_memset"],
+    )
+    parser.add_argument("--rdma-rc-skip-client-copy", action="store_true")
+    parser.add_argument("--verify-values", action="store_true")
+    parser.add_argument("--verify-value-row-stride", type=int, default=1)
     parser.add_argument("--show-runner-logs", action="store_true")
     args = parser.parse_args()
 
@@ -349,13 +411,13 @@ def main():
     if args.client_count <= 0:
         raise ValueError("--client-count must be positive")
 
-    config_path = resolve_rdma_integration_config(
+    source_config_path = resolve_rdma_integration_config(
         args.server_count, args.config_path
     )
-    if args.server_count == 1 and config_path is None:
-        config_path = DEFAULT_RDMA_SINGLE_SHARD_CONFIG
-    if args.server_count > 1 and config_path is None:
-        config_path = DEFAULT_RDMA_MULTI_SHARD_CONFIG
+    if args.server_count == 1 and source_config_path is None:
+        source_config_path = DEFAULT_RDMA_SINGLE_SHARD_CONFIG
+    if args.server_count > 1 and source_config_path is None:
+        source_config_path = DEFAULT_RDMA_MULTI_SHARD_CONFIG
 
     max_kv_num_per_request = (
         args.max_kv_num_per_request
@@ -363,31 +425,40 @@ def main():
         else max(1, args.batch_keys)
     )
 
-    runner = PetPSClusterRunner(
-        config_path=config_path,
-        num_servers=args.server_count,
-        num_clients=args.client_count,
-        thread_num=args.thread_num,
-        value_size=args.value_size,
-        max_kv_num_per_request=max_kv_num_per_request,
-        timeout=args.cluster_timeout,
-        use_local_memcached=args.use_local_memcached,
-        memcached_host=args.memcached_host,
-        memcached_port=args.memcached_port,
-        show_status_logs=args.show_runner_logs,
-        show_memcached_logs=args.show_runner_logs,
-        rdma_rc_qps_per_client_per_shard=(
-            args.rdma_rc_qps_per_client_per_shard
-        ),
-        rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
-    )
+    with tempfile.TemporaryDirectory(prefix="recstore_rdma_rc_benchmark_") as tmpdir:
+        config_path = write_runtime_config(args, source_config_path, tmpdir)
+        runner = PetPSClusterRunner(
+            config_path=config_path,
+            num_servers=args.server_count,
+            num_clients=args.client_count,
+            thread_num=args.thread_num,
+            value_size=args.value_size,
+            max_kv_num_per_request=max_kv_num_per_request,
+            timeout=args.cluster_timeout,
+            use_local_memcached=args.use_local_memcached,
+            memcached_host=args.memcached_host,
+            memcached_port=args.memcached_port,
+            verbose=args.show_runner_logs,
+            show_status_logs=args.show_runner_logs,
+            show_memcached_logs=args.show_runner_logs,
+            rdma_rc_qps_per_client_per_shard=(
+                args.rdma_rc_qps_per_client_per_shard
+            ),
+            rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
+            rdma_rc_profile_interval_ms=args.rdma_rc_profile_interval_ms,
+            rdma_rc_server_coroutines_per_thread=(
+                args.rdma_rc_server_coroutines_per_thread
+            ),
+            rdma_rc_fake_get_mode=args.rdma_rc_fake_get_mode,
+            rdma_rc_skip_client_copy=args.rdma_rc_skip_client_copy,
+        )
 
-    summary_rows = []
-    with runner.run():
-        returncode, rows = run_benchmark_clients(runner, args)
-        summary_rows.extend(rows)
-        if returncode != 0:
-            return returncode
+        summary_rows = []
+        with runner.run():
+            returncode, rows = run_benchmark_clients(runner, args)
+            summary_rows.extend(rows)
+            if returncode != 0:
+                return returncode
 
     print_summary_table(summary_rows)
     print_aggregate_table(summary_rows)

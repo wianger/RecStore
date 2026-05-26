@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/array.h"
+#include "benchmark/rdma_rc_transport_benchmark_values.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
 
@@ -20,11 +21,17 @@ DEFINE_int32(rounds, 5, "number of measured rounds");
 DEFINE_int32(warmup_rounds, 1, "number of warmup rounds before measurement");
 DEFINE_int32(batch_keys, 16, "number of keys per request");
 DEFINE_int32(get_ratio, 95, "GET percentage for mixed operation");
-DEFINE_int32(async_depth, 1, "outstanding async GET depth for async_depth op");
-DEFINE_string(op, "all", "operation: all|put|get|async_get|async_depth|mixed");
+DEFINE_int32(async_depth, 1, "outstanding async GET depth for async_stream op");
+DEFINE_string(op, "all", "operation: all|put|get|async_get|async_stream|mixed");
 DEFINE_string(report_mode,
               "summary",
               "benchmark output mode: summary|per_round|both");
+DEFINE_bool(verify_values,
+            false,
+            "verify GET response values against initialized test data");
+DEFINE_int32(verify_value_row_stride,
+             1,
+             "row stride for --verify_values; 1 verifies every returned row");
 DECLARE_int32(value_size);
 
 namespace {
@@ -57,7 +64,7 @@ MakeValues(const std::vector<std::uint64_t>& keys) {
     std::vector<float> row;
     row.reserve(static_cast<std::size_t>(dim));
     for (int col = 0; col < dim; ++col) {
-      row.push_back(static_cast<float>(key * 10 + col));
+      row.push_back(recstore::benchmark::MakeHashedValue(key, col));
     }
     values.push_back(std::move(row));
   }
@@ -103,7 +110,7 @@ void ValidateFlags() {
   CHECK_GT(FLAGS_rounds, 0);
   CHECK_GT(FLAGS_batch_keys, 0);
   CHECK(FLAGS_op == "all" || FLAGS_op == "put" || FLAGS_op == "get" ||
-        FLAGS_op == "async_get" || FLAGS_op == "async_depth" ||
+        FLAGS_op == "async_get" || FLAGS_op == "async_stream" ||
         FLAGS_op == "mixed")
       << "Invalid --op: " << FLAGS_op;
   CHECK_GT(FLAGS_async_depth, 0);
@@ -112,6 +119,45 @@ void ValidateFlags() {
   CHECK(FLAGS_report_mode == "summary" || FLAGS_report_mode == "per_round" ||
         FLAGS_report_mode == "both")
       << "Invalid --report_mode: " << FLAGS_report_mode;
+  CHECK_GT(FLAGS_verify_value_row_stride, 0);
+}
+
+void VerifyFlatOutput(const BenchmarkInput& input,
+                      const std::vector<float>& output,
+                      const std::string& op,
+                      int iteration,
+                      int output_index = 0) {
+  if (!FLAGS_verify_values) {
+    return;
+  }
+  const int dim = FLAGS_value_size / sizeof(float);
+  const std::size_t value_count =
+      input.keys.size() * static_cast<std::size_t>(dim);
+  CHECK_GE(output.size(), value_count + 1);
+  const auto* status = reinterpret_cast<const std::int32_t*>(
+      reinterpret_cast<const char*>(output.data()) +
+      input.keys.size() * static_cast<std::size_t>(FLAGS_value_size));
+  CHECK_EQ(*status, static_cast<std::int32_t>(petps::RpcStatus::kOk))
+      << "GET status mismatch op=" << op << " iteration=" << iteration
+      << " output_index=" << output_index;
+  const std::size_t row_stride =
+      static_cast<std::size_t>(FLAGS_verify_value_row_stride);
+  for (std::size_t row = 0; row < input.keys.size(); row += row_stride) {
+    for (int col = 0; col < dim; ++col) {
+      const float actual = output[row * static_cast<std::size_t>(dim) +
+                                  static_cast<std::size_t>(col)];
+      const float expected =
+          recstore::benchmark::MakeHashedValue(input.keys[row], col);
+      CHECK_EQ(recstore::benchmark::FloatBits(actual),
+               recstore::benchmark::FloatBits(expected))
+          << "GET value mismatch op=" << op << " iteration=" << iteration
+          << " output_index=" << output_index << " row=" << row << " key="
+          << input.keys[row] << " col=" << col << " actual=" << actual
+          << " expected=" << expected << " actual_bits=0x" << std::hex
+          << recstore::benchmark::FloatBits(actual) << " expected_bits=0x"
+          << recstore::benchmark::FloatBits(expected) << std::dec;
+    }
+  }
 }
 
 void MaybePrintPerRound(
@@ -212,6 +258,87 @@ void RunOperation(const std::string& op,
   }
 }
 
+void RunAsyncStreamOperation(BaseParameterClient* client,
+                             const BenchmarkInput& input) {
+  const int dim                = FLAGS_value_size / sizeof(float);
+  const int total_rounds       = FLAGS_warmup_rounds + FLAGS_rounds;
+  const int requests_per_round = FLAGS_iterations * FLAGS_async_depth;
+  const std::size_t output_size =
+      input.keys.size() * static_cast<std::size_t>(dim) + 1;
+  const std::string op = "async_stream" + std::to_string(FLAGS_async_depth);
+
+  std::vector<std::vector<float>> outputs;
+  outputs.reserve(static_cast<std::size_t>(FLAGS_async_depth));
+  for (int i = 0; i < FLAGS_async_depth; ++i) {
+    outputs.emplace_back(output_size, 0.0f);
+  }
+  std::vector<int> rpc_ids(static_cast<std::size_t>(FLAGS_async_depth), 0);
+  std::vector<int> request_ids(static_cast<std::size_t>(FLAGS_async_depth), 0);
+
+  std::vector<int64_t> warmup_samples_us;
+  std::vector<int64_t> measure_samples_us;
+  warmup_samples_us.reserve(static_cast<std::size_t>(FLAGS_warmup_rounds));
+  measure_samples_us.reserve(static_cast<std::size_t>(FLAGS_rounds));
+
+  for (int round = 0; round < total_rounds; ++round) {
+    const bool is_warmup = round < FLAGS_warmup_rounds;
+    const auto start     = std::chrono::steady_clock::now();
+
+    int submitted     = 0;
+    const int initial = std::min(FLAGS_async_depth, requests_per_round);
+    for (; submitted < initial; ++submitted) {
+      const int slot                          = submitted % FLAGS_async_depth;
+      rpc_ids[static_cast<std::size_t>(slot)] = client->GetParameter(
+          input.key_array,
+          outputs[static_cast<std::size_t>(slot)].data(),
+          true,
+          0);
+      request_ids[static_cast<std::size_t>(slot)] = submitted;
+    }
+
+    for (int completed = 0; completed < requests_per_round; ++completed) {
+      const int slot   = completed % FLAGS_async_depth;
+      const int rpc_id = rpc_ids[static_cast<std::size_t>(slot)];
+      client->WaitRPCFinish(rpc_id);
+      VerifyFlatOutput(
+          input,
+          outputs[static_cast<std::size_t>(slot)],
+          "async_stream",
+          request_ids[static_cast<std::size_t>(slot)],
+          slot);
+      client->RevokeRPCResource(rpc_id);
+
+      if (submitted < requests_per_round) {
+        rpc_ids[static_cast<std::size_t>(slot)] = client->GetParameter(
+            input.key_array,
+            outputs[static_cast<std::size_t>(slot)].data(),
+            true,
+            0);
+        request_ids[static_cast<std::size_t>(slot)] = submitted;
+        ++submitted;
+      }
+    }
+
+    const auto end = std::chrono::steady_clock::now();
+    const int64_t elapsed_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start)
+            .count();
+    (is_warmup ? warmup_samples_us : measure_samples_us).push_back(elapsed_us);
+    MaybePrintPerRound(
+        op, is_warmup, round, FLAGS_warmup_rounds, FLAGS_rounds, elapsed_us);
+  }
+
+  if (ShouldPrintSummary(FLAGS_report_mode)) {
+    PrintSummary(
+        op, "warmup", warmup_samples_us, requests_per_round, input.keys.size());
+    PrintSummary(op,
+                 "measure",
+                 measure_samples_us,
+                 requests_per_round,
+                 input.keys.size());
+  }
+}
+
 class BenchmarkClient {
 public:
   explicit BenchmarkClient(int num_shards) {
@@ -277,6 +404,7 @@ int main(int argc, char** argv) {
           int rpc_id =
               client->GetParameter(input.key_array, output.data(), false, 0);
           client->WaitRPCFinish(rpc_id);
+          VerifyFlatOutput(input, output, "get", iteration);
           client->RevokeRPCResource(rpc_id);
           (void)iteration;
         },
@@ -293,38 +421,15 @@ int main(int argc, char** argv) {
           int rpc_id =
               client->GetParameter(input.key_array, output.data(), true, 0);
           client->WaitRPCFinish(rpc_id);
+          VerifyFlatOutput(input, output, "async_get", iteration);
           client->RevokeRPCResource(rpc_id);
           (void)iteration;
         },
         input.keys.size());
   }
 
-  if (ShouldRunOp(FLAGS_op, "async_depth")) {
-    const int dim = FLAGS_value_size / sizeof(float);
-    std::vector<std::vector<float>> outputs;
-    outputs.reserve(static_cast<std::size_t>(FLAGS_async_depth));
-    for (int i = 0; i < FLAGS_async_depth; ++i) {
-      outputs.emplace_back(
-          input.keys.size() * static_cast<std::size_t>(dim) + 1, 0.0f);
-    }
-    std::vector<int> rpc_ids(static_cast<std::size_t>(FLAGS_async_depth), 0);
-    RunOperation(
-        "async_depth" + std::to_string(FLAGS_async_depth),
-        [&](int iteration) {
-          for (int i = 0; i < FLAGS_async_depth; ++i) {
-            rpc_ids[static_cast<std::size_t>(i)] = client->GetParameter(
-                input.key_array,
-                outputs[static_cast<std::size_t>(i)].data(),
-                true,
-                0);
-          }
-          for (int rpc_id : rpc_ids) {
-            client->WaitRPCFinish(rpc_id);
-            client->RevokeRPCResource(rpc_id);
-          }
-          (void)iteration;
-        },
-        input.keys.size() * static_cast<std::size_t>(FLAGS_async_depth));
+  if (ShouldRunOp(FLAGS_op, "async_stream")) {
+    RunAsyncStreamOperation(client, input);
   }
 
   if (ShouldRunOp(FLAGS_op, "mixed")) {
@@ -339,6 +444,7 @@ int main(int argc, char** argv) {
             int rpc_id =
                 client->GetParameter(input.key_array, output.data(), false, 0);
             client->WaitRPCFinish(rpc_id);
+            VerifyFlatOutput(input, output, "mixed", iteration);
             client->RevokeRPCResource(rpc_id);
           } else {
             CHECK_EQ(client->PutParameter(input.keys, input.values), 0)

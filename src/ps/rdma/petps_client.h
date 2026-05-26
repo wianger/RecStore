@@ -65,8 +65,24 @@ private:
     std::size_t response_bytes = 0;       // Dense response payload bytes.
   };
 
+  struct ProfileCounters {
+    std::atomic<std::uint64_t> acquire_qp_count{0};
+    std::atomic<std::uint64_t> acquire_qp_failures{0};
+    std::atomic<std::uint64_t> submit_rpc_count{0};
+    std::atomic<std::uint64_t> wait_rpc_count{0};
+    std::atomic<std::uint64_t> revoke_rpc_count{0};
+    std::atomic<std::uint64_t> submit_request_ns{0};
+    std::atomic<std::uint64_t> wait_status_ns{0};
+    std::atomic<std::uint64_t> copy_response_ns{0};
+    std::atomic<std::uint64_t> revoke_resource_ns{0};
+    std::atomic<std::uint64_t> response_bytes_copied{0};
+    std::atomic<std::uint64_t> pending_rpc_peak{0};
+    std::atomic<std::uint64_t> next_report_ns{0};
+  };
+
   void InitializeTransport();
   int AcquireIdleQp();
+  void MaybeReportProfile();
   void FillGetDescriptor(RequestDescriptor* descriptor,
                          std::uint64_t seq,
                          std::size_t key_count,
@@ -108,6 +124,7 @@ private:
   std::unordered_map<int, PendingRpc> pending_rpcs_; // In-flight RPC table.
   std::mutex mu_; // Guards transport setup and pending RPC state.
   std::atomic<int> next_rpc_id_{1}; // Monotonic RPC handle generator.
+  ProfileCounters profile_;
   bool thread_initialized_ = false; // Set after InitThread has run.
 };
 

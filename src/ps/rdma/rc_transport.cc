@@ -1,6 +1,9 @@
 #include "ps/rdma/rc_transport.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstring>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 
@@ -19,6 +22,99 @@ constexpr std::uint64_t kSubmitDescriptorWrId = 1;
 constexpr std::uint64_t kSubmitCommitWrId     = 2;
 constexpr std::uint64_t kResponsePayloadWrId  = 3;
 constexpr std::uint64_t kResponseStatusWrId   = 4;
+
+std::uint64_t NowNs() {
+  return static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+}
+
+std::uint64_t Exchange(std::atomic<std::uint64_t>* value) {
+  return value->exchange(0, std::memory_order_relaxed);
+}
+
+struct RcTransportProfileCounters {
+  std::atomic<std::uint64_t> submit_request_count{0};
+  std::atomic<std::uint64_t> submit_descriptor_write_count{0};
+  std::atomic<std::uint64_t> submit_commit_write_count{0};
+  std::atomic<std::uint64_t> submit_request_ns{0};
+  std::atomic<std::uint64_t> drain_pending_submit_count{0};
+  std::atomic<std::uint64_t> drain_pending_submit_ns{0};
+
+  std::atomic<std::uint64_t> complete_response_count{0};
+  std::atomic<std::uint64_t> response_payload_write_count{0};
+  std::atomic<std::uint64_t> response_status_write_count{0};
+  std::atomic<std::uint64_t> response_payload_bytes{0};
+  std::atomic<std::uint64_t> complete_response_ns{0};
+  std::atomic<std::uint64_t> drain_pending_response_count{0};
+  std::atomic<std::uint64_t> drain_pending_response_ns{0};
+  std::atomic<std::uint64_t> next_report_ns{0};
+};
+
+RcTransportProfileCounters& TransportProfile() {
+  static RcTransportProfileCounters counters;
+  return counters;
+}
+
+void MaybeReportTransportProfile(const RcTransportConfig& config,
+                                 const char* role) {
+  if (FLAGS_rdma_rc_profile_interval_ms <= 0) {
+    return;
+  }
+  auto& counters          = TransportProfile();
+  const std::uint64_t now = NowNs();
+  const std::uint64_t interval =
+      static_cast<std::uint64_t>(FLAGS_rdma_rc_profile_interval_ms) * 1000000;
+  std::uint64_t expected =
+      counters.next_report_ns.load(std::memory_order_relaxed);
+  if (expected == 0) {
+    counters.next_report_ns.compare_exchange_strong(
+        expected, now + interval, std::memory_order_relaxed);
+    return;
+  }
+  if (now < expected ||
+      !counters.next_report_ns.compare_exchange_strong(
+          expected, now + interval, std::memory_order_relaxed)) {
+    return;
+  }
+
+  const std::uint64_t submit_count = Exchange(&counters.submit_request_count);
+  const std::uint64_t submit_ns    = Exchange(&counters.submit_request_ns);
+  const std::uint64_t complete_count =
+      Exchange(&counters.complete_response_count);
+  const std::uint64_t complete_ns = Exchange(&counters.complete_response_ns);
+  const std::uint64_t drain_submit_count =
+      Exchange(&counters.drain_pending_submit_count);
+  const std::uint64_t drain_submit_ns =
+      Exchange(&counters.drain_pending_submit_ns);
+  const std::uint64_t drain_response_count =
+      Exchange(&counters.drain_pending_response_count);
+  const std::uint64_t drain_response_ns =
+      Exchange(&counters.drain_pending_response_ns);
+  std::cout
+      << "component=rdma_rc_transport_profile role=" << role
+      << " shard=" << config.shard_id << " client_id=" << config.client_id
+      << " submit_count=" << submit_count << " submit_descriptor_writes="
+      << Exchange(&counters.submit_descriptor_write_count)
+      << " submit_commit_writes="
+      << Exchange(&counters.submit_commit_write_count)
+      << " submit_avg_ns=" << (submit_count == 0 ? 0 : submit_ns / submit_count)
+      << " drain_submit_count=" << drain_submit_count << " drain_submit_avg_ns="
+      << (drain_submit_count == 0 ? 0 : drain_submit_ns / drain_submit_count)
+      << " complete_count=" << complete_count << " response_payload_writes="
+      << Exchange(&counters.response_payload_write_count)
+      << " response_status_writes="
+      << Exchange(&counters.response_status_write_count)
+      << " response_payload_bytes="
+      << Exchange(&counters.response_payload_bytes) << " complete_avg_ns="
+      << (complete_count == 0 ? 0 : complete_ns / complete_count)
+      << " drain_response_count=" << drain_response_count
+      << " drain_response_avg_ns="
+      << (drain_response_count == 0 ? 0
+                                    : drain_response_ns / drain_response_count)
+      << std::endl;
+}
 
 std::size_t ServerLaneBytes(const RcTransportConfig& config) {
   return static_cast<std::size_t>(config.num_clients) *
@@ -256,20 +352,41 @@ void RcShardClientTransport::SubmitRequest(
     const RequestDescriptor& descriptor,
     const void* payload,
     std::size_t payload_bytes) {
-  Lane& lane = LaneAt(view.qp_index);
+  const bool profile_enabled   = FLAGS_rdma_rc_profile_interval_ms > 0;
+  const std::uint64_t start_ns = profile_enabled ? NowNs() : 0;
+  Lane& lane                   = LaneAt(view.qp_index);
   const std::uint64_t remote_request_offset =
       ServerRequestOffset(config_, config_.client_id);
-  DrainPendingWrite(
-      lane.verbs.get(),
-      &lane.submit_completion_pending,
-      kSubmitCommitWrId,
-      ClientWriteContext(
-          config_,
-          view.qp_index,
-          descriptor.seq - 1,
-          remote_request_offset + RequestCommitOffset(config_),
-          server_node_id_,
-          "previous_submit_commit"));
+  if (profile_enabled && lane.submit_completion_pending) {
+    const std::uint64_t drain_start_ns = NowNs();
+    DrainPendingWrite(
+        lane.verbs.get(),
+        &lane.submit_completion_pending,
+        kSubmitCommitWrId,
+        ClientWriteContext(
+            config_,
+            view.qp_index,
+            descriptor.seq - 1,
+            remote_request_offset + RequestCommitOffset(config_),
+            server_node_id_,
+            "previous_submit_commit"));
+    auto& counters = TransportProfile();
+    counters.drain_pending_submit_count.fetch_add(1, std::memory_order_relaxed);
+    counters.drain_pending_submit_ns.fetch_add(
+        NowNs() - drain_start_ns, std::memory_order_relaxed);
+  } else {
+    DrainPendingWrite(
+        lane.verbs.get(),
+        &lane.submit_completion_pending,
+        kSubmitCommitWrId,
+        ClientWriteContext(
+            config_,
+            view.qp_index,
+            descriptor.seq - 1,
+            remote_request_offset + RequestCommitOffset(config_),
+            server_node_id_,
+            "previous_submit_commit"));
+  }
   auto* request_slot     = static_cast<char*>(lane.request_staging);
   auto* local_descriptor = reinterpret_cast<RequestDescriptor*>(request_slot);
   auto* local_payload    = request_slot + Align64(sizeof(RequestDescriptor));
@@ -291,6 +408,10 @@ void RcShardClientTransport::SubmitRequest(
       Align64(sizeof(RequestDescriptor)) + payload_bytes,
       kSubmitDescriptorWrId,
       false);
+  if (profile_enabled) {
+    TransportProfile().submit_descriptor_write_count.fetch_add(
+        1, std::memory_order_relaxed);
+  }
 
   lane.verbs->Write(
       local_commit,
@@ -302,6 +423,14 @@ void RcShardClientTransport::SubmitRequest(
       kSubmitCommitWrId,
       true);
   lane.submit_completion_pending = true;
+  if (profile_enabled) {
+    auto& counters = TransportProfile();
+    counters.submit_request_count.fetch_add(1, std::memory_order_relaxed);
+    counters.submit_commit_write_count.fetch_add(1, std::memory_order_relaxed);
+    counters.submit_request_ns.fetch_add(
+        NowNs() - start_ns, std::memory_order_relaxed);
+    MaybeReportTransportProfile(config_, "client");
+  }
 }
 
 void RcShardClientTransport::ClearRequestSlot(const RcClientQpView& view) {
@@ -431,23 +560,46 @@ void RcShardServerTransport::CompleteResponse(
     int qp_index,
     const ResponseView& response,
     std::uint64_t seq) {
+  const bool profile_enabled   = FLAGS_rdma_rc_profile_interval_ms > 0;
+  const std::uint64_t start_ns = profile_enabled ? NowNs() : 0;
   ValidateClientId(config_, client_id);
   Lane& lane = LaneAt(qp_index);
   auto& pending =
       lane.response_completion_pending.at(static_cast<std::size_t>(client_id));
   const int client_node_id = FLAGS_num_server_processes + client_id;
-  DrainPendingWrite(
-      lane.verbs.get(),
-      &pending,
-      kResponseStatusWrId,
-      ServerWriteContext(
-          config_,
-          client_id,
-          qp_index,
-          seq - 1,
-          ClientResponseOffset(config_) + ResponseStatusOffset(config_),
-          client_node_id,
-          "previous_response_status"));
+  if (profile_enabled && pending != 0) {
+    const std::uint64_t drain_start_ns = NowNs();
+    DrainPendingWrite(
+        lane.verbs.get(),
+        &pending,
+        kResponseStatusWrId,
+        ServerWriteContext(
+            config_,
+            client_id,
+            qp_index,
+            seq - 1,
+            ClientResponseOffset(config_) + ResponseStatusOffset(config_),
+            client_node_id,
+            "previous_response_status"));
+    auto& counters = TransportProfile();
+    counters.drain_pending_response_count.fetch_add(
+        1, std::memory_order_relaxed);
+    counters.drain_pending_response_ns.fetch_add(
+        NowNs() - drain_start_ns, std::memory_order_relaxed);
+  } else {
+    DrainPendingWrite(
+        lane.verbs.get(),
+        &pending,
+        kResponseStatusWrId,
+        ServerWriteContext(
+            config_,
+            client_id,
+            qp_index,
+            seq - 1,
+            ClientResponseOffset(config_) + ResponseStatusOffset(config_),
+            client_node_id,
+            "previous_response_status"));
+  }
   response.status->seq.store(seq, std::memory_order_release);
   response.status->state.store(kRcSlotDone, std::memory_order_release);
 
@@ -462,6 +614,13 @@ void RcShardServerTransport::CompleteResponse(
         response.status->response_bytes,
         kResponsePayloadWrId,
         false);
+    if (profile_enabled) {
+      auto& counters = TransportProfile();
+      counters.response_payload_write_count.fetch_add(
+          1, std::memory_order_relaxed);
+      counters.response_payload_bytes.fetch_add(
+          response.status->response_bytes, std::memory_order_relaxed);
+    }
   }
 
   const std::uint64_t response_status_offset =
@@ -476,6 +635,15 @@ void RcShardServerTransport::CompleteResponse(
       kResponseStatusWrId,
       true);
   pending = true;
+  if (profile_enabled) {
+    auto& counters = TransportProfile();
+    counters.complete_response_count.fetch_add(1, std::memory_order_relaxed);
+    counters.response_status_write_count.fetch_add(
+        1, std::memory_order_relaxed);
+    counters.complete_response_ns.fetch_add(
+        NowNs() - start_ns, std::memory_order_relaxed);
+    MaybeReportTransportProfile(config_, "server");
+  }
 }
 
 } // namespace petps

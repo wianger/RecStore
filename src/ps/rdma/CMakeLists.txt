@@ -1,8 +1,6 @@
 option(ENABLE_RDMA_INTEGRATION_TESTS "Enable RDMA integration tests" OFF)
 
-if(ENABLE_RDMA_INTEGRATION_TESTS)
-    find_package(Python3 COMPONENTS Interpreter REQUIRED)
-endif()
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 add_library(wq_ps_client
     petps_client.cc
@@ -31,6 +29,8 @@ target_link_libraries(petps_server PUBLIC
     mayfly
     TBB::tbb
     Folly::folly
+    boost_context
+    boost_coroutine
     pthread
     rt
 )
@@ -46,6 +46,27 @@ target_link_libraries(petps_integration_test PUBLIC
     gtest
     Folly::folly
     pthread
+)
+
+add_test(
+    NAME petps_hashed_value_transfer_test
+    COMMAND ${Python3_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/src/test/scripts/run_petps_integration.py
+            --server-count 1
+            --config-path ${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.rdma_test.json
+            --test-binary $<TARGET_FILE:petps_integration_test>
+            --gtest-filter=PetPSIntegrationTest.HashedValueBatchGetTransferSingleShard
+            --value-size 512
+            --max-kv-num-per-request 500
+            --client-timeout 45
+            --cluster-timeout 45
+)
+set_tests_properties(
+    petps_hashed_value_transfer_test
+    PROPERTIES
+        SKIP_RETURN_CODE 77
+        TIMEOUT 90
+        LABELS "rdma_integration"
 )
 
 if(ENABLE_RDMA_INTEGRATION_TESTS)

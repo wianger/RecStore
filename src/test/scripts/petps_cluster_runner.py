@@ -58,6 +58,10 @@ class PetPSClusterRunner:
         rdma_put_server_scratch_bytes=None,
         rdma_rc_qps_per_client_per_shard=None,
         rdma_wait_timeout_ms=None,
+        rdma_rc_profile_interval_ms=None,
+        rdma_rc_server_coroutines_per_thread=None,
+        rdma_rc_fake_get_mode=None,
+        rdma_rc_skip_client_copy=None,
         validate_routing=False,
     ):
         self.server_path = Path(server_path)
@@ -102,6 +106,12 @@ class PetPSClusterRunner:
         self.rdma_put_server_scratch_bytes = rdma_put_server_scratch_bytes
         self.rdma_rc_qps_per_client_per_shard = rdma_rc_qps_per_client_per_shard
         self.rdma_wait_timeout_ms = rdma_wait_timeout_ms
+        self.rdma_rc_profile_interval_ms = rdma_rc_profile_interval_ms
+        self.rdma_rc_server_coroutines_per_thread = (
+            rdma_rc_server_coroutines_per_thread
+        )
+        self.rdma_rc_fake_get_mode = rdma_rc_fake_get_mode
+        self.rdma_rc_skip_client_copy = rdma_rc_skip_client_copy
         self.validate_routing = validate_routing
         self.processes = []
         self.process_logs = {}
@@ -206,6 +216,18 @@ class PetPSClusterRunner:
                 "--rdma_rc_qps_per_client_per_shard="
                 f"{self.rdma_rc_qps_per_client_per_shard}"
             )
+        if self.rdma_rc_profile_interval_ms is not None:
+            cmd.append(
+                "--rdma_rc_profile_interval_ms="
+                f"{self.rdma_rc_profile_interval_ms}"
+            )
+        if self.rdma_rc_server_coroutines_per_thread is not None:
+            cmd.append(
+                "--rdma_rc_server_coroutines_per_thread="
+                f"{self.rdma_rc_server_coroutines_per_thread}"
+            )
+        if self.rdma_rc_fake_get_mode is not None:
+            cmd.append(f"--rdma_rc_fake_get_mode={self.rdma_rc_fake_get_mode}")
         return cmd
 
     def build_client_cmd(self, argv, client_index=0):
@@ -266,6 +288,16 @@ class PetPSClusterRunner:
             )
         if self.rdma_wait_timeout_ms is not None:
             cmd.append(f"--rdma_wait_timeout_ms={self.rdma_wait_timeout_ms}")
+        if self.rdma_rc_profile_interval_ms is not None:
+            cmd.append(
+                "--rdma_rc_profile_interval_ms="
+                f"{self.rdma_rc_profile_interval_ms}"
+            )
+        if self.rdma_rc_skip_client_copy is not None:
+            cmd.append(
+                "--rdma_rc_skip_client_copy="
+                f"{str(self.rdma_rc_skip_client_copy).lower()}"
+            )
         return cmd
 
     def is_ready_line(self, line):

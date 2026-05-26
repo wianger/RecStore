@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "base/array.h"
+#include "benchmark/rdma_rc_transport_benchmark_values.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
 #include "ps/rdma/rdma_protocol.h"
@@ -41,6 +42,36 @@ void ExpectFlatSlots(const float* buffer,
   for (std::size_t row = 0; row < expected.size(); ++row) {
     for (int col = 0; col < embedding_dim; ++col) {
       EXPECT_FLOAT_EQ(buffer[row * embedding_dim + col], expected[row][col]);
+    }
+  }
+}
+
+std::vector<std::vector<float>>
+MakeHashedValues(const std::vector<std::uint64_t>& keys, int embedding_dim) {
+  std::vector<std::vector<float>> values;
+  values.reserve(keys.size());
+  for (auto key : keys) {
+    std::vector<float> row;
+    row.reserve(embedding_dim);
+    for (int col = 0; col < embedding_dim; ++col) {
+      row.push_back(recstore::benchmark::MakeHashedValue(key, col));
+    }
+    values.push_back(std::move(row));
+  }
+  return values;
+}
+
+void ExpectHashedFlatSlots(const float* buffer,
+                           const std::vector<std::uint64_t>& keys,
+                           int embedding_dim) {
+  for (std::size_t row = 0; row < keys.size(); ++row) {
+    for (int col = 0; col < embedding_dim; ++col) {
+      const float expected =
+          recstore::benchmark::MakeHashedValue(keys[row], col);
+      const float actual = buffer[row * embedding_dim + col];
+      EXPECT_EQ(recstore::benchmark::FloatBits(actual),
+                recstore::benchmark::FloatBits(expected))
+          << "row=" << row << " key=" << keys[row] << " col=" << col;
     }
   }
 }
@@ -129,6 +160,33 @@ TEST(PetPSIntegrationTest, MissingKeysReturnZeroSlots) {
   for (std::size_t i = 0; i < keys.size() * embedding_dim; ++i) {
     EXPECT_FLOAT_EQ(values[i], 0.0f);
   }
+  client.RevokeRPCResource(rpc_id);
+}
+
+TEST(PetPSIntegrationTest, HashedValueBatchGetTransferSingleShard) {
+  ASSERT_EQ(FLAGS_value_size % static_cast<int>(sizeof(float)), 0);
+  const int embedding_dim = FLAGS_value_size / sizeof(float);
+  auto& client            = SingleShardClient();
+
+  std::vector<std::uint64_t> keys;
+  keys.reserve(500);
+  for (std::uint64_t i = 0; i < 500; ++i) {
+    keys.push_back(4000001ULL + i);
+  }
+  auto values = MakeHashedValues(keys, embedding_dim);
+  ASSERT_EQ(client.PutParameter(keys, values), 0);
+
+  std::vector<float> output(
+      keys.size() * static_cast<std::size_t>(embedding_dim) + 1, 0.0f);
+  int rpc_id = client.GetParameter(
+      base::ConstArray<std::uint64_t>(keys), output.data(), false);
+  client.WaitRPCFinish(rpc_id);
+
+  ExpectHashedFlatSlots(output.data(), keys, embedding_dim);
+  const auto* status = reinterpret_cast<const std::int32_t*>(
+      reinterpret_cast<const char*>(output.data()) +
+      keys.size() * static_cast<std::size_t>(FLAGS_value_size));
+  EXPECT_EQ(*status, static_cast<std::int32_t>(petps::RpcStatus::kOk));
   client.RevokeRPCResource(rpc_id);
 }
 

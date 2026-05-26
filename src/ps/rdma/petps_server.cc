@@ -1,5 +1,7 @@
 #include <folly/init/Init.h>
 
+#include <boost/coroutine2/all.hpp>
+
 #include <atomic>
 #include <algorithm>
 #include <chrono>
@@ -56,6 +58,17 @@ std::uint64_t RdmaGetTraceInterval() {
     return parsed == 0 ? std::uint64_t{5000} : parsed;
   }();
   return interval;
+}
+
+std::uint64_t RdmaRcNowNs() {
+  return static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+}
+
+std::uint64_t Exchange(std::atomic<std::uint64_t>* value) {
+  return value->exchange(0, std::memory_order_relaxed);
 }
 
 std::string TimestampNow() {
@@ -139,18 +152,162 @@ public:
   }
 
 private:
+  struct ProfileCounters {
+    std::atomic<std::uint64_t> scan_rounds{0};
+    std::atomic<std::uint64_t> scanned_slots{0};
+    std::atomic<std::uint64_t> ready_slots{0};
+    std::atomic<std::uint64_t> empty_scan_rounds{0};
+    std::atomic<std::uint64_t> handled_get{0};
+    std::atomic<std::uint64_t> handled_put{0};
+    std::atomic<std::uint64_t> handled_update{0};
+    std::atomic<std::uint64_t> handled_init{0};
+    std::atomic<std::uint64_t> invalid_descriptor{0};
+    std::atomic<std::uint64_t> wrong_shard{0};
+    std::atomic<std::uint64_t> handle_get_ns{0};
+    std::atomic<std::uint64_t> get_batch_get_ns{0};
+    std::atomic<std::uint64_t> get_zero_fill_ns{0};
+    std::atomic<std::uint64_t> get_row_copy_ns{0};
+    std::atomic<std::uint64_t> get_rows{0};
+    std::atomic<std::uint64_t> get_value_bytes{0};
+    std::atomic<std::uint64_t> get_missing_rows{0};
+    std::atomic<std::uint64_t> handle_put_ns{0};
+    std::atomic<std::uint64_t> handle_update_ns{0};
+    std::atomic<std::uint64_t> handle_init_ns{0};
+    std::atomic<std::uint64_t> complete_response_ns{0};
+    std::atomic<std::uint64_t> poll_loop_ns{0};
+    std::atomic<std::uint64_t> next_report_ns{0};
+  };
+
+  void MaybeReportProfile(int thread_id) {
+    if (FLAGS_rdma_rc_profile_interval_ms <= 0 || thread_id != 0) {
+      return;
+    }
+    const std::uint64_t now = RdmaRcNowNs();
+    const std::uint64_t interval =
+        static_cast<std::uint64_t>(FLAGS_rdma_rc_profile_interval_ms) * 1000000;
+    std::uint64_t expected =
+        profile_.next_report_ns.load(std::memory_order_relaxed);
+    if (expected == 0) {
+      profile_.next_report_ns.compare_exchange_strong(
+          expected, now + interval, std::memory_order_relaxed);
+      return;
+    }
+    if (now < expected ||
+        !profile_.next_report_ns.compare_exchange_strong(
+            expected, now + interval, std::memory_order_relaxed)) {
+      return;
+    }
+
+    const std::uint64_t scan_rounds   = Exchange(&profile_.scan_rounds);
+    const std::uint64_t scanned_slots = Exchange(&profile_.scanned_slots);
+    const std::uint64_t ready_slots   = Exchange(&profile_.ready_slots);
+    const std::uint64_t empty_scan_rounds =
+        Exchange(&profile_.empty_scan_rounds);
+    const std::uint64_t handled_get    = Exchange(&profile_.handled_get);
+    const std::uint64_t handled_put    = Exchange(&profile_.handled_put);
+    const std::uint64_t handled_update = Exchange(&profile_.handled_update);
+    const std::uint64_t handled_init   = Exchange(&profile_.handled_init);
+    const std::uint64_t complete_count =
+        handled_get + handled_put + handled_update + handled_init;
+    const std::uint64_t handle_get_ns    = Exchange(&profile_.handle_get_ns);
+    const std::uint64_t get_batch_get_ns = Exchange(&profile_.get_batch_get_ns);
+    const std::uint64_t get_zero_fill_ns = Exchange(&profile_.get_zero_fill_ns);
+    const std::uint64_t get_row_copy_ns  = Exchange(&profile_.get_row_copy_ns);
+    const std::uint64_t get_rows         = Exchange(&profile_.get_rows);
+    const std::uint64_t get_value_bytes  = Exchange(&profile_.get_value_bytes);
+    const std::uint64_t get_missing_rows = Exchange(&profile_.get_missing_rows);
+    const std::uint64_t handle_put_ns    = Exchange(&profile_.handle_put_ns);
+    const std::uint64_t handle_update_ns = Exchange(&profile_.handle_update_ns);
+    const std::uint64_t handle_init_ns   = Exchange(&profile_.handle_init_ns);
+    const std::uint64_t complete_response_ns =
+        Exchange(&profile_.complete_response_ns);
+    const std::uint64_t poll_loop_ns = Exchange(&profile_.poll_loop_ns);
+    std::cout
+        << "component=rdma_rc_server_profile"
+        << " shard=" << shard_id_ << " threads=" << thread_count_
+        << " scan_rounds=" << scan_rounds << " scanned_slots=" << scanned_slots
+        << " ready_slots=" << ready_slots
+        << " empty_scan_rounds=" << empty_scan_rounds << " scan_hit_pct="
+        << (scanned_slots == 0 ? 0.0
+                               : 100.0 * static_cast<double>(ready_slots) /
+                                     static_cast<double>(scanned_slots))
+        << " handled_get=" << handled_get << " handled_put=" << handled_put
+        << " handled_update=" << handled_update
+        << " handled_init=" << handled_init
+        << " invalid_descriptor=" << Exchange(&profile_.invalid_descriptor)
+        << " wrong_shard=" << Exchange(&profile_.wrong_shard)
+        << " handle_get_avg_ns="
+        << (handled_get == 0 ? 0 : handle_get_ns / handled_get)
+        << " get_batch_get_avg_ns="
+        << (handled_get == 0 ? 0 : get_batch_get_ns / handled_get)
+        << " get_zero_fill_avg_ns="
+        << (handled_get == 0 ? 0 : get_zero_fill_ns / handled_get)
+        << " get_row_copy_avg_ns="
+        << (handled_get == 0 ? 0 : get_row_copy_ns / handled_get)
+        << " get_rows=" << get_rows << " get_value_bytes=" << get_value_bytes
+        << " get_missing_rows=" << get_missing_rows << " handle_put_avg_ns="
+        << (handled_put == 0 ? 0 : handle_put_ns / handled_put)
+        << " handle_update_avg_ns="
+        << (handled_update == 0 ? 0 : handle_update_ns / handled_update)
+        << " handle_init_avg_ns="
+        << (handled_init == 0 ? 0 : handle_init_ns / handled_init)
+        << " complete_response_avg_ns="
+        << (complete_count == 0 ? 0 : complete_response_ns / complete_count)
+        << " poll_loop_avg_ns="
+        << (scan_rounds == 0 ? 0 : poll_loop_ns / scan_rounds) << std::endl;
+  }
+
   void HandleGet(const petps::RequestDescriptor& descriptor,
                  const char* payload,
                  petps::RcShardServerTransport::ResponseView* response,
                  int thread_id) {
+    if (FLAGS_rdma_rc_fake_get_mode == "status_only") {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kOk);
+      response->status->response_bytes = 0;
+      return;
+    }
+    if (FLAGS_rdma_rc_fake_get_mode == "payload_memset") {
+      std::memset(response->payload, 0, descriptor.response_bytes);
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kOk);
+      response->status->response_bytes =
+          static_cast<std::uint32_t>(descriptor.response_bytes);
+      return;
+    }
+    if (FLAGS_rdma_rc_fake_get_mode != "none" &&
+        !FLAGS_rdma_rc_fake_get_mode.empty()) {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+      response->status->response_bytes = 0;
+      return;
+    }
+
     base::ConstArray<std::uint64_t> keys(
         reinterpret_cast<const std::uint64_t*>(payload), descriptor.key_count);
+    CachePS::FlatGetProfile get_profile;
+    CachePS::FlatGetProfile* get_profile_ptr =
+        FLAGS_rdma_rc_profile_interval_ms > 0 ? &get_profile : nullptr;
     const bool ok = cache_ps_->GetParameterFlat(
         keys,
         reinterpret_cast<float*>(response->payload),
         descriptor.key_count,
         descriptor.embedding_dim,
-        thread_id);
+        thread_id,
+        get_profile_ptr);
+    if (get_profile_ptr != nullptr) {
+      profile_.get_batch_get_ns.fetch_add(
+          get_profile.batch_get_ns, std::memory_order_relaxed);
+      profile_.get_zero_fill_ns.fetch_add(
+          get_profile.zero_fill_ns, std::memory_order_relaxed);
+      profile_.get_row_copy_ns.fetch_add(
+          get_profile.row_copy_ns, std::memory_order_relaxed);
+      profile_.get_rows.fetch_add(get_profile.rows, std::memory_order_relaxed);
+      profile_.get_value_bytes.fetch_add(
+          get_profile.value_bytes, std::memory_order_relaxed);
+      profile_.get_missing_rows.fetch_add(
+          get_profile.missing_rows, std::memory_order_relaxed);
+    }
     response->status->status = static_cast<std::int32_t>(
         ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
     response->status->response_bytes =
@@ -234,88 +391,211 @@ private:
     LOG(INFO) << "component=rdma_server event=polling_thread_ready thread_id="
               << thread_id;
     const int total_slots = transport_->TotalSlots();
+    const int coroutines_per_thread =
+        std::max(1, FLAGS_rdma_rc_server_coroutines_per_thread);
+    LOG(INFO) << "component=rdma_rc_server event=polling_thread_mode"
+              << " thread_id=" << thread_id
+              << " coroutines_per_thread=" << coroutines_per_thread;
+    if (coroutines_per_thread > 1) {
+      RunCoroutinePollingThread(thread_id, total_slots, coroutines_per_thread);
+      return;
+    }
     while (true) {
+      const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
+      const std::uint64_t poll_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      std::uint64_t scanned_slots       = 0;
+      std::uint64_t ready_slots         = 0;
       for (int slot = thread_id; slot < total_slots; slot += thread_count_) {
-        auto* commit = transport_->RequestCommitAt(slot);
-        if (commit->state.load(std::memory_order_acquire) !=
-            petps::kRcSlotReady) {
-          continue;
+        ++scanned_slots;
+        if (ProcessSlot(slot, thread_id, profile_enabled)) {
+          ++ready_slots;
         }
-        const std::uint64_t seq = commit->seq.load(std::memory_order_acquire);
-        if (seq == 0 || seq == last_seq_[static_cast<std::size_t>(slot)]) {
-          continue;
-        }
-
-        auto* descriptor = transport_->RequestDescriptorAt(slot);
-        std::string error;
-        if (!petps::ValidateRequestDescriptor(
-                *descriptor,
-                transport_->config().request_slot_bytes,
-                transport_->config().response_slot_bytes,
-                &error)) {
-          LOG(ERROR)
-              << "component=rdma_rc_server event=invalid_descriptor"
-              << " shard=" << shard_id_ << " slot=" << slot
-              << " thread_id=" << thread_id << " seq=" << seq
-              << " descriptor_seq=" << descriptor->seq
-              << " client_id=" << descriptor->client_id
-              << " qp=" << descriptor->qp_index << " op=" << descriptor->op
-              << " key_count=" << descriptor->key_count
-              << " payload_bytes=" << descriptor->payload_bytes
-              << " response_bytes=" << descriptor->response_bytes << " error=\""
-              << error << "\"";
-          last_seq_[static_cast<std::size_t>(slot)] = seq;
-          commit->state.store(0, std::memory_order_release);
-          continue;
-        }
-
-        auto response = transport_->OpenClientResponse(
-            descriptor->client_id, descriptor->qp_index);
-        const char* payload = transport_->RequestPayloadAt(slot);
-        VLOG(1) << "component=rdma_rc_server event=consume shard=" << shard_id_
-                << " slot=" << slot << " client_id=" << descriptor->client_id
-                << " qp=" << descriptor->qp_index << " seq=" << seq << " op="
-                << descriptor->op << " key_count=" << descriptor->key_count
-                << " payload_bytes=" << descriptor->payload_bytes
-                << " response_bytes=" << descriptor->response_bytes;
-        response.status->status =
-            static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
-        response.status->response_bytes = 0;
-
-        if (descriptor->shard_id != static_cast<std::uint32_t>(shard_id_)) {
-          LOG(ERROR) << "component=rdma_rc_server event=wrong_shard"
-                     << " expected_shard=" << shard_id_ << " actual_shard="
-                     << descriptor->shard_id << " slot=" << slot
-                     << " client_id=" << descriptor->client_id
-                     << " qp=" << descriptor->qp_index << " seq=" << seq
-                     << " op=" << descriptor->op
-                     << " key_count=" << descriptor->key_count;
-          response.status->status =
-              static_cast<std::int32_t>(petps::RpcStatus::kWrongShard);
-        } else if (descriptor->op ==
-                   static_cast<std::uint16_t>(petps::RcOp::kGet)) {
-          HandleGet(*descriptor, payload, &response, thread_id);
-        } else if (descriptor->op ==
-                   static_cast<std::uint16_t>(petps::RcOp::kPut)) {
-          HandlePut(*descriptor, payload, &response, thread_id);
-        } else if (descriptor->op ==
-                   static_cast<std::uint16_t>(petps::RcOp::kUpdate)) {
-          HandleUpdate(*descriptor, payload, &response, thread_id);
-        } else if (descriptor->op ==
-                   static_cast<std::uint16_t>(petps::RcOp::kInitTable)) {
-          HandleInitTable(*descriptor, payload, &response);
-        }
-
-        std::atomic_thread_fence(std::memory_order_release);
-        transport_->CompleteResponse(
-            descriptor->client_id, descriptor->qp_index, response, seq);
-        VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
-                << " slot=" << slot << " client_id=" << descriptor->client_id
-                << " qp=" << descriptor->qp_index << " seq=" << seq
-                << " status=" << response.status->status
-                << " response_bytes=" << response.status->response_bytes;
-        last_seq_[static_cast<std::size_t>(slot)] = seq;
       }
+      if (profile_enabled) {
+        profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        profile_.scanned_slots.fetch_add(
+            scanned_slots, std::memory_order_relaxed);
+        if (ready_slots == 0) {
+          profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        }
+        profile_.poll_loop_ns.fetch_add(
+            RdmaRcNowNs() - poll_start_ns, std::memory_order_relaxed);
+        MaybeReportProfile(thread_id);
+      }
+      std::this_thread::yield();
+    }
+  }
+
+  bool ProcessSlot(int slot, int thread_id, bool profile_enabled) {
+    auto* commit = transport_->RequestCommitAt(slot);
+    if (commit->state.load(std::memory_order_acquire) != petps::kRcSlotReady) {
+      return false;
+    }
+    const std::uint64_t seq = commit->seq.load(std::memory_order_acquire);
+    if (seq == 0 || seq == last_seq_[static_cast<std::size_t>(slot)]) {
+      return false;
+    }
+    if (profile_enabled) {
+      profile_.ready_slots.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    auto* descriptor = transport_->RequestDescriptorAt(slot);
+    std::string error;
+    if (!petps::ValidateRequestDescriptor(
+            *descriptor,
+            transport_->config().request_slot_bytes,
+            transport_->config().response_slot_bytes,
+            &error)) {
+      LOG(ERROR) << "component=rdma_rc_server event=invalid_descriptor"
+                 << " shard=" << shard_id_ << " slot=" << slot
+                 << " thread_id=" << thread_id << " seq=" << seq
+                 << " descriptor_seq=" << descriptor->seq
+                 << " client_id=" << descriptor->client_id
+                 << " qp=" << descriptor->qp_index << " op=" << descriptor->op
+                 << " key_count=" << descriptor->key_count
+                 << " payload_bytes=" << descriptor->payload_bytes
+                 << " response_bytes=" << descriptor->response_bytes
+                 << " error=\"" << error << "\"";
+      if (profile_enabled) {
+        profile_.invalid_descriptor.fetch_add(1, std::memory_order_relaxed);
+      }
+      last_seq_[static_cast<std::size_t>(slot)] = seq;
+      commit->state.store(0, std::memory_order_release);
+      return true;
+    }
+
+    auto response = transport_->OpenClientResponse(
+        descriptor->client_id, descriptor->qp_index);
+    const char* payload = transport_->RequestPayloadAt(slot);
+    VLOG(1) << "component=rdma_rc_server event=consume shard=" << shard_id_
+            << " slot=" << slot << " client_id=" << descriptor->client_id
+            << " qp=" << descriptor->qp_index << " seq=" << seq << " op="
+            << descriptor->op << " key_count=" << descriptor->key_count
+            << " payload_bytes=" << descriptor->payload_bytes
+            << " response_bytes=" << descriptor->response_bytes;
+    response.status->status =
+        static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+    response.status->response_bytes = 0;
+
+    if (descriptor->shard_id != static_cast<std::uint32_t>(shard_id_)) {
+      LOG(ERROR) << "component=rdma_rc_server event=wrong_shard"
+                 << " expected_shard=" << shard_id_
+                 << " actual_shard=" << descriptor->shard_id << " slot=" << slot
+                 << " client_id=" << descriptor->client_id
+                 << " qp=" << descriptor->qp_index << " seq=" << seq << " op="
+                 << descriptor->op << " key_count=" << descriptor->key_count;
+      if (profile_enabled) {
+        profile_.wrong_shard.fetch_add(1, std::memory_order_relaxed);
+      }
+      response.status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kWrongShard);
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kGet)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      HandleGet(*descriptor, payload, &response, thread_id);
+      if (profile_enabled) {
+        profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_get_ns.fetch_add(
+            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kPut)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      HandlePut(*descriptor, payload, &response, thread_id);
+      if (profile_enabled) {
+        profile_.handled_put.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_put_ns.fetch_add(
+            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kUpdate)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      HandleUpdate(*descriptor, payload, &response, thread_id);
+      if (profile_enabled) {
+        profile_.handled_update.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_update_ns.fetch_add(
+            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kInitTable)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      HandleInitTable(*descriptor, payload, &response);
+      if (profile_enabled) {
+        profile_.handled_init.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_init_ns.fetch_add(
+            RdmaRcNowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    }
+
+    std::atomic_thread_fence(std::memory_order_release);
+    const std::uint64_t complete_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+    transport_->CompleteResponse(
+        descriptor->client_id, descriptor->qp_index, response, seq);
+    if (profile_enabled) {
+      profile_.complete_response_ns.fetch_add(
+          RdmaRcNowNs() - complete_start_ns, std::memory_order_relaxed);
+    }
+    VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
+            << " slot=" << slot << " client_id=" << descriptor->client_id
+            << " qp=" << descriptor->qp_index << " seq=" << seq
+            << " status=" << response.status->status
+            << " response_bytes=" << response.status->response_bytes;
+    last_seq_[static_cast<std::size_t>(slot)] = seq;
+    return true;
+  }
+
+  void CoroutineSlotScanner(
+      boost::coroutines2::coroutine<void>::push_type& sink,
+      int thread_id,
+      int worker_id,
+      int worker_count,
+      int total_slots) {
+    while (true) {
+      const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
+      const std::uint64_t poll_start_ns = profile_enabled ? RdmaRcNowNs() : 0;
+      std::uint64_t scanned_slots       = 0;
+      std::uint64_t ready_slots         = 0;
+      for (int slot = worker_id; slot < total_slots; slot += worker_count) {
+        ++scanned_slots;
+        if (ProcessSlot(slot, thread_id, profile_enabled)) {
+          ++ready_slots;
+        }
+      }
+      if (profile_enabled) {
+        profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        profile_.scanned_slots.fetch_add(
+            scanned_slots, std::memory_order_relaxed);
+        if (ready_slots == 0) {
+          profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        }
+        profile_.poll_loop_ns.fetch_add(
+            RdmaRcNowNs() - poll_start_ns, std::memory_order_relaxed);
+      }
+      sink();
+    }
+  }
+
+  void RunCoroutinePollingThread(
+      int thread_id, int total_slots, int coroutines_per_thread) {
+    using Coroutine        = boost::coroutines2::coroutine<void>;
+    const int worker_count = thread_count_ * coroutines_per_thread;
+    std::vector<std::unique_ptr<Coroutine::pull_type>> coroutines;
+    coroutines.reserve(static_cast<std::size_t>(coroutines_per_thread));
+    for (int coroutine_id = 0; coroutine_id < coroutines_per_thread;
+         ++coroutine_id) {
+      const int worker_id = thread_id * coroutines_per_thread + coroutine_id;
+      coroutines.emplace_back(std::make_unique<Coroutine::pull_type>(
+          [this, thread_id, worker_id, worker_count, total_slots](
+              Coroutine::push_type& sink) {
+            CoroutineSlotScanner(
+                sink, thread_id, worker_id, worker_count, total_slots);
+          }));
+    }
+    while (true) {
+      for (auto& coroutine : coroutines) {
+        (*coroutine)();
+      }
+      MaybeReportProfile(thread_id);
       std::this_thread::yield();
     }
   }
@@ -326,6 +606,7 @@ private:
   std::unique_ptr<petps::RcShardServerTransport> transport_;
   std::vector<std::thread> threads_;
   std::vector<std::uint64_t> last_seq_;
+  ProfileCounters profile_;
 };
 
 } // namespace
@@ -340,7 +621,7 @@ int main(int argc, char* argv[]) {
 
   base::PMMmapRegisterCenter::GetConfig().backend =
       base::PMMmapRegisterCenter::BackendFromUseDram(FLAGS_use_dram);
-  base::PMMmapRegisterCenter::GetConfig().numa_id  = FLAGS_numa_id;
+  base::PMMmapRegisterCenter::GetConfig().numa_id = FLAGS_numa_id;
 
   extern int global_socket_id;
   global_socket_id = FLAGS_numa_id;

@@ -46,6 +46,15 @@ class CachePS {
 public:
   using key_t = uint64_t;
 
+  struct FlatGetProfile {
+    std::uint64_t batch_get_ns = 0;
+    std::uint64_t zero_fill_ns = 0;
+    std::uint64_t row_copy_ns  = 0;
+    std::uint64_t rows         = 0;
+    std::uint64_t value_bytes  = 0;
+    std::uint64_t missing_rows = 0;
+  };
+
   CachePS(json config) {
     LOG(INFO) << "cache ps config: " << config.dump(2);
     BaseKVConfig kv_config;
@@ -216,11 +225,13 @@ public:
     return true;
   }
 
-  bool GetParameterFlat(base::ConstArray<uint64_t> keys,
-                        float* values,
-                        int64_t num_rows,
-                        int64_t embedding_dim,
-                        int tid) {
+  bool GetParameterFlat(
+      base::ConstArray<uint64_t> keys,
+      float* values,
+      int64_t num_rows,
+      int64_t embedding_dim,
+      int tid,
+      FlatGetProfile* profile = nullptr) {
     if (values == nullptr) {
       LOG(ERROR) << "GetParameterFlat values pointer is null";
       return false;
@@ -239,6 +250,16 @@ public:
     const auto batch_get_start = std::chrono::steady_clock::now();
     std::vector<base::ConstArray<float>> value_slices;
     base_kv_->BatchGet(keys, &value_slices, tid);
+    if (profile != nullptr) {
+      profile->batch_get_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - batch_get_start)
+              .count());
+      profile->rows = static_cast<std::uint64_t>(num_rows);
+      profile->value_bytes =
+          static_cast<std::uint64_t>(num_rows) *
+          static_cast<std::uint64_t>(embedding_dim) * sizeof(float);
+    }
     recstore::ReportLocalShmStageMetric(
         "cache_ps_get_batch_get_us",
         recstore::LocalShmElapsedUs(batch_get_start));
@@ -259,21 +280,37 @@ public:
       }
     }
 
-    const auto copy_start = std::chrono::steady_clock::now();
-    std::fill_n(
-        values,
-        static_cast<size_t>(num_rows) * static_cast<size_t>(embedding_dim),
-        0.0f);
+    const auto row_copy_start          = std::chrono::steady_clock::now();
+    std::uint64_t missing_zero_fill_ns = 0;
     for (int64_t row = 0; row < num_rows; ++row) {
       const auto& slice = value_slices[static_cast<size_t>(row)];
       if (slice.Size() > 0) {
         std::copy_n(slice.Data(),
                     static_cast<int64_t>(slice.Size()),
                     values + row * embedding_dim);
+      } else {
+        const auto missing_zero_start = std::chrono::steady_clock::now();
+        std::fill_n(values + row * embedding_dim,
+                    static_cast<size_t>(embedding_dim),
+                    0.0f);
+        if (profile != nullptr) {
+          missing_zero_fill_ns += static_cast<std::uint64_t>(
+              std::chrono::duration_cast< std::chrono::nanoseconds>(
+                  std::chrono::steady_clock::now() - missing_zero_start)
+                  .count());
+          ++profile->missing_rows;
+        }
       }
     }
+    if (profile != nullptr) {
+      profile->zero_fill_ns = missing_zero_fill_ns;
+      profile->row_copy_ns  = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - row_copy_start)
+              .count());
+    }
     recstore::ReportLocalShmStageMetric(
-        "cache_ps_get_copy_us", recstore::LocalShmElapsedUs(copy_start));
+        "cache_ps_get_copy_us", recstore::LocalShmElapsedUs(row_copy_start));
     return true;
   }
 
