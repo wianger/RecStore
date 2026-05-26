@@ -55,5 +55,3 @@ if(USE_GPERF_PROFILING)
   target_link_libraries(benchmark_kv_engine PRIVATE profiler)
 endif()
 
-add_executable(bench benchmark_zipf.cc)
-target_link_libraries(bench PUBLIC pthread base kv_engine)

@@ -228,7 +228,7 @@ BaseKVConfig BuildConfig() {
           "fasterkv_mutable_fraction must be in [0, 1]");
     }
     config.json_config_ = {
-        {"external_engine_type", "KVEngineFasterKV"},
+        {"engine_type", "KVEngineFasterKV"},
         {"capacity", capacity},
         {"path", FLAGS_ssd_path.empty() ? FLAGS_dram_path : FLAGS_ssd_path},
         {"value_size", FLAGS_value_size},
@@ -263,7 +263,7 @@ BaseKVConfig BuildConfig() {
           "dram_path or ssd_path must be set for " + FLAGS_engine_class);
     }
     config.json_config_ = {
-        {"external_engine_type", FLAGS_engine_class},
+        {"engine_type", FLAGS_engine_class},
         {"capacity", capacity},
         {"path", data_path},
         {"value_size", FLAGS_value_size}};
@@ -285,6 +285,7 @@ BaseKVConfig BuildConfig() {
   const bool ssd_index = IsSsdIndexType(FLAGS_index_type);
 
   config.json_config_ = {
+      {"engine_type", "KVEngineComposite"},
       {"capacity", capacity},
       {"index", {{"type", FLAGS_index_type}}},
       {"value",

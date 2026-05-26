@@ -215,22 +215,16 @@
       "properties": {
         "engine_type": {
           "type": "string",
-          "description": "Deprecated alias for external_engine_type. Use external_engine_type for new configs.",
+          "description": "KV engine factory name. KVEngineComposite uses nested index/value; KVEnginePetKV and external adapters use flat top-level fields.",
           "enum": [
+            "KVEngineComposite",
+            "KVEnginePetKV",
             "KVEngineFasterKV",
             "KVEngineHPSHashMap",
             "KVEngineHPSRocksDB"
           ]
         },
-        "external_engine_type": {
-          "type": "string",
-          "description": "Explicit selector for external KV backend adapters. RecStore built-in KV uses index/value instead.",
-          "enum": [
-            "KVEngineFasterKV",
-            "KVEngineHPSHashMap",
-            "KVEngineHPSRocksDB"
-          ]
-        },
+        "external_engine_type": false,
         "path": {
           "type": "string",
           "minLength": 1
@@ -285,6 +279,16 @@
         "capacity": {
           "type": "integer",
           "minimum": 1
+        },
+        "value_capacity": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total value-store byte budget for KVEnginePetKV."
+        },
+        "shard_num": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "PetMultiKV shard count; defaults to 16 when omitted."
         },
         "index": {
           "type": "object",
@@ -470,13 +474,85 @@
       },
       "allOf": [
         {
+          "if": {
+            "anyOf": [
+              {
+                "not": {
+                  "required": [
+                    "engine_type"
+                  ]
+                }
+              },
+              {
+                "properties": {
+                  "engine_type": {
+                    "const": "KVEngineComposite"
+                  }
+                },
+                "required": [
+                  "engine_type"
+                ]
+              }
+            ]
+          },
+          "then": {
+            "required": [
+              "capacity",
+              "index",
+              "value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "engine_type": {
+                "const": "KVEnginePetKV"
+              }
+            },
+            "required": [
+              "engine_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "path",
+              "capacity",
+              "value_size",
+              "value_capacity"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "engine_type": {
+                "enum": [
+                  "KVEngineFasterKV",
+                  "KVEngineHPSHashMap",
+                  "KVEngineHPSRocksDB"
+                ]
+              }
+            },
+            "required": [
+              "engine_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "path",
+              "capacity",
+              "value_size"
+            ]
+          }
+        },
+        {
           "anyOf": [
             {
               "required": [
-                "external_engine_type",
-                "path",
                 "capacity",
-                "value_size"
+                "index",
+                "value"
               ]
             },
             {
@@ -485,13 +561,6 @@
                 "path",
                 "capacity",
                 "value_size"
-              ]
-            },
-            {
-              "required": [
-                "capacity",
-                "index",
-                "value"
               ]
             },
             {
@@ -530,66 +599,6 @@
                   "path",
                   "io"
                 ]
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "required": [
-              "external_engine_type",
-              "engine_type"
-            ],
-            "properties": {
-              "external_engine_type": {
-                "const": "KVEngineFasterKV"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "engine_type": {
-                "const": "KVEngineFasterKV"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "required": [
-              "external_engine_type",
-              "engine_type"
-            ],
-            "properties": {
-              "external_engine_type": {
-                "const": "KVEngineHPSHashMap"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "engine_type": {
-                "const": "KVEngineHPSHashMap"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "required": [
-              "external_engine_type",
-              "engine_type"
-            ],
-            "properties": {
-              "external_engine_type": {
-                "const": "KVEngineHPSRocksDB"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "engine_type": {
-                "const": "KVEngineHPSRocksDB"
               }
             }
           }

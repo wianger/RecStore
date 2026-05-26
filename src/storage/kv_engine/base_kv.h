@@ -17,8 +17,9 @@ struct BaseKVConfig {
   json json_config_; // add your custom config in this field
 };
 /*
-KVEngine uses the nested configuration format:
+KVEngineComposite uses the nested configuration format:
 {
+  "engine_type": "KVEngineComposite",
   "capacity": 1000000,
   "index": {"type": "DRAM_EXTENDIBLE_HASH"},
   "value": {
@@ -32,10 +33,10 @@ KVEngine uses the nested configuration format:
   }
 }
 
-ResolveEngine returns "KVEngine" for every valid configuration. Legacy fields
-such as top-level path/index_type/value_type and nested file_path are rejected.
-SSD index uses index.path, single-layer value stores use value.path, and TIERED
-value stores use value.dram_allocator.path/value.ssd_allocator.path.
+ResolveEngine returns the matching factory name; engine_type defaults to
+KVEngineComposite when omitted.
+Field validation happens in each engine constructor. KVEngineComposite rejects
+legacy top-level fields such as path/index_type/value_type and nested file_path.
 */
 
 class BaseKV {
