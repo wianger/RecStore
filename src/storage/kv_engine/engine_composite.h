@@ -311,6 +311,10 @@ public:
     LOG(INFO) << value_store_->GetInfo();
   }
 
+  std::string ExtraResultFields() const override {
+    return value_store_ ? value_store_->ExtraResultFields() : "";
+  }
+
 private:
   void PutInternal(uint64_t key,
                    const void* data,

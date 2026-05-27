@@ -19,9 +19,13 @@ namespace recstore {
 std::string BackendNameFromConfig(const json& config) {
   switch (ResolveFrameworkPSClientType(config)) {
   case PSClientType::kGrpc:
-    return "grpc";
+    return HasFrameworkDistributedClientConfig(config)
+             ? "distributed_grpc"
+             : "grpc";
   case PSClientType::kBrpc:
-    return "brpc";
+    return HasFrameworkDistributedClientConfig(config)
+             ? "distributed_brpc"
+             : "brpc";
   case PSClientType::kRdma:
     return "rdma";
   case PSClientType::kLocalShm:

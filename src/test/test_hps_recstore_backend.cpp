@@ -139,3 +139,31 @@ TEST(HpsRecStoreBackendTest, SsdValueStoreInsertFetchAndMissCallback) {
 
   std::filesystem::remove_all(path);
 }
+
+TEST(HpsRecStoreBackendTest, TieredValueStoreInsertFetchAndMissCallback) {
+  std::string reason;
+  if (!test_utils::CanUseIoUring(&reason))
+    GTEST_SKIP() << reason;
+
+  const std::string path = "/tmp/test_hps_recstore_backend_tiered_" +
+                           std::to_string(static_cast<long long>(getpid()));
+  const std::string dram_path =
+      "/dev/shm/recstore_hps_tiered_" +
+      std::to_string(std::hash<std::string>{}(path)) + "_dram";
+  std::filesystem::remove_all(path);
+  std::filesystem::remove_all(dram_path);
+  std::filesystem::create_directories(path);
+
+  auto params                = MakeParams(path);
+  params.value_store_type    = "TIERED_VALUE_STORE";
+  params.dram_capacity_bytes = sizeof(float) * 2;
+  params.ssd_capacity_bytes  = 1024 * 1024;
+  params.ssd_value_file      = path + "/tiered_value_pages.db";
+  params.ssd_io_backend      = "IOURING";
+  params.ssd_queue_depth     = 64;
+  recstore::storage::HpsRecStoreBackend<long long> backend(params);
+  AssertInsertFetchAndMiss(&backend);
+
+  std::filesystem::remove_all(path);
+  std::filesystem::remove_all(dram_path);
+}

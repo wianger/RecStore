@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <fstream>
 #include <memory>
 #include <mutex>
@@ -32,6 +33,7 @@ struct HpsRecStoreBackendParams : public HugeCTR::VolatileBackendParams {
   uint32_t value_size{0};
   uint64_t dram_capacity_bytes{0};
   uint64_t ssd_capacity_bytes{0};
+  double tiered_high_watermark_ratio{0.0};
   std::string ssd_io_backend{"IOURING"};
   std::string ssd_value_file;
   int ssd_queue_depth{512};
@@ -72,7 +74,6 @@ public:
         {"index", {{"type", params.index_type}}},
         {"value",
          {{"type", params.value_store_type},
-          {"path", params.path},
           {"default_value_size_hint", value_size}}}};
 
     auto& value_config = cfg.json_config_["value"];
@@ -80,6 +81,11 @@ public:
         params.value_store_type == "TIERED_VALUE_STORE") {
       value_config["dram_allocator"] = {
           {"type", params.dram_allocator}, {"capacity_bytes", dram_capacity}};
+      if (params.value_store_type == "DRAM_VALUE_STORE") {
+        value_config["path"] = params.path;
+      } else {
+        value_config["dram_allocator"]["path"] = TieredDramPath(params.path);
+      }
     }
     if (params.value_store_type == "SSD_VALUE_STORE" ||
         params.value_store_type == "TIERED_VALUE_STORE") {
@@ -92,10 +98,18 @@ public:
            {{"type", params.ssd_io_backend},
             {"queue_depth", params.ssd_queue_depth},
             {"base_offset_bytes", 4096}}}};
-      value_config["path"] = ssd_value_file;
+      if (params.value_store_type == "SSD_VALUE_STORE") {
+        value_config["path"] = ssd_value_file;
+      } else {
+        value_config["ssd_allocator"]["path"] = ssd_value_file;
+      }
     }
     if (params.value_store_type == "TIERED_VALUE_STORE") {
       value_config["tiering"] = {{"cache_policy", "LRU"}};
+      if (params.tiered_high_watermark_ratio > 0.0) {
+        value_config["tiering"]["high_watermark_ratio"] =
+            params.tiered_high_watermark_ratio;
+      }
     }
 
     auto resolved = base::ResolveEngine(cfg);
@@ -108,6 +122,10 @@ public:
 
   const char* get_name() const override { return "RecStoreBackend"; }
   bool is_shared() const override { return false; }
+
+  std::string extra_result_fields() const {
+    return kv_ ? kv_->ExtraResultFields() : "";
+  }
 
   size_t size(const std::string& table_name) const override {
     std::lock_guard<std::mutex> lock(table_sizes_mu_);
@@ -332,6 +350,11 @@ private:
           "HpsRecStoreBackend SSD value_size exceeds max SSD block size");
     }
     return slot;
+  }
+
+  static std::string TieredDramPath(const std::string& path) {
+    const std::string suffix = std::to_string(std::hash<std::string>{}(path));
+    return "/dev/shm/recstore_hps_tiered_" + suffix + "_dram";
   }
 
   std::unique_ptr<BaseKV> kv_;

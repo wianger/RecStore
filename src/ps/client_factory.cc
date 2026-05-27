@@ -4,9 +4,12 @@
 
 #include "base/factory.h"
 #include "ps/brpc/brpc_ps_client.h"
+#include "ps/brpc/dist_brpc_ps_client.h"
 #include "ps/grpc/grpc_ps_client.h"
+#include "ps/grpc/dist_grpc_ps_client.h"
 #include "ps/local_shm/local_shm_client.h"
 #include "ps/rdma/rdma_ps_client_adapter.h"
+#include "framework/common/ps_client_config_adapter.h"
 
 namespace recstore {
 
@@ -33,6 +36,17 @@ std::unique_ptr<BasePSClient>
 CreatePSClient(const PSClientCreateOptions& options) {
   if (options.type == PSClientType::kRdma) {
     return std::make_unique<RDMAPSClientAdapter>(options.raw_config);
+  }
+
+  if (HasFrameworkDistributedClientConfig(options.raw_config)) {
+    if (options.type == PSClientType::kGrpc) {
+      return std::make_unique<DistributedGRPCParameterClient>(
+          options.raw_config);
+    }
+    if (options.type == PSClientType::kBrpc) {
+      return std::make_unique<DistributedBRPCParameterClient>(
+          options.raw_config);
+    }
   }
 
   BasePSClient* client = base::Factory<BasePSClient, json>::NewInstance(
