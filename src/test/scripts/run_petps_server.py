@@ -40,7 +40,7 @@ def main():
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run RDMA petps_server cluster with integrated memcached lifecycle. "
+            "Run RDMA petps_server cluster with shard-0 control-plane lifecycle. "
             "Designed to align with ps_server-style config_path startup."
         )
     )
@@ -50,23 +50,17 @@ def main():
     parser.add_argument("--thread-num", type=int, default=1)
     parser.add_argument("--value-size", type=int, default=16)
     parser.add_argument("--max-kv-num-per-request", type=int, default=64)
-    parser.add_argument(
-        "--use-local-memcached",
-        choices=["always", "auto", "never"],
-        default="auto",
-    )
-    parser.add_argument("--memcached-host", default="127.0.0.1")
-    parser.add_argument("--memcached-port", type=int, default=21211)
+    parser.add_argument("--rdma-namespace", default="auto")
+    parser.add_argument("--rdma-control-plane-host", default="127.0.0.1")
+    parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument("--timeout", type=int, default=60)
     parser.add_argument("--rdma-per-thread-response-limit-bytes", type=int)
-    parser.add_argument("--rdma-server-ready-timeout-sec", type=int)
-    parser.add_argument("--rdma-server-ready-poll-ms", type=int)
     parser.add_argument("--rdma-client-receive-arena-bytes", type=int)
     parser.add_argument("--validate-routing", action="store_true")
     parser.add_argument(
         "--show-runner-logs",
         action="store_true",
-        help="show memcached/status logs from PetPSClusterRunner",
+        help="show control-plane/status logs from PetPSClusterRunner",
     )
     args = parser.parse_args()
 
@@ -78,22 +72,22 @@ def main():
         thread_num=args.thread_num,
         value_size=args.value_size,
         max_kv_num_per_request=args.max_kv_num_per_request,
-        use_local_memcached=args.use_local_memcached,
-        memcached_host=args.memcached_host,
-        memcached_port=args.memcached_port,
         timeout=args.timeout,
+        verbose=args.show_runner_logs,
         show_status_logs=args.show_runner_logs,
-        show_memcached_logs=args.show_runner_logs,
+        show_control_plane_logs=args.show_runner_logs,
+        rdma_namespace=args.rdma_namespace,
+        rdma_control_plane_host=args.rdma_control_plane_host,
+        rdma_control_plane_port=args.rdma_control_plane_port,
         rdma_per_thread_response_limit_bytes=args.rdma_per_thread_response_limit_bytes,
-        rdma_server_ready_timeout_sec=args.rdma_server_ready_timeout_sec,
-        rdma_server_ready_poll_ms=args.rdma_server_ready_poll_ms,
         rdma_client_receive_arena_bytes=args.rdma_client_receive_arena_bytes,
         validate_routing=args.validate_routing,
     )
 
     print(
         f"[petps-launch] config={args.config_path} servers={server_count} "
-        f"clients={args.client_count} memcached_mode={args.use_local_memcached}"
+        f"clients={args.client_count} control_plane="
+        f"{runner.rdma_control_plane_host}:{runner.rdma_control_plane_port}"
     )
     runner.start()
     print("[petps-launch] petps server cluster is running. Press Ctrl+C to stop.")

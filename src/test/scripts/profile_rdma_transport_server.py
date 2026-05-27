@@ -44,13 +44,9 @@ def parse_args():
     parser.add_argument("--timeout-sec", type=int, default=300)
     parser.add_argument("--profile-signal", type=int, default=signal.SIGUSR2)
     parser.add_argument("--profile-frequency", type=int, default=1000)
-    parser.add_argument(
-        "--use-local-memcached",
-        choices=["auto", "always", "never"],
-        default="auto",
-    )
-    parser.add_argument("--memcached-host", default="127.0.0.1")
-    parser.add_argument("--memcached-port", type=int, default=21211)
+    parser.add_argument("--rdma-namespace", default="auto")
+    parser.add_argument("--rdma-control-plane-host", default="127.0.0.1")
+    parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument("--show-runner-logs", action="store_true")
     return parser.parse_args()
 
@@ -74,10 +70,10 @@ def main():
         max_kv_num_per_request=args.batch_keys,
         verbose=args.show_runner_logs,
         show_status_logs=args.show_runner_logs,
-        show_memcached_logs=args.show_runner_logs,
-        use_local_memcached=args.use_local_memcached,
-        memcached_host=args.memcached_host,
-        memcached_port=args.memcached_port,
+        show_control_plane_logs=args.show_runner_logs,
+        rdma_namespace=args.rdma_namespace,
+        rdma_control_plane_host=args.rdma_control_plane_host,
+        rdma_control_plane_port=args.rdma_control_plane_port,
         rdma_put_protocol_version=2,
         rdma_put_v2_transfer_mode=args.rdma_put_v2_transfer_mode,
         rdma_wait_timeout_ms=30000,

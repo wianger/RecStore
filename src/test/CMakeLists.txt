@@ -603,6 +603,18 @@ target_link_libraries(test_rdma_rc_protocol PUBLIC
 )
 add_test(NAME test_rdma_rc_protocol COMMAND test_rdma_rc_protocol)
 
+add_executable(test_rdma_control_plane
+    test_rdma_control_plane.cpp
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/control_plane.cc
+)
+target_link_libraries(test_rdma_control_plane PUBLIC
+    base
+    gtest
+    gtest_main
+    pthread
+)
+add_test(NAME test_rdma_control_plane COMMAND test_rdma_control_plane)
+
 add_executable(test_ps_transport_benchmark test_ps_transport_benchmark.cpp)
 target_link_libraries(test_ps_transport_benchmark PUBLIC
     base

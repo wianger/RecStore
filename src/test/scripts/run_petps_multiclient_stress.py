@@ -8,14 +8,14 @@ from petps_cluster_runner import PetPSClusterRunner, REPO_ROOT, _to_text
 from ps_server_helpers import RDMA_SKIP_EXIT_CODE, get_rdma_skip_reason
 from ps_test_config import resolve_rdma_integration_config
 from run_petps_integration import (
-    is_memcached_noise_line,
+    is_runner_noise_line,
     normalize_timeout,
 )
 
 
 def print_filtered_output(text, show_runner_logs, client_index):
     for line in text.splitlines():
-        if not show_runner_logs and is_memcached_noise_line(line):
+        if not show_runner_logs and is_runner_noise_line(line):
             continue
         print(f"[petps-client:{client_index}] {line}")
 
@@ -112,17 +112,13 @@ def main():
     parser.add_argument("--client-timeout", type=int, default=45)
     parser.add_argument("--cluster-timeout", type=int, default=25)
     parser.add_argument("--status-refresh-interval", type=float, default=2.0)
-    parser.add_argument(
-        "--use-local-memcached",
-        choices=["always", "auto", "never"],
-        default="auto",
-    )
-    parser.add_argument("--memcached-host", default="127.0.0.1")
-    parser.add_argument("--memcached-port", type=int, default=21211)
+    parser.add_argument("--rdma-namespace", default="auto")
+    parser.add_argument("--rdma-control-plane-host", default="127.0.0.1")
+    parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument(
         "--show-runner-logs",
         action="store_true",
-        help="show memcached/status logs from runner and integration binary",
+        help="show control-plane/status logs from runner and integration binary",
     )
     args = parser.parse_args()
 
@@ -140,13 +136,14 @@ def main():
         thread_num=1,
         value_size=args.value_size,
         max_kv_num_per_request=args.max_kv_num_per_request,
-        use_local_memcached=args.use_local_memcached,
-        memcached_host=args.memcached_host,
-        memcached_port=args.memcached_port,
         timeout=cluster_timeout,
+        verbose=args.show_runner_logs,
         status_refresh_interval=args.status_refresh_interval,
         show_status_logs=args.show_runner_logs,
-        show_memcached_logs=args.show_runner_logs,
+        show_control_plane_logs=args.show_runner_logs,
+        rdma_namespace=args.rdma_namespace,
+        rdma_control_plane_host=args.rdma_control_plane_host,
+        rdma_control_plane_port=args.rdma_control_plane_port,
     )
 
     with runner.run():

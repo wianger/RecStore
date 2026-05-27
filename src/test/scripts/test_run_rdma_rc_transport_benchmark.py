@@ -109,6 +109,8 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
         self.assertIn("--server-numa-id", completed.stdout)
         self.assertIn("--fake-get-mode", completed.stdout)
         self.assertIn("--skip-client-copy", completed.stdout)
+        self.assertIn("--rdma-control-plane-host", completed.stdout)
+        self.assertNotIn("--use-local-memcached", completed.stdout)
 
     def test_parse_client_numa_ids_requires_one_id_per_client(self):
         self.assertEqual(parse_client_numa_ids("0,1", 2), [0, 1])

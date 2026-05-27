@@ -26,12 +26,12 @@ from run_rdma_transport_benchmarks import (
 class TestRunRDMATransportBenchmarks(unittest.TestCase):
     def test_rdma_runner_uses_rdma_specific_config(self):
         args = SimpleNamespace(
-            use_local_memcached="never",
-            memcached_host="127.0.0.1",
-            memcached_port=21211,
             show_runner_logs=False,
             batch_keys=500,
             rdma_thread_num=4,
+            rdma_namespace="bench-ns",
+            rdma_control_plane_host="127.0.0.2",
+            rdma_control_plane_port=25001,
             rdma_put_protocol_version=1,
             rdma_put_v2_transfer_mode="read",
             rdma_put_v2_push_slot_bytes=262144,
@@ -48,6 +48,9 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         self.assertEqual(runner.config_path, expected)
         self.assertEqual(runner.thread_num, 4)
         self.assertEqual(runner.max_kv_num_per_request, 500)
+        self.assertEqual(runner.rdma_namespace, "bench-ns")
+        self.assertEqual(runner.rdma_control_plane_host, "127.0.0.2")
+        self.assertEqual(runner.rdma_control_plane_port, 25001)
         self.assertEqual(runner.rdma_put_protocol_version, 1)
         self.assertEqual(runner.rdma_put_v2_transfer_mode, "read")
         self.assertEqual(runner.rdma_put_v2_push_slot_bytes, 262144)
@@ -170,7 +173,8 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         self.assertIn("--rdma-only", completed.stdout)
         self.assertIn("--rdma-put-protocol-version", completed.stdout)
         self.assertIn("--rdma-put-v2-transfer-mode", completed.stdout)
-        self.assertNotIn("--rdma-transport-mode", completed.stdout)
+        self.assertIn("--rdma-control-plane-host", completed.stdout)
+        self.assertNotIn("--use-local-memcached", completed.stdout)
 
 
 if __name__ == "__main__":

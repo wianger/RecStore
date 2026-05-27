@@ -18,11 +18,9 @@ from ps_test_config import (
 )
 
 
-MEMCACHED_NOISE_PATTERNS = (
-    "[petps-memcached]",
-    "[petps-status] phase=memcached",
-    "[memcached-endpoint]",
-    "use memcached in ",
+CONTROL_PLANE_NOISE_PATTERNS = (
+    "[petps-control-plane]",
+    "component=rdma_control_plane",
 )
 
 SUMMARY_RE = re.compile(
@@ -42,8 +40,8 @@ SUMMARY_RE = re.compile(
 )
 
 
-def is_memcached_noise_line(line):
-    return any(pattern in line for pattern in MEMCACHED_NOISE_PATTERNS)
+def is_runner_noise_line(line):
+    return any(pattern in line for pattern in CONTROL_PLANE_NOISE_PATTERNS)
 
 
 def is_summary_line(line):
@@ -54,7 +52,7 @@ def print_filtered_output(text, show_runner_logs, quiet):
     for line in text.splitlines():
         if quiet and not is_summary_line(line):
             continue
-        if not show_runner_logs and is_memcached_noise_line(line):
+        if not show_runner_logs and is_runner_noise_line(line):
             continue
         print(line)
 
@@ -467,13 +465,9 @@ def main():
     parser.add_argument("--max-kv-num-per-request", type=int)
     parser.add_argument("--client-timeout", type=int, default=120)
     parser.add_argument("--cluster-timeout", type=int, default=35)
-    parser.add_argument(
-        "--use-local-memcached",
-        choices=["always", "auto", "never"],
-        default="auto",
-    )
-    parser.add_argument("--memcached-host", default="127.0.0.1")
-    parser.add_argument("--memcached-port", type=int, default=21211)
+    parser.add_argument("--rdma-namespace", default="auto")
+    parser.add_argument("--rdma-control-plane-host", default="127.0.0.1")
+    parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument(
         "--qps-per-client-per-shard",
         "--rdma-rc-qps-per-client-per-shard",
@@ -588,12 +582,12 @@ def main():
             value_size=args.value_size,
             max_kv_num_per_request=max_kv_num_per_request,
             timeout=args.cluster_timeout,
-            use_local_memcached=args.use_local_memcached,
-            memcached_host=args.memcached_host,
-            memcached_port=args.memcached_port,
             verbose=args.show_runner_logs,
             show_status_logs=args.show_runner_logs,
-            show_memcached_logs=args.show_runner_logs,
+            show_control_plane_logs=args.show_runner_logs,
+            rdma_namespace=args.rdma_namespace,
+            rdma_control_plane_host=args.rdma_control_plane_host,
+            rdma_control_plane_port=args.rdma_control_plane_port,
             rdma_qps_per_client_per_shard=args.qps_per_client_per_shard,
             rdma_slots_per_qp=args.slots_per_qp,
             rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
