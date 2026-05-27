@@ -9,6 +9,7 @@
 
 #include <folly/portability/GFlags.h>
 
+#include "ps/rdma/control_plane.h"
 #include "ps/rdma/rdma_common.h"
 #include "ps/rdma/rc_options.h"
 
@@ -99,9 +100,18 @@ void PetPSClient::InitializeTransport() {
       static_cast<std::size_t>(FLAGS_rdma_rc_request_slot_bytes);
   config_.response_slot_bytes =
       static_cast<std::size_t>(FLAGS_rdma_rc_response_slot_bytes);
-  config_.namespace_token = namespace_token_;
+  config_.control_plane_host       = FLAGS_rdma_control_plane_host;
+  config_.control_plane_port       = FLAGS_rdma_control_plane_port;
+  config_.control_plane_timeout_ms = FLAGS_rdma_control_plane_timeout_ms;
+  config_.namespace_token          = namespace_token_;
 
   transport_ = std::make_unique<RcShardClientTransport>(config_);
+  RdmaControlPlaneClient control_plane({
+      config_.control_plane_host,
+      config_.control_plane_port,
+      config_.control_plane_timeout_ms,
+  });
+  control_plane.WaitServer(shard_, config_.control_plane_timeout_ms);
   qps_.clear();
   qps_.reserve(static_cast<std::size_t>(config_.qps_per_client_per_shard));
   for (int qp = 0; qp < config_.qps_per_client_per_shard; ++qp) {

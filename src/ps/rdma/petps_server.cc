@@ -23,6 +23,7 @@
 #include "memory/shm_file.h"
 #include "ps/rdma/rdma_common.h"
 #include "ps/base/cache_ps_impl.h"
+#include "ps/rdma/control_plane.h"
 #include "ps/rdma/rc_options.h"
 #include "ps/rdma/rc_transport.h"
 #include "ps/rdma/rdma_protocol.h"
@@ -114,7 +115,14 @@ public:
               int thread_count,
               int shard_id,
               const std::string& namespace_token)
-      : cache_ps_(cache_ps), thread_count_(thread_count), shard_id_(shard_id) {
+      : cache_ps_(cache_ps),
+        thread_count_(thread_count),
+        shard_id_(shard_id),
+        control_plane_client_(petps::RdmaControlPlaneEndpoint{
+            FLAGS_rdma_control_plane_host,
+            FLAGS_rdma_control_plane_port,
+            FLAGS_rdma_control_plane_timeout_ms,
+        }) {
     petps::RcTransportConfig config;
     config.shard_id                 = shard_id_;
     config.num_clients              = FLAGS_num_client_processes;
@@ -124,7 +132,10 @@ public:
         static_cast<std::size_t>(FLAGS_rdma_rc_request_slot_bytes);
     config.response_slot_bytes =
         static_cast<std::size_t>(FLAGS_rdma_rc_response_slot_bytes);
-    config.namespace_token = namespace_token;
+    config.control_plane_host       = FLAGS_rdma_control_plane_host;
+    config.control_plane_port       = FLAGS_rdma_control_plane_port;
+    config.control_plane_timeout_ms = FLAGS_rdma_control_plane_timeout_ms;
+    config.namespace_token          = namespace_token;
     transport_ = std::make_unique<petps::RcShardServerTransport>(config);
     last_seq_.assign(
         static_cast<std::size_t>(transport_->TotalSlots()), std::uint64_t{0});
@@ -371,10 +382,25 @@ private:
     response->status->response_bytes = 0;
   }
 
+  void MaybePublishServerReady() {
+    const int started =
+        started_threads_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (started != thread_count_ ||
+        ready_published_.exchange(true, std::memory_order_acq_rel)) {
+      return;
+    }
+    control_plane_client_.PublishServerReady(FLAGS_global_id);
+    LOG(INFO) << "component=rdma_control_plane event=server_ready_published"
+              << " server_id=" << FLAGS_global_id
+              << " host=" << FLAGS_rdma_control_plane_host
+              << " port=" << FLAGS_rdma_control_plane_port;
+  }
+
   void PollingThread(int thread_id) {
     base::auto_bind_core();
     LOG(INFO) << "component=rdma_server event=polling_thread_ready thread_id="
               << thread_id;
+    MaybePublishServerReady();
     const int coroutines_per_thread =
         std::max(1, FLAGS_rdma_rc_server_coroutines_per_thread);
     LOG(INFO) << "component=rdma_rc_server event=polling_thread_mode"
@@ -632,8 +658,11 @@ private:
   int thread_count_  = 1;
   int shard_id_      = 0;
   std::unique_ptr<petps::RcShardServerTransport> transport_;
+  petps::RdmaControlPlaneClient control_plane_client_;
   std::vector<std::thread> threads_;
   std::vector<std::uint64_t> last_seq_;
+  std::atomic<int> started_threads_{0};
+  std::atomic<bool> ready_published_{false};
   ProfileCounters profile_;
 };
 
@@ -651,8 +680,7 @@ int main(int argc, char* argv[]) {
       base::PMMmapRegisterCenter::BackendFromUseDram(FLAGS_use_dram);
   base::PMMmapRegisterCenter::GetConfig().numa_id = FLAGS_numa_id;
 
-  extern int global_socket_id;
-  global_socket_id = FLAGS_numa_id;
+  base::global_socket_id = FLAGS_numa_id;
   LOG(INFO) << "set NUMA ID = " << FLAGS_numa_id;
 
   const std::string config_path =
@@ -674,6 +702,20 @@ int main(int argc, char* argv[]) {
       config["distributed_client"].is_object() &&
       config["distributed_client"].contains("base_kv_config")) {
     NormalizeDramValuePath(&config["distributed_client"]["base_kv_config"]);
+  }
+  std::unique_ptr<petps::RdmaControlPlaneServer> control_plane_server;
+  if (FLAGS_global_id == 0) {
+    control_plane_server = std::make_unique<petps::RdmaControlPlaneServer>(
+        petps::RdmaControlPlaneEndpoint{
+            FLAGS_rdma_control_plane_host,
+            FLAGS_rdma_control_plane_port,
+            FLAGS_rdma_control_plane_timeout_ms,
+        });
+    control_plane_server->Start();
+    LOG(INFO) << "component=rdma_control_plane event=listening"
+              << " server_id=0"
+              << " host=" << FLAGS_rdma_control_plane_host
+              << " port=" << FLAGS_rdma_control_plane_port;
   }
   auto cache_ps      = std::make_unique<CachePS>(config["cache_ps"]);
   const int shard_id = ResolveShardId(config);

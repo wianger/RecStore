@@ -6,7 +6,6 @@
 #include "benchmark/benchmark_client_common.h"
 #include "ps/base/Postoffice.h"
 #include "ps/rdma/base_client.h"
-#include "third_party/Mayfly-main/include/Common.h"
 
 DEFINE_int32(thread_num, 1, "client thread num");
 DEFINE_int32(batch_read_count, 300, "");

@@ -1,50 +1,12 @@
 #include "Postoffice.h"
 
-#include "mayfly_config.h"
 #include "base/log.h"
 
-#include <cstdlib>
-#include <libmemcached/memcached.h>
-#include <fstream>
-#include <iostream>
 #include <mutex>
-#include <utility>
 
 DEFINE_int32(num_server_processes, 1, "# of server processes");
 DEFINE_int32(num_client_processes, 1, "# of client processes");
 DEFINE_int32(global_id, 0, "");
-
-static std::string trim(const std::string& s) {
-  std::string res = s;
-  if (!res.empty()) {
-    res.erase(0, res.find_first_not_of(" "));
-    res.erase(res.find_last_not_of(" ") + 1);
-  }
-  return res;
-}
-
-static std::pair<std::string, std::string> ResolveMemcachedEndpoint() {
-  const char* env_host = std::getenv("RECSTORE_MEMCACHED_HOST");
-  const char* env_port = std::getenv("RECSTORE_MEMCACHED_PORT");
-  if (env_host != nullptr && env_port != nullptr) {
-    std::cout << "[memcached-endpoint] source=env host=" << env_host
-              << " port=" << env_port << std::endl;
-    return {env_host, env_port};
-  }
-
-  std::ifstream conf(MAYFLY_PATH "/memcached.conf");
-  if (!conf) {
-    LOG(FATAL) << "can't open memcached.conf";
-  }
-
-  std::string addr;
-  std::string port;
-  std::getline(conf, addr);
-  std::getline(conf, port);
-  std::cout << "[memcached-endpoint] source=config host=" << trim(addr)
-            << " port=" << trim(port) << std::endl;
-  return {trim(addr), trim(port)};
-}
 
 XPostoffice::XPostoffice() {
   num_servers_ = FLAGS_num_server_processes;
@@ -57,11 +19,7 @@ XPostoffice::XPostoffice() {
   static bool init_ = false;
 
   CHECK(init_ == false);
-  init_                     = true;
-  const char* namespace_env = std::getenv("RECSTORE_MEMCACHED_NAMESPACE");
-  if (namespace_env != nullptr) {
-    memcached_namespace_ = trim(namespace_env);
-  }
+  init_ = true;
 
   global_id_ = g_id;
   if (0 <= g_id && g_id < num_servers_) {
@@ -76,80 +34,4 @@ XPostoffice::XPostoffice() {
                << "server_id = " << server_id_ << std::endl
                << "client_id = " << client_id_ << std::endl;
   }
-  ConnectMemcached();
-}
-
-std::string XPostoffice::MemCachedGet(const std::string& key) {
-  const std::string namespaced = NamespacedKey(key);
-  size_t l;
-  uint32_t flags;
-  memcached_return rc;
-  char* res;
-  while (true) {
-    res = memcached_get(
-        memc_, namespaced.c_str(), namespaced.size(), &l, &flags, &rc);
-    if (rc == MEMCACHED_SUCCESS) {
-      break;
-    }
-    usleep(400);
-  }
-  auto ret = std::string(res);
-  free(res);
-  return ret;
-}
-
-bool XPostoffice::MemCachedTryGet(const std::string& key, std::string* value) {
-  const std::string namespaced = NamespacedKey(key);
-  size_t l;
-  uint32_t flags;
-  memcached_return rc;
-  char* res = memcached_get(
-      memc_, namespaced.c_str(), namespaced.size(), &l, &flags, &rc);
-  if (rc != MEMCACHED_SUCCESS) {
-    return false;
-  }
-  if (value != nullptr) {
-    value->assign(res, l);
-  }
-  free(res);
-  return true;
-}
-
-void XPostoffice::MemCachedSet(const std::string& key,
-                               const std::string& value) {
-  const std::string namespaced = NamespacedKey(key);
-  memcached_return rc;
-  while (true) {
-    rc = memcached_set(
-        memc_,
-        namespaced.c_str(),
-        namespaced.size(),
-        value.c_str(),
-        value.size(),
-        (time_t)0,
-        (uint32_t)0);
-    if (rc == MEMCACHED_SUCCESS) {
-      break;
-    }
-    usleep(400);
-  }
-}
-
-std::string XPostoffice::NamespacedKey(const std::string& key) const {
-  if (memcached_namespace_.empty()) {
-    return key;
-  }
-  return memcached_namespace_ + ":" + key;
-}
-
-void XPostoffice::ConnectMemcached() {
-  memcached_server_st* servers = NULL;
-  memcached_return rc;
-  auto [addr, port] = ResolveMemcachedEndpoint();
-  std::cout << "use memcached in " << addr << ":" << port << std::endl;
-
-  memc_ = memcached_create(NULL);
-  servers =
-      memcached_server_list_append(servers, addr.c_str(), std::stoi(port), &rc);
-  rc = memcached_server_push(memc_, servers);
 }

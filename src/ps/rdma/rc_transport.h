@@ -21,6 +21,9 @@ struct RcTransportConfig {
   int slots_per_qp               = 1; // Logical slots multiplexed on each lane.
   std::size_t request_slot_bytes = 1 << 20;  // Bytes per server request slot.
   std::size_t response_slot_bytes = 1 << 20; // Bytes per client response slot.
+  std::string control_plane_host  = "127.0.0.1";
+  int control_plane_port          = 25100;
+  int control_plane_timeout_ms    = 30000;
   std::string namespace_token =
       "default"; // Shared-memory namespace for this run.
 };

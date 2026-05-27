@@ -28,9 +28,6 @@ inline std::string NamespaceToken() {
   if (!FLAGS_rdma_rc_namespace.empty()) {
     return FLAGS_rdma_rc_namespace;
   }
-  if (const char* env = std::getenv("RECSTORE_MEMCACHED_NAMESPACE")) {
-    return env;
-  }
   return "default";
 }
 

@@ -3,6 +3,7 @@ option(ENABLE_RDMA_INTEGRATION_TESTS "Enable RDMA integration tests" OFF)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 add_library(wq_ps_client
+    control_plane.cc
     petps_client.cc
     allshards_ps_client.cc
     rc_options.cc
@@ -10,11 +11,12 @@ add_library(wq_ps_client
     raw_verbs_transport.cc
     ${PROJECT_SOURCE_DIR}/src/ps/base/parameters.cpp
 )
-                         
-target_link_libraries(wq_ps_client PUBLIC base ps_common mayfly Folly::folly pthread rt)
+
+target_link_libraries(wq_ps_client PUBLIC base ps_common Folly::folly pthread rt ibverbs)
 set(warp_wq_ps_client -Wl,--whole-archive wq_ps_client -Wl,--no-whole-archive CACHE INTERNAL "wq_ps_client")
 
 add_executable(petps_server
+    control_plane.cc
     petps_server.cc
     rc_options.cc
     rc_transport.cc
@@ -26,13 +28,13 @@ target_link_libraries(petps_server PUBLIC
     kv_engine
     sparse_tensor
     ps_common
-    mayfly
     TBB::tbb
     Folly::folly
     boost_context
     boost_coroutine
     pthread
     rt
+    ibverbs
 )
 
 add_executable(

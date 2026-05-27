@@ -26,7 +26,6 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
             RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
             RECSTORE_CLIENT_TEST_PHASE=basic
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
             ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
             "$<TARGET_FILE:recstore_torch_ops>"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
@@ -37,7 +36,6 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
             RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
             RECSTORE_CLIENT_TEST_PHASE=full
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
             ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
             "$<TARGET_FILE:recstore_torch_ops>"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
@@ -48,7 +46,6 @@ add_test(
     COMMAND ${CMAKE_COMMAND} -E env
             RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
             RECSTORE_CLIENT_TEST_PHASE=full
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
             ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
             "$<TARGET_FILE:recstore_torch_ops>"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch

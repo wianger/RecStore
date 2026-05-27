@@ -9,6 +9,7 @@
 
 #include <folly/portability/GFlags.h>
 
+#include "ps/rdma/control_plane.h"
 #include "ps/rdma/rdma_common.h"
 #include "ps/rdma/rc_options.h"
 
@@ -359,10 +360,12 @@ RawVerbsConfig MakeRawConfig(
       is_client ? FLAGS_rdma_rc_client_numa_id : FLAGS_rdma_rc_server_numa_id;
   raw.max_inline_data =
       static_cast<std::uint32_t>(std::max(0, FLAGS_rdma_rc_inline_bytes));
-  raw.connect_to_servers = is_client;
-  raw.connect_to_clients = !is_client;
-  raw.local_region_bytes = local_region_bytes;
-  (void)config;
+  raw.connect_to_servers       = is_client;
+  raw.connect_to_clients       = !is_client;
+  raw.local_region_bytes       = local_region_bytes;
+  raw.control_plane_host       = config.control_plane_host;
+  raw.control_plane_port       = config.control_plane_port;
+  raw.control_plane_timeout_ms = config.control_plane_timeout_ms;
   return raw;
 }
 

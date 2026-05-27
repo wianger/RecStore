@@ -9,7 +9,7 @@
 
 #include <infiniband/verbs.h>
 
-#include "third_party/Mayfly-main/include/GlobalAddress.h"
+#include "ps/rdma/global_address.h"
 
 namespace petps {
 
@@ -36,6 +36,9 @@ struct RawVerbsConfig {
   bool connect_to_clients        = true;
   std::size_t local_region_bytes = 128 * 1024 * 1024;
   std::uint64_t local_base_addr  = 0;
+  std::string control_plane_host = "127.0.0.1";
+  int control_plane_port         = 25100;
+  int control_plane_timeout_ms   = 30000;
   std::uint64_t allocation_start_offset = 0;
   std::uint64_t reserved_region_offset  = 0;
   std::uint64_t reserved_region_bytes   = 0;

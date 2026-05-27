@@ -41,9 +41,18 @@ DEFINE_int32(rdma_rc_client_numa_id,
 DEFINE_int32(rdma_rc_server_numa_id,
              0,
              "RDMA device index/NUMA hint used by RC server-side transport");
+DEFINE_int32(rdma_control_plane_port,
+             25100,
+             "Shard-0 RDMA control-plane TCP port");
+DEFINE_int32(rdma_control_plane_timeout_ms,
+             30000,
+             "RDMA control-plane request timeout in milliseconds");
 DEFINE_string(rdma_rc_namespace,
               "",
               "Override RC write shared-memory namespace");
+DEFINE_string(rdma_control_plane_host,
+              "127.0.0.1",
+              "Shard-0 RDMA control-plane TCP host");
 DEFINE_string(rdma_rc_fake_get_mode,
               "none",
               "Benchmark-only fake GET mode: none, status_only, or "

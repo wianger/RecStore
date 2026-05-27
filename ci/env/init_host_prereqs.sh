@@ -13,7 +13,7 @@ sudo apt-get install -y --no-install-recommends \
   libiberty-dev liblz4-dev liblzma-dev libsnappy-dev zlib1g-dev \
   binutils-dev libjemalloc-dev libssl-dev pkg-config \
   libunwind-dev libunwind8-dev libelf-dev libdwarf-dev \
-  cloc check sudo libtbb-dev libmemcached-dev
+  cloc check sudo libtbb-dev
 
 sudo apt-get remove -y libgoogle-glog-dev || true
 
