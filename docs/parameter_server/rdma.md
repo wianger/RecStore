@@ -255,6 +255,39 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 
 如果你想在不继续增加 QP 数的情况下抬高 `async_stream` 深度，可以优先调 `--slots-per-qp`，再看 `qps-per-client-per-shard` 是否还需要一起放大。
 
+#### 6.2.1 当前验证状态与边界
+
+截至 `2026-05-27`，通用 PS benchmark 的 RDMA `transactions/fetch` 路径已验证：
+
+- `server-count=1`
+- `client-count=1` 和 `client-count=2`
+- `threads=1`
+- `load_threads=1`
+- benchmark 进程内复用同一个 RDMA client 做 load 和 run
+
+这个路径依赖 `RDMAPSClientAdapter` 保留 runner 传入的 `global_id`、`num_server_processes` 和 `num_client_processes`。如果 adapter 覆盖这些拓扑参数，多 client generic benchmark 会在控制面 metadata exchange 阶段超时，例如曾经出现过：
+
+```text
+get_meta timeout key=2:0->0:0
+```
+
+通用 PS benchmark 的 RDMA 并发建议通过 `--client-count` 增加 client 进程数。单个 benchmark 进程内仍建议保持 `--threads=1`，除非已经重新验证同进程多线程下的 RDMA client/lane 语义。
+
+#### 6.2.2 为什么 generic benchmark 和 dedicated RC benchmark 可能结论不同
+
+`ps_transport_benchmark` 和 `rdma_rc_transport_benchmark` 不是同一条调用路径：
+
+- `rdma_rc_transport_benchmark` 主要验证 `PetPSClient` 的专项 RC 闭环
+- `ps_transport_benchmark` 走的是更上层的 `RDMAPSClientAdapter`
+- `transactions` 模式下还会经历 preload、thread 创建、client 生命周期切换等额外行为
+
+因此：
+
+- dedicated RC benchmark 成功，不能自动推出 generic PS benchmark 也成功
+- generic PS benchmark 失败，也不能直接证明底层 RC transport 已坏
+
+排障时先用 dedicated RC benchmark 建立 transport baseline，再看 generic benchmark 是否是更上层生命周期或调用方式问题。
+
 ### 6.3 RDMA RC 专项入口
 
 最小真实 RDMA RC 闭环命令：

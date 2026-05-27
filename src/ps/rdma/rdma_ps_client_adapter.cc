@@ -192,11 +192,16 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
       config_.contains("client") ? config_["client"] : json::object();
   const json dist_cfg = ResolveFrameworkDistributedClientConfig(config_);
 
-  num_shards_                = dist_cfg.value("num_shards", 1);
-  hash_method_               = dist_cfg.value("hash_method", "city_hash");
-  FLAGS_num_server_processes = num_shards_;
-  FLAGS_num_client_processes = 1;
-  FLAGS_global_id            = num_shards_;
+  num_shards_  = dist_cfg.value("num_shards", 1);
+  hash_method_ = dist_cfg.value("hash_method", "city_hash");
+  if (FLAGS_global_id < num_shards_) {
+    FLAGS_num_server_processes = num_shards_;
+    FLAGS_num_client_processes = 1;
+    FLAGS_global_id            = num_shards_;
+  } else if (FLAGS_num_server_processes != num_shards_) {
+    throw std::runtime_error(
+        "RDMA num_server_processes must match distributed_client.num_shards");
+  }
   FLAGS_value_size =
       cache_ps_cfg.contains("base_kv_config")
           ? ValueSizeHintFromBaseKvConfig(
