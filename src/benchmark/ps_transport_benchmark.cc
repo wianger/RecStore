@@ -49,6 +49,9 @@ DEFINE_int32(running_seconds, 5, "transaction runtime seconds");
 DEFINE_string(distribution, "uniform", "uniform|zipfian");
 DEFINE_double(zipfian_alpha, 0.9, "Zipfian alpha");
 DEFINE_int32(read_ratio, 100, "read percentage for mixed mode");
+DEFINE_uint64(seed, 0x9e3779b97f4a7c15ULL, "base random seed");
+DEFINE_bool(skip_load, false, "skip transactions preload phase");
+DEFINE_bool(load_only, false, "run transactions preload phase and exit");
 DECLARE_int32(value_size);
 
 namespace {
@@ -399,7 +402,7 @@ PhaseStats RunTransactions(const std::string& transport, int dim) {
           FLAGS_distribution,
           static_cast<uint64_t>(FLAGS_record_count),
           FLAGS_zipfian_alpha,
-          0x9e3779b97f4a7c15ULL + static_cast<uint64_t>(tid));
+          FLAGS_seed + static_cast<uint64_t>(tid));
       std::vector<uint64_t> keys(static_cast<size_t>(FLAGS_batch_keys));
       std::vector<float> values =
           MakeFlatValues(static_cast<size_t>(FLAGS_batch_keys), dim, tid);
@@ -492,13 +495,18 @@ int main(int argc, char** argv) {
     CHECK_GT(FLAGS_batch_keys, 0);
     CHECK_GT(FLAGS_thread_num, 0);
     CHECK_GT(FLAGS_running_seconds, 0);
-    const int load_threads =
-        FLAGS_load_thread_num > 0 ? FLAGS_load_thread_num : FLAGS_thread_num;
-    const auto load_begin = std::chrono::steady_clock::now();
-    const PhaseStats load = LoadRecords(transport, load_threads, dim);
-    const auto load_end   = std::chrono::steady_clock::now();
-    PrintTransactionResult(
-        "load", transport, load, SecondsSince(load_begin, load_end));
+    if (!FLAGS_skip_load) {
+      const int load_threads =
+          FLAGS_load_thread_num > 0 ? FLAGS_load_thread_num : FLAGS_thread_num;
+      const auto load_begin = std::chrono::steady_clock::now();
+      const PhaseStats load = LoadRecords(transport, load_threads, dim);
+      const auto load_end   = std::chrono::steady_clock::now();
+      PrintTransactionResult(
+          "load", transport, load, SecondsSince(load_begin, load_end));
+    }
+    if (FLAGS_load_only) {
+      return 0;
+    }
 
     const auto run_begin = std::chrono::steady_clock::now();
     const PhaseStats run = RunTransactions(transport, dim);

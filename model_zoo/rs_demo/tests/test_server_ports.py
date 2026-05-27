@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import tempfile
 import unittest
@@ -59,6 +60,29 @@ class TestChooseAvailablePorts(unittest.TestCase):
                     "/dev/shm/rs_demo_kv/case-a/"
                 )
             )
+
+    def test_make_runtime_dir_returns_absolute_paths_for_relative_output_root(self) -> None:
+        base_cfg = {"cache_ps": {}, "distributed_client": {"servers": []}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(tmpdir)
+                runtime_dir, runtime_cfg_path = make_runtime_dir(
+                    base_cfg=base_cfg,
+                    host="127.0.0.1",
+                    port0=15123,
+                    port1=15124,
+                    allocator="PersistLoopShmMalloc",
+                    output_root="relative-output",
+                    run_id="case-relative",
+                    ps_type="BRPC",
+                )
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertTrue(runtime_dir.is_absolute())
+            self.assertTrue(runtime_cfg_path.is_absolute())
+            self.assertTrue(runtime_cfg_path.exists())
 
     def test_make_runtime_dir_overrides_kv_capacity_when_requested(self) -> None:
         base_cfg = {
@@ -125,6 +149,117 @@ class TestChooseAvailablePorts(unittest.TestCase):
             self.assertIn('"local_shm"', runtime_cfg)
             self.assertIn('"region_name"', runtime_cfg)
             self.assertIn('"default_value_size_hint": 256', runtime_cfg)
+
+    def test_make_runtime_dir_writes_tiered_base_kv_when_requested(self) -> None:
+        base_cfg = {"cache_ps": {}, "distributed_client": {"servers": []}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _runtime_dir, runtime_cfg_path = make_runtime_dir(
+                base_cfg=base_cfg,
+                host="127.0.0.1",
+                port0=15123,
+                port1=15124,
+                allocator="PersistLoopShmMalloc",
+                output_root=tmpdir,
+                run_id="case-tiered",
+                ps_type="GRPC",
+                kv_capacity=20_000,
+                value_size_bytes=512,
+                ps_kv_backend="recstore_tiered",
+            )
+            runtime_cfg = json.loads(runtime_cfg_path.read_text(encoding="utf-8"))
+            base_kv = runtime_cfg["cache_ps"]["base_kv_config"]
+
+            self.assertEqual(base_kv["value"]["type"], "TIERED_VALUE_STORE")
+            self.assertNotIn("path", base_kv["value"])
+            self.assertTrue(
+                base_kv["value"]["dram_allocator"]["path"].startswith(
+                    "/dev/shm/rs_demo_kv/case-tiered/"
+                )
+            )
+            self.assertIn("/tmp/rs_demo_kv/case-tiered/", base_kv["value"]["ssd_allocator"]["path"])
+            self.assertGreaterEqual(
+                base_kv["value"]["ssd_allocator"]["capacity_bytes"],
+                256 * 1024 * 1024,
+            )
+            self.assertEqual(base_kv["value"]["tiering"], {"cache_policy": "LRU"})
+
+    def test_make_runtime_dir_applies_tiered_dram_capacity_multiplier(self) -> None:
+        base_cfg = {"cache_ps": {}, "distributed_client": {"servers": []}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _runtime_dir, runtime_cfg_path = make_runtime_dir(
+                base_cfg=base_cfg,
+                host="127.0.0.1",
+                port0=15123,
+                port1=15124,
+                allocator="PersistLoopShmMalloc",
+                output_root=tmpdir,
+                run_id="case-tiered-small-dram",
+                ps_type="GRPC",
+                kv_capacity=20_000,
+                value_size_bytes=512,
+                ps_kv_backend="recstore_tiered",
+                tiered_dram_capacity_multiplier=0.02,
+            )
+            runtime_cfg = json.loads(runtime_cfg_path.read_text(encoding="utf-8"))
+            base_kv = runtime_cfg["cache_ps"]["base_kv_config"]
+
+            self.assertEqual(
+                base_kv["value"]["dram_allocator"]["capacity_bytes"],
+                int(20_000 * 512 * 0.02),
+            )
+
+    def test_make_runtime_dir_writes_hps_rocksdb_base_kv_when_requested(self) -> None:
+        base_cfg = {"cache_ps": {}, "distributed_client": {"servers": []}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _runtime_dir, runtime_cfg_path = make_runtime_dir(
+                base_cfg=base_cfg,
+                host="127.0.0.1",
+                port0=15123,
+                port1=15124,
+                allocator="PersistLoopShmMalloc",
+                output_root=tmpdir,
+                run_id="case-hps-rocks",
+                ps_type="GRPC",
+                kv_capacity=20_000,
+                value_size_bytes=512,
+                ps_kv_backend="hps_rocksdb",
+            )
+            runtime_cfg = json.loads(runtime_cfg_path.read_text(encoding="utf-8"))
+            base_kv = runtime_cfg["cache_ps"]["base_kv_config"]
+
+            self.assertEqual(base_kv["external_engine_type"], "KVEngineHPSRocksDB")
+            self.assertEqual(base_kv["capacity"], 20_000)
+            self.assertEqual(base_kv["value_size"], 512)
+            self.assertEqual(base_kv["rocksdb_path"], base_kv["path"])
+            self.assertNotIn("index", base_kv)
+            self.assertNotIn("value", base_kv)
+            self.assertTrue(Path(base_kv["path"]).exists())
+
+    def test_make_runtime_dir_writes_hps_hash_map_base_kv_when_requested(self) -> None:
+        base_cfg = {"cache_ps": {}, "distributed_client": {"servers": []}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            _runtime_dir, runtime_cfg_path = make_runtime_dir(
+                base_cfg=base_cfg,
+                host="127.0.0.1",
+                port0=15123,
+                port1=15124,
+                allocator="PersistLoopShmMalloc",
+                output_root=tmpdir,
+                run_id="case-hps-hash",
+                ps_type="GRPC",
+                kv_capacity=20_000,
+                value_size_bytes=512,
+                ps_kv_backend="hps_hash_map",
+            )
+            runtime_cfg = json.loads(runtime_cfg_path.read_text(encoding="utf-8"))
+            base_kv = runtime_cfg["cache_ps"]["base_kv_config"]
+
+            self.assertEqual(base_kv["external_engine_type"], "KVEngineHPSHashMap")
+            self.assertEqual(base_kv["capacity"], 20_000)
+            self.assertEqual(base_kv["value_size"], 512)
+            self.assertNotIn("rocksdb_path", base_kv)
+            self.assertNotIn("index", base_kv)
+            self.assertNotIn("value", base_kv)
 
     def test_make_runtime_dir_uses_single_shared_local_shm_shard(self) -> None:
         base_cfg = {"cache_ps": {}, "distributed_client": {"servers": []}}

@@ -9,14 +9,20 @@ from contextlib import redirect_stdout
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from run_ps_dram_transport_benchmark import (  # noqa: E402
+    BenchmarkCaseError,
     build_benchmark_cmd,
     build_runtime_config,
+    build_failure_row,
     collect_case_rows,
     collect_ps_result_rows,
     collect_summary_rows,
     is_port_open,
     parse_csv_list,
+    prepare_runtime_paths,
     print_summary_table,
+    resolve_case_base_port,
+    resolve_failure_stage,
+    resolve_case_load_threads,
     write_csv,
 )
 
@@ -26,7 +32,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             config = build_runtime_config(
                 transport="BRPC",
-                index_type="DRAM_PET_HASH",
+                backend_alias="dram_pet_dram",
                 runtime_dir=Path(tmpdir),
                 num_shards=2,
                 base_port=25000,
@@ -60,7 +66,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             config = build_runtime_config(
                 transport="BRPC",
-                index_type="DRAM_PET_HASH",
+                backend_alias="dram_pet_dram",
                 runtime_dir=Path(tmpdir),
                 num_shards=1,
                 base_port=25000,
@@ -84,7 +90,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             config = build_runtime_config(
                 transport="LOCAL_SHM",
-                index_type="DRAM_EXTENDIBLE_HASH",
+                backend_alias="dram_eh_dram",
                 runtime_dir=Path(tmpdir),
                 num_shards=1,
                 base_port=0,
@@ -105,6 +111,84 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         self.assertEqual(config["local_shm"]["region_name"], "bench_region")
         self.assertEqual(config["local_shm"]["ready_queue_count"], 2)
 
+    def test_build_runtime_config_uses_hps_hash_map_external_engine(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = build_runtime_config(
+                transport="GRPC",
+                backend_alias="hps_hash_map",
+                runtime_dir=Path(tmpdir),
+                num_shards=1,
+                base_port=15000,
+                capacity=2048,
+                value_size=512,
+                max_keys_per_request=256,
+                num_threads=8,
+                dram_allocator="PERSIST_LOOP_SLAB",
+                local_shm_region="unused",
+                local_shm_slot_count=64,
+                local_shm_ready_queue_count=1,
+                local_shm_ready_queue_burst_limit=8,
+                local_shm_slot_buffer_bytes=4096,
+                local_shm_client_timeout_ms=1000,
+                dram_capacity_multiplier=2.0,
+            )
+        base_kv = config["cache_ps"]["base_kv_config"]
+        self.assertEqual(base_kv["external_engine_type"], "KVEngineHPSHashMap")
+        self.assertEqual(base_kv["value_size"], 512)
+        self.assertEqual(base_kv["capacity"], 2048)
+        self.assertNotIn("index", base_kv)
+        self.assertNotIn("value", base_kv)
+
+    def test_build_runtime_config_uses_hps_rocksdb_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = build_runtime_config(
+                transport="BRPC",
+                backend_alias="hps_rocksdb",
+                runtime_dir=Path(tmpdir),
+                num_shards=1,
+                base_port=25000,
+                capacity=2048,
+                value_size=512,
+                max_keys_per_request=256,
+                num_threads=4,
+                dram_allocator="PERSIST_LOOP_SLAB",
+                local_shm_region="unused",
+                local_shm_slot_count=64,
+                local_shm_ready_queue_count=1,
+                local_shm_ready_queue_burst_limit=8,
+                local_shm_slot_buffer_bytes=4096,
+                local_shm_client_timeout_ms=1000,
+                dram_capacity_multiplier=2.0,
+            )
+        base_kv = config["cache_ps"]["base_kv_config"]
+        self.assertEqual(base_kv["external_engine_type"], "KVEngineHPSRocksDB")
+        self.assertIn("hps_rocksdb", base_kv["path"])
+        self.assertEqual(base_kv["rocksdb_path"], base_kv["path"])
+
+    def test_build_runtime_config_uses_minimum_ssd_allocator_capacity(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = build_runtime_config(
+                transport="GRPC",
+                backend_alias="dram_eh_ssd",
+                runtime_dir=Path(tmpdir),
+                num_shards=1,
+                base_port=15000,
+                capacity=2048,
+                value_size=128,
+                max_keys_per_request=128,
+                num_threads=4,
+                dram_allocator="PERSIST_LOOP_SLAB",
+                local_shm_region="unused",
+                local_shm_slot_count=64,
+                local_shm_ready_queue_count=1,
+                local_shm_ready_queue_burst_limit=8,
+                local_shm_slot_buffer_bytes=4096,
+                local_shm_client_timeout_ms=1000,
+                dram_capacity_multiplier=2.0,
+            )
+        ssd = config["cache_ps"]["base_kv_config"]["value"]["ssd_allocator"]
+        self.assertGreaterEqual(ssd["capacity_bytes"], 256 * 1024 * 1024)
+
     def test_build_benchmark_cmd_includes_transport_and_value_size(self):
         cmd = build_benchmark_cmd(
             benchmark_binary=Path("/tmp/ps_transport_benchmark"),
@@ -124,6 +208,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
             zipfian_alpha=0.9,
             read_ratio=100,
             report_mode="summary",
+            seed=1234,
         )
         self.assertEqual(cmd[0], "/tmp/ps_transport_benchmark")
         self.assertIn("--transport=grpc", cmd)
@@ -131,6 +216,32 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         self.assertIn("--config_path=/tmp/config.json", cmd)
         self.assertIn("--workload=transactions", cmd)
         self.assertIn("--value_size=256", cmd)
+        self.assertIn("--seed=1234", cmd)
+
+    def test_build_benchmark_cmd_can_use_preload_batch_size(self):
+        cmd = build_benchmark_cmd(
+            benchmark_binary=Path("/tmp/ps_transport_benchmark"),
+            transport="GRPC",
+            host="127.0.0.1",
+            port=15000,
+            num_shards=1,
+            config_path=Path("/tmp/config.json"),
+            mode="mixed",
+            record_count=1000,
+            runtime_seconds=5,
+            threads=8,
+            load_threads=1,
+            batch_size=64,
+            value_size=512,
+            distribution="uniform",
+            zipfian_alpha=0.9,
+            read_ratio=95,
+            report_mode="summary",
+            seed=1234,
+            phase="load",
+        )
+        self.assertIn("--batch_keys=64", cmd)
+        self.assertIn("--load_only=true", cmd)
 
     def test_collect_summary_rows_keeps_measure_rows(self):
         sample = (
@@ -153,6 +264,8 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
             print_summary_table(
                 [
                     {
+                        "backend_alias": "dram_eh_dram",
+                        "backend_layer": "PS/network",
                         "index_type": "DRAM_EXTENDIBLE_HASH",
                         "transport": "BRPC",
                         "mode": "fetch",
@@ -165,7 +278,8 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 ]
             )
         text = out.getvalue()
-        self.assertIn("PS DRAM Transport Benchmark Summary", text)
+        self.assertIn("PS Backend Transport Benchmark Summary", text)
+        self.assertIn("dram_eh_dram", text)
         self.assertIn("DRAM_EXTENDIBLE_HASH", text)
         self.assertIn("BRPC", text)
 
@@ -175,6 +289,8 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
             write_csv(
                 [
                     {
+                        "backend_alias": "dram_map_dram",
+                        "backend_layer": "PS/network",
                         "index_type": "DRAM_UNORDERED_MAP",
                         "value_store_type": "DRAM_VALUE_STORE",
                         "value_size": 512,
@@ -198,14 +314,49 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 csv_path,
             )
             rows = csv_path.read_text(encoding="utf-8")
-        self.assertIn("index_type,value_store_type", rows)
-        self.assertIn("DRAM_UNORDERED_MAP,DRAM_VALUE_STORE", rows)
+        self.assertIn("backend_alias,backend_layer,index_type,value_store_type", rows)
+        self.assertIn("dram_map_dram,PS/network,DRAM_UNORDERED_MAP,DRAM_VALUE_STORE", rows)
+
+    def test_write_csv_preserves_failure_status(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "out.csv"
+            write_csv(
+                [
+                    build_failure_row(
+                        backend_alias="hps_rocksdb",
+                        transport="GRPC",
+                        mode="mixed",
+                        read_ratio=95,
+                        threads=8,
+                        client_processes=4,
+                        batch_size=1024,
+                        value_size=512,
+                        capacity=100000,
+                        distribution="uniform",
+                        zipfian_alpha=0.9,
+                        failure_stage="load",
+                        error_tail="Deadline Exceeded",
+                    )
+                ],
+                csv_path,
+            )
+            rows = csv_path.read_text(encoding="utf-8")
+        self.assertIn("status,failure_stage,error_tail", rows)
+        self.assertIn("hps_rocksdb,PS/network,,HPS_ROCKSDB", rows)
+        self.assertIn("failed,load,Deadline Exceeded", rows)
+
+    def test_resolve_failure_stage_uses_benchmark_case_error_stage(self):
+        self.assertEqual(
+            resolve_failure_stage(BenchmarkCaseError("load", "preload failed")),
+            "load",
+        )
+        self.assertEqual(resolve_failure_stage(RuntimeError("boom")), "run_one_case")
 
     def test_config_is_json_serializable(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             config = build_runtime_config(
                 transport="GRPC",
-                index_type="DRAM_UNORDERED_MAP",
+                backend_alias="dram_map_dram",
                 runtime_dir=Path(tmpdir),
                 num_shards=2,
                 base_port=15100,
@@ -225,8 +376,49 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
             loaded = json.loads(json.dumps(config))
         self.assertEqual(loaded["cache_ps"]["base_kv_config"]["capacity"], 1024)
 
+    def test_prepare_runtime_paths_creates_ssd_parents_without_touching_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runtime_dir = Path(tmpdir)
+            ssd_value = runtime_dir / "ssd" / "value.db"
+            tiered_ssd = runtime_dir / "tiered" / "ssd.db"
+            config = {
+                "cache_ps": {
+                    "base_kv_config": {
+                        "value": {
+                            "type": "TIERED_VALUE_STORE",
+                            "path": str(ssd_value),
+                            "ssd_allocator": {"path": str(tiered_ssd)},
+                        }
+                    }
+                }
+            }
+
+            prepare_runtime_paths(config)
+
+            self.assertTrue(ssd_value.parent.is_dir())
+            self.assertTrue(tiered_ssd.parent.is_dir())
+            self.assertFalse(ssd_value.exists())
+            self.assertFalse(tiered_ssd.exists())
+
     def test_parse_csv_list_normalizes_values(self):
         self.assertEqual(parse_csv_list("grpc, BRPC"), ["GRPC", "BRPC"])
+
+    def test_resolve_case_base_port_uses_grpc_single_shard_default(self):
+        class Args:
+            grpc_base_port = 18100
+            brpc_base_port = 28100
+
+        self.assertEqual(resolve_case_base_port("GRPC", 1, Args()), 15000)
+        self.assertEqual(resolve_case_base_port("GRPC", 2, Args()), 18100)
+        self.assertEqual(resolve_case_base_port("BRPC", 1, Args()), 28100)
+
+    def test_resolve_case_load_threads_serializes_hps_rocksdb_default(self):
+        class Args:
+            load_threads = 0
+            hps_rocksdb_load_threads = 1
+
+        self.assertEqual(resolve_case_load_threads("hps_rocksdb", Args()), 1)
+        self.assertEqual(resolve_case_load_threads("hps_hash_map", Args()), 0)
 
     def test_collect_ps_result_rows_parses_transactions(self):
         text = (
@@ -260,7 +452,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         ]
         rows = collect_case_rows(
             outputs,
-            index_type="DRAM_PET_HASH",
+            backend_alias="dram_pet_dram",
             value_size=512,
             capacity=1000000,
             read_ratio=100,
@@ -275,6 +467,30 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         self.assertEqual(aggregate[0]["threads"], 32)
         self.assertEqual(aggregate[0]["client_processes"], 2)
         self.assertEqual(aggregate[0]["throughput_keys_sec"], 6144.0)
+
+    def test_collect_case_rows_adds_single_process_aggregate(self):
+        outputs = [
+            (
+                0,
+                "PS_BENCHMARK_RESULT phase=run transport=GRPC mode=fetch "
+                "distribution=uniform zipfian_alpha=0.9 threads=4 batch_size=128 "
+                "records=2048 runtime_s=1.0 batches=10 key_ops=1280 "
+                "throughput_batches_sec=10 throughput_keys_sec=1280\n",
+            )
+        ]
+        rows = collect_case_rows(
+            outputs,
+            backend_alias="hps_hash_map",
+            value_size=128,
+            capacity=2048,
+            read_ratio=100,
+            client_processes=1,
+        )
+        aggregate = [row for row in rows if row["aggregate"] == "true"]
+        self.assertEqual(len(aggregate), 1)
+        self.assertEqual(aggregate[0]["backend_alias"], "hps_hash_map")
+        self.assertEqual(aggregate[0]["process_id"], "all")
+        self.assertEqual(aggregate[0]["throughput_keys_sec"], 1280.0)
 
     def test_is_port_open_returns_false_for_unused_port(self):
         self.assertFalse(is_port_open("127.0.0.1", 1, timeout_s=0.01))

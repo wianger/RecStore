@@ -4,6 +4,80 @@ import argparse
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Sequence
+
+
+DEFAULT_NUM_EMBEDDINGS_PER_FEATURE = [
+    40000000,
+    39060,
+    17295,
+    7424,
+    20265,
+    3,
+    7122,
+    1543,
+    63,
+    40000000,
+    3067956,
+    405282,
+    10,
+    2209,
+    11938,
+    155,
+    4,
+    976,
+    14,
+    40000000,
+    40000000,
+    40000000,
+    590152,
+    12973,
+    108,
+    36,
+]
+
+
+def parse_num_embeddings_per_feature(value: str | Sequence[int] | None) -> list[int]:
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        parts = [part.strip() for part in value.split(",") if part.strip()]
+        values = [int(part) for part in parts]
+    else:
+        values = [int(item) for item in value]
+    if len(values) != len(DEFAULT_NUM_EMBEDDINGS_PER_FEATURE):
+        raise ValueError(
+            "num_embeddings_per_feature must contain exactly "
+            f"{len(DEFAULT_NUM_EMBEDDINGS_PER_FEATURE)} values"
+        )
+    if any(item <= 0 for item in values):
+        raise ValueError("num_embeddings_per_feature values must be positive")
+    return values
+
+
+def cap_default_num_embeddings_per_feature(cap: int) -> list[int]:
+    cap = int(cap)
+    if cap <= 0:
+        raise ValueError("num_embeddings cap must be positive")
+    return [min(int(vocab), cap) for vocab in DEFAULT_NUM_EMBEDDINGS_PER_FEATURE]
+
+
+def resolve_num_embeddings_per_feature(
+    num_embeddings: int,
+    override: str | Sequence[int] | None = None,
+) -> list[int]:
+    parsed = parse_num_embeddings_per_feature(override)
+    if parsed:
+        return parsed
+    return cap_default_num_embeddings_per_feature(int(num_embeddings))
+
+
+def format_num_embeddings_per_feature(values: Sequence[int]) -> str:
+    return ",".join(str(int(value)) for value in values)
+
+
+def total_num_embeddings_per_feature(values: Sequence[int]) -> int:
+    return sum(int(value) for value in values)
 
 
 def ensure_shared_dir(path: Path) -> None:
@@ -17,6 +91,7 @@ def ensure_shared_dir(path: Path) -> None:
 @dataclass
 class RunConfig:
     num_embeddings: int = 200000
+    num_embeddings_per_feature: str = ""
     embedding_dim: int = 128
     batch_size: int = 4096
     steps: int = 80
@@ -65,6 +140,8 @@ class RunConfig:
     rdzv_id: str = ""
     ps_type: str = "BRPC"
     recstore_index_type: str = "DRAM_EXTENDIBLE_HASH"
+    ps_kv_backend: str = "recstore_dram"
+    tiered_dram_capacity_multiplier: float = 2.0
     torchrec_profiler: bool = False
     torchrec_dist_mode: str = "replicated"
     torchrec_memory_mode: str = "hbm"
@@ -77,6 +154,16 @@ class RunConfig:
     torchrec_trace_csv: str = ""
     torchrec_compare_recstore_csv: str = ""
     torchrec_compare_csv: str = ""
+    hps_torch_model_name: str = "recstore_hps_torch"
+    hps_torch_config_file: str = ""
+    hps_torch_model_dir: str = ""
+    hps_torch_main_csv: str = ""
+    hps_torch_main_agg_csv: str = ""
+    hps_torch_key_offset_mode: str = "cumulative"
+    hps_torch_materialize_embeddings: bool = True
+    hps_torch_force_materialize: bool = False
+    hps_torch_gpucache: bool = True
+    hps_torch_gpucacheper: float = 1.0
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -86,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--backend",
         type=str,
         default="recstore",
-        choices=["recstore", "torchrec"],
+        choices=["recstore", "torchrec", "hps_torch"],
     )
     parser.add_argument("--nproc", type=int, default=1)
     parser.add_argument("--nnodes", type=int, default=1)
@@ -148,7 +235,36 @@ def build_parser() -> argparse.ArgumentParser:
         default="DRAM_EXTENDIBLE_HASH",
         choices=["DRAM_UNORDERED_MAP", "DRAM_EXTENDIBLE_HASH", "DRAM_PET_HASH"],
     )
+    parser.add_argument(
+        "--ps-kv-backend",
+        type=str,
+        default="recstore_dram",
+        choices=["recstore_dram", "recstore_tiered", "hps_hash_map", "hps_rocksdb"],
+        help=(
+            "Server-side BaseKV backend used by the RecStore PyTorch runner. "
+            "HPS options route the model through RecStore PS with an HPS KV engine."
+        ),
+    )
+    parser.add_argument(
+        "--tiered-dram-capacity-multiplier",
+        type=float,
+        default=2.0,
+        help=(
+            "DRAM allocator bytes for recstore_tiered as "
+            "kv_capacity * value_size_bytes * multiplier."
+        ),
+    )
     parser.add_argument("--num-embeddings", type=int, default=200000)
+    parser.add_argument(
+        "--num-embeddings-per-feature",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated cardinalities for the 26 sparse tables. "
+            "When omitted, --num-embeddings is treated as a per-table cap "
+            "over the default Criteo DLRM table sizes."
+        ),
+    )
     parser.add_argument("--embedding-dim", type=int, default=128)
     parser.add_argument("--batch-size", type=int, default=4096)
     parser.add_argument("--steps", type=int, default=80)
@@ -242,6 +358,39 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default="",
     )
+    parser.add_argument("--hps-torch-model-name", type=str, default="recstore_hps_torch")
+    parser.add_argument("--hps-torch-config-file", type=str, default="")
+    parser.add_argument("--hps-torch-model-dir", type=str, default="")
+    parser.add_argument("--hps-torch-main-csv", type=str, default="")
+    parser.add_argument("--hps-torch-main-agg-csv", type=str, default="")
+    parser.add_argument(
+        "--hps-torch-key-offset-mode",
+        type=str,
+        default="cumulative",
+        choices=["cumulative", "none"],
+        help=(
+            "How HPS table keys are written. cumulative gives each table a disjoint "
+            "key range, matching HPS table-fusion requirements."
+        ),
+    )
+    parser.add_argument(
+        "--hps-torch-no-materialize-embeddings",
+        action="store_true",
+        default=False,
+        help="Reuse existing HPS key/emb_vector files instead of generating them.",
+    )
+    parser.add_argument(
+        "--hps-torch-force-materialize",
+        action="store_true",
+        default=False,
+        help="Regenerate HPS key/emb_vector files even if metadata matches.",
+    )
+    parser.add_argument(
+        "--hps-torch-disable-gpucache",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument("--hps-torch-gpucacheper", type=float, default=1.0)
     return parser
 
 
@@ -250,6 +399,8 @@ def parse_config(argv: list[str] | None = None) -> RunConfig:
     cfg_kwargs = vars(ns).copy()
     cfg_kwargs.pop("no_read_before_update", None)
     cfg_kwargs.pop("no_start_server", None)
+    hps_no_materialize = bool(cfg_kwargs.pop("hps_torch_no_materialize_embeddings", False))
+    hps_disable_gpucache = bool(cfg_kwargs.pop("hps_torch_disable_gpucache", False))
     if cfg_kwargs["nproc_per_node"] is None:
         cfg_kwargs["nproc_per_node"] = cfg_kwargs.get("nproc", 1)
     cfg = RunConfig(**cfg_kwargs)
@@ -257,12 +408,31 @@ def parse_config(argv: list[str] | None = None) -> RunConfig:
         cfg.read_before_update = False
     if ns.no_start_server:
         cfg.start_server = False
+    if hps_no_materialize:
+        cfg.hps_torch_materialize_embeddings = False
+    if hps_disable_gpucache:
+        cfg.hps_torch_gpucache = False
     return cfg
+
+
+def validate_hps_torch_config(cfg: RunConfig) -> None:
+    if cfg.backend != "hps_torch":
+        return
+    resolve_num_embeddings_per_feature(cfg.num_embeddings, cfg.num_embeddings_per_feature)
+    if cfg.nnodes != 1:
+        raise RuntimeError("hps_torch backend currently supports single-node runs only.")
+    if cfg.nproc_per_node <= 0:
+        raise RuntimeError("--nproc-per-node must be greater than 0.")
+    if cfg.node_rank != 0:
+        raise RuntimeError("hps_torch single-node runs require --node-rank=0.")
+    if cfg.hps_torch_gpucacheper < 0.0 or cfg.hps_torch_gpucacheper > 1.0:
+        raise RuntimeError("--hps-torch-gpucacheper must be within [0, 1].")
 
 
 def validate_torchrec_config(cfg: RunConfig) -> None:
     if cfg.backend != "torchrec":
         return
+    resolve_num_embeddings_per_feature(cfg.num_embeddings, cfg.num_embeddings_per_feature)
 
     if cfg.nnodes <= 0:
         raise RuntimeError("--nnodes must be greater than 0.")
@@ -292,6 +462,7 @@ def validate_torchrec_config(cfg: RunConfig) -> None:
 def validate_recstore_config(cfg: RunConfig) -> None:
     if cfg.backend != "recstore":
         return
+    resolve_num_embeddings_per_feature(cfg.num_embeddings, cfg.num_embeddings_per_feature)
 
     if cfg.nnodes <= 0:
         raise RuntimeError("--nnodes must be greater than 0.")
@@ -305,6 +476,8 @@ def validate_recstore_config(cfg: RunConfig) -> None:
         )
     if cfg.prefetch_depth < 0:
         raise RuntimeError("--prefetch-depth must be non-negative")
+    if cfg.tiered_dram_capacity_multiplier < 0:
+        raise RuntimeError("--tiered-dram-capacity-multiplier must be non-negative")
     if cfg.enable_single_node_distributed_fast_path:
         if cfg.nnodes != 1:
             raise RuntimeError(
@@ -336,6 +509,7 @@ def ensure_run_id(cfg: RunConfig) -> None:
 
 def populate_default_paths(cfg: RunConfig) -> None:
     ensure_run_id(cfg)
+    cfg.output_root = str(Path(cfg.output_root).resolve())
     outputs_base = Path(cfg.output_root) / "outputs" / cfg.run_id
     logs_base = Path(cfg.output_root) / "logs" / cfg.run_id
 
@@ -361,6 +535,14 @@ def populate_default_paths(cfg: RunConfig) -> None:
         cfg.torchrec_trace_csv = str(outputs_base / "torchrec_trace.csv")
     if not cfg.torchrec_compare_csv:
         cfg.torchrec_compare_csv = str(outputs_base / "recstore_torchrec_compare.csv")
+    if not cfg.hps_torch_model_dir:
+        cfg.hps_torch_model_dir = str(outputs_base / "hps_torch_model")
+    if not cfg.hps_torch_config_file:
+        cfg.hps_torch_config_file = str(outputs_base / "hps_torch.json")
+    if not cfg.hps_torch_main_csv:
+        cfg.hps_torch_main_csv = str(outputs_base / "hps_torch_main.csv")
+    if not cfg.hps_torch_main_agg_csv:
+        cfg.hps_torch_main_agg_csv = str(outputs_base / "hps_torch_main_agg.csv")
 
 
 def ensure_parent_dirs(cfg: RunConfig) -> None:
@@ -375,3 +557,7 @@ def ensure_parent_dirs(cfg: RunConfig) -> None:
     ensure_shared_dir(Path(cfg.torchrec_main_agg_csv).parent)
     ensure_shared_dir(Path(cfg.torchrec_trace_csv).parent)
     ensure_shared_dir(Path(cfg.torchrec_compare_csv).parent)
+    ensure_shared_dir(Path(cfg.hps_torch_config_file).parent)
+    ensure_shared_dir(Path(cfg.hps_torch_model_dir))
+    ensure_shared_dir(Path(cfg.hps_torch_main_csv).parent)
+    ensure_shared_dir(Path(cfg.hps_torch_main_agg_csv).parent)

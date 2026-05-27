@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Tuple
 import torch
 
 _LOCAL_FAST_PATH_BACKENDS = {"local_shm", "hierkv"}
+_NATIVE_DISTRIBUTED_BACKENDS = {"distributed_grpc", "distributed_brpc"}
 _DEFAULT_LOCAL_SHM_SLOT_BUFFER_BYTES = 8 * 1024 * 1024
 _GPU_CACHE_PROFILE_KEYS = (
     "gpu_cache_query_ms",
@@ -89,6 +90,14 @@ def _load_hash_method(distributed_cfg: dict) -> str:
     return str(distributed_cfg.get("hash_method", "city_hash"))
 
 
+def _load_max_keys_per_request(distributed_cfg: dict) -> int:
+    try:
+        value = int(distributed_cfg.get("max_keys_per_request", 0))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, value)
+
+
 _CITYHASH_LIB_HANDLE: ctypes.CDLL | None = None
 _CITYHASH64_FUNC = None
 
@@ -141,15 +150,17 @@ class ShardedRecstoreClient:
         self._servers_by_shard = {server.shard: server for server in self._servers}
         self._num_shards = _load_num_shards(distributed_cfg, cache_cfg, self._servers)
         self._hash_method = _load_hash_method(distributed_cfg)
+        self._max_keys_per_request = _load_max_keys_per_request(distributed_cfg)
         self._active_shard: int | None = None
         self._next_prefetch_id = 1
-        self._prefetch_contexts: dict[int, tuple[int, list[tuple[int, torch.Tensor, torch.Tensor]]]] = {}
+        self._prefetch_contexts: dict[int, tuple[int, list[tuple[int, torch.Tensor, Any]]]] = {}
         self._kv_prefetch_next_id = 1
-        self._kv_prefetch_contexts: dict[int, tuple[int, list[tuple[int, torch.Tensor, torch.Tensor]]]] = {}
+        self._kv_prefetch_contexts: dict[int, tuple[int, list[tuple[int, torch.Tensor, Any]]]] = {}
         self._tensor_meta: Dict[str, Dict[str, Any]] = {}
         self._next_async_handle = 1
         self._pending_async_ops: Dict[int, tuple[str, torch.Tensor, torch.Tensor]] = {}
         self._gpu_cache_table_name: str | None = None
+        self._native_distributed_backend = self._detect_native_distributed_backend()
 
     def register_tensor_meta(
         self,
@@ -175,6 +186,9 @@ class ShardedRecstoreClient:
     def _activate_shard(self, shard: int) -> None:
         shard = int(shard)
         if self._active_shard == shard:
+            return
+        if self._uses_native_distributed_backend():
+            self._active_shard = shard
             return
         if self.is_shared_local_shm_table():
             self._active_shard = shard
@@ -226,9 +240,35 @@ class ShardedRecstoreClient:
             normalized_grads = normalized_grads.to("cpu")
         return normalized_grads
 
+    def _normalize_values(self, values: torch.Tensor) -> torch.Tensor:
+        if not isinstance(values, torch.Tensor):
+            raise TypeError("values must be a torch.Tensor")
+        normalized_values = values.to(dtype=torch.float32)
+        if not normalized_values.is_contiguous():
+            normalized_values = normalized_values.contiguous()
+        if normalized_values.device.type != "cpu":
+            normalized_values = normalized_values.to("cpu")
+        return normalized_values
+
     def _require_active_shard(self, api_name: str) -> None:
         if self._active_shard is None:
             raise RuntimeError(f"{api_name} requires an active shard to be selected first.")
+
+    def _detect_native_distributed_backend(self) -> bool:
+        ops = getattr(self._client, "ops", None)
+        getter = getattr(ops, "current_ps_backend", None)
+        if not callable(getter):
+            return False
+        try:
+            return str(getter()).lower() in _NATIVE_DISTRIBUTED_BACKENDS
+        except Exception:
+            return False
+
+    def _uses_native_distributed_backend(self) -> bool:
+        return self._native_distributed_backend
+
+    def _can_issue_shard_prefetch_early(self) -> bool:
+        return self._uses_native_distributed_backend() or self._num_shards <= 1
 
     def _require_local_shm_backend(self, api_name: str) -> None:
         if not hasattr(self._client, "ops") or not hasattr(self._client.ops, "current_ps_backend"):
@@ -272,6 +312,12 @@ class ShardedRecstoreClient:
         return grouped
 
     def init_embedding_table(self, table_name: str, num_embeddings: int, embedding_dim: int) -> bool:
+        if self._uses_native_distributed_backend():
+            return bool(
+                self._client.init_embedding_table(
+                    table_name, num_embeddings, embedding_dim
+                )
+            )
         ok = True
         for server in self._servers:
             self._activate_shard(server.shard)
@@ -280,6 +326,9 @@ class ShardedRecstoreClient:
 
     def emb_write(self, keys: torch.Tensor, values: torch.Tensor) -> None:
         if keys.numel() == 0:
+            return
+        if self._uses_native_distributed_backend():
+            self._client.emb_write(self._normalize_ids(keys), self._normalize_values(values))
             return
         for shard, index_tensor in self._group_indices(keys):
             self._activate_shard(shard)
@@ -290,6 +339,8 @@ class ShardedRecstoreClient:
     def emb_read(self, keys: torch.Tensor, embedding_dim: int) -> torch.Tensor:
         if keys.numel() == 0:
             return torch.empty((0, embedding_dim), dtype=torch.float32)
+        if self._uses_native_distributed_backend():
+            return self._client.emb_read(self._normalize_ids(keys), embedding_dim)
         out = torch.empty((keys.shape[0], embedding_dim), dtype=torch.float32)
         for shard, index_tensor in self._group_indices(keys):
             self._activate_shard(shard)
@@ -299,20 +350,29 @@ class ShardedRecstoreClient:
         return out
 
     def emb_prefetch(self, keys: torch.Tensor) -> int:
+        if self._uses_native_distributed_backend():
+            return int(self._client.emb_prefetch(self._normalize_ids(keys)))
         req_id = self._next_prefetch_id
         self._next_prefetch_id += 1
         if keys.numel() == 0:
             self._prefetch_contexts[req_id] = (0, [])
             return req_id
 
-        shard_requests: list[tuple[int, torch.Tensor, torch.Tensor]] = []
+        shard_requests: list[tuple[int, torch.Tensor, Any]] = []
         for shard, index_tensor in self._group_indices(keys):
             shard_keys = keys.index_select(0, index_tensor).contiguous()
-            shard_requests.append((shard, index_tensor, shard_keys))
+            if self._can_issue_shard_prefetch_early():
+                self._activate_shard(shard)
+                shard_prefetch_id = int(self._client.emb_prefetch(shard_keys))
+                shard_requests.append((shard, index_tensor, shard_prefetch_id))
+            else:
+                shard_requests.append((shard, index_tensor, shard_keys))
         self._prefetch_contexts[req_id] = (int(keys.shape[0]), shard_requests)
         return req_id
 
     def emb_wait_result(self, prefetch_id: int, embedding_dim: int) -> torch.Tensor:
+        if self._uses_native_distributed_backend():
+            return self._client.emb_wait_result(int(prefetch_id), embedding_dim)
         context = self._prefetch_contexts.pop(int(prefetch_id), None)
         if context is None:
             raise RuntimeError(f"unknown prefetch_id: {prefetch_id}")
@@ -320,9 +380,12 @@ class ShardedRecstoreClient:
         if total_rows == 0:
             return torch.empty((0, embedding_dim), dtype=torch.float32)
         out = torch.empty((total_rows, embedding_dim), dtype=torch.float32)
-        for shard, index_tensor, shard_keys in shard_requests:
+        for shard, index_tensor, request in shard_requests:
             self._activate_shard(shard)
-            shard_prefetch_id = int(self._client.emb_prefetch(shard_keys))
+            if isinstance(request, torch.Tensor):
+                shard_prefetch_id = int(self._client.emb_prefetch(request))
+            else:
+                shard_prefetch_id = int(request)
             shard_values = self._client.emb_wait_result(shard_prefetch_id, embedding_dim)
             out.index_copy_(0, index_tensor, shard_values)
         return out
@@ -349,6 +412,7 @@ class ShardedRecstoreClient:
                 "set_ps_backend requires a RecStore ops library exposing set_ps_backend()."
             )
         self._client.ops.set_ps_backend(backend)
+        self._native_distributed_backend = self._detect_native_distributed_backend()
 
     def enable_gpu_cache(self, capacity: int, embedding_dim: int) -> bool:
         enable = getattr(self._client, "enable_gpu_cache", None)
@@ -459,11 +523,16 @@ class ShardedRecstoreClient:
 
     def _max_emb_write_rows(self, embedding_dim: int) -> int:
         if self._cache_ps_type != "LOCAL_SHM":
-            return 0
+            return self._max_keys_per_request
         bytes_per_row = 8 + int(embedding_dim) * 4
-        if bytes_per_row <= 0:
-            return 0
-        return max(1, int(self._local_shm_slot_buffer_bytes) // bytes_per_row)
+        local_limit = (
+            max(1, int(self._local_shm_slot_buffer_bytes) // bytes_per_row)
+            if bytes_per_row > 0
+            else 0
+        )
+        if self._max_keys_per_request > 0:
+            return min(local_limit, self._max_keys_per_request)
+        return local_limit
 
     def _emb_write_chunked_if_needed(
         self,
@@ -570,6 +639,13 @@ class ShardedRecstoreClient:
     def emb_update_table(self, table_name: str, keys: torch.Tensor, grads: torch.Tensor) -> None:
         if keys.numel() == 0:
             return
+        if self._uses_native_distributed_backend():
+            self._client.emb_update_table(
+                table_name,
+                self._normalize_ids(keys),
+                self._normalize_grads(grads),
+            )
+            return
         for shard, index_tensor in self._group_indices(keys):
             self._activate_shard(shard)
             shard_keys = keys.index_select(0, index_tensor).contiguous()
@@ -608,6 +684,10 @@ class ShardedRecstoreClient:
         if base_offset != 0:
             keys = keys + int(base_offset)
 
+        if self._uses_native_distributed_backend():
+            self._emb_write_chunked_if_needed(keys, initial_data, embedding_dim)
+            return
+
         for shard, index_tensor, shard_keys in self._group_ids_by_shard(keys):
             self._activate_shard(shard)
             shard_values = initial_data.index_select(0, index_tensor).contiguous()
@@ -621,14 +701,21 @@ class ShardedRecstoreClient:
 
     def prefetch(self, ids: torch.Tensor) -> int:
         normalized_ids = self._normalize_ids(ids)
+        if self._uses_native_distributed_backend():
+            return int(self._client.emb_prefetch(normalized_ids))
         req_id = self._kv_prefetch_next_id
         self._kv_prefetch_next_id += 1
         if normalized_ids.numel() == 0:
             self._kv_prefetch_contexts[req_id] = (0, [])
             return req_id
-        shard_requests: list[tuple[int, torch.Tensor, torch.Tensor]] = []
+        shard_requests: list[tuple[int, torch.Tensor, Any]] = []
         for shard, index_tensor, shard_keys in self._group_ids_by_shard(normalized_ids):
-            shard_requests.append((shard, index_tensor, shard_keys))
+            if self._can_issue_shard_prefetch_early():
+                self._activate_shard(shard)
+                shard_prefetch_id = int(self._client.emb_prefetch(shard_keys))
+                shard_requests.append((shard, index_tensor, shard_prefetch_id))
+            else:
+                shard_requests.append((shard, index_tensor, shard_keys))
         self._kv_prefetch_contexts[req_id] = (int(normalized_ids.numel()), shard_requests)
         return req_id
 
@@ -638,6 +725,11 @@ class ShardedRecstoreClient:
         embedding_dim: int,
         device: torch.device = torch.device("cpu"),
     ) -> torch.Tensor:
+        if self._uses_native_distributed_backend():
+            out = self._client.emb_wait_result(int(prefetch_id), embedding_dim)
+            if device.type == "cuda":
+                out = out.to(device)
+            return out
         context = self._kv_prefetch_contexts.pop(int(prefetch_id), None)
         if context is None:
             raise RuntimeError(f"unknown prefetch_id: {prefetch_id}")
@@ -645,9 +737,12 @@ class ShardedRecstoreClient:
         if total_rows == 0:
             return torch.empty((0, embedding_dim), dtype=torch.float32, device=device)
         out = torch.empty((total_rows, embedding_dim), dtype=torch.float32)
-        for shard, index_tensor, shard_keys in shard_requests:
+        for shard, index_tensor, request in shard_requests:
             self._activate_shard(shard)
-            shard_prefetch_id = int(self._client.emb_prefetch(shard_keys))
+            if isinstance(request, torch.Tensor):
+                shard_prefetch_id = int(self._client.emb_prefetch(request))
+            else:
+                shard_prefetch_id = int(request)
             shard_values = self._client.emb_wait_result(shard_prefetch_id, embedding_dim)
             out.index_copy_(0, index_tensor, shard_values)
         if device.type == "cuda":
@@ -674,6 +769,15 @@ class ShardedRecstoreClient:
         if ids.numel() == 0:
             return
         updated_on_cpu = ids.device.type == "cpu"
+        if self._uses_native_distributed_backend():
+            self._client.emb_update_table(
+                name,
+                self._normalize_ids(ids),
+                self._normalize_grads(grads),
+            )
+            if updated_on_cpu:
+                self._clear_gpu_cache_if_available()
+            return
         for shard, index_tensor, shard_keys in self._group_ids_by_shard(
             ids,
             keep_key_device=True,

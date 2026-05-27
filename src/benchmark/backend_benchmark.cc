@@ -50,6 +50,9 @@ DEFINE_string(ssd_io_backend, "IOURING", "RecStore SSD IO backend");
 DEFINE_string(ssd_value_file, "", "RecStore SSD value file");
 DEFINE_int32(ssd_queue_depth, 512, "RecStore SSD IO queue depth");
 DEFINE_int64(ssd_capacity_bytes, 0, "override RecStore SSD capacity bytes");
+DEFINE_double(tiered_high_watermark_ratio,
+              0.0,
+              "override RecStore Tiered high watermark ratio; 0 uses default");
 DEFINE_int64(record_count, 1000000, "record count");
 DEFINE_int32(value_size, 512, "value size bytes");
 DEFINE_int32(batch_size, 1024, "keys per HPS fetch/insert call");
@@ -172,6 +175,8 @@ public:
         char* values,
         size_t value_size,
         const std::function<void(size_t)>& on_miss) = 0;
+
+  virtual std::string ExtraResultFields() const { return ""; }
 };
 
 class HpsBenchmarkBackend : public BenchmarkBackend {
@@ -204,6 +209,13 @@ public:
         value_size,
         on_miss,
         std::chrono::nanoseconds::zero());
+  }
+
+  std::string ExtraResultFields() const override {
+    const auto* recstore =
+        dynamic_cast<const recstore::storage::HpsRecStoreBackend<long long>*>(
+            backend_.get());
+    return recstore ? recstore->extra_result_fields() : "";
   }
 
 private:
@@ -358,10 +370,11 @@ std::unique_ptr<HpsBackend> CreateBackend() {
         FLAGS_ssd_capacity_bytes > 0
             ? static_cast<uint64_t>(FLAGS_ssd_capacity_bytes)
             : 0;
-    params.ssd_io_backend  = FLAGS_ssd_io_backend;
-    params.ssd_value_file  = FLAGS_ssd_value_file;
-    params.ssd_queue_depth = FLAGS_ssd_queue_depth;
-    params.num_threads     = FLAGS_thread_num;
+    params.tiered_high_watermark_ratio = FLAGS_tiered_high_watermark_ratio;
+    params.ssd_io_backend              = FLAGS_ssd_io_backend;
+    params.ssd_value_file              = FLAGS_ssd_value_file;
+    params.ssd_queue_depth             = FLAGS_ssd_queue_depth;
+    params.num_threads                 = FLAGS_thread_num;
     return std::make_unique<recstore::storage::HpsRecStoreBackend<long long>>(
         params);
   }
@@ -546,7 +559,10 @@ double SecondsSince(std::chrono::steady_clock::time_point start,
       .count();
 }
 
-void PrintResult(const char* phase, const PhaseStats& stats, double seconds) {
+void PrintResult(const char* phase,
+                 const PhaseStats& stats,
+                 double seconds,
+                 const BenchmarkBackend* backend) {
   const double batch_ops_sec =
       seconds > 0.0 ? static_cast<double>(stats.batches) / seconds : 0.0;
   const double key_ops_sec =
@@ -556,7 +572,7 @@ void PrintResult(const char* phase, const PhaseStats& stats, double seconds) {
       "value_store_type=%s mode=%s distribution=%s zipfian_alpha=%.6f "
       "threads=%d batch_size=%d records=%ld runtime_s=%.6f batches=%lu "
       "key_ops=%lu misses=%lu throughput_batches_sec=%.6f "
-      "throughput_keys_sec=%.6f\n",
+      "throughput_keys_sec=%.6f%s\n",
       phase,
       FLAGS_backend.c_str(),
       FLAGS_index_type.c_str(),
@@ -572,7 +588,8 @@ void PrintResult(const char* phase, const PhaseStats& stats, double seconds) {
       stats.key_ops,
       stats.misses,
       batch_ops_sec,
-      key_ops_sec);
+      key_ops_sec,
+      backend == nullptr ? "" : backend->ExtraResultFields().c_str());
 }
 
 } // namespace
@@ -598,11 +615,11 @@ int main(int argc, char** argv) {
   const auto load_begin = std::chrono::steady_clock::now();
   const PhaseStats load = LoadRecords(backend.get(), load_threads);
   const auto load_end   = std::chrono::steady_clock::now();
-  PrintResult("load", load, SecondsSince(load_begin, load_end));
+  PrintResult("load", load, SecondsSince(load_begin, load_end), backend.get());
 
   const auto run_begin = std::chrono::steady_clock::now();
   const PhaseStats run = RunTransactions(backend.get());
   const auto run_end   = std::chrono::steady_clock::now();
-  PrintResult("run", run, SecondsSince(run_begin, run_end));
+  PrintResult("run", run, SecondsSince(run_begin, run_end), backend.get());
   return 0;
 }
