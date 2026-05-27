@@ -1,5 +1,7 @@
 # RDMA 模块运行手册
 
+更新时间：2026-05-27
+
 本文档整理当前 RecStore RDMA 主路径的边界、参数、验证入口、已知限制和下一步路线图。默认工作目录为仓库根目录：
 
 ```bash
@@ -9,6 +11,11 @@ cd /app/RecStore
 ## 1. 适用范围
 
 当前文档只覆盖 Parameter Server 里的 RDMA 主路径，不讨论 gRPC / bRPC 的通用网络栈。
+
+当前主路径已经完成两次硬切换：
+
+- RDMA 数据面不再依赖历史 Mayfly `RawMessage` 路径。
+- RDMA 控制面不再依赖 `memcached`，统一由 shard 0 `petps_server` 内置控制面承担。
 
 RecStore 现在有两条 RDMA 入口：
 
@@ -49,8 +56,10 @@ Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 - 打开 RDMA 设备
 - 注册本地 MR
 - 创建 QP / CQ
-- 交换 memcached metadata
+- 通过 shard 0 控制面交换 metadata
 - 轮询 RDMA write completion
+
+这条路径当前已经不再链接或包含 Mayfly 控制面代码；`GlobalAddress`、QP metadata exchange 和 ready 协调都在仓内自维护。
 
 `src/ps/rdma/rc_transport.*` 负责：
 
@@ -239,7 +248,7 @@ python3 src/test/scripts/run_rdma_transport_benchmarks.py \
   --rdma-wait-timeout-ms 20000 \
   --rdma-client-timeout-sec 60 \
   --show-runner-logs \
-  --use-local-memcached auto
+  --rdma-control-plane-host 127.0.0.1
 ```
 
 summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read` 和 `push` 的结果不能直接混比。
@@ -267,7 +276,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
   --rdma-wait-timeout-ms 20000 \
   --client-timeout 60 \
   --cluster-timeout 30 \
-  --use-local-memcached auto
+  --rdma-control-plane-host 127.0.0.1
 ```
 
 多 client 最小解析验证：
@@ -289,7 +298,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
   --rdma-wait-timeout-ms 20000 \
   --client-timeout 60 \
   --cluster-timeout 30 \
-  --use-local-memcached auto \
+  --rdma-control-plane-host 127.0.0.1 \
   --quiet
 ```
 
@@ -342,9 +351,39 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - server 侧会按 `client_id / qp_index / slot_in_qp` 反解请求槽位。
 - `slots_per_qp` 已经贯通到 client、server、runner、测试和 benchmark 参数解析。
 
+当前仓内的活跃 RDMA 路径还有几个明确事实：
+
+- 运行时不再依赖 `memcached`。
+- 顶层构建不再引入 `third_party/Mayfly-main`。
+- `src/ps/base/Postoffice.*` 只保留进程角色和 shard/client 元信息，不再负责 memcached 读写。
+- `src/benchmark/perf_sgl.cc` 已移除，不再作为维护中的 RDMA 路径。
+- RDMA 目标现在显式链接 `ibverbs`，不再依赖旧链路隐式带出 verbs 符号。
+
 这意味着文档里判断并发能力时，不能再只看 `qps-per-client-per-shard`，而要看 `qps-per-client-per-shard * slots-per-qp`。
 
 如果你要补 benchmark 数字，建议把结果放到单独的 `results/` 目录，不要把一次临时跑出来的吞吐值长期固化在主文档里。
+
+### 7.1 最近验证状态
+
+以 2026-05-27 本地仓库状态为准，下面这些验证已经通过：
+
+- `cmake -S . -B build`
+- `cmake --build build --target petps_server petps_integration_test rdma_rc_transport_benchmark ps_transport_benchmark benchmark_client test_rdma_control_plane test_rdmaps_client_adapter -j4`
+- `ctest --test-dir build -R 'test_rdma_control_plane|test_rdmaps_client_adapter' -VV`
+- `python3 src/test/scripts/test_run_rdma_transport_benchmarks.py`
+- `python3 src/test/scripts/test_run_rdma_rc_transport_benchmark.py`
+- 单分片真实 RDMA integration：`PetPSIntegrationTest.PutGetRoundTripSingleShard`
+- 2-client RC benchmark `get` 小负载闭环
+
+这组验证说明当前“无 Mayfly / 无 memcached”版本至少在：
+
+- 构建
+- runner 参数拼接
+- 控制面 metadata/ready 协调
+- 单分片 correctness
+- 多 client RC benchmark 闭环
+
+这些层面没有明显回归。
 
 ## 8. 当前路线图
 
@@ -422,21 +461,22 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 
 如果看到了看似“不对劲”的行为，先确认 binary 是最新构建的目标。RDMA 这条链路对旧二进制非常敏感。
 
-### 9.4 memcached 依赖
+### 9.4 shard 0 控制面
 
-RDMA 脚本通过 memcached 交换元数据。常用建议是：
+RDMA runner 不再依赖 `memcached`，也不再依赖 Mayfly 控制面。当前做法是：
 
-```bash
---use-local-memcached auto
-```
+- `global_id=0` 的 `petps_server` 在启动时监听一个本地 TCP 控制面端口。
+- client 和其他 shard 通过这个控制面交换 `RawVerbsNodeMeta`，并等待所有 server ready。
+- runner 默认自动生成 `rdma_rc_namespace`，并在未显式指定时自动分配 `rdma_control_plane_port`。
+- 控制面只承担启动期元数据交换和 ready 协调，不参与热路径 GET/PUT/UPDATE 数据面。
 
-含义：
+常用参数：
 
-| 值 | 行为 |
-|----|------|
-| `auto` | 优先复用外部 memcached；不可用时启动本地 memcached |
-| `always` | 总是启动本地 memcached |
-| `never` | 只使用已经存在的外部 memcached |
+| 参数 | 说明 |
+|------|------|
+| `--rdma-namespace` | RDMA 元数据命名空间；默认 `auto` |
+| `--rdma-control-plane-host` | shard 0 控制面监听地址 |
+| `--rdma-control-plane-port` | shard 0 控制面监听端口；不传则自动分配 |
 
 ## 10. 验证入口
 
@@ -450,7 +490,7 @@ python3 src/test/scripts/run_petps_integration.py \
   --config-path ./src/test/configs/recstore_config.rdma_test.json \
   --test-binary ./build/bin/petps_integration_test \
   --gtest-filter=PetPSIntegrationTest.PutGetRoundTripSingleShard:PetPSIntegrationTest.UpdateGetRoundTripSingleShard \
-  --use-local-memcached=auto \
+  --rdma-control-plane-host=127.0.0.1 \
   --show-runner-logs \
   --client-timeout=20 \
   --cluster-timeout=35
@@ -465,7 +505,7 @@ python3 src/test/scripts/run_petps_integration.py \
   --config-path ./src/test/configs/recstore_config.rdma_multishard_test.json \
   --test-binary ./build/bin/petps_integration_test \
   --gtest-filter=PetPSIntegrationTest.PutGetRoundTripMultiShard \
-  --use-local-memcached=auto \
+  --rdma-control-plane-host=127.0.0.1 \
   --show-runner-logs \
   --client-timeout=25 \
   --cluster-timeout=45
@@ -508,7 +548,7 @@ ctest --test-dir ./build -R "^pytorch_client_test_rdma$|^pytorch_client_test_rdm
 ```bash
 RECSTORE_CONFIG=./src/test/configs/recstore_config.op_rdma.json \
 RECSTORE_CLIENT_TEST_PHASE=basic \
-RECSTORE_USE_LOCAL_MEMCACHED=auto \
+RECSTORE_RDMA_CONTROL_PLANE_HOST=127.0.0.1 \
 python3 src/test/framework/pytorch/test_client.py ./build/lib/lib_recstore_ops.so
 ```
 
@@ -543,6 +583,7 @@ python3 -m unittest src/test/scripts/test_run_rdma_transport_benchmarks.py
 
 - `--quiet` 模式只输出 summary / aggregate，不输出 progress 噪声。
 - 多 client 流式 stdout 保留行边界，避免多条 `phase=measure summary` 粘连后只解析到第一条。
+- 旧的 `--use-local-memcached` 参数不应再出现在生成命令里。
 
 真实 RDMA 数据面至少跑一个最小 benchmark 闭环，推荐先用 `6.3` 的单 client 命令，再用 2-client `--quiet` 命令确认聚合表中的 `clients=2`。
 
@@ -550,10 +591,10 @@ python3 -m unittest src/test/scripts/test_run_rdma_transport_benchmarks.py
 
 1. 确认二进制是最新构建的目标，尤其是 `petps_server`、`ps_transport_benchmark`、`petps_integration_test` 和 `recstore_torch_ops`。
 2. 确认参数传到了正确入口：runner 用 RDMA 专项参数，C++ binary 读对应 gflags，op-layer 读 `RECSTORE_CONFIG` 和相关环境变量。
-3. 确认 RDMA 设备和 memcached 可用：检查 `/dev/infiniband`、`ibv_devices`、`ss -ltnp | grep ':21211'`。
-4. 如果 runner 卡在 `memcached-wait` 或 `startup-wait`，先看 runner 捕获的 server 日志。
+3. 确认 RDMA 设备和 shard 0 控制面可用：检查 `/dev/infiniband`、`ibv_devices`、`ss -ltnp | grep ':25100'` 或 runner 输出的实际控制面端口。
+4. 如果 runner 卡在 `control-plane-wait` 或 `startup-wait`，先看 runner 捕获的 shard 0 日志。
 5. 如果看到 `unknown command line flag 'rdma_transport_mode'`，通常是跑到了旧 binary，或者当前目标没有链接 RDMA client 相关对象。
-6. 如果看到 `message size too large`，先把 `batch-keys` 降到 500 或更小建立稳定基线。
+6. 如果看到 `unknown argument --use-local-memcached` 或还在传 `RECSTORE_MEMCACHED_*`，说明还在使用旧脚本或旧命令。
 7. 如果 RDMA 路径卡住，重点检查 raw verbs buffer 是否注册、QP metadata 是否按 shard/lane 匹配、CQ 是否被错误线程消费、server/client mode 是否一致。
 
 最小日常验证顺序：
@@ -565,6 +606,6 @@ python3 src/test/scripts/run_petps_integration.py \
   --config-path ./src/test/configs/recstore_config.rdma_test.json \
   --test-binary ./build/bin/petps_integration_test \
   --gtest-filter=PetPSIntegrationTest.PutGetRoundTripSingleShard:PetPSIntegrationTest.UpdateGetRoundTripSingleShard \
-  --use-local-memcached=auto
+  --rdma-control-plane-host=127.0.0.1
 ctest --test-dir ./build -R "^pytorch_client_test_rdma_basic$" -VV
 ```

@@ -28,5 +28,4 @@ exec python3 "${RUNNER_SCRIPT}" \
   --rdma-wait-timeout-ms 30000 \
   --rdma-client-timeout-sec 60 \
   --show-runner-logs \
-  --use-local-memcached auto \
   "$@"
