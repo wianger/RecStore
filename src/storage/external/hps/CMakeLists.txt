@@ -29,49 +29,49 @@ if(NOT TARGET rocksdb-shared)
   recstore_add_hps_rocksdb()
 endif()
 
-if(NOT TARGET redis++)
-  function(recstore_add_hps_redis)
-    cmake_policy(PUSH)
-    cmake_policy(SET CMP0077 NEW)
-    set(ENABLE_SSL ON CACHE BOOL "" FORCE)
-    set(DISABLE_TESTS ON CACHE BOOL "" FORCE)
-    add_subdirectory(
-      ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis
-      ${PROJECT_BINARY_DIR}/third_party/HugeCTR/hiredis)
-
-    set(stub_dir "${PROJECT_BINARY_DIR}/third_party/HugeCTR/generated/pkg")
-    file(WRITE "${stub_dir}/hiredis-config.cmake" "")
-    file(WRITE "${stub_dir}/hiredis_ssl-config.cmake" "")
-
-    set(hiredis_DIR ${stub_dir})
-    set(hiredis_LIBRARIES hiredis::hiredis)
-    set(hiredis_INCLUDE_DIRS
-      "${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis")
-    if(NOT TARGET hiredis::hiredis)
-      add_library(hiredis::hiredis ALIAS hiredis)
-    endif()
-
-    set(hiredis_ssl_DIR ${stub_dir})
-    set(hiredis_ssl_LIBRARIES hiredis::hiredis_ssl)
-    set(hiredis_ssl_INCLUDE_DIRS
-      "${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis")
-    if(NOT TARGET hiredis::hiredis_ssl)
-      add_library(hiredis::hiredis_ssl ALIAS hiredis_ssl)
-    endif()
-
-    include_directories(${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party)
-    set(REDIS_PLUS_PLUS_BUILD_STATIC OFF CACHE BOOL "" FORCE)
-    set(REDIS_PLUS_PLUS_BUILD_TEST OFF CACHE BOOL "" FORCE)
-    set(REDIS_PLUS_PLUS_USE_TLS ON CACHE BOOL "" FORCE)
-    add_subdirectory(
-      ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/redis_pp
-      ${PROJECT_BINARY_DIR}/third_party/HugeCTR/redis_pp)
-    cmake_policy(POP)
-  endfunction()
-  recstore_add_hps_redis()
-endif()
-
 if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
+  if(NOT TARGET redis++)
+    function(recstore_add_hps_redis)
+      cmake_policy(PUSH)
+      cmake_policy(SET CMP0077 NEW)
+      set(ENABLE_SSL ON CACHE BOOL "" FORCE)
+      set(DISABLE_TESTS ON CACHE BOOL "" FORCE)
+      add_subdirectory(
+        ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis
+        ${PROJECT_BINARY_DIR}/third_party/HugeCTR/hiredis)
+
+      set(stub_dir "${PROJECT_BINARY_DIR}/third_party/HugeCTR/generated/pkg")
+      file(WRITE "${stub_dir}/hiredis-config.cmake" "")
+      file(WRITE "${stub_dir}/hiredis_ssl-config.cmake" "")
+
+      set(hiredis_DIR ${stub_dir})
+      set(hiredis_LIBRARIES hiredis::hiredis)
+      set(hiredis_INCLUDE_DIRS
+        "${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis")
+      if(NOT TARGET hiredis::hiredis)
+        add_library(hiredis::hiredis ALIAS hiredis)
+      endif()
+
+      set(hiredis_ssl_DIR ${stub_dir})
+      set(hiredis_ssl_LIBRARIES hiredis::hiredis_ssl)
+      set(hiredis_ssl_INCLUDE_DIRS
+        "${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis")
+      if(NOT TARGET hiredis::hiredis_ssl)
+        add_library(hiredis::hiredis_ssl ALIAS hiredis_ssl)
+      endif()
+
+      include_directories(${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party)
+      set(REDIS_PLUS_PLUS_BUILD_STATIC OFF CACHE BOOL "" FORCE)
+      set(REDIS_PLUS_PLUS_BUILD_TEST OFF CACHE BOOL "" FORCE)
+      set(REDIS_PLUS_PLUS_USE_TLS ON CACHE BOOL "" FORCE)
+      add_subdirectory(
+        ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/redis_pp
+        ${PROJECT_BINARY_DIR}/third_party/HugeCTR/redis_pp)
+      cmake_policy(POP)
+    endfunction()
+    recstore_add_hps_redis()
+  endif()
+
   add_library(hps_native_support STATIC
     hps_embedding_cache_noop_shim.cc
     hps_inference_params_shim.cc

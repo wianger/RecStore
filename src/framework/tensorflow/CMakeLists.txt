@@ -54,7 +54,9 @@ target_link_libraries(recstore_tf_ops PRIVATE
     ${TENSORFLOW_LIBRARIES}
     wq_ps_client
     grpc_ps_client
+    dist_grpc_ps_client
     brpc_ps_client
+    dist_brpc_ps_client
     local_shm_ps_client
     protobuf::libprotobuf
     gRPC::grpc++
