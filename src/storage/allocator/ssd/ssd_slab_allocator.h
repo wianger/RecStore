@@ -1,9 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <stdexcept>
 #include <vector>
 
@@ -178,9 +180,9 @@ public:
                  std::vector<size_t>& out_sizes) override {
     out_sizes.assign(entries.size(), 0);
     struct PendingRead {
-      size_t index = 0;
+      size_t index      = 0;
       uint64_t page_off = 0;
-      size_t buf_size = 0;
+      size_t buf_size   = 0;
     };
     std::vector<IOBackend::IOEntry> io_entries;
     std::vector<PendingRead> pending;
@@ -190,24 +192,24 @@ public:
       uint16_t slab_idx;
       uint64_t local_slot_id;
       Decode(entries[i].handle, slab_idx, local_slot_id);
-      const auto& slab = *slabs_.at(slab_idx);
-      const uint64_t byte_off =
-          ResolveSlotByteOffset(slab_idx, local_slot_id);
-      const PageID_t start = byte_off / PAGE_SIZE;
+      const auto& slab        = *slabs_.at(slab_idx);
+      const uint64_t byte_off = ResolveSlotByteOffset(slab_idx, local_slot_id);
+      const PageID_t start    = byte_off / PAGE_SIZE;
       const uint64_t page_off = byte_off % PAGE_SIZE;
-      const uint64_t total = page_off + slab.slot_size;
-      const uint64_t pages = (total + PAGE_SIZE - 1) / PAGE_SIZE;
-      char* buf = backend_->AllocateBuffer(pages);
+      const uint64_t total    = page_off + slab.slot_size;
+      const uint64_t pages    = (total + PAGE_SIZE - 1) / PAGE_SIZE;
+      char* buf               = backend_->AllocateBuffer(pages);
       io_entries.push_back({start, buf, pages});
-      pending.push_back(PendingRead{i, page_off, entries[i].out_buf == nullptr
-                                                     ? 0
-                                                     : slab.slot_size - kHeaderSize});
+      pending.push_back(PendingRead{
+          i,
+          page_off,
+          entries[i].out_buf == nullptr ? 0 : slab.slot_size - kHeaderSize});
     }
     backend_->BatchReadPages(io_entries);
     for (size_t i = 0; i < pending.size(); ++i) {
       const auto& item = pending[i];
-      const auto& io = io_entries[i];
-      uint32_t n = 0;
+      const auto& io   = io_entries[i];
+      uint32_t n       = 0;
       std::memcpy(&n, io.buffer + item.page_off, sizeof(n));
       const size_t actual = std::min(item.buf_size, static_cast<size_t>(n));
       if (actual > 0) {
@@ -224,48 +226,13 @@ public:
   BatchAllocAndWrite(const std::vector<WriteEntry>& entries) override {
     std::vector<uint64_t> handles;
     handles.reserve(entries.size());
-    struct PendingWrite {
-      size_t index = 0;
-      uint64_t page_off = 0;
-    };
-    std::vector<IOBackend::IOEntry> io_entries;
-    std::vector<PendingWrite> pending;
-    io_entries.reserve(entries.size());
-    pending.reserve(entries.size());
-    for (size_t i = 0; i < entries.size(); ++i) {
-      const uint64_t handle = Alloc(entries[i].data_size);
+    for (const auto& entry : entries) {
+      const uint64_t handle = Alloc(entry.data_size);
       handles.push_back(handle);
       if (handle == kInvalidHandle) {
         continue;
       }
-      uint16_t slab_idx;
-      uint64_t local_slot_id;
-      Decode(handle, slab_idx, local_slot_id);
-      const auto& slab = *slabs_.at(slab_idx);
-      const uint64_t byte_off =
-          ResolveSlotByteOffset(slab_idx, local_slot_id);
-      const PageID_t start = byte_off / PAGE_SIZE;
-      const uint64_t page_off = byte_off % PAGE_SIZE;
-      const uint64_t total = page_off + slab.slot_size;
-      const uint64_t pages = (total + PAGE_SIZE - 1) / PAGE_SIZE;
-      char* buf = backend_->AllocateBuffer(pages);
-      io_entries.push_back({start, buf, pages});
-      pending.push_back(PendingWrite{i, page_off});
-    }
-    if (!io_entries.empty()) {
-      backend_->BatchReadPages(io_entries);
-      for (size_t i = 0; i < pending.size(); ++i) {
-        const auto& item = pending[i];
-        const auto& spec = entries[item.index];
-        char* buf = io_entries[i].buffer;
-        const uint32_t n = static_cast<uint32_t>(spec.data_size);
-        std::memcpy(buf + item.page_off, &n, sizeof(n));
-        std::memcpy(buf + item.page_off + kHeaderSize, spec.data, spec.data_size);
-      }
-      backend_->BatchWritePages(io_entries);
-      for (const auto& io : io_entries) {
-        backend_->FreeBuffer(io.buffer);
-      }
+      Write(handle, entry.data, entry.data_size);
     }
     return handles;
   }
@@ -394,6 +361,7 @@ private:
     const uint64_t page_off = byte_offset % PAGE_SIZE;
     const uint64_t total    = page_off + slot_size;
     const uint64_t pages    = (total + PAGE_SIZE - 1) / PAGE_SIZE;
+    auto locks              = LockPageRangeExclusive(start, pages);
     char* buf               = AcquireThreadBuffer(pages);
     backend_->BatchReadPages({{start, buf, pages}});
     const uint32_t n = static_cast<uint32_t>(data_size);
@@ -410,6 +378,7 @@ private:
     const uint64_t page_off = byte_offset % PAGE_SIZE;
     const uint64_t total    = page_off + slot_size;
     const uint64_t pages    = (total + PAGE_SIZE - 1) / PAGE_SIZE;
+    auto locks              = LockPageRangeShared(start, pages);
     char* buf               = AcquireThreadBuffer(pages);
     backend_->BatchReadPages({{start, buf, pages}});
     uint32_t n = 0;
@@ -419,13 +388,53 @@ private:
     return actual;
   }
 
-  static constexpr uint64_t kHeaderSize = 4;
+  static constexpr uint64_t kHeaderSize    = 4;
+  static constexpr size_t kPageLockStripes = 4096;
+
+  size_t PageLockStripe(PageID_t page_id) const {
+    return static_cast<size_t>(page_id) % kPageLockStripes;
+  }
+
+  std::vector<size_t> PageLockStripes(PageID_t start, uint64_t pages) const {
+    std::vector<size_t> stripes;
+    stripes.reserve(static_cast<size_t>(pages));
+    for (uint64_t i = 0; i < pages; ++i) {
+      stripes.push_back(PageLockStripe(start + i));
+    }
+    std::sort(stripes.begin(), stripes.end());
+    stripes.erase(std::unique(stripes.begin(), stripes.end()), stripes.end());
+    return stripes;
+  }
+
+  std::vector<std::unique_lock<std::shared_mutex>>
+  LockPageRangeExclusive(PageID_t start, uint64_t pages) {
+    std::vector<std::unique_lock<std::shared_mutex>> locks;
+    const auto stripes = PageLockStripes(start, pages);
+    locks.reserve(stripes.size());
+    for (size_t stripe : stripes) {
+      locks.emplace_back(page_locks_[stripe]);
+    }
+    return locks;
+  }
+
+  std::vector<std::shared_lock<std::shared_mutex>>
+  LockPageRangeShared(PageID_t start, uint64_t pages) {
+    std::vector<std::shared_lock<std::shared_mutex>> locks;
+    const auto stripes = PageLockStripes(start, pages);
+    locks.reserve(stripes.size());
+    for (size_t stripe : stripes) {
+      locks.emplace_back(page_locks_[stripe]);
+    }
+    return locks;
+  }
+
   IOBackend* backend_;
   std::vector<int> size_classes_;
   std::vector<std::unique_ptr<SlabPool>> slabs_;
 
   std::vector<uint64_t> global_free_blocks_;
   std::mutex global_mu_;
+  std::array<std::shared_mutex, kPageLockStripes> page_locks_;
 };
 
 FACTORY_REGISTER(SsdBlockAllocator,
