@@ -143,12 +143,25 @@ class _FakeClient:
 
 
 class _FakeClientCollidingPrefetchId(_FakeClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.prefetch_requests_by_port: dict[tuple[int, int], list[int]] = {}
+
     def emb_prefetch(self, keys: torch.Tensor) -> int:
         assert self.ops.active_port is not None
         # Simulate backend with per-connection/local handle namespace:
         # different shards may return the same id.
-        self.prefetch_requests[1] = (self.ops.active_port, [int(v) for v in keys.tolist()])
+        self.prefetch_requests_by_port[(self.ops.active_port, 1)] = [
+            int(v) for v in keys.tolist()
+        ]
         return 1
+
+    def emb_wait_result(self, prefetch_id: int, embedding_dim: int) -> torch.Tensor:
+        assert self.ops.active_port is not None
+        keys = self.prefetch_requests_by_port[(self.ops.active_port, int(prefetch_id))]
+        bucket = self.writes.setdefault(self.ops.active_port, {})
+        rows = [bucket[int(key)] for key in keys]
+        return torch.tensor(rows, dtype=torch.float32).reshape(len(rows), embedding_dim)
 
 
 class _FakeClientWithGpuCache(_FakeClient):
@@ -197,6 +210,47 @@ class _FakeClientWithWriteRowLimit(_FakeClient):
         super().emb_write(keys, values)
 
 
+class _FakeNativeDistributedClient(_FakeClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.ops.backend = "distributed_grpc"
+        self.direct_writes: dict[int, list[float]] = {}
+        self.direct_updates: list[tuple[str, list[int], list[list[float]]]] = []
+        self.direct_prefetch_requests: dict[int, list[int]] = {}
+
+    def init_embedding_table(self, table_name: str, num_embeddings: int, embedding_dim: int) -> bool:
+        self.table_inits.append((-1, table_name, int(num_embeddings), int(embedding_dim)))
+        return True
+
+    def emb_write(self, keys: torch.Tensor, values: torch.Tensor) -> None:
+        for key, value in zip(keys.tolist(), values.tolist()):
+            self.direct_writes[int(key)] = [float(x) for x in value]
+
+    def emb_read(self, keys: torch.Tensor, embedding_dim: int) -> torch.Tensor:
+        rows = [self.direct_writes[int(key)] for key in keys.tolist()]
+        return torch.tensor(rows, dtype=torch.float32).reshape(len(rows), embedding_dim)
+
+    def emb_update_table(self, table_name: str, keys: torch.Tensor, grads: torch.Tensor) -> None:
+        self.direct_updates.append(
+            (
+                table_name,
+                [int(v) for v in keys.tolist()],
+                [[float(x) for x in row] for row in grads.tolist()],
+            )
+        )
+
+    def emb_prefetch(self, keys: torch.Tensor) -> int:
+        pid = self._next_prefetch_id
+        self._next_prefetch_id += 1
+        self.direct_prefetch_requests[pid] = [int(v) for v in keys.tolist()]
+        return pid
+
+    def emb_wait_result(self, prefetch_id: int, embedding_dim: int) -> torch.Tensor:
+        keys = self.direct_prefetch_requests[int(prefetch_id)]
+        rows = [self.direct_writes[int(key)] for key in keys]
+        return torch.tensor(rows, dtype=torch.float32).reshape(len(rows), embedding_dim)
+
+
 class TestShardedRecstoreClient(unittest.TestCase):
     def _make_runtime_dir(
         self,
@@ -206,6 +260,7 @@ class TestShardedRecstoreClient(unittest.TestCase):
         distributed_servers: list[dict] | None = None,
         cache_servers: list[dict] | None = None,
         distributed_num_shards: int | None = None,
+        max_keys_per_request: int | None = None,
         include_distributed_servers: bool = True,
         include_distributed_num_shards: bool = True,
     ) -> Path:
@@ -236,6 +291,8 @@ class TestShardedRecstoreClient(unittest.TestCase):
             cfg["cache_ps"]["ps_type"] = cache_ps_type
         if include_distributed_num_shards:
             cfg["distributed_client"]["num_shards"] = distributed_num_shards
+        if max_keys_per_request is not None:
+            cfg["distributed_client"]["max_keys_per_request"] = int(max_keys_per_request)
         if include_distributed_servers:
             cfg["distributed_client"]["servers"] = distributed_servers
         (runtime_dir / "recstore_config.json").write_text(
@@ -324,6 +381,26 @@ class TestShardedRecstoreClient(unittest.TestCase):
         self.assertIn(21001, fake_client.writes)
         self.assertNotIn(22000, fake_client.writes)
         self.assertNotIn(22001, fake_client.writes)
+
+    def test_native_distributed_backend_does_not_switch_shards(self) -> None:
+        runtime_dir = self._make_runtime_dir(
+            hash_method="simple_mod",
+            cache_ps_type="GRPC",
+            distributed_num_shards=2,
+        )
+        fake_client = _FakeNativeDistributedClient()
+        client = ShardedRecstoreClient(fake_client, runtime_dir)
+
+        self.assertTrue(client.init_embedding_table("default", 100, 4))
+        keys = torch.tensor([5, 2, 7, 4], dtype=torch.int64)
+        values = torch.arange(16, dtype=torch.float32).reshape(4, 4)
+        client.emb_write(keys, values)
+
+        handle = client.prefetch(keys)
+        self.assertEqual(fake_client.ops.port_history, [])
+        self.assertEqual(fake_client.direct_prefetch_requests[handle], [5, 2, 7, 4])
+        self.assertTrue(torch.allclose(client.wait_and_get(handle, 4), values))
+        self.assertEqual(fake_client.table_inits, [(-1, "default", 100, 4)])
 
     def test_routes_by_shard_id_when_shards_are_non_contiguous(self) -> None:
         runtime_dir = self._make_runtime_dir(
@@ -436,8 +513,13 @@ class TestShardedRecstoreClient(unittest.TestCase):
         client.emb_write(keys, values)
 
         pid = client.emb_prefetch(keys)
+        self.assertEqual(fake_client.prefetch_requests, {})
         out = client.emb_wait_result(pid, 4)
         self.assertTrue(torch.allclose(out, values))
+        self.assertEqual(
+            sorted((port, tuple(keys)) for port, keys in fake_client.prefetch_requests.values()),
+            [(20000, (2, 4)), (20001, (5, 7))],
+        )
 
     def test_stable_prefetch_read_handles_colliding_shard_prefetch_ids(self) -> None:
         runtime_dir = self._make_runtime_dir(hash_method="simple_mod", distributed_num_shards=2)
@@ -461,8 +543,13 @@ class TestShardedRecstoreClient(unittest.TestCase):
         client.emb_write(keys, values)
 
         opaque_handle = client.emb_prefetch(keys)
+        self.assertEqual(fake_client.prefetch_requests_by_port, {})
         out = client.emb_wait_result(opaque_handle, 4)
         self.assertTrue(torch.allclose(out, values))
+        self.assertEqual(
+            sorted(fake_client.prefetch_requests_by_port.items()),
+            [((20000, 1), [2, 4]), ((20001, 1), [5, 7])],
+        )
 
     def test_public_prefetch_wait_consumes_opaque_handle(self) -> None:
         runtime_dir = self._make_runtime_dir(hash_method="simple_mod", distributed_num_shards=2)
@@ -528,6 +615,28 @@ class TestShardedRecstoreClient(unittest.TestCase):
         pulled = client.pull("large_fused", ids)
         self.assertTrue(torch.allclose(pulled, torch.zeros((4, 128))))
 
+    def test_init_data_splits_large_writes_by_distributed_max_keys_per_request(self) -> None:
+        runtime_dir = self._make_runtime_dir(
+            cache_ps_type="GRPC",
+            cache_servers=[{"host": "127.0.0.1", "port": 20000, "shard": 0}],
+            distributed_servers=[{"host": "127.0.0.1", "port": 20000, "shard": 0}],
+            distributed_num_shards=1,
+            max_keys_per_request=500,
+        )
+        fake_client = _FakeClientWithWriteRowLimit(max_rows_per_write=500)
+        client = ShardedRecstoreClient(fake_client, runtime_dir)
+
+        client.init_data(
+            name="grpc_large_fused",
+            shape=(1200, 128),
+            dtype=torch.float32,
+        )
+
+        self.assertEqual(fake_client.write_batch_sizes, [500, 500, 200])
+        ids = torch.tensor([0, 499, 500, 999, 1199], dtype=torch.int64)
+        pulled = client.pull("grpc_large_fused", ids)
+        self.assertTrue(torch.allclose(pulled, torch.zeros((5, 128))))
+
     def test_prefetch_wait_and_get_handles_colliding_shard_ids(self) -> None:
         runtime_dir = self._make_runtime_dir(hash_method="simple_mod", distributed_num_shards=2)
         fake_client = _FakeClientCollidingPrefetchId()
@@ -538,8 +647,13 @@ class TestShardedRecstoreClient(unittest.TestCase):
         client.emb_write(keys, values)
 
         handle = client.prefetch(keys)
+        self.assertEqual(fake_client.prefetch_requests_by_port, {})
         result = client.wait_and_get(handle, 4)
         self.assertTrue(torch.allclose(result, values))
+        self.assertEqual(
+            sorted(fake_client.prefetch_requests_by_port.items()),
+            [((20000, 1), [2, 4]), ((20001, 1), [5, 7])],
+        )
         with self.assertRaises(RuntimeError):
             client.wait_and_get(handle, 4)
 

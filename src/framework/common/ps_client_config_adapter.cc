@@ -64,7 +64,22 @@ json ResolveFrameworkDistributedClientConfig(const json& config) {
   copy_field_if_missing("hash_method");
   copy_field_if_missing("max_keys_per_request");
 
+  if (!resolved.contains("num_shards") && resolved.contains("servers") &&
+      resolved["servers"].is_array()) {
+    resolved["num_shards"] = resolved["servers"].size();
+  }
+
   return resolved;
+}
+
+bool HasFrameworkDistributedClientConfig(const json& config) {
+  const json distributed_client =
+      ResolveFrameworkDistributedClientConfig(config);
+  return distributed_client.contains("servers") &&
+         distributed_client["servers"].is_array() &&
+         !distributed_client["servers"].empty() &&
+         distributed_client.contains("num_shards") &&
+         distributed_client["num_shards"].is_number_integer();
 }
 
 json ResolveFrameworkPSClientTransportConfig(const json& config) {

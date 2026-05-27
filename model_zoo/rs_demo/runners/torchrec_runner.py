@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import fcntl
 import hashlib
 import json
 import os
@@ -12,7 +13,12 @@ from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any
 
-from ..config import RunConfig, ensure_shared_dir, validate_torchrec_config
+from ..config import (
+    RunConfig,
+    ensure_shared_dir,
+    resolve_num_embeddings_per_feature,
+    validate_torchrec_config,
+)
 from ..runtime.hybrid_dlrm import (
     build_hybrid_dense_arch,
     parse_layer_sizes,
@@ -87,6 +93,7 @@ def _append_worker_debug(cfg: RunConfig, rank: int, message: str) -> None:
 def _build_worker_fingerprint(repo_root: Path) -> dict[str, dict[str, str]]:
     rel_paths = [
         "model_zoo/rs_demo/config.py",
+        "model_zoo/rs_demo/data/dlrm_source.py",
         "model_zoo/rs_demo/runners/torchrec_runner.py",
         "model_zoo/rs_demo/runtime/hybrid_dlrm.py",
     ]
@@ -103,24 +110,29 @@ def _write_or_verify_worker_fingerprint(
     fingerprint: dict[str, dict[str, str]],
     fingerprint_path: Path,
 ) -> None:
+    del world_size
     fingerprint_path.parent.mkdir(parents=True, exist_ok=True)
-    if fingerprint_path.exists():
-        all_fingerprints = json.loads(fingerprint_path.read_text(encoding="utf-8"))
-    else:
-        all_fingerprints = {}
+    lock_path = fingerprint_path.with_suffix(fingerprint_path.suffix + ".lock")
+    with lock_path.open("w", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        if fingerprint_path.exists():
+            content = fingerprint_path.read_text(encoding="utf-8")
+            all_fingerprints = json.loads(content) if content.strip() else {}
+        else:
+            all_fingerprints = {}
 
-    all_fingerprints[str(rank)] = fingerprint
-    fingerprint_path.write_text(
-        json.dumps(all_fingerprints, sort_keys=True, indent=2),
-        encoding="utf-8",
-    )
+        all_fingerprints[str(rank)] = fingerprint
+        fingerprint_path.write_text(
+            json.dumps(all_fingerprints, sort_keys=True, indent=2),
+            encoding="utf-8",
+        )
 
-    if rank != 0:
-        baseline = all_fingerprints.get("0")
-        if baseline is not None and baseline != fingerprint:
-            raise RuntimeError(
-                f"worker fingerprint mismatch: rank0={baseline} rank{rank}={fingerprint}"
-            )
+        if rank != 0:
+            baseline = all_fingerprints.get("0")
+            if baseline is not None and baseline != fingerprint:
+                raise RuntimeError(
+                    f"worker fingerprint mismatch: rank0={baseline} rank{rank}={fingerprint}"
+                )
 
 
 def _summarize_sharding_plan(plan: Any) -> str:
@@ -170,6 +182,29 @@ def _compute_or_load_shared_sharding_plan(
     with plan_path.open("rb") as f:
         plan = pickle.load(f)
     return plan
+
+
+def _remove_stale_distributed_outputs(cfg: RunConfig, rank_dir: Path) -> None:
+    run_output_dir = Path(cfg.output_root) / "outputs" / cfg.run_id
+    stale_paths = [
+        run_output_dir / "torchrec_worker_fingerprints.json",
+        run_output_dir / "torchrec_worker_fingerprints.json.lock",
+        run_output_dir / "torchrec_plan.pkl",
+        Path(cfg.torchrec_main_csv),
+        Path(cfg.torchrec_main_agg_csv),
+        Path(cfg.torchrec_trace_csv),
+    ]
+    for path in stale_paths:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+    if rank_dir.exists():
+        for path in rank_dir.glob("rank*.csv"):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _merge_rank_outputs(paths: list[Path], out_path: Path) -> list[dict[str, Any]]:
@@ -256,6 +291,7 @@ def _build_train_dataloader_for_mode(
         data_dir_rel=cfg.data_dir,
         train_ratio=cfg.train_ratio,
         num_embeddings=cfg.num_embeddings,
+        num_embeddings_per_feature=cfg.num_embeddings_per_feature,
         batch_size=cfg.batch_size,
         shuffle=shuffle,
         seed=seed,
@@ -352,15 +388,19 @@ def _run_single_or_dist_worker(
         torch=torch,
     )
     data_iter = iter(dataloader)
+    num_embeddings_per_feature = resolve_num_embeddings_per_feature(
+        cfg.num_embeddings,
+        cfg.num_embeddings_per_feature,
+    )
 
     eb_configs = [
         EmbeddingBagConfig(
             name=f"t_{feature_name}",
             embedding_dim=int(cfg.embedding_dim),
-            num_embeddings=int(cfg.num_embeddings),
+            num_embeddings=int(num_embeddings_per_feature[feature_idx]),
             feature_names=[feature_name],
         )
-        for feature_name in DEFAULT_CAT_NAMES
+        for feature_idx, feature_name in enumerate(DEFAULT_CAT_NAMES)
     ]
 
     use_dist = world_size > 1
@@ -705,6 +745,13 @@ class TorchRecRunner(BenchmarkRunner):
             str(cfg.torchrec_memory_mode),
             "--no-start-server",
         ]
+        if cfg.num_embeddings_per_feature:
+            cmd.extend(
+                [
+                    "--num-embeddings-per-feature",
+                    str(cfg.num_embeddings_per_feature),
+                ]
+            )
         if cfg.torchrec_profiler:
             cmd.extend(
                 [
@@ -733,6 +780,7 @@ class TorchRecRunner(BenchmarkRunner):
     def _run_distributed(self, repo_root: Path, cfg: RunConfig) -> dict[str, Any]:
         rank_dir = self._rank_output_dir(cfg)
         ensure_shared_dir(rank_dir)
+        _remove_stale_distributed_outputs(cfg, rank_dir)
 
         cmd = self._build_torchrun_cmd(repo_root, cfg)
 

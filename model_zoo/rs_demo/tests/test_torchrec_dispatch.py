@@ -84,6 +84,7 @@ class TestTorchRecDispatch(unittest.TestCase):
             repo_root = Path(tmpdir)
             for rel_path in (
                 "model_zoo/rs_demo/config.py",
+                "model_zoo/rs_demo/data/dlrm_source.py",
                 "model_zoo/rs_demo/runners/torchrec_runner.py",
                 "model_zoo/rs_demo/runtime/hybrid_dlrm.py",
             ):
@@ -95,6 +96,7 @@ class TestTorchRecDispatch(unittest.TestCase):
 
         self.assertIn("files", fingerprint)
         self.assertIn("model_zoo/rs_demo/config.py", fingerprint["files"])
+        self.assertIn("model_zoo/rs_demo/data/dlrm_source.py", fingerprint["files"])
         self.assertIn("model_zoo/rs_demo/runners/torchrec_runner.py", fingerprint["files"])
         self.assertIn("model_zoo/rs_demo/runtime/hybrid_dlrm.py", fingerprint["files"])
 
@@ -120,6 +122,23 @@ class TestTorchRecDispatch(unittest.TestCase):
 
         self.assertEqual(stored["0"], fingerprint)
         self.assertEqual(stored["1"], fingerprint)
+
+    def test_write_or_verify_worker_fingerprint_tolerates_empty_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fingerprint_path = Path(tmpdir) / "fingerprints.json"
+            fingerprint_path.write_text("", encoding="utf-8")
+            fingerprint = {"files": {"a.py": "hash-a"}}
+
+            _write_or_verify_worker_fingerprint(
+                rank=0,
+                world_size=2,
+                fingerprint=fingerprint,
+                fingerprint_path=fingerprint_path,
+            )
+
+            stored = json.loads(fingerprint_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(stored["0"], fingerprint)
 
     def test_write_or_verify_worker_fingerprint_rejects_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -496,6 +515,70 @@ class TestTorchRecDispatch(unittest.TestCase):
         self.assertEqual(env["GLOO_SOCKET_IFNAME"], "eno1")
         self.assertEqual(env["NCCL_IB_DISABLE"], "1")
         self.assertEqual(env["NCCL_SOCKET_FAMILY"], "AF_INET")
+
+    def test_distributed_run_removes_stale_coordination_files_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_root = Path(tmpdir)
+            run_id = "stale-case"
+            run_output = output_root / "outputs" / run_id
+            rank_dir = run_output / "torchrec_ranks"
+            rank_dir.mkdir(parents=True)
+            stale_paths = [
+                run_output / "torchrec_worker_fingerprints.json",
+                run_output / "torchrec_worker_fingerprints.json.lock",
+                run_output / "torchrec_plan.pkl",
+                rank_dir / "rank0.csv",
+            ]
+            for path in stale_paths:
+                path.write_text("stale", encoding="utf-8")
+
+            cfg = RunConfig(
+                backend="torchrec",
+                steps=1,
+                nnodes=1,
+                node_rank=0,
+                nproc_per_node=1,
+                master_addr="127.0.0.1",
+                master_port=29612,
+                rdzv_id=run_id,
+                output_root=str(output_root),
+                run_id=run_id,
+                torchrec_main_csv=str(run_output / "torchrec_main.csv"),
+                torchrec_main_agg_csv=str(run_output / "torchrec_main_agg.csv"),
+                torchrec_trace_dir=str(run_output / "torchrec_traces"),
+                torchrec_trace_csv=str(run_output / "torchrec_trace.csv"),
+            )
+            runner = TorchRecRunner(Path("/tmp/runtime"))
+
+            def fake_subprocess_run(*args, **kwargs):
+                for path in stale_paths:
+                    self.assertFalse(path.exists(), f"{path} was not cleaned")
+                write_stage_csv(
+                    rank_dir / "rank0.csv",
+                    [
+                        {
+                            "backend": "torchrec",
+                            "rank": 0,
+                            "step": 0,
+                            "warmup_excluded": 0,
+                        }
+                    ],
+                )
+                return mock.Mock(returncode=0, stdout="", stderr="")
+
+            with mock.patch(
+                "model_zoo.rs_demo.runners.torchrec_runner._pick_socket_ifname",
+                return_value=None,
+            ), mock.patch(
+                "model_zoo.rs_demo.runners.torchrec_runner.subprocess.run",
+                side_effect=fake_subprocess_run,
+            ), mock.patch(
+                "model_zoo.rs_demo.runners.torchrec_runner._merge_rank_outputs",
+                return_value=[],
+            ):
+                result = runner._run_distributed(Path("/app/RecStore"), cfg)
+
+        self.assertEqual(result["backend"], "torchrec")
 
     def test_merge_rank_outputs_keeps_only_trainer_rows_for_fair_remote(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

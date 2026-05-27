@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <iomanip>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -28,11 +29,18 @@ public:
       if (raw != kValueHandleNone) {
         dram_bytes_reserved_.fetch_add(
             dram_store_.SlotCapacity(raw), std::memory_order_relaxed);
+        dram_live_allocs_.fetch_add(1, std::memory_order_relaxed);
+        dram_total_allocs_.fetch_add(1, std::memory_order_relaxed);
         return MakeDramHandle(raw);
       }
     }
     const uint64_t raw = ssd_store_.Alloc(size);
-    return raw == kValueHandleNone ? kValueHandleNone : MakeSsdHandle(raw);
+    if (raw == kValueHandleNone) {
+      return kValueHandleNone;
+    }
+    ssd_live_allocs_.fetch_add(1, std::memory_order_relaxed);
+    ssd_total_allocs_.fetch_add(1, std::memory_order_relaxed);
+    return MakeSsdHandle(raw);
   }
 
   void Write(uint64_t handle, const void* data, size_t size) override {
@@ -70,11 +78,13 @@ public:
     }
     if (IsOnSSD(handle)) {
       ssd_store_.Free(SsdRawHandle(handle));
+      ssd_live_allocs_.fetch_sub(1, std::memory_order_relaxed);
       return;
     }
     const uint64_t raw = DramRawHandle(handle);
     const size_t cap   = dram_store_.SlotCapacity(raw);
     dram_store_.Free(raw);
+    dram_live_allocs_.fetch_sub(1, std::memory_order_relaxed);
     uint64_t cur = dram_bytes_reserved_.load(std::memory_order_relaxed);
     while (cur != 0 &&
            !dram_bytes_reserved_.compare_exchange_weak(
@@ -141,6 +151,33 @@ public:
     return os.str();
   }
 
+  std::string ExtraResultFields() const override {
+    const uint64_t dram_live =
+        dram_live_allocs_.load(std::memory_order_relaxed);
+    const uint64_t ssd_live = ssd_live_allocs_.load(std::memory_order_relaxed);
+    const uint64_t live     = dram_live + ssd_live;
+    const uint64_t dram_total =
+        dram_total_allocs_.load(std::memory_order_relaxed);
+    const uint64_t ssd_total =
+        ssd_total_allocs_.load(std::memory_order_relaxed);
+    const uint64_t total = dram_total + ssd_total;
+    const double live_ratio =
+        live == 0 ? 0.0 : static_cast<double>(ssd_live) / live;
+    const double total_ratio =
+        total == 0 ? 0.0 : static_cast<double>(ssd_total) / total;
+    std::ostringstream os;
+    os << std::fixed << std::setprecision(6)
+       << " tiered_dram_capacity_bytes=" << dram_capacity_bytes_
+       << " tiered_high_watermark_ratio=" << high_watermark_ratio_
+       << " tiered_dram_live_allocs=" << dram_live << " tiered_ssd_live_allocs="
+       << ssd_live << " tiered_live_allocs=" << live
+       << " tiered_ssd_live_ratio=" << live_ratio
+       << " tiered_dram_total_allocs=" << dram_total
+       << " tiered_ssd_total_allocs=" << ssd_total << " tiered_total_allocs="
+       << total << " tiered_ssd_total_ratio=" << total_ratio;
+    return os.str();
+  }
+
 private:
   static constexpr uint64_t kSsdFlag = 1ULL << 63;
 
@@ -204,6 +241,10 @@ private:
   uint64_t dram_capacity_bytes_ = 0;
   double high_watermark_ratio_  = 0.85;
   std::atomic<uint64_t> dram_bytes_reserved_{0};
+  std::atomic<uint64_t> dram_live_allocs_{0};
+  std::atomic<uint64_t> ssd_live_allocs_{0};
+  std::atomic<uint64_t> dram_total_allocs_{0};
+  std::atomic<uint64_t> ssd_total_allocs_{0};
 };
 
 FACTORY_REGISTER(

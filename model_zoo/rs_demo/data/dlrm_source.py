@@ -6,6 +6,8 @@ from pathlib import Path
 
 import torch
 
+from ..config import resolve_num_embeddings_per_feature
+
 
 def inject_project_paths(repo_root: Path) -> None:
     recstore_src = str(repo_root / "src")
@@ -135,6 +137,7 @@ def build_train_dataloader(
     num_embeddings: int,
     batch_size: int,
     *,
+    num_embeddings_per_feature: list[int] | str | None = None,
     shuffle: bool = True,
     seed: int | None = None,
     rank: int | None = None,
@@ -146,7 +149,10 @@ def build_train_dataloader(
     if not data_dir.exists():
         raise FileNotFoundError(f"dataset dir not found: {data_dir}")
 
-    nep = [int(num_embeddings)] * 26
+    nep = resolve_num_embeddings_per_feature(
+        int(num_embeddings),
+        num_embeddings_per_feature,
+    )
     dataset = CustomCriteoDataset(
         data_dir=str(data_dir),
         stage="train",

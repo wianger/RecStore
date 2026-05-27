@@ -12,6 +12,8 @@ from model_zoo.rs_demo.config import (
     ensure_run_id,
     parse_config,
     populate_default_paths,
+    resolve_num_embeddings_per_feature,
+    validate_hps_torch_config,
     validate_recstore_config,
     validate_torchrec_config,
 )
@@ -70,6 +72,24 @@ class TestTorchRecConfig(unittest.TestCase):
         self.assertEqual(cfg.output_root, "/nas/home/shq/docker/rs_demo")
         self.assertEqual(cfg.run_id, "case-a")
 
+    def test_num_embeddings_per_feature_override_parses(self) -> None:
+        values = [str(idx + 1) for idx in range(26)]
+        cfg = parse_config(
+            [
+                "--backend",
+                "torchrec",
+                "--num-embeddings",
+                "5000",
+                "--num-embeddings-per-feature",
+                ",".join(values),
+            ]
+        )
+
+        self.assertEqual(resolve_num_embeddings_per_feature(
+            cfg.num_embeddings,
+            cfg.num_embeddings_per_feature,
+        ), list(range(1, 27)))
+
     def test_torchrec_dist_mode_parses(self) -> None:
         cfg = parse_config(
             [
@@ -91,6 +111,58 @@ class TestTorchRecConfig(unittest.TestCase):
             ]
         )
         self.assertEqual(cfg.torchrec_memory_mode, "uvm_caching")
+
+    def test_hps_torch_backend_parses_paths(self) -> None:
+        cfg = parse_config(
+            [
+                "--backend",
+                "hps_torch",
+                "--hps-torch-model-name",
+                "dlrm_hps",
+                "--hps-torch-config-file",
+                "/tmp/hps.json",
+                "--hps-torch-model-dir",
+                "/tmp/hps_model",
+                "--hps-torch-main-csv",
+                "/tmp/hps.csv",
+                "--hps-torch-main-agg-csv",
+                "/tmp/hps_agg.csv",
+                "--hps-torch-gpucacheper",
+                "0.5",
+            ]
+        )
+        self.assertEqual(cfg.backend, "hps_torch")
+        self.assertEqual(cfg.hps_torch_model_name, "dlrm_hps")
+        self.assertEqual(cfg.hps_torch_config_file, "/tmp/hps.json")
+        self.assertEqual(cfg.hps_torch_model_dir, "/tmp/hps_model")
+        self.assertEqual(cfg.hps_torch_main_csv, "/tmp/hps.csv")
+        self.assertEqual(cfg.hps_torch_main_agg_csv, "/tmp/hps_agg.csv")
+        self.assertEqual(cfg.hps_torch_gpucacheper, 0.5)
+
+    def test_hps_torch_backend_accepts_single_node_multi_process(self) -> None:
+        cfg = parse_config(
+            [
+                "--backend",
+                "hps_torch",
+                "--nproc-per-node",
+                "2",
+            ]
+        )
+        validate_hps_torch_config(cfg)
+
+    def test_hps_torch_backend_rejects_multi_node(self) -> None:
+        cfg = parse_config(
+            [
+                "--backend",
+                "hps_torch",
+                "--nnodes",
+                "2",
+                "--node-rank",
+                "0",
+            ]
+        )
+        with self.assertRaisesRegex(RuntimeError, "single-node"):
+            validate_hps_torch_config(cfg)
 
     def test_torchrec_backend_parses_profiler_flags(self) -> None:
         cfg = parse_config(

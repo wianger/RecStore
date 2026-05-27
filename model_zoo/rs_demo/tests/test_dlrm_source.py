@@ -153,6 +153,15 @@ class TestDlrmSourceFallback(unittest.TestCase):
                 self.assertTrue(torch.equal(batched_tensor, single_tensor))
                 self.assertEqual(batched_tensor.dtype, single_tensor.dtype)
 
+    def test_resolve_default_table_sizes_uses_cap_instead_of_uniform_size(self) -> None:
+        sizes = dlrm_source.resolve_num_embeddings_per_feature(5000)
+
+        self.assertEqual(len(sizes), 26)
+        self.assertEqual(sizes[0], 5000)
+        self.assertEqual(sizes[5], 3)
+        self.assertEqual(sizes[8], 63)
+        self.assertLess(sum(sizes), 5000 * 26)
+
 
 if __name__ == "__main__":
     unittest.main()
