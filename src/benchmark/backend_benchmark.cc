@@ -6,8 +6,14 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <map>
 #include <memory>
+#include <mutex>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -20,12 +26,14 @@
 #include "storage/external/hps/hps_recstore.h"
 #include "storage/external/hps/raw_rocksdb.h"
 #include "third_party/HugeCTR/HugeCTR/include/hps/hash_map_backend.hpp"
+#include "third_party/HugeCTR/HugeCTR/include/hps/hier_parameter_server_base.hpp"
+#include "third_party/HugeCTR/HugeCTR/include/hps/inference_utils.hpp"
 #include "third_party/HugeCTR/HugeCTR/include/hps/rocksdb_backend.hpp"
 
 DEFINE_string(backend,
               "hps_hash_map",
               "hps_hash_map|hps_rocksdb|raw_rocksdb|raw_rocksdb_memenv|"
-              "fasterkv|recstore");
+              "fasterkv|recstore|hps_native_tiered");
 DEFINE_string(path, "", "RecStore data path");
 DEFINE_string(fasterkv_storage,
               "memory",
@@ -61,6 +69,21 @@ DEFINE_int32(load_thread_num, 0, "load thread count; 0 uses thread_num");
 DEFINE_int32(hps_rocksdb_thread_num,
              1,
              "RocksDB internal thread count; 0 uses thread_num");
+DEFINE_double(hps_native_dram_fraction,
+              1.0,
+              "HPS native tiered volatile DB capacity fraction in [0, 1]");
+DEFINE_bool(
+    hps_native_cache_missed_embeddings,
+    false,
+    "Pass through to HPS VolatileDatabaseParams.cache_missed_embeddings");
+DEFINE_string(hps_native_overflow_policy,
+              "evict_random",
+              "HPS native volatile DB overflow policy: "
+              "evict_random|evict_least_used|evict_oldest");
+DEFINE_double(
+    hps_native_overflow_resolution_target,
+    0.8,
+    "Pass through to HPS VolatileDatabaseParams.overflow_resolution_target");
 DEFINE_int32(running_seconds, 5, "transaction runtime seconds");
 DEFINE_string(distribution, "uniform", "uniform|zipfian");
 DEFINE_double(zipfian_alpha, 0.9, "Zipfian alpha");
@@ -175,6 +198,8 @@ public:
         char* values,
         size_t value_size,
         const std::function<void(size_t)>& on_miss) = 0;
+
+  virtual void FinishLoad(const std::string& table_name) { (void)table_name; }
 
   virtual std::string ExtraResultFields() const { return ""; }
 };
@@ -292,6 +317,231 @@ private:
   recstore::storage::fasterkv::FasterKVBackend backend_;
 };
 
+HugeCTR::DatabaseOverflowPolicy_t HpsNativeOverflowPolicy() {
+  if (FLAGS_hps_native_overflow_policy == "evict_random") {
+    return HugeCTR::DatabaseOverflowPolicy_t::EvictRandom;
+  }
+  if (FLAGS_hps_native_overflow_policy == "evict_least_used") {
+    return HugeCTR::DatabaseOverflowPolicy_t::EvictLeastUsed;
+  }
+  if (FLAGS_hps_native_overflow_policy == "evict_oldest") {
+    return HugeCTR::DatabaseOverflowPolicy_t::EvictOldest;
+  }
+  throw std::invalid_argument("hps_native_overflow_policy must be "
+                              "evict_random|evict_least_used|evict_oldest");
+}
+
+size_t HpsNativeOverflowMarginPerPartition() {
+  if (FLAGS_hps_native_dram_fraction < 0.0 ||
+      FLAGS_hps_native_dram_fraction > 1.0) {
+    throw std::invalid_argument("hps_native_dram_fraction must be in [0, 1]");
+  }
+  const size_t partitions = static_cast<size_t>(std::max(1, FLAGS_thread_num));
+  const double target_records =
+      static_cast<double>(FLAGS_record_count) * FLAGS_hps_native_dram_fraction;
+  if (target_records <= 0.0) {
+    return 1;
+  }
+  return std::max<size_t>(
+      1,
+      static_cast<size_t>(
+          std::ceil(target_records / static_cast<double>(partitions))));
+}
+
+class HpsNativeTieredBenchmarkBackend : public BenchmarkBackend {
+public:
+  HpsNativeTieredBenchmarkBackend(
+      const std::string& path, size_t value_size, size_t max_batch_size)
+      : path_(path),
+        sparse_model_path_(path_ + "/hps_native_sparse"),
+        value_size_(value_size),
+        embedding_vec_size_(value_size / sizeof(float)),
+        max_batch_size_(max_batch_size) {
+    if (value_size_ == 0 || value_size_ % sizeof(float) != 0) {
+      throw std::invalid_argument(
+          "hps_native_tiered requires float-aligned value_size");
+    }
+    std::filesystem::create_directories(sparse_model_path_);
+    key_stream_.open(sparse_model_path_ + "/key",
+                     std::ios::binary | std::ios::out | std::ios::trunc);
+    vec_stream_.open(sparse_model_path_ + "/emb_vector",
+                     std::ios::binary | std::ios::out | std::ios::trunc);
+    if (!key_stream_.is_open() || !vec_stream_.is_open()) {
+      throw std::runtime_error("failed to create HPS native sparse files");
+    }
+  }
+
+  void Insert(const std::string& table_name,
+              size_t num_keys,
+              const long long* keys,
+              const char* values,
+              uint32_t value_size,
+              size_t stride) override {
+    (void)table_name;
+    if (parameter_server_) {
+      throw std::runtime_error(
+          "hps_native_tiered benchmark does not support inserts after load");
+    }
+    if (value_size != value_size_ || stride < value_size_) {
+      throw std::invalid_argument(
+          "hps_native_tiered insert requires fixed-size rows");
+    }
+    std::lock_guard<std::mutex> guard(load_mu_);
+    key_stream_.write(
+        reinterpret_cast<const char*>(keys),
+        static_cast<std::streamsize>(num_keys * sizeof(long long)));
+    for (size_t i = 0; i < num_keys; ++i) {
+      vec_stream_.write(
+          values + i * stride, static_cast<std::streamsize>(value_size_));
+    }
+    loaded_records_ += num_keys;
+  }
+
+  void FinishLoad(const std::string& table_name) override {
+    (void)table_name;
+    if (parameter_server_) {
+      return;
+    }
+    key_stream_.close();
+    vec_stream_.close();
+
+    HugeCTR::VolatileDatabaseParams volatile_db;
+    volatile_db.type = HugeCTR::DatabaseType_t::ParallelHashMap;
+    volatile_db.num_partitions =
+        static_cast<size_t>(std::max(1, FLAGS_thread_num));
+    volatile_db.max_batch_size  = max_batch_size_;
+    volatile_db.overflow_margin = HpsNativeOverflowMarginPerPartition();
+    volatile_db.overflow_policy = HpsNativeOverflowPolicy();
+    volatile_db.overflow_resolution_target =
+        FLAGS_hps_native_overflow_resolution_target;
+    volatile_db.initial_cache_rate = FLAGS_hps_native_dram_fraction;
+    volatile_db.cache_missed_embeddings =
+        FLAGS_hps_native_cache_missed_embeddings;
+    volatile_db.update_filters.clear();
+
+    HugeCTR::PersistentDatabaseParams persistent_db;
+    persistent_db.type           = HugeCTR::DatabaseType_t::RocksDB;
+    persistent_db.path           = path_ + "/rocksdb";
+    persistent_db.num_threads    = static_cast<size_t>(std::max(
+        1,
+        FLAGS_hps_rocksdb_thread_num > 0 ? FLAGS_hps_rocksdb_thread_num
+                                            : FLAGS_thread_num));
+    persistent_db.max_batch_size = max_batch_size_;
+    persistent_db.update_filters.clear();
+
+    HugeCTR::UpdateSourceParams update_source;
+    update_source.type = HugeCTR::UpdateSourceType_t::Null;
+
+    HugeCTR::InferenceParams params(
+        kModelName,
+        max_batch_size_,
+        0.9f,
+        "",
+        std::vector<std::string>{sparse_model_path_},
+        0,
+        false,
+        0.0f,
+        true,
+        false,
+        1.0f,
+        true,
+        true,
+        1,
+        1,
+        std::max(1, FLAGS_thread_num),
+        0.0f,
+        std::vector<int>{0},
+        std::vector<float>{0.0f},
+        volatile_db,
+        persistent_db,
+        update_source,
+        1,
+        0.0f,
+        0.0f,
+        std::vector<size_t>{max_batch_size_},
+        std::vector<size_t>{embedding_vec_size_},
+        std::vector<std::string>{kTableName},
+        "",
+        1,
+        1,
+        "",
+        false,
+        HugeCTR::EmbeddingCacheType_t::Dynamic,
+        true,
+        false,
+        true,
+        false,
+        false,
+        false);
+
+    HugeCTR::parameter_server_config ps_config(
+        std::map<std::string, std::vector<std::string>>{
+            {kModelName, std::vector<std::string>{kTableName}}},
+        std::map<std::string, std::vector<size_t>>{
+            {kModelName, std::vector<size_t>{embedding_vec_size_}}},
+        std::map<std::string, std::vector<size_t>>{
+            {kModelName, std::vector<size_t>{max_batch_size_}}},
+        std::vector<HugeCTR::InferenceParams>{params},
+        volatile_db,
+        persistent_db,
+        update_source);
+    parameter_server_ = HugeCTR::HierParameterServerBase::create(ps_config);
+  }
+
+  void Fetch(const std::string& table_name,
+             size_t num_keys,
+             const long long* keys,
+             char* values,
+             size_t value_size,
+             const std::function<void(size_t)>& on_miss) override {
+    (void)table_name;
+    if (!parameter_server_) {
+      throw std::runtime_error("hps_native_tiered fetch before FinishLoad");
+    }
+    if (value_size != value_size_) {
+      throw std::invalid_argument(
+          "hps_native_tiered fetch value_size mismatch");
+    }
+    thread_local std::vector<float> scratch;
+    scratch.resize(num_keys * embedding_vec_size_);
+    parameter_server_->lookup(keys, num_keys, scratch.data(), kModelName, 0);
+    std::memcpy(values, scratch.data(), num_keys * value_size_);
+    for (size_t i = 0; i < num_keys; ++i) {
+      if (static_cast<uint64_t>(keys[i]) == 0 ||
+          static_cast<uint64_t>(keys[i]) >
+              static_cast<uint64_t>(FLAGS_record_count)) {
+        on_miss(i);
+      }
+    }
+  }
+
+  std::string ExtraResultFields() const override {
+    std::ostringstream os;
+    os << " hps_native_dram_fraction=" << FLAGS_hps_native_dram_fraction
+       << " hps_native_volatile_overflow_margin="
+       << HpsNativeOverflowMarginPerPartition()
+       << " hps_native_cache_missed_embeddings="
+       << (FLAGS_hps_native_cache_missed_embeddings ? "true" : "false")
+       << " hps_native_loaded_records=" << loaded_records_;
+    return os.str();
+  }
+
+private:
+  static constexpr const char* kModelName = "recstore_hps_native_bench";
+  static constexpr const char* kTableName = "table0";
+
+  std::string path_;
+  std::string sparse_model_path_;
+  size_t value_size_;
+  size_t embedding_vec_size_;
+  size_t max_batch_size_;
+  size_t loaded_records_ = 0;
+  std::mutex load_mu_;
+  std::ofstream key_stream_;
+  std::ofstream vec_stream_;
+  std::shared_ptr<HugeCTR::HierParameterServerBase> parameter_server_;
+};
+
 recstore::storage::fasterkv::FasterKVBackendOptions FasterKvOptions() {
   recstore::storage::fasterkv::FasterKVBackendOptions options;
   if (FLAGS_fasterkv_storage == "memory") {
@@ -387,6 +637,12 @@ std::unique_ptr<BenchmarkBackend> CreateBenchmarkBackend() {
         FLAGS_path,
         static_cast<size_t>(FLAGS_value_size),
         FLAGS_backend == "raw_rocksdb_memenv");
+  }
+  if (FLAGS_backend == "hps_native_tiered") {
+    return std::make_unique<HpsNativeTieredBenchmarkBackend>(
+        FLAGS_path,
+        static_cast<size_t>(FLAGS_value_size),
+        static_cast<size_t>(FLAGS_batch_size));
   }
   if (FLAGS_backend == "fasterkv") {
     return std::make_unique<FasterKVBenchmarkBackend>(
@@ -567,6 +823,11 @@ void PrintResult(const char* phase,
       seconds > 0.0 ? static_cast<double>(stats.batches) / seconds : 0.0;
   const double key_ops_sec =
       seconds > 0.0 ? static_cast<double>(stats.key_ops) / seconds : 0.0;
+  const bool hps_native_tiered = FLAGS_backend == "hps_native_tiered";
+  const char* index_type =
+      hps_native_tiered ? "HPS_PARALLEL_HASH_MAP" : FLAGS_index_type.c_str();
+  const char* value_store_type =
+      hps_native_tiered ? "HPS_ROCKSDB" : FLAGS_value_store_type.c_str();
   std::printf(
       "BACKEND_BENCHMARK_RESULT phase=%s backend=%s index_type=%s "
       "value_store_type=%s mode=%s distribution=%s zipfian_alpha=%.6f "
@@ -575,8 +836,8 @@ void PrintResult(const char* phase,
       "throughput_keys_sec=%.6f%s\n",
       phase,
       FLAGS_backend.c_str(),
-      FLAGS_index_type.c_str(),
-      FLAGS_value_store_type.c_str(),
+      index_type,
+      value_store_type,
       FLAGS_mode.c_str(),
       FLAGS_distribution.c_str(),
       FLAGS_zipfian_alpha,
@@ -602,7 +863,8 @@ int main(int argc, char** argv) {
   CHECK_GT(FLAGS_thread_num, 0);
   CHECK_GT(FLAGS_running_seconds, 0);
   if (FLAGS_backend == "recstore" || FLAGS_backend == "hps_rocksdb" ||
-      FLAGS_backend == "raw_rocksdb" || FLAGS_backend == "raw_rocksdb_memenv") {
+      FLAGS_backend == "hps_native_tiered" || FLAGS_backend == "raw_rocksdb" ||
+      FLAGS_backend == "raw_rocksdb_memenv") {
     CHECK(!FLAGS_path.empty())
         << "--path is required for " << FLAGS_backend << " backend";
   }
@@ -614,7 +876,8 @@ int main(int argc, char** argv) {
 
   const auto load_begin = std::chrono::steady_clock::now();
   const PhaseStats load = LoadRecords(backend.get(), load_threads);
-  const auto load_end   = std::chrono::steady_clock::now();
+  backend->FinishLoad(EffectiveTableName());
+  const auto load_end = std::chrono::steady_clock::now();
   PrintResult("load", load, SecondsSince(load_begin, load_end), backend.get());
 
   const auto run_begin = std::chrono::steady_clock::now();
