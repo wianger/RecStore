@@ -91,7 +91,7 @@ public:
     if (params.value_store_type == "SSD_VALUE_STORE" ||
         params.value_store_type == "TIERED_VALUE_STORE") {
       value_config["ssd_allocator"] = {
-          {"type", "SSD_BUDDY"},
+          {"type", "SSD_SLAB"},
           {"capacity_bytes", ssd_capacity},
           {"min_block_size", 128},
           {"max_block_size", 4096},

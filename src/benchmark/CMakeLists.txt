@@ -60,7 +60,9 @@ add_executable(recstore_mixed_benchmark
 target_link_libraries(recstore_mixed_benchmark PUBLIC
     base
     grpc_ps_client
+    dist_grpc_ps_client
     brpc_ps_client
+    dist_brpc_ps_client
     local_shm_ps_client
     ${warp_wq_ps_client}
     Folly::folly

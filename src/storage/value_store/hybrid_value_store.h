@@ -142,6 +142,49 @@ public:
     }
   }
 
+  void BatchRead(const std::vector<uint64_t>& handles,
+                 std::vector<ReadResult>& out_results) override {
+    out_results.clear();
+    out_results.resize(handles.size());
+
+    std::vector<uint64_t> ssd_handles;
+    std::vector<size_t> ssd_indices;
+    ssd_handles.reserve(handles.size());
+    ssd_indices.reserve(handles.size());
+
+    for (size_t i = 0; i < handles.size(); ++i) {
+      const uint64_t handle = handles[i];
+      if (handle == kValueHandleNone) {
+        continue;
+      }
+      if (IsOnSSD(handle)) {
+        ssd_handles.push_back(SsdRawHandle(handle));
+        ssd_indices.push_back(i);
+        continue;
+      }
+
+      const uint64_t raw = DramRawHandle(handle);
+      out_results[i].data.resize(dram_store_.SlotCapacity(raw));
+      const size_t actual = dram_store_.Read(
+          raw, out_results[i].data.data(), out_results[i].data.size());
+      out_results[i].data.resize(actual);
+    }
+
+    if (ssd_handles.empty()) {
+      return;
+    }
+
+    std::vector<ReadResult> ssd_results;
+    ssd_store_.BatchRead(ssd_handles, ssd_results);
+    if (ssd_results.size() != ssd_indices.size()) {
+      throw std::runtime_error(
+          "HybridValueStore::BatchRead result size mismatch");
+    }
+    for (size_t i = 0; i < ssd_indices.size(); ++i) {
+      out_results[ssd_indices[i]] = std::move(ssd_results[i]);
+    }
+  }
+
   std::string GetInfo() const override {
     std::ostringstream os;
     os << "HybridValueStore(dram_reserved="

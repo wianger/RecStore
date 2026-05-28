@@ -338,7 +338,9 @@ target_link_libraries(test_op_runtime_support PUBLIC
     base
     wq_ps_client
     grpc_ps_client
+    dist_grpc_ps_client
     brpc_ps_client
+    dist_brpc_ps_client
     local_shm_ps_client
     Folly::folly
     gflags
@@ -364,7 +366,9 @@ target_link_libraries(test_op PUBLIC
     base
     wq_ps_client
     grpc_ps_client
+    dist_grpc_ps_client
     brpc_ps_client
+    dist_brpc_ps_client
     local_shm_ps_client
     Folly::folly
     gflags
@@ -505,7 +509,9 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER AND
         base
         wq_ps_client
         grpc_ps_client
+        dist_grpc_ps_client
         brpc_ps_client
+        dist_brpc_ps_client
         local_shm_ps_client
         Folly::folly
         protobuf::libprotobuf

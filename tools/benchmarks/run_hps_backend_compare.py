@@ -23,6 +23,7 @@ class BackendSpec:
 BACKEND_ALIASES: dict[str, BackendSpec] = {
     "hps_hash_map": BackendSpec("hps_hash_map", "", ""),
     "hps_rocksdb": BackendSpec("hps_rocksdb", "", ""),
+    "hps_native_tiered": BackendSpec("hps_native_tiered", "", ""),
     "dram_eh_dram": BackendSpec("recstore", "DRAM_EXTENDIBLE_HASH", "DRAM_VALUE_STORE"),
     "dram_eh_ssd": BackendSpec("recstore", "DRAM_EXTENDIBLE_HASH", "SSD_VALUE_STORE"),
     "dram_eh_tiered": BackendSpec("recstore", "DRAM_EXTENDIBLE_HASH", "TIERED_VALUE_STORE"),
@@ -52,9 +53,32 @@ SUMMARY_FIELDS = [
     "misses",
     "throughput_batches_sec",
     "throughput_keys_sec",
+    "tiered_dram_capacity_bytes",
+    "tiered_high_watermark_ratio",
+    "tiered_dram_live_allocs",
+    "tiered_ssd_live_allocs",
+    "tiered_live_allocs",
+    "tiered_ssd_live_ratio",
+    "tiered_dram_total_allocs",
+    "tiered_ssd_total_allocs",
+    "tiered_total_allocs",
+    "tiered_ssd_total_ratio",
     "data_path",
     "log_path",
     "error_tail",
+]
+
+TIERED_RESULT_FIELDS = [
+    "tiered_dram_capacity_bytes",
+    "tiered_high_watermark_ratio",
+    "tiered_dram_live_allocs",
+    "tiered_ssd_live_allocs",
+    "tiered_live_allocs",
+    "tiered_ssd_live_ratio",
+    "tiered_dram_total_allocs",
+    "tiered_ssd_total_allocs",
+    "tiered_total_allocs",
+    "tiered_ssd_total_ratio",
 ]
 
 
@@ -104,6 +128,39 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ssd-io-backend", default="IOURING")
     parser.add_argument("--ssd-queue-depth", type=int, default=512)
     parser.add_argument("--ssd-capacity-bytes", type=int, default=0)
+    parser.add_argument(
+        "--tiered-high-watermark-ratio",
+        type=float,
+        default=0.0,
+        help="Pass through to backend_benchmark for RecStore TIERED_VALUE_STORE; 0 uses backend default.",
+    )
+    parser.add_argument(
+        "--hps-native-dram-fraction",
+        type=float,
+        default=1.0,
+        help=(
+            "Target volatile DB capacity fraction for hps_native_tiered. "
+            "This maps to HPS overflow_margin/num_partitions."
+        ),
+    )
+    parser.add_argument(
+        "--hps-native-cache-missed-embeddings",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Pass through to HPS VolatileDatabaseParams.cache_missed_embeddings.",
+    )
+    parser.add_argument(
+        "--hps-native-overflow-policy",
+        choices=["evict_random", "evict_least_used", "evict_oldest"],
+        default="evict_random",
+        help="Pass through to HPS VolatileDatabaseParams.overflow_policy.",
+    )
+    parser.add_argument(
+        "--hps-native-overflow-resolution-target",
+        type=float,
+        default=0.8,
+        help="Pass through to HPS VolatileDatabaseParams.overflow_resolution_target.",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--keep-data", action="store_true")
     parser.add_argument("--extra-arg", action="append", default=[])
@@ -167,10 +224,29 @@ def command_for(alias: str, spec: BackendSpec, data_path: Path, args: argparse.N
         cmd.append(gflag("value_store_type", spec.value_store_type))
     if alias == "hps_rocksdb":
         cmd.append(gflag("hps_rocksdb_thread_num", args.hps_rocksdb_db_threads))
+    if alias == "hps_native_tiered":
+        cmd.append(gflag("hps_rocksdb_thread_num", args.hps_rocksdb_db_threads))
+        cmd.append(gflag("hps_native_dram_fraction", args.hps_native_dram_fraction))
+        cmd.append(
+            gflag(
+                "hps_native_cache_missed_embeddings",
+                str(args.hps_native_cache_missed_embeddings).lower(),
+            )
+        )
+        cmd.append(gflag("hps_native_overflow_policy", args.hps_native_overflow_policy))
+        cmd.append(
+            gflag(
+                "hps_native_overflow_resolution_target",
+                args.hps_native_overflow_resolution_target,
+            )
+        )
     if args.dram_capacity_bytes:
         cmd.append(gflag("dram_capacity_bytes", args.dram_capacity_bytes))
     if ssd_capacity_bytes:
         cmd.append(gflag("ssd_capacity_bytes", ssd_capacity_bytes))
+    tiered_high_watermark_ratio = getattr(args, "tiered_high_watermark_ratio", 0.0)
+    if tiered_high_watermark_ratio:
+        cmd.append(gflag("tiered_high_watermark_ratio", tiered_high_watermark_ratio))
     cmd.extend(args.extra_arg)
     return cmd
 
@@ -199,10 +275,16 @@ def error_tail(output: str, exit_code: int) -> str:
     return " | ".join(lines[-5:])[:1000]
 
 
-def run_one(alias: str, repeat: int, args: argparse.Namespace) -> list[dict[str, object]]:
-    if alias not in BACKEND_ALIASES:
+def run_one(
+    alias: str,
+    repeat: int,
+    args: argparse.Namespace,
+    spec: BackendSpec | None = None,
+) -> list[dict[str, object]]:
+    if spec is None and alias not in BACKEND_ALIASES:
         raise ValueError(f"unknown backend alias '{alias}'")
-    spec = BACKEND_ALIASES[alias]
+    if spec is None:
+        spec = BACKEND_ALIASES[alias]
     run_name = f"{sanitize(alias)}_{sanitize(args.mode)}_{sanitize(args.distribution)}_r{repeat}"
     data_path = args.output_dir / "data" / run_name
     log_path = args.output_dir / "logs" / f"{run_name}.log"
@@ -226,33 +308,34 @@ def run_one(alias: str, repeat: int, args: argparse.Namespace) -> list[dict[str,
     if not parsed:
         parsed = [{"phase": "missing"}]
     for result in parsed:
-        rows.append(
-            {
-                "alias": alias,
-                "backend": spec.backend,
-                "index_type": spec.index_type,
-                "value_store_type": spec.value_store_type,
-                "mode": args.mode,
-                "repeat": repeat,
-                "record_count": args.record_count,
-                "threads": args.threads,
-                "batch_size": args.batch_size,
-                "value_size": args.value_size,
-                "distribution": args.distribution,
-                "zipfian_alpha": args.zipfian_alpha,
-                "phase": result.get("phase", ""),
-                "exit_code": proc.returncode,
-                "runtime_s": result.get("runtime_s", ""),
-                "batches": result.get("batches", ""),
-                "key_ops": result.get("key_ops", ""),
-                "misses": result.get("misses", ""),
-                "throughput_batches_sec": result.get("throughput_batches_sec", ""),
-                "throughput_keys_sec": result.get("throughput_keys_sec", ""),
-                "data_path": str(data_path),
-                "log_path": str(log_path),
-                "error_tail": error_tail(proc.stdout, proc.returncode),
-            }
-        )
+        row = {
+            "alias": alias,
+            "backend": spec.backend,
+            "index_type": spec.index_type,
+            "value_store_type": spec.value_store_type,
+            "mode": args.mode,
+            "repeat": repeat,
+            "record_count": args.record_count,
+            "threads": args.threads,
+            "batch_size": args.batch_size,
+            "value_size": args.value_size,
+            "distribution": args.distribution,
+            "zipfian_alpha": args.zipfian_alpha,
+            "phase": result.get("phase", ""),
+            "exit_code": proc.returncode,
+            "runtime_s": result.get("runtime_s", ""),
+            "batches": result.get("batches", ""),
+            "key_ops": result.get("key_ops", ""),
+            "misses": result.get("misses", ""),
+            "throughput_batches_sec": result.get("throughput_batches_sec", ""),
+            "throughput_keys_sec": result.get("throughput_keys_sec", ""),
+            "data_path": str(data_path),
+            "log_path": str(log_path),
+            "error_tail": error_tail(proc.stdout, proc.returncode),
+        }
+        for field in TIERED_RESULT_FIELDS:
+            row[field] = result.get(field, "")
+        rows.append(row)
     if not args.keep_data:
         shutil.rmtree(data_path, ignore_errors=True)
     return rows

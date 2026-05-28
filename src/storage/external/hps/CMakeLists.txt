@@ -30,13 +30,65 @@ if(NOT TARGET rocksdb-shared)
 endif()
 
 if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
+  if(NOT TARGET redis++)
+    function(recstore_add_hps_redis)
+      cmake_policy(PUSH)
+      cmake_policy(SET CMP0077 NEW)
+      set(ENABLE_SSL ON CACHE BOOL "" FORCE)
+      set(DISABLE_TESTS ON CACHE BOOL "" FORCE)
+      add_subdirectory(
+        ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis
+        ${PROJECT_BINARY_DIR}/third_party/HugeCTR/hiredis)
+
+      set(stub_dir "${PROJECT_BINARY_DIR}/third_party/HugeCTR/generated/pkg")
+      file(WRITE "${stub_dir}/hiredis-config.cmake" "")
+      file(WRITE "${stub_dir}/hiredis_ssl-config.cmake" "")
+
+      set(hiredis_DIR ${stub_dir})
+      set(hiredis_LIBRARIES hiredis::hiredis)
+      set(hiredis_INCLUDE_DIRS
+        "${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis")
+      if(NOT TARGET hiredis::hiredis)
+        add_library(hiredis::hiredis ALIAS hiredis)
+      endif()
+
+      set(hiredis_ssl_DIR ${stub_dir})
+      set(hiredis_ssl_LIBRARIES hiredis::hiredis_ssl)
+      set(hiredis_ssl_INCLUDE_DIRS
+        "${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/hiredis")
+      if(NOT TARGET hiredis::hiredis_ssl)
+        add_library(hiredis::hiredis_ssl ALIAS hiredis_ssl)
+      endif()
+
+      include_directories(${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party)
+      set(REDIS_PLUS_PLUS_BUILD_STATIC OFF CACHE BOOL "" FORCE)
+      set(REDIS_PLUS_PLUS_BUILD_TEST OFF CACHE BOOL "" FORCE)
+      set(REDIS_PLUS_PLUS_USE_TLS ON CACHE BOOL "" FORCE)
+      add_subdirectory(
+        ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/redis_pp
+        ${PROJECT_BINARY_DIR}/third_party/HugeCTR/redis_pp)
+      cmake_policy(POP)
+    endfunction()
+    recstore_add_hps_redis()
+  endif()
+
   add_library(hps_native_support STATIC
+    hps_embedding_cache_noop_shim.cc
+    hps_inference_params_shim.cc
+    hps_raw_model_loader_shim.cc
     hps_shim.cc
     raw_rocksdb.cc
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/core23/logger.cpp
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/thread_pool.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/io/filesystem.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/io/local_filesystem.cpp
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/database_backend.cpp
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/hash_map_backend.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/hier_parameter_server.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/kafka_message.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/message.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/mp_hash_map_backend.cpp
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/redis_backend.cpp
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/src/hps/rocksdb_backend.cpp
   )
   target_compile_definitions(hps_native_support PUBLIC HCTR_USE_ROCKS_DB)
@@ -45,8 +97,12 @@ if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/include
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/embedding_cache/include
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/gpu_cache/include
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/librdkafka/src
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/parallel-hashmap
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/rocksdb/include
+    ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/redis_pp/src
     ${RECSTORE_CUDA_INCLUDE_DIRS}
   )
   target_link_libraries(hps_native_support PUBLIC
@@ -54,6 +110,9 @@ if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
     base
     TBB::tbb
     rocksdb-shared
+    redis++
+    rdkafka
+    ${CUDA_CUDART_LIBRARY}
     OpenMP::OpenMP_CXX
   )
   add_library(hps_backend_support INTERFACE)

@@ -4,9 +4,11 @@ find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
 
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/gpu)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/pytorch)
+else()
+    message(STATUS "Skipping framework/pytorch because CUDA is disabled or nvcc not found")
 endif()
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/pytorch)
 # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tensorflow)
 
 if(USE_FAKE_KVCLIENT)
@@ -14,68 +16,70 @@ if(USE_FAKE_KVCLIENT)
     add_definitions(-DUSE_FAKE_KVCLIENT)
 endif()
 
-add_test(
-    NAME pytorch_client_test
-    COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
-            "$<TARGET_FILE:recstore_torch_ops>"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
-)
+if(TARGET recstore_torch_ops)
+    add_test(
+        NAME pytorch_client_test
+        COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
+                "$<TARGET_FILE:recstore_torch_ops>"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
+    )
 
-add_test(
-    NAME pytorch_client_test_rdma_basic
-    COMMAND ${CMAKE_COMMAND} -E env
-            RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
-            RECSTORE_CLIENT_TEST_PHASE=basic
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
-            ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
-            "$<TARGET_FILE:recstore_torch_ops>"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
-)
+    add_test(
+        NAME pytorch_client_test_rdma_basic
+        COMMAND ${CMAKE_COMMAND} -E env
+                RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
+                RECSTORE_CLIENT_TEST_PHASE=basic
+                RECSTORE_USE_LOCAL_MEMCACHED=auto
+                ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
+                "$<TARGET_FILE:recstore_torch_ops>"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
+    )
 
-add_test(
-    NAME pytorch_client_test_rdma
-    COMMAND ${CMAKE_COMMAND} -E env
-            RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
-            RECSTORE_CLIENT_TEST_PHASE=full
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
-            ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
-            "$<TARGET_FILE:recstore_torch_ops>"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
-)
+    add_test(
+        NAME pytorch_client_test_rdma
+        COMMAND ${CMAKE_COMMAND} -E env
+                RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
+                RECSTORE_CLIENT_TEST_PHASE=full
+                RECSTORE_USE_LOCAL_MEMCACHED=auto
+                ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
+                "$<TARGET_FILE:recstore_torch_ops>"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
+    )
 
-add_test(
-    NAME pytorch_client_test_rdma_auto
-    COMMAND ${CMAKE_COMMAND} -E env
-            RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
-            RECSTORE_CLIENT_TEST_PHASE=full
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
-            ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
-            "$<TARGET_FILE:recstore_torch_ops>"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
-)
+    add_test(
+        NAME pytorch_client_test_rdma_auto
+        COMMAND ${CMAKE_COMMAND} -E env
+                RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
+                RECSTORE_CLIENT_TEST_PHASE=full
+                RECSTORE_USE_LOCAL_MEMCACHED=auto
+                ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
+                "$<TARGET_FILE:recstore_torch_ops>"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
+    )
 
-add_test(
-    NAME pytorch_client_test_rdma_descriptor_basic
-    COMMAND ${CMAKE_COMMAND} -E env
-            RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
-            RECSTORE_CLIENT_TEST_PHASE=basic
-            RECSTORE_USE_LOCAL_MEMCACHED=auto
-            RECSTORE_RDMA_TRANSPORT_MODE=descriptor_doorbell
-            ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
-            "$<TARGET_FILE:recstore_torch_ops>"
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
-)
+    add_test(
+        NAME pytorch_client_test_rdma_descriptor_basic
+        COMMAND ${CMAKE_COMMAND} -E env
+                RECSTORE_CONFIG=${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.op_rdma.json
+                RECSTORE_CLIENT_TEST_PHASE=basic
+                RECSTORE_USE_LOCAL_MEMCACHED=auto
+                RECSTORE_RDMA_TRANSPORT_MODE=descriptor_doorbell
+                ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch/test_client.py
+                "$<TARGET_FILE:recstore_torch_ops>"
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/pytorch
+    )
 
-set_tests_properties(
-    pytorch_client_test_rdma_basic
-    pytorch_client_test_rdma
-    pytorch_client_test_rdma_auto
-    pytorch_client_test_rdma_descriptor_basic
-    PROPERTIES
-        SKIP_RETURN_CODE 77
-        TIMEOUT 90
-        LABELS "rdma_integration"
-)
+    set_tests_properties(
+        pytorch_client_test_rdma_basic
+        pytorch_client_test_rdma
+        pytorch_client_test_rdma_auto
+        pytorch_client_test_rdma_descriptor_basic
+        PROPERTIES
+            SKIP_RETURN_CODE 77
+            TIMEOUT 90
+            LABELS "rdma_integration"
+    )
+endif()
 
 add_test(
     NAME dist_emb_unittest
