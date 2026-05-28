@@ -1,0 +1,286 @@
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from run_benchmark_ps import (  # noqa: E402
+    build_benchmark_cmd,
+    build_remote_exec_cmd,
+    build_runtime_config,
+    build_topology_plan,
+    collect_ps_result_rows,
+    collect_summary_rows,
+    normalize_transport_list,
+    parse_csv_list,
+    recommended_dram_capacity_bytes,
+    replace_config_path_arg,
+    resolve_base_port,
+    write_summary_csv,
+)
+
+
+class TestRunBenchmarkPS(unittest.TestCase):
+    def test_parse_csv_list_strips_empty_items(self):
+        self.assertEqual(parse_csv_list("grpc, brpc,,rdma"), ["grpc", "brpc", "rdma"])
+
+    def test_normalize_transport_list_deduplicates_and_uppercases(self):
+        self.assertEqual(
+            normalize_transport_list("grpc, BRPC, grpc, rdma"),
+            ["GRPC", "BRPC", "RDMA"],
+        )
+
+    def test_build_topology_plan_single_host_replication(self):
+        topology = build_topology_plan(
+            "GRPC",
+            server_hosts=["127.0.0.1"],
+            client_hosts=["127.0.0.1"],
+            server_count=2,
+            client_count=2,
+            base_port=15000,
+        )
+        self.assertEqual(len(topology.server_plan), 2)
+        self.assertEqual(topology.server_plan[1].host, "127.0.0.1")
+        self.assertEqual(topology.server_plan[1].shard, 1)
+        self.assertEqual(topology.server_plan[1].port, 15001)
+        self.assertEqual(topology.client_plan[1].host, "127.0.0.1")
+
+    def test_build_topology_plan_rejects_invalid_host_lengths(self):
+        with self.assertRaisesRegex(ValueError, "server_hosts length"):
+            build_topology_plan(
+                "GRPC",
+                server_hosts=["a", "b"],
+                client_hosts=["127.0.0.1"],
+                server_count=3,
+                client_count=1,
+                base_port=15000,
+            )
+
+    def test_build_runtime_config_writes_explicit_shards(self):
+        topology = build_topology_plan(
+            "BRPC",
+            server_hosts=["server-a", "server-b"],
+            client_hosts=["client-a"],
+            server_count=2,
+            client_count=1,
+            base_port=25000,
+        )
+        config = build_runtime_config(
+            transport="BRPC",
+            topology=topology,
+            capacity=4096,
+            value_size=128,
+            max_keys_per_request=256,
+            num_threads=8,
+            index_type="DRAM_PET_HASH",
+            dram_allocator="PERSIST_LOOP_SLAB",
+            data_root="/tmp/bench/value",
+        )
+        self.assertEqual(config["cache_ps"]["ps_type"], "BRPC")
+        self.assertEqual(config["distributed_client"]["servers"][1]["host"], "server-b")
+        self.assertEqual(config["distributed_client"]["servers"][1]["shard"], 1)
+        self.assertEqual(config["client"]["port"], 25000)
+
+    def test_build_runtime_config_uses_rdma_ps_type(self):
+        topology = build_topology_plan(
+            "RDMA",
+            server_hosts=["rdma-a"],
+            client_hosts=["client-a"],
+            server_count=1,
+            client_count=1,
+            base_port=25000,
+        )
+        config = build_runtime_config(
+            transport="RDMA",
+            topology=topology,
+            capacity=1024,
+            value_size=64,
+            max_keys_per_request=64,
+            num_threads=2,
+            index_type="DRAM_EXTENDIBLE_HASH",
+            dram_allocator="PERSIST_LOOP_SLAB",
+            data_root="/tmp/rdma/value",
+        )
+        self.assertEqual(config["cache_ps"]["ps_type"], "RDMA")
+
+    def test_build_runtime_config_adds_slab_metadata_capacity(self):
+        topology = build_topology_plan(
+            "GRPC",
+            server_hosts=["127.0.0.1"],
+            client_hosts=["127.0.0.1"],
+            server_count=1,
+            client_count=1,
+            base_port=15000,
+        )
+        config = build_runtime_config(
+            transport="GRPC",
+            topology=topology,
+            capacity=1024,
+            value_size=128,
+            max_keys_per_request=64,
+            num_threads=2,
+            index_type="DRAM_EXTENDIBLE_HASH",
+            dram_allocator="PERSIST_LOOP_SLAB",
+            data_root="/tmp/grpc/value",
+        )
+        self.assertEqual(
+            config["cache_ps"]["base_kv_config"]["value"]["dram_allocator"]["capacity_bytes"],
+            1 << 20,
+        )
+
+    def test_recommended_dram_capacity_bytes_keeps_non_slab_exact(self):
+        self.assertEqual(
+            recommended_dram_capacity_bytes(
+                capacity=100,
+                value_size=64,
+                dram_allocator="R2_ALLOC",
+            ),
+            6400,
+        )
+
+    def test_resolve_base_port_uses_brpc_single_shard_default(self):
+        self.assertEqual(resolve_base_port("BRPC", 25000, 1), 15000)
+        self.assertEqual(resolve_base_port("BRPC", 25000, 2), 25000)
+
+    def test_build_benchmark_cmd_includes_transactions_args(self):
+        topology = build_topology_plan(
+            "GRPC",
+            server_hosts=["127.0.0.1"],
+            client_hosts=["127.0.0.1"],
+            server_count=1,
+            client_count=1,
+            base_port=15000,
+        )
+        cmd = build_benchmark_cmd(
+            benchmark_binary="/tmp/ps_transport_benchmark",
+            transport="GRPC",
+            topology=topology,
+            config_path="/tmp/config.json",
+            record_count=1000,
+            runtime_seconds=5,
+            threads=16,
+            load_threads=8,
+            batch_keys=64,
+            value_size=256,
+            distribution="uniform",
+            zipfian_alpha=0.9,
+            read_ratio=100,
+            mode="fetch",
+            report_mode="summary",
+        )
+        self.assertIn("--workload=transactions", cmd)
+        self.assertIn("--record_count=1000", cmd)
+        self.assertIn("--config_path=/tmp/config.json", cmd)
+        self.assertIn("--value_size=256", cmd)
+
+    def test_collect_ps_result_rows_parses_load_and_run(self):
+        text = (
+            "PS_BENCHMARK_RESULT phase=load transport=GRPC mode=fetch "
+            "distribution=uniform zipfian_alpha=0.9 threads=16 batch_size=64 "
+            "records=1000 runtime_s=1.0 batches=10 key_ops=640 "
+            "throughput_batches_sec=10 throughput_keys_sec=6400\n"
+            "PS_BENCHMARK_RESULT phase=run transport=GRPC mode=fetch "
+            "distribution=uniform zipfian_alpha=0.9 threads=16 batch_size=64 "
+            "records=1000 runtime_s=1.0 batches=20 key_ops=1280 "
+            "throughput_batches_sec=20 throughput_keys_sec=12800\n"
+        )
+        rows = collect_ps_result_rows(text)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["phase"], "load")
+        self.assertEqual(rows[1]["throughput_keys_sec"], 12800.0)
+
+    def test_collect_summary_rows_keeps_measure_phase(self):
+        text = (
+            "transport=GRPC op=get phase=warmup summary rounds=1 iterations=10 "
+            "batch_keys=64 elapsed_us_mean=200 elapsed_us_p50=180 "
+            "elapsed_us_p95=220 elapsed_us_p99=230 ops_per_sec=100 key_ops_per_sec=6400\n"
+            "transport=GRPC op=get phase=measure summary rounds=2 iterations=10 "
+            "batch_keys=64 elapsed_us_mean=100 elapsed_us_p50=90 "
+            "elapsed_us_p95=110 elapsed_us_p99=120 ops_per_sec=200 key_ops_per_sec=12800\n"
+        )
+        rows = collect_summary_rows(text)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["phase"], "measure")
+        self.assertEqual(rows[0]["mean"], 100.0)
+
+    def test_build_remote_exec_cmd_wraps_container_when_present(self):
+        cmd = build_remote_exec_cmd(
+            host="worker-a",
+            remote_repo="/app/RecStore",
+            remote_container="recstore-dev",
+            shell_command="echo ready",
+        )
+        self.assertEqual(cmd[:4], ["ssh", "worker-a", "docker", "exec"])
+        self.assertIn("recstore-dev", cmd)
+        self.assertIn("cd /app/RecStore && echo ready", cmd)
+
+    def test_replace_config_path_arg_rewrites_existing_flag(self):
+        cmd = replace_config_path_arg(
+            [
+                "/tmp/ps_transport_benchmark",
+                "--transport=grpc",
+                "--config_path=/tmp/old.json",
+            ],
+            "/tmp/new.json",
+        )
+        self.assertIn("--config_path=/tmp/new.json", cmd)
+        self.assertNotIn("--config_path=/tmp/old.json", cmd)
+
+    def test_write_summary_csv_writes_rows(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csv_path = Path(tmpdir) / "summary.csv"
+            write_summary_csv(
+                [
+                    {
+                        "transport": "GRPC",
+                        "status": "success",
+                        "phase": "run",
+                        "client_index": 0,
+                        "repeat_index": 0,
+                        "server_count": 1,
+                        "client_count": 1,
+                        "server_hosts": "127.0.0.1",
+                        "client_hosts": "127.0.0.1",
+                        "record_count": 1000,
+                        "value_size": 128,
+                        "batch_keys": 64,
+                        "threads": 16,
+                        "runtime_seconds": 1,
+                        "distribution": "uniform",
+                        "mode": "fetch",
+                        "ops_per_sec": 10.0,
+                        "key_ops_per_sec": 640.0,
+                        "mean_us": "",
+                        "p50_us": "",
+                        "p95_us": "",
+                        "p99_us": "",
+                        "log_path": "/tmp/log",
+                        "message": "",
+                    }
+                ],
+                csv_path,
+            )
+            text = csv_path.read_text(encoding="utf-8")
+        self.assertIn("transport,status,phase,client_index", text)
+        self.assertIn("GRPC,success,run,0", text)
+
+    def test_help_mentions_remote_and_topology_args(self):
+        script = Path(__file__).resolve().parent / "run_benchmark_ps.py"
+        completed = subprocess.run(
+            ["python3", str(script), "--help"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0)
+        self.assertIn("--execution-backend", completed.stdout)
+        self.assertIn("--remote-sync", completed.stdout)
+        self.assertIn("--client-hosts", completed.stdout)
+        self.assertIn("--server-hosts", completed.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()
