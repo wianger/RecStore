@@ -34,9 +34,10 @@ Do not treat third-party RDMA code under `third_party/` as the RecStore RDMA mod
    - PetPS client/server semantics: `petps_client.*`, `petps_server.cc`, `allshards_ps_client.*`
    - generic PS adapter: `rdma_ps_client_adapter.*`
    - benchmark/runtime flags: `rc_options.*`, `src/test/scripts/run_rdma_*.py`
-5. Build the narrowest relevant targets.
+5. Build the narrowest relevant targets before CTest so stale binaries are not tested.
 6. Run correctness tests before benchmark tests.
 7. If running benchmarks, save the command, parameters, raw logs, and parsed summary in a result directory.
+8. Run benchmark commands sequentially unless the runner explicitly allocates distinct ports, namespaces, and runtime directories. RDMA tests can conflict through memcached/control-plane state, QP resources, and default ports.
 
 ## Correctness Commands
 
@@ -86,6 +87,8 @@ Generic PS benchmark RDMA single-client transactions smoke:
 ```bash
 python3 src/test/scripts/run_benchmark_ps.py \
   --transports rdma \
+  --client-hosts 127.0.0.1 \
+  --server-hosts 127.0.0.1 \
   --server-count 1 \
   --client-count 1 \
   --record-count 10000 \
@@ -97,7 +100,9 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --repeat 1 \
   --rdma-wait-timeout-ms 8000 \
   --rdma-rc-qps-per-client-per-shard 4 \
-  --rdma-rc-slots-per-qp 1
+  --rdma-rc-slots-per-qp 1 \
+  --execution-backend local \
+  --output-dir results/rdma_ps_smoke_$(date +%m%d%H%M)
 ```
 
 Single-client RDMA transport benchmark, current PUT-v2 read mode:
@@ -129,7 +134,7 @@ tools/benchmarks/run_rdma_transport_push_summary.sh
 Multi-client RC-write stress benchmark:
 
 ```bash
-./run_rdma_rc_transport_benchmark.sh
+tools/benchmarks/run_rdma_rc_transport_benchmark.sh
 ```
 
 When testing low-load limits, prefer explicit parameters over wrapper defaults:
@@ -161,6 +166,8 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - Measured key volume is roughly `iterations * rounds * batch_keys`.
 - `--qps-per-client-per-shard` is RC QP pool size, not a target QPS.
 - For `async_stream`, require `qps-per-client-per-shard >= async-depth`.
+- For generic PS transaction benchmarks, keep `--threads 1 --load-threads 1` for RDMA unless same-process multi-lane semantics have been explicitly changed and revalidated; scale load with `--client-count`.
+- Do not combine RDMA with GRPC/BRPC in the same `run_benchmark_ps.py` command when using RPC-oriented `--threads` values. Split RPC and RDMA runs because safe thread settings differ.
 - `read` and `push` PUT-v2 modes are different transport paths; do not merge them into one throughput conclusion.
 - Higher `thread-num` can increase polling capacity but can also hide low-load fixed costs.
 - `--fake-get-mode` and `--skip-client-copy` are diagnostic knobs, not default benchmark settings.
@@ -180,10 +187,12 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
   - timeout values
   - aggregate `ops/s`, `key_ops/s`, and per-request latency fields when present
 - Preserve raw logs when the run is long or flaky. Prefer result directories such as `results/rdma_<mode>_$(date +%m%d%H%M)`.
+- Inspect non-empty stderr logs even when parsed rows are successful. Report expected teardown separately from request-path failures, timeouts, allocator failures, or QP acquisition failures.
 
 ## Current Bring-up Notes
 
 - Treat `run_benchmark_ps.py` and `run_rdma_rc_transport_benchmark.py` as different validation layers. If the generic PS benchmark fails but the dedicated RC benchmark succeeds, report that the failure is above or beside the RC transport baseline.
+- Before diagnosing a generic PS RDMA timeout as a transport issue, inspect server logs for allocation or config failures such as `KVEngine value allocation failed`.
 - In the current repo snapshot, the low-load single-client RC benchmark is a good smoke baseline. Prefer proving this path first before escalating to multi-client or multi-shard RDMA runs.
 - As of `2026-05-27`, generic PS benchmark RDMA `transactions/fetch` is verified for `client-count=1` and `client-count=2`, with `threads=1` and `load-threads=1`, by reusing the same client across load and run inside each benchmark process.
 - For generic PS benchmark RDMA concurrency, use `--client-count` for multi-process clients. Keep `--threads=1` per process unless the adapter's same-process multi-client/lane semantics are explicitly changed and revalidated.

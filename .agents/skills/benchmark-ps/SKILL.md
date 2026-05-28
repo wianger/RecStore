@@ -21,20 +21,29 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - record count (default = `1000000`)
    - value size (default = `512`)
    - batch keys (default = `1024`)
-   - thread count (default = `16`)
+   - RPC thread count (default = `16`)
+   - RDMA thread count (default = `1`; use `client-count` for RDMA concurrency)
    - runtime seconds (default = `5`)
    - repeat count (default = `1`)
    - execution backend (default = `local`)
    - result output directory (default = `results/benchmark_ps_$(date +%m%d%H%M)`)
-3. Validate the runner and related PS tests before benchmark runs:
-   - `python3 -m unittest src/test/scripts/test_run_benchmark_ps.py`
-   - `ctest -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_transport_benchmark|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`
-4. Build:
+3. Build before any CTest-based validation, so stale binaries are not tested:
    - `cmake -S . -B build`
    - `cmake --build build --target ps_transport_benchmark ps_server petps_server -j`
-5. Run `src/test/scripts/run_benchmark_ps.py` with the selected topology.
-6. Save generated configs, logs, `summary.csv`, and `summary.md` under the chosen output directory.
-7. Report the result in Chinese and explicitly separate success, skip, and failure rows.
+4. Validate the runner and related PS tests before benchmark runs:
+   - `python3 -m unittest src/test/scripts/test_run_benchmark_ps.py`
+   - `ctest -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_transport_benchmark|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`
+5. If `rdma` is selected, confirm RDMA verbs are available before running RDMA rows:
+   - `/dev/infiniband` exists
+   - at least one `/dev/infiniband/uverbs*` device exists
+   - if missing, skip RDMA rows and report the environment limitation instead of treating it as a failed benchmark
+6. Split incompatible transport groups:
+   - run `grpc,brpc` with RPC thread settings such as `--threads 16 --load-threads 16`
+   - run `rdma` separately with `--threads 1 --load-threads 1`
+   - do not run `rdma,grpc,brpc` in one command unless the chosen thread settings are valid for every selected transport
+7. Run `src/test/scripts/run_benchmark_ps.py` with the selected topology.
+8. Save generated configs, logs, `summary.csv`, and `summary.md` under the chosen output directory.
+9. Report the result in Chinese and explicitly separate success, skip, and failure rows.
 
 ## Command Template
 
@@ -94,6 +103,42 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir <output_dir>
 ```
 
+For a mixed local reliability matrix, run RPC and RDMA as separate commands because their safe thread settings differ:
+
+```bash
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports grpc,brpc \
+  --client-hosts 127.0.0.1 \
+  --server-hosts 127.0.0.1 \
+  --server-count 1 \
+  --client-count 1 \
+  --record-count <record_count> \
+  --value-size <value_size> \
+  --batch-keys <batch_keys> \
+  --threads 16 \
+  --load-threads 16 \
+  --runtime-seconds <runtime_seconds> \
+  --repeat <repeat> \
+  --execution-backend local \
+  --output-dir <output_dir>/rpc
+
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --client-hosts 127.0.0.1 \
+  --server-hosts 127.0.0.1 \
+  --server-count 1 \
+  --client-count 1 \
+  --record-count <record_count> \
+  --value-size <value_size> \
+  --batch-keys <batch_keys> \
+  --threads 1 \
+  --load-threads 1 \
+  --runtime-seconds <runtime_seconds> \
+  --repeat <repeat> \
+  --execution-backend local \
+  --output-dir <output_dir>/rdma
+```
+
 For explicit cross-host or multi-shard placement, use `--server-plan` and `--client-plan`:
 
 ```bash
@@ -125,6 +170,7 @@ In the final Chinese response, include:
 2. Benchmark scope: transports, topology, record count, value size, batch keys, threads, runtime seconds, repeat count, and output directory.
 3. Success rows: transport, phase, client index, and M keys/s.
 4. Skip / failure rows: transport, status, message, and log paths.
+5. Warnings: non-empty `stderr.log`, teardown stack traces, allocator warnings, or timeout messages that did not change row status.
 
 Treat `summary.csv` as authoritative when any client exits nonzero. `run_benchmark_ps.py` still writes summaries on partial or total failure.
 
@@ -134,12 +180,13 @@ Treat `summary.csv` as authoritative when any client exits nonzero. `run_benchma
 - Do not describe them as storage-only or model-level conclusions.
 - Do not claim RDMA succeeded when the runner returned skip code `77`.
 - If any transport fails, still keep `summary.csv` and `summary.md`, then report which rows failed and where the logs are.
+- Check for non-empty stderr logs even when all rows are `success`; report request-path warnings separately from expected teardown output.
 - Do not claim tests pass unless the exact command completed successfully.
 - Keep generated project-facing report text in Chinese.
 
 ## Verified Local Matrix
 
-The current local environment has validated these paths:
+The current local environment has validated these paths after the latest benchmark-runner fixes. Revalidate them after changing PS, RDMA, benchmark, config-generation, or allocator code:
 
 - Full CTest: `55/55` passed.
 - PS-focused CTest: `8/8` passed.
@@ -152,7 +199,7 @@ Use these as bring-up baselines before increasing record count, runtime, or cros
 ## Current Bring-up Notes
 
 - `run_benchmark_ps.py` writes `summary.csv` and `summary.md` even when all client rows fail. Always inspect those files before rerunning.
-- If `GRPC` or `BRPC` fails during preload with `PutParameter failed`, inspect the client stderr log first. In the current repo snapshot, this is a real runtime failure, not a reporting bug.
+- `GRPC` / `BRPC` benchmark clients may be distributed clients even in local runs because the runner writes `distributed_client` config. Distributed RPC clients report success as `0`; ordinary RPC clients report success as nonzero. Keep `ps_transport_benchmark` return-code handling aligned with the concrete client type.
 - RDMA transaction mode requires `--threads 1`; use `--client-count` for RDMA client concurrency. If `--threads > 1`, the benchmark binary aborts by design.
-- If `RDMA` single-shard fails with `RC write RPC wait timeout`, switch to the dedicated RC benchmark from `rdma-module` to confirm whether the lower RDMA transport is still healthy.
+- Large single-shard RDMA preload can fail as `RC write RPC wait timeout` after server-side `KVEngine value allocation failed`; the runner should generate slab allocator capacity with headroom. If this recurs, inspect generated config capacity and server logs before treating it as a transport failure.
 - If `RDMA` multi-shard fails with control-plane `get_meta timeout`, report it as multi-shard bring-up failure. Do not convert it into a throughput result.

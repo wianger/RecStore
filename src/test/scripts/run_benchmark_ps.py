@@ -45,6 +45,8 @@ SUCCESS_STATUS = "success"
 SKIPPED_STATUS = "skipped"
 SLAB_ALLOCATOR_CHUNK_BYTES = 1 << 20
 SLAB_ALLOCATOR_METADATA_BYTES = 8
+SLAB_ALLOCATOR_CAPACITY_HEADROOM_NUMERATOR = 6
+SLAB_ALLOCATOR_CAPACITY_HEADROOM_DENOMINATOR = 5
 SINGLE_SHARD_PORT_OVERRIDES = {
     "BRPC": 15000,
 }
@@ -354,6 +356,12 @@ def recommended_dram_capacity_bytes(
     if dram_allocator in {"PERSIST_LOOP_SLAB", "CONCURRENT_SLAB_MEMORY_POOL"}:
         per_value_bytes += SLAB_ALLOCATOR_METADATA_BYTES
         raw_capacity = int(capacity * per_value_bytes)
+        raw_capacity = (
+            raw_capacity
+            * SLAB_ALLOCATOR_CAPACITY_HEADROOM_NUMERATOR
+            + SLAB_ALLOCATOR_CAPACITY_HEADROOM_DENOMINATOR
+            - 1
+        ) // SLAB_ALLOCATOR_CAPACITY_HEADROOM_DENOMINATOR
         return (
             (raw_capacity + SLAB_ALLOCATOR_CHUNK_BYTES - 1)
             // SLAB_ALLOCATOR_CHUNK_BYTES

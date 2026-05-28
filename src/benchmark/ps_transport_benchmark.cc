@@ -168,6 +168,13 @@ std::vector<float> MakeFlatValues(size_t rows, int dim, int seed) {
   return values;
 }
 
+bool ClientReturnsZeroOnSuccess(recstore::BasePSClient* client) {
+  return dynamic_cast<recstore::DistributedGRPCParameterClient*>(client) !=
+             nullptr ||
+         dynamic_cast<recstore::DistributedBRPCParameterClient*>(client) !=
+             nullptr;
+}
+
 bool ShouldPrintPerRound(const std::string& mode) {
   return mode == "per_round" || mode == "both";
 }
@@ -316,7 +323,9 @@ bool PutFlat(recstore::BasePSClient* client,
     rows.emplace_back(begin, begin + dim);
   }
   return BenchmarkWriteSucceeded(
-      transport, client->PutParameter(base::ConstArray<uint64_t>(keys), rows));
+      transport,
+      client->PutParameter(base::ConstArray<uint64_t>(keys), rows),
+      ClientReturnsZeroOnSuccess(client));
 }
 
 bool GetFlat(recstore::BasePSClient* client,
@@ -333,7 +342,9 @@ bool GetFlat(recstore::BasePSClient* client,
     }
   }
   return BenchmarkReadSucceeded(
-      transport, client->GetParameter(key_array, output->data()));
+      transport,
+      client->GetParameter(key_array, output->data()),
+      ClientReturnsZeroOnSuccess(client));
 }
 
 using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
@@ -757,7 +768,8 @@ int main(int argc, char** argv) {
       report_mode,
       [&](int iteration) {
         const int ret = client->PutParameter(key_array, values);
-        CHECK(BenchmarkWriteSucceeded(transport, ret))
+        CHECK(BenchmarkWriteSucceeded(
+            transport, ret, ClientReturnsZeroOnSuccess(client.get())))
             << transport << " PutParameter failed at iteration=" << iteration;
       },
       &put_warmup_samples_us,
@@ -787,7 +799,8 @@ int main(int argc, char** argv) {
           std::vector<float> output(
               keys.size() * (FLAGS_value_size / sizeof(float)), 0.0f);
           const int ret = client->GetParameter(key_array, output.data());
-          CHECK(BenchmarkReadSucceeded(transport, ret))
+          CHECK(BenchmarkReadSucceeded(
+              transport, ret, ClientReturnsZeroOnSuccess(client.get())))
               << transport << " GetParameter failed at iteration=" << iteration;
         }
       },

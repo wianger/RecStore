@@ -183,6 +183,16 @@ class TestRunBenchmarkPS(unittest.TestCase):
             1 << 20,
         )
 
+    def test_recommended_dram_capacity_bytes_adds_slab_headroom(self):
+        self.assertEqual(
+            recommended_dram_capacity_bytes(
+                capacity=1_000_000,
+                value_size=512,
+                dram_allocator="PERSIST_LOOP_SLAB",
+            ),
+            596 * (1 << 20),
+        )
+
     def test_recommended_dram_capacity_bytes_keeps_non_slab_exact(self):
         self.assertEqual(
             recommended_dram_capacity_bytes(

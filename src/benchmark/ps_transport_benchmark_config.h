@@ -42,8 +42,9 @@ inline bool BenchmarkWriteReturnsZeroOnSuccess(const std::string& transport) {
   return normalized == "RDMA" || normalized == "LOCAL_SHM";
 }
 
-inline bool BenchmarkWriteSucceeded(const std::string& transport, int ret) {
-  return BenchmarkWriteReturnsZeroOnSuccess(transport)
+inline bool BenchmarkWriteSucceeded(
+    const std::string& transport, int ret, bool client_returns_zero = false) {
+  return (client_returns_zero || BenchmarkWriteReturnsZeroOnSuccess(transport))
            ? (ret == 0)
            : (ret != 0);
 }
@@ -52,6 +53,9 @@ inline bool BenchmarkReadReturnsZeroOnSuccess(const std::string& transport) {
   return BenchmarkWriteReturnsZeroOnSuccess(transport);
 }
 
-inline bool BenchmarkReadSucceeded(const std::string& transport, int ret) {
-  return BenchmarkReadReturnsZeroOnSuccess(transport) ? (ret == 0) : (ret != 0);
+inline bool BenchmarkReadSucceeded(
+    const std::string& transport, int ret, bool client_returns_zero = false) {
+  return (client_returns_zero || BenchmarkReadReturnsZeroOnSuccess(transport))
+           ? (ret == 0)
+           : (ret != 0);
 }
