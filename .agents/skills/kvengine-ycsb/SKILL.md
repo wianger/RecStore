@@ -77,3 +77,10 @@ Use `M` for values >= 1,000,000 and `K` for values >= 1,000. Include the `三 wo
 - If `test_kvengine` fails, stop before YCSB and report the log path.
 - If any YCSB row exits nonzero, still write `summary.md`, but state failures in the final response and point to `summary.csv`.
 - Keep generated project-facing report text in Chinese.
+
+## Current Bring-up Notes
+
+- `run_ycsb_compare.py` renders `kvengine_ycsb_run_throughput.svg` unconditionally at the end of a normal run. If `matplotlib` is missing, the command can exit nonzero after `summary.csv` and `kvengine_workload_summary.csv` are already written.
+- In that case, still generate `summary.md` from `kvengine_workload_summary.csv` and report the missing chart dependency separately.
+- For `DRAM_VALUE_STORE` lanes, watch for allocator failures such as `ConcurrentSlabMemoryPool OOM`. If that happens, record the failing engine row and consider rerunning with explicit `--dram-capacity-bytes` or a different allocator.
+- Judge `petkv` success by exit code plus `YCSB_LOAD_RESULT` / `YCSB_RESULT`, not by incidental `PetHash invalid. capacity_ == 0` log lines alone.

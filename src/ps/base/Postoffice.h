@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
 
-class memcached_st;
 class XPostoffice {
 public:
   static XPostoffice* GetInstance() {
@@ -22,16 +21,8 @@ public:
   int NumServers() const { return num_servers_; }
   int NumClients() const { return num_clients_; }
 
-  std::string MemCachedGet(const std::string& key);
-
-  bool MemCachedTryGet(const std::string& key, std::string* value);
-
-  void MemCachedSet(const std::string& key, const std::string& value);
-
 private:
   XPostoffice();
-  void ConnectMemcached();
-  std::string NamespacedKey(const std::string& key) const;
   int num_servers_;
   int num_clients_;
   int global_id_;
@@ -39,6 +30,4 @@ private:
   int client_id_;
   enum ActorEnum { ACTOR_SERVER, ACTOR_CLIENT };
   ActorEnum actor_;
-  memcached_st* memc_;
-  std::string memcached_namespace_;
 };

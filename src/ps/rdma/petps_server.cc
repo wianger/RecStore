@@ -1,90 +1,49 @@
 #include <folly/init/Init.h>
 
+#include <boost/coroutine2/all.hpp>
+
 #include <atomic>
+#include <algorithm>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
-#include <deque>
+#include <cstring>
 #include <fstream>
-#include <future>
 #include <iostream>
 #include <memory>
-#include <mutex>
-#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include "base/base.h"
-#include "base/factory.h"
-#include "base/init.h"
+#include "base/bind_core.h"
+#include "base/config.h"
 #include "base/log.h"
-#include "base/string.h"
 #include "base/timer.h"
-#include "ps/base/Postoffice.h"
-#include "ps/base/base_ps_server.h"
-#include "ps/base/cache_ps_impl.h"
-#include "ps/base/parameters.h"
-#include "ps/base/shard_manager.h"
-#include "mayfly_config.h"
-#include "memory/epoch_manager.h"
 #include "memory/shm_file.h"
-#include "ps/rdma/raw_verbs_transport.h"
+#include "ps/rdma/rdma_common.h"
+#include "ps/base/cache_ps_impl.h"
+#include "ps/rdma/control_plane.h"
+#include "ps/rdma/rc_options.h"
+#include "ps/rdma/rc_transport.h"
 #include "ps/rdma/rdma_protocol.h"
 #include "ps/rdma/rdma_status.h"
-#include "ps/rdma/rdma_transport_mode.h"
-#include "petps_magic.h"
-#include "recstore_config.h"
-#include "src/base/config.h"
-#include "third_party/Mayfly-main/include/DSM.h"
-#include "third_party/json/single_include/nlohmann/json.hpp"
 
 DEFINE_string(config_path, "", "config file path");
-
-DEFINE_double(warmup_ratio,
-              0.8,
-              "bulk load (warmup_ratio * key_space) kvs in DB");
-
-DEFINE_int32(thread_num, 1, "");
-DEFINE_bool(use_sglist, true, "");
-DEFINE_bool(preload, false, "");
-DEFINE_bool(use_dram, false, "");
-DEFINE_int32(numa_id, 0, "");
-DEFINE_uint64(rdma_per_thread_response_limit_bytes,
-              1 * 1024 * 1024,
-              "Per-thread max response bytes for RDMA GET replies");
-DEFINE_uint64(rdma_put_server_scratch_bytes,
-              1 * 1024 * 1024,
-              "Per-thread max bytes used for RDMA PUT-v2 payload scratch");
-DEFINE_uint64(rdma_put_v2_push_slot_bytes,
-              256 * 1024,
-              "RDMA PUT-v2(push) per-slot bytes reserved in server DSM");
-DEFINE_int32(rdma_put_v2_push_slots_per_client,
-             8,
-             "RDMA PUT-v2(push) slot count reserved for each client node");
-DEFINE_uint64(
-    rdma_put_v2_push_region_offset,
-    64 * 1024 * 1024,
-    "RDMA PUT-v2(push) base offset in server DSM used by client payload slots");
-DEFINE_string(rdma_transport_mode,
-              "raw_message",
-              "RDMA transport mode: raw_message|descriptor_doorbell");
-DEFINE_int32(
-    rdma_wait_timeout_ms,
-    60000,
-    "Timeout for waiting a single raw verbs completion; <=0 means no timeout");
-
-DECLARE_int32(value_size);
-DECLARE_int32(max_kv_num_per_request);
+DEFINE_int32(thread_num, 1, "RC write poll thread count");
+DECLARE_int32(global_id);
+DECLARE_int32(num_server_processes);
+DECLARE_int32(num_client_processes);
+DEFINE_int32(value_size, 128, "embedding row bytes");
+DEFINE_int32(max_kv_num_per_request, 500, "max keys per request");
+DEFINE_bool(use_dram, false, "unused compatibility flag");
+DEFINE_int32(numa_id, 0, "NUMA node id for mmap and core binding");
 
 namespace {
-constexpr std::size_t kRdmaThreadBufferBytes = 1 * define::MB;
 
-bool ShouldValidateRouting() {
-  const char* env = std::getenv("RECSTORE_RDMA_VALIDATE_ROUTING");
-  return env != nullptr && std::string(env) != "0";
-}
+using petps::Exchange;
+using petps::NamespaceToken;
+using petps::NowNs;
 
 bool ShouldTraceRdmaGet() {
   static const bool enabled = [] {
@@ -107,850 +66,607 @@ std::uint64_t RdmaGetTraceInterval() {
   return interval;
 }
 
-std::uint64_t ToNs(std::chrono::steady_clock::duration duration) {
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count());
+std::string TimestampNow() {
+  const auto now = std::chrono::system_clock::now().time_since_epoch();
+  return std::to_string(
+      std::chrono::duration_cast<std::chrono::microseconds>(now).count());
 }
 
-struct RdmaGetServerHandleTraceStats {
-  std::atomic<std::uint64_t> count{0};
-  std::atomic<std::uint64_t> parse_ns{0};
-  std::atomic<std::uint64_t> index_ns{0};
-  std::atomic<std::uint64_t> response_ns{0};
-  std::atomic<std::uint64_t> write_ns{0};
-  std::atomic<std::uint64_t> total_ns{0};
-
-  void Add(const char* mode,
-           std::uint64_t parse,
-           std::uint64_t index,
-           std::uint64_t response,
-           std::uint64_t write,
-           std::uint64_t total) {
-    parse_ns.fetch_add(parse, std::memory_order_relaxed);
-    index_ns.fetch_add(index, std::memory_order_relaxed);
-    response_ns.fetch_add(response, std::memory_order_relaxed);
-    write_ns.fetch_add(write, std::memory_order_relaxed);
-    total_ns.fetch_add(total, std::memory_order_relaxed);
-    const auto n        = count.fetch_add(1, std::memory_order_relaxed) + 1;
-    const auto interval = RdmaGetTraceInterval();
-    if (n % interval != 0) {
-      return;
-    }
-    const double denom = static_cast<double>(n) * 1000.0;
-    std::ostringstream out;
-    out << "component=rdma_get_trace side=server stage=handle mode=" << mode
-        << " count=" << n
-        << " parse_us_avg=" << parse_ns.load(std::memory_order_relaxed) / denom
-        << " index_us_avg=" << index_ns.load(std::memory_order_relaxed) / denom
-        << " response_us_avg="
-        << response_ns.load(std::memory_order_relaxed) / denom
-        << " write_us_avg=" << write_ns.load(std::memory_order_relaxed) / denom
-        << " total_us_avg=" << total_ns.load(std::memory_order_relaxed) / denom;
-    LOG(INFO) << out.str();
-    std::cerr << out.str() << std::endl;
+int ResolveShardId(const nlohmann::json& config) {
+  const int default_shard = FLAGS_global_id;
+  if (!config.contains("cache_ps") || !config["cache_ps"].is_object()) {
+    return default_shard;
   }
-};
-
-struct RdmaGetServerEnvelopeTraceStats {
-  std::atomic<std::uint64_t> count{0};
-  std::atomic<std::uint64_t> poll_ns{0};
-  std::atomic<std::uint64_t> decode_ns{0};
-  std::atomic<std::uint64_t> handle_ns{0};
-  std::atomic<std::uint64_t> total_ns{0};
-
-  void Add(std::uint64_t poll,
-           std::uint64_t decode,
-           std::uint64_t handle,
-           std::uint64_t total) {
-    poll_ns.fetch_add(poll, std::memory_order_relaxed);
-    decode_ns.fetch_add(decode, std::memory_order_relaxed);
-    handle_ns.fetch_add(handle, std::memory_order_relaxed);
-    total_ns.fetch_add(total, std::memory_order_relaxed);
-    const auto n        = count.fetch_add(1, std::memory_order_relaxed) + 1;
-    const auto interval = RdmaGetTraceInterval();
-    if (n % interval != 0) {
-      return;
-    }
-    const double denom = static_cast<double>(n) * 1000.0;
-    std::ostringstream out;
-    out << "component=rdma_get_trace side=server stage=envelope mode="
-        << "descriptor_doorbell count=" << n << " poll_us_avg="
-        << poll_ns.load(std::memory_order_relaxed) / denom << " decode_us_avg="
-        << decode_ns.load(std::memory_order_relaxed) / denom
-        << " handle_us_avg="
-        << handle_ns.load(std::memory_order_relaxed) / denom
-        << " total_us_avg=" << total_ns.load(std::memory_order_relaxed) / denom;
-    LOG(INFO) << out.str();
-    std::cerr << out.str() << std::endl;
-  }
-};
-
-RdmaGetServerHandleTraceStats& RawGetServerHandleTraceStats() {
-  static RdmaGetServerHandleTraceStats stats;
-  return stats;
-}
-
-RdmaGetServerHandleTraceStats& DescriptorGetServerHandleTraceStats() {
-  static RdmaGetServerHandleTraceStats stats;
-  return stats;
-}
-
-RdmaGetServerEnvelopeTraceStats& DescriptorGetServerEnvelopeTraceStats() {
-  static RdmaGetServerEnvelopeTraceStats stats;
-  return stats;
-}
-
-struct RequestView {
-  RpcType type;
-  NodeIDType node_id;
-  ThreadIDType t_id;
-  GlobalAddress receive_gaddr;
-  Slice payload;
-  bool descriptor_doorbell;
-};
-
-RequestView RequestViewFromRawMessage(RawMessage* recv) {
-  Cursor cursor;
-  return RequestView{
-      recv->type,
-      recv->node_id,
-      recv->t_id,
-      recv->receive_gaddr,
-      recv->get_string(cursor),
-      false,
-  };
-}
-} // namespace
-
-namespace recstore {
-class PetPSServer : public BaseParameterServer {
-public:
-  PetPSServer(CachePS* cache_ps, int thread_count)
-      : cache_ps_(cache_ps),
-        thread_count_(thread_count),
-        get_parameter_timer_("GetParameter", 1),
-        index_timer_("Index Part", 1),
-        value_timer_("Value Part", 1),
-        epoch_manager_(base::epoch::EpochManager::GetInstance()) {
-    CHECK_LE(thread_count, kMaxThread);
-
-    ClusterInfo cluster;
-    cluster.serverNR = XPostoffice::GetInstance()->NumServers();
-    cluster.clientNR = XPostoffice::GetInstance()->NumClients();
-
-    DSMConfig config(CacheConfig(), cluster, 0, false);
-    if (FLAGS_use_sglist) {
-      // TODO: Need to implement PM address registration for cache_ps
-      LOG(WARNING) << "PM address registration not implemented for cache_ps, "
-                      "using default DRAM allocation";
-      config.dsmSize  = 100 * define::MB;
-      config.baseAddr = (uint64_t)hugePageAlloc(config.dsmSize);
-      LOG(INFO) << "Using DRAM space instead of PM space";
-    } else {
-      config.dsmSize  = 100 * define::MB;
-      config.baseAddr = (uint64_t)hugePageAlloc(config.dsmSize);
-      LOG(INFO) << "WE DONT register PM space to RNIC";
-    }
-    LOG(INFO) << "register MR start =" << (void*)config.baseAddr
-              << ", end = " << (void*)(config.baseAddr + config.dsmSize)
-              << ", size = " << config.dsmSize;
-
-    config.NIC_name = '0' + FLAGS_numa_id;
-    {
-      dsm_ = DSM::getInstance(config, XPostoffice::GetInstance()->GlobalID());
-      CHECK_EQ(dsm_->getMyNodeID(), XPostoffice::GetInstance()->GlobalID())
-          << "inconsistent postoffice and wq dsm";
-      LOG(INFO) << "xmh: finish construct DSM";
-    }
-    sourcelists_.resize(thread_count);
-    for (int i = 0; i < thread_count; i++) {
-      sourcelists_[i].resize(FLAGS_max_kv_num_per_request);
-    }
-    std::string mode_error;
-    CHECK(petps::ParseRdmaTransportMode(
-        FLAGS_rdma_transport_mode, &transport_mode_, &mode_error))
-        << mode_error;
-    if (transport_mode_ == petps::RdmaTransportMode::kDescriptorDoorbell) {
-      CHECK_GT(FLAGS_rdma_put_v2_push_slots_per_client, 0)
-          << "descriptor_doorbell requires positive slot count";
-      CHECK_GT(FLAGS_rdma_put_v2_push_slot_bytes, 0)
-          << "descriptor_doorbell requires positive slot bytes";
-      raw_transports_.resize(static_cast<std::size_t>(thread_count_));
-      const std::uint64_t machine_count = static_cast<std::uint64_t>(
-          XPostoffice::GetInstance()->NumServers() +
-          XPostoffice::GetInstance()->NumClients());
-      for (int thread_id :
-           petps::GetRdmaDescriptorServingThreadIDs(thread_count_)) {
-        petps::RawVerbsConfig raw_config;
-        raw_config.global_id   = XPostoffice::GetInstance()->GlobalID();
-        raw_config.local_lane  = thread_id;
-        raw_config.remote_lane = thread_id;
-        raw_config.num_servers = XPostoffice::GetInstance()->NumServers();
-        raw_config.num_clients = XPostoffice::GetInstance()->NumClients();
-        raw_config.numa_id     = FLAGS_numa_id;
-        raw_config.connect_to_servers = false;
-        raw_config.connect_to_clients = true;
-        raw_config.local_base_addr    = dsm_->get_conf()->baseAddr;
-        raw_config.local_region_bytes = dsm_->get_conf()->dsmSize;
-        raw_config.reserved_region_offset =
-            FLAGS_rdma_put_v2_push_region_offset;
-        raw_config.reserved_region_bytes =
-            machine_count *
-            static_cast<std::uint64_t>(
-                FLAGS_rdma_put_v2_push_slots_per_client) *
-            FLAGS_rdma_put_v2_push_slot_bytes;
-        raw_transports_[static_cast<std::size_t>(thread_id)] =
-            std::make_unique<petps::RawVerbsTransport>(raw_config);
+  const auto& cache_ps = config["cache_ps"];
+  if (cache_ps.contains("servers") && cache_ps["servers"].is_array()) {
+    for (const auto& server : cache_ps["servers"]) {
+      if (server.value("shard", -1) == FLAGS_global_id) {
+        return server.value("shard", default_shard);
       }
     }
+  }
+  return default_shard;
+}
+
+void NormalizeDramValuePath(nlohmann::json* base_kv_config) {
+  if (base_kv_config == nullptr || !base_kv_config->is_object()) {
+    return;
+  }
+  if (!base_kv_config->contains("value") ||
+      !(*base_kv_config)["value"].is_object()) {
+    return;
+  }
+  auto& value_cfg = (*base_kv_config)["value"];
+  const std::string value_type =
+      value_cfg.value("type", std::string("DRAM_VALUE_STORE"));
+  if (value_type != "DRAM_VALUE_STORE") {
+    return;
+  }
+  const std::string path = value_cfg.value("path", std::string());
+  if (path.empty() || path.rfind("/dev/shm", 0) == 0) {
+    return;
+  }
+  value_cfg["path"] = "/dev/shm/recstore_rdma_rc_" + TimestampNow() + "/value";
+}
+
+class PetPSServer {
+public:
+  PetPSServer(CachePS* cache_ps,
+              int thread_count,
+              int shard_id,
+              const std::string& namespace_token)
+      : cache_ps_(cache_ps),
+        thread_count_(thread_count),
+        shard_id_(shard_id),
+        control_plane_client_(petps::RdmaControlPlaneEndpoint{
+            FLAGS_rdma_control_plane_host,
+            FLAGS_rdma_control_plane_port,
+            FLAGS_rdma_control_plane_timeout_ms,
+        }) {
+    petps::RcTransportConfig config;
+    config.shard_id                 = shard_id_;
+    config.num_clients              = FLAGS_num_client_processes;
+    config.qps_per_client_per_shard = FLAGS_rdma_rc_qps_per_client_per_shard;
+    config.slots_per_qp             = FLAGS_rdma_rc_slots_per_qp;
+    config.request_slot_bytes =
+        static_cast<std::size_t>(FLAGS_rdma_rc_request_slot_bytes);
+    config.response_slot_bytes =
+        static_cast<std::size_t>(FLAGS_rdma_rc_response_slot_bytes);
+    config.control_plane_host       = FLAGS_rdma_control_plane_host;
+    config.control_plane_port       = FLAGS_rdma_control_plane_port;
+    config.control_plane_timeout_ms = FLAGS_rdma_control_plane_timeout_ms;
+    config.namespace_token          = namespace_token;
+    transport_ = std::make_unique<petps::RcShardServerTransport>(config);
+    last_seq_.assign(
+        static_cast<std::size_t>(transport_->TotalSlots()), std::uint64_t{0});
   }
 
   void Run() {
-    for (int i = 0; i < thread_count_; i++) {
-      LOG(INFO) << "Starts PS polling thread " << i;
+    for (int i = 0; i < thread_count_; ++i) {
       threads_.emplace_back(&PetPSServer::PollingThread, this, i);
-      tp[i][0] = 0;
     }
-  }
-
-  uint64_t GetThroughputCounterSum() const {
-    uint64_t sum = 0;
-    for (int i = 0; i < thread_count_; i++)
-      sum += tp[i][0];
-    return sum;
   }
 
 private:
-  struct DescriptorTask {
-    petps::RdmaDescriptorRequest request;
-    const char* inline_payload       = nullptr;
-    std::size_t inline_payload_bytes = 0;
+  struct ProfileCounters {
+    std::atomic<std::uint64_t> scan_rounds{0};
+    std::atomic<std::uint64_t> scanned_slots{0};
+    std::atomic<std::uint64_t> ready_slots{0};
+    std::atomic<std::uint64_t> empty_scan_rounds{0};
+    std::atomic<std::uint64_t> handled_get{0};
+    std::atomic<std::uint64_t> handled_put{0};
+    std::atomic<std::uint64_t> handled_update{0};
+    std::atomic<std::uint64_t> handled_init{0};
+    std::atomic<std::uint64_t> invalid_descriptor{0};
+    std::atomic<std::uint64_t> wrong_shard{0};
+    std::atomic<std::uint64_t> handle_get_ns{0};
+    std::atomic<std::uint64_t> get_batch_get_ns{0};
+    std::atomic<std::uint64_t> get_zero_fill_ns{0};
+    std::atomic<std::uint64_t> get_row_copy_ns{0};
+    std::atomic<std::uint64_t> get_rows{0};
+    std::atomic<std::uint64_t> get_value_bytes{0};
+    std::atomic<std::uint64_t> get_missing_rows{0};
+    std::atomic<std::uint64_t> handle_put_ns{0};
+    std::atomic<std::uint64_t> handle_update_ns{0};
+    std::atomic<std::uint64_t> handle_init_ns{0};
+    std::atomic<std::uint64_t> complete_response_ns{0};
+    std::atomic<std::uint64_t> poll_loop_ns{0};
+    std::atomic<std::uint64_t> next_report_ns{0};
   };
 
-  void WriteMayflyResponse(
-      const RequestView& request,
-      const char* buffer,
-      GlobalAddress gaddr,
-      std::size_t size,
-      bool signal,
-      std::uint64_t wr_id,
-      int thread_id) {
-    if (!request.descriptor_doorbell) {
-      dsm_->write(buffer, gaddr, size, signal, wr_id);
+  void MaybeReportProfile(int thread_id) {
+    if (FLAGS_rdma_rc_profile_interval_ms <= 0 || thread_id != 0) {
+      return;
+    }
+    const std::uint64_t now = NowNs();
+    const std::uint64_t interval =
+        static_cast<std::uint64_t>(FLAGS_rdma_rc_profile_interval_ms) * 1000000;
+    std::uint64_t expected =
+        profile_.next_report_ns.load(std::memory_order_relaxed);
+    if (expected == 0) {
+      profile_.next_report_ns.compare_exchange_strong(
+          expected, now + interval, std::memory_order_relaxed);
+      return;
+    }
+    if (now < expected ||
+        !profile_.next_report_ns.compare_exchange_strong(
+            expected, now + interval, std::memory_order_relaxed)) {
       return;
     }
 
-    auto& counter = descriptor_dsm_write_counters_[thread_id];
-    const petps::RdmaDescriptorDsmWriteDecision decision =
-        petps::GetRdmaDescriptorDsmWriteDecision(counter);
-    ++counter;
-    if (decision.poll_before_write) {
-      dsm_->poll_rdma_cq(1);
-    }
-    dsm_->write(buffer, gaddr, size, decision.signal_write, wr_id);
+    const std::uint64_t scan_rounds   = Exchange(&profile_.scan_rounds);
+    const std::uint64_t scanned_slots = Exchange(&profile_.scanned_slots);
+    const std::uint64_t ready_slots   = Exchange(&profile_.ready_slots);
+    const std::uint64_t empty_scan_rounds =
+        Exchange(&profile_.empty_scan_rounds);
+    const std::uint64_t handled_get    = Exchange(&profile_.handled_get);
+    const std::uint64_t handled_put    = Exchange(&profile_.handled_put);
+    const std::uint64_t handled_update = Exchange(&profile_.handled_update);
+    const std::uint64_t handled_init   = Exchange(&profile_.handled_init);
+    const std::uint64_t complete_count =
+        handled_get + handled_put + handled_update + handled_init;
+    const std::uint64_t handle_get_ns    = Exchange(&profile_.handle_get_ns);
+    const std::uint64_t get_batch_get_ns = Exchange(&profile_.get_batch_get_ns);
+    const std::uint64_t get_zero_fill_ns = Exchange(&profile_.get_zero_fill_ns);
+    const std::uint64_t get_row_copy_ns  = Exchange(&profile_.get_row_copy_ns);
+    const std::uint64_t get_rows         = Exchange(&profile_.get_rows);
+    const std::uint64_t get_value_bytes  = Exchange(&profile_.get_value_bytes);
+    const std::uint64_t get_missing_rows = Exchange(&profile_.get_missing_rows);
+    const std::uint64_t handle_put_ns    = Exchange(&profile_.handle_put_ns);
+    const std::uint64_t handle_update_ns = Exchange(&profile_.handle_update_ns);
+    const std::uint64_t handle_init_ns   = Exchange(&profile_.handle_init_ns);
+    const std::uint64_t complete_response_ns =
+        Exchange(&profile_.complete_response_ns);
+    const std::uint64_t poll_loop_ns = Exchange(&profile_.poll_loop_ns);
+    std::cout
+        << "component=rdma_rc_server_profile"
+        << " shard=" << shard_id_ << " threads=" << thread_count_
+        << " scan_rounds=" << scan_rounds << " scanned_slots=" << scanned_slots
+        << " ready_slots=" << ready_slots
+        << " empty_scan_rounds=" << empty_scan_rounds << " scan_hit_pct="
+        << (scanned_slots == 0 ? 0.0
+                               : 100.0 * static_cast<double>(ready_slots) /
+                                     static_cast<double>(scanned_slots))
+        << " handled_get=" << handled_get << " handled_put=" << handled_put
+        << " handled_update=" << handled_update
+        << " handled_init=" << handled_init
+        << " invalid_descriptor=" << Exchange(&profile_.invalid_descriptor)
+        << " wrong_shard=" << Exchange(&profile_.wrong_shard)
+        << " handle_get_avg_ns="
+        << (handled_get == 0 ? 0 : handle_get_ns / handled_get)
+        << " get_batch_get_avg_ns="
+        << (handled_get == 0 ? 0 : get_batch_get_ns / handled_get)
+        << " get_zero_fill_avg_ns="
+        << (handled_get == 0 ? 0 : get_zero_fill_ns / handled_get)
+        << " get_row_copy_avg_ns="
+        << (handled_get == 0 ? 0 : get_row_copy_ns / handled_get)
+        << " get_rows=" << get_rows << " get_value_bytes=" << get_value_bytes
+        << " get_missing_rows=" << get_missing_rows << " handle_put_avg_ns="
+        << (handled_put == 0 ? 0 : handle_put_ns / handled_put)
+        << " handle_update_avg_ns="
+        << (handled_update == 0 ? 0 : handle_update_ns / handled_update)
+        << " handle_init_avg_ns="
+        << (handled_init == 0 ? 0 : handle_init_ns / handled_init)
+        << " complete_response_avg_ns="
+        << (complete_count == 0 ? 0 : complete_response_ns / complete_count)
+        << " poll_loop_avg_ns="
+        << (scan_rounds == 0 ? 0 : poll_loop_ns / scan_rounds) << std::endl;
   }
 
-  void RpcGetServerServingThreadIDs(RawMessage* recv) {
-    CHECK_EQ(recv->type, GET_SERVER_THREADIDS);
-    VLOG(1) << "component=rdma_server event=get_server_threadids_recv node_id="
-            << static_cast<int>(recv->node_id)
-            << " tid=" << static_cast<int>(recv->t_id);
-    static std::atomic_int serving_thread_id{0};
-    auto m  = RawMessage::get_new_msg();
-    m->type = RESP_GET_SERVER_THREADIDS;
-    std::vector<int> thread_ids;
-    thread_ids.reserve(static_cast<std::size_t>(thread_count_));
-    const int start = serving_thread_id.fetch_add(1);
-    for (int i = 0; i < thread_count_; ++i) {
-      thread_ids.push_back((start + i) % thread_count_);
-    }
-    dsm_->rpc_call(
-        m,
-        recv->node_id,
-        recv->t_id,
-        Slice((char*)thread_ids.data(), thread_ids.size() * sizeof(int)));
-    VLOG(1) << "component=rdma_server event=get_server_threadids_reply node_id="
-            << static_cast<int>(recv->node_id) << " tid="
-            << static_cast<int>(recv->t_id) << " threads=" << thread_ids.size();
-  }
-
-  void PublishDescriptorWorkerThreads() {
-    if (transport_mode_ == petps::RdmaTransportMode::kDescriptorDoorbell) {
-      const std::vector<int> thread_ids =
-          petps::GetRdmaDescriptorServingThreadIDs(thread_count_);
-      const std::string worker_key = petps::RdmaDescriptorWorkerThreadsKey(
-          XPostoffice::GetInstance()->ServerID());
-      XPostoffice::GetInstance()->MemCachedSet(
-          worker_key, petps::EncodeRdmaDescriptorWorkerThreads(thread_ids));
-      VLOG(1) << "component=rdma_server "
-              << "event=publish_descriptor_worker_threads key=" << worker_key
-              << " threads=" << thread_ids.size();
-    }
-  }
-
-  void PublishReadyKeys() {
-    if (ready_published_.exchange(true, std::memory_order_acq_rel)) {
+  void HandleGet(const petps::RequestDescriptor& descriptor,
+                 const char* payload,
+                 petps::RcShardServerTransport::ResponseView* response,
+                 int thread_id) {
+    if (FLAGS_rdma_rc_fake_get_mode == "status_only") {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kOk);
+      response->status->response_bytes = 0;
       return;
     }
-    PublishDescriptorWorkerThreads();
-    const std::string ready_key =
-        "petps-server-ready-" +
-        std::to_string(XPostoffice::GetInstance()->ServerID());
-    XPostoffice::GetInstance()->MemCachedSet(ready_key, "1");
-    VLOG(1) << "component=rdma_server event=publish_ready_key key="
-            << ready_key;
-  }
-
-  void HandlePsPut(const RequestView& request, int thread_id) {
-    std::string error;
-    petps::RpcStatus status = petps::RpcStatus::kOk;
-    const std::string_view payload_view(request.payload.s, request.payload.len);
-
-    petps::PutRemotePayloadV2 control{};
-    if (petps::DecodePutRemoteControlV2(payload_view, &control, &error)) {
-      if (control.embedding_dim * sizeof(float) != FLAGS_value_size) {
-        LOG(ERROR) << "RpcPsPut(v2) value size mismatch, embedding_dim="
-                   << control.embedding_dim
-                   << " FLAGS_value_size=" << FLAGS_value_size;
-        status = petps::RpcStatus::kValueSizeMismatch;
-      } else if (control.key_count >
-                 static_cast<std::uint32_t>(FLAGS_max_kv_num_per_request)) {
-        LOG(ERROR) << "RpcPsPut(v2) batch too large, key_count="
-                   << control.key_count << " max_kv_num_per_request="
-                   << FLAGS_max_kv_num_per_request;
-        status = petps::RpcStatus::kBatchTooLarge;
-      } else {
-        const char* payload_ptr = nullptr;
-        if (control.transfer_mode == petps::kPutV2TransferModeRead) {
-          const std::size_t scratch_limit = std::min<std::size_t>(
-              FLAGS_rdma_put_server_scratch_bytes, kRdmaThreadBufferBytes);
-          if (control.payload_bytes > scratch_limit) {
-            LOG(ERROR) << "RpcPsPut(v2-read) scratch overflow, payload_bytes="
-                       << control.payload_bytes
-                       << " scratch_limit=" << scratch_limit;
-            status = petps::RpcStatus::kBatchTooLarge;
-          } else {
-            char* put_scratch = dsm_->get_rdma_buffer();
-            dsm_->read_sync(
-                put_scratch, control.payload_gaddr, control.payload_bytes);
-            payload_ptr = put_scratch;
-          }
-        } else if (control.transfer_mode == petps::kPutV2TransferModePush) {
-          if (FLAGS_rdma_put_v2_push_slot_bytes == 0 ||
-              FLAGS_rdma_put_v2_push_slots_per_client <= 0) {
-            LOG(ERROR) << "RpcPsPut(v2-push) invalid slot config: slot_bytes="
-                       << FLAGS_rdma_put_v2_push_slot_bytes
-                       << " slots_per_client="
-                       << FLAGS_rdma_put_v2_push_slots_per_client;
-            status = petps::RpcStatus::kInvalidPayload;
-          } else if (control.payload_bytes >
-                     FLAGS_rdma_put_v2_push_slot_bytes) {
-            LOG(ERROR)
-                << "RpcPsPut(v2-push) payload larger than slot: payload_bytes="
-                << control.payload_bytes
-                << " slot_bytes=" << FLAGS_rdma_put_v2_push_slot_bytes;
-            status = petps::RpcStatus::kBatchTooLarge;
-          } else if (control.payload_gaddr.nodeID != dsm_->getMyNodeID()) {
-            LOG(ERROR)
-                << "RpcPsPut(v2-push) payload node mismatch: payload_node="
-                << control.payload_gaddr.nodeID
-                << " local_node=" << dsm_->getMyNodeID();
-            status = petps::RpcStatus::kInvalidPayload;
-          } else {
-            const std::uint64_t slots_per_client = static_cast<std::uint64_t>(
-                FLAGS_rdma_put_v2_push_slots_per_client);
-            const std::uint64_t total_slots =
-                static_cast<std::uint64_t>(dsm_->get_conf()->machineNR) *
-                slots_per_client;
-            const std::uint64_t region_bytes =
-                total_slots * FLAGS_rdma_put_v2_push_slot_bytes;
-            const std::uint64_t region_begin =
-                FLAGS_rdma_put_v2_push_region_offset;
-            const std::uint64_t region_end    = region_begin + region_bytes;
-            const std::uint64_t payload_begin = control.payload_gaddr.offset;
-            const std::uint64_t payload_end =
-                payload_begin +
-                static_cast<std::uint64_t>(control.payload_bytes);
-            const std::uint64_t sender_lane_begin =
-                region_begin +
-                static_cast<std::uint64_t>(request.node_id) * slots_per_client *
-                    FLAGS_rdma_put_v2_push_slot_bytes;
-            const std::uint64_t sender_lane_end =
-                sender_lane_begin +
-                slots_per_client * FLAGS_rdma_put_v2_push_slot_bytes;
-
-            if (region_end <= region_begin) {
-              LOG(ERROR) << "RpcPsPut(v2-push) invalid region range begin="
-                         << region_begin << " end=" << region_end;
-              status = petps::RpcStatus::kInvalidPayload;
-            } else if (payload_begin < region_begin ||
-                       payload_end > region_end ||
-                       payload_end < payload_begin) {
-              LOG(ERROR) << "RpcPsPut(v2-push) payload out of range: payload=["
-                         << payload_begin << "," << payload_end << ") region=["
-                         << region_begin << "," << region_end << ")";
-              status = petps::RpcStatus::kInvalidPayload;
-            } else if ((payload_begin - region_begin) %
-                           FLAGS_rdma_put_v2_push_slot_bytes !=
-                       0) {
-              LOG(ERROR) << "RpcPsPut(v2-push) payload not slot-aligned: "
-                            "payload_begin="
-                         << payload_begin << " region_begin=" << region_begin
-                         << " slot_bytes=" << FLAGS_rdma_put_v2_push_slot_bytes;
-              status = petps::RpcStatus::kInvalidPayload;
-            } else if (payload_begin < sender_lane_begin ||
-                       payload_end > sender_lane_end ||
-                       sender_lane_end < sender_lane_begin) {
-              LOG(ERROR)
-                  << "RpcPsPut(v2-push) payload not in sender lane: sender="
-                  << static_cast<int>(request.node_id) << " payload=["
-                  << payload_begin << "," << payload_end << ") sender_lane=["
-                  << sender_lane_begin << "," << sender_lane_end << ")";
-              status = petps::RpcStatus::kInvalidPayload;
-            } else if (payload_end >
-                       static_cast<std::uint64_t>(dsm_->get_conf()->dsmSize)) {
-              LOG(ERROR)
-                  << "RpcPsPut(v2-push) payload exceeds DSM size: payload_end="
-                  << payload_end << " dsm_size=" << dsm_->get_conf()->dsmSize;
-              status = petps::RpcStatus::kInvalidPayload;
-            } else {
-              payload_ptr = dsm_->addr(control.payload_gaddr);
-            }
-          }
-        } else {
-          LOG(ERROR) << "RpcPsPut(v2) unknown transfer_mode="
-                     << control.transfer_mode;
-          status = petps::RpcStatus::kInvalidPayload;
-        }
-
-        if (status == petps::RpcStatus::kOk && payload_ptr != nullptr) {
-          const auto* keys =
-              reinterpret_cast<const std::uint64_t*>(payload_ptr);
-          const char* value_bytes =
-              payload_ptr + static_cast<std::size_t>(control.key_count) *
-                                sizeof(std::uint64_t);
-          cache_ps_->PutDenseParameterBatch(
-              keys,
-              reinterpret_cast<const float*>(value_bytes),
-              static_cast<int>(control.key_count),
-              static_cast<int>(control.embedding_dim),
-              thread_id);
-        } else if (status == petps::RpcStatus::kOk) {
-          status = petps::RpcStatus::kInvalidPayload;
-        }
-      }
-    } else {
-      petps::DecodedPutPayload decoded;
-      if (!petps::DecodePutPayload(payload_view, &decoded, &error)) {
-        LOG(ERROR) << "RpcPsPut decode error: " << error;
-        status = petps::RpcStatus::kInvalidPayload;
-      } else if (decoded.embedding_dim * sizeof(float) != FLAGS_value_size) {
-        LOG(ERROR) << "RpcPsPut(v1) value size mismatch, embedding_dim="
-                   << decoded.embedding_dim
-                   << " FLAGS_value_size=" << FLAGS_value_size;
-        status = petps::RpcStatus::kValueSizeMismatch;
-      } else if (decoded.keys.size() >
-                 static_cast<std::size_t>(FLAGS_max_kv_num_per_request)) {
-        LOG(ERROR) << "RpcPsPut(v1) batch too large, key_count="
-                   << decoded.keys.size() << " max_kv_num_per_request="
-                   << FLAGS_max_kv_num_per_request;
-        status = petps::RpcStatus::kBatchTooLarge;
-      } else {
-        for (std::size_t i = 0; i < decoded.keys.size(); ++i) {
-          cache_ps_->PutSingleParameter(
-              decoded.keys[i],
-              decoded.values.data() + i * decoded.embedding_dim,
-              decoded.embedding_dim,
-              thread_id);
-        }
-      }
+    if (FLAGS_rdma_rc_fake_get_mode == "payload_memset") {
+      std::memset(response->payload, 0, descriptor.response_bytes);
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kOk);
+      response->status->response_bytes =
+          static_cast<std::uint32_t>(descriptor.response_bytes);
+      return;
     }
-
-    const std::int32_t code = static_cast<std::int32_t>(status);
-    auto* ack_buf           = dsm_->get_rdma_buffer();
-    std::memcpy(ack_buf, &code, sizeof(code));
-    WriteMayflyResponse(
-        request,
-        ack_buf,
-        request.receive_gaddr,
-        sizeof(code),
-        true,
-        petps::WR_ID_PUT,
-        thread_id);
-  }
-
-  void RpcPsPut(RawMessage* recv, int thread_id) {
-    HandlePsPut(RequestViewFromRawMessage(recv), thread_id);
-  }
-
-  void HandlePsGet(const RequestView& request, int thread_id) {
-    const bool trace_get = ShouldTraceRdmaGet();
-    const auto trace_start =
-        trace_get ? std::chrono::steady_clock::now()
-                  : std::chrono::steady_clock::time_point{};
-    const bool perf_condition = (thread_id == 0);
-    auto& sourcelist          = sourcelists_[thread_id];
-
-    epoch_manager_->Protect();
-
-    if (perf_condition)
-      get_parameter_timer_.start();
-    Slice extra_data = request.payload;
-
-    int batch_get_kv_count = extra_data.len / sizeof(uint64_t);
-    tp[thread_id][0] += batch_get_kv_count;
-    base::ConstArray<uint64_t> keys(
-        (uint64_t*)extra_data.s, batch_get_kv_count);
-    if (ShouldValidateRouting()) {
-      for (auto each : keys) {
-        CHECK_EQ(XPostoffice::GetInstance()->ServerID(),
-                 ShardManager::KeyPartition(each))
-            << each << " not belong to this PS; "
-            << "sended from client node_id = " << (int)request.node_id;
-      }
-    }
-#ifdef RPC_DEBUG
-    LOG(INFO) << "recv->msg_size=" << extra_data.len;
-    LOG(INFO) << "server batch gets: " << keys.Debug();
-#endif
-    CHECK_LE(batch_get_kv_count, FLAGS_max_kv_num_per_request);
-    const auto trace_after_parse =
-        trace_get ? std::chrono::steady_clock::now()
-                  : std::chrono::steady_clock::time_point{};
-
-    const int embedding_dim = FLAGS_value_size / sizeof(float);
-    const std::size_t response_bytes =
-        petps::FixedSlotResponseBytes(batch_get_kv_count, FLAGS_value_size);
-    auto* buf = dsm_->get_rdma_buffer();
-
-    if (perf_condition)
-      index_timer_.start();
-    bool flat_get_ok = true;
-    if (response_bytes <= FLAGS_rdma_per_thread_response_limit_bytes) {
-      flat_get_ok = cache_ps_->GetParameterFlat(
-          keys,
-          reinterpret_cast<float*>(buf),
-          batch_get_kv_count,
-          embedding_dim,
-          thread_id);
-    }
-    if (perf_condition)
-      index_timer_.end();
-    const auto trace_after_index =
-        trace_get ? std::chrono::steady_clock::now()
-                  : std::chrono::steady_clock::time_point{};
-
-#ifdef RPC_DEBUG
-    if (response_bytes <= FLAGS_rdma_per_thread_response_limit_bytes &&
-        flat_get_ok) {
-      for (int i = 0; i < batch_get_kv_count; i++) {
-        float* slot = reinterpret_cast<float*>(buf + i * FLAGS_value_size);
-        XDebug::AssertTensorEq(
-            slot,
-            embedding_dim,
-            keys[i],
-            base::SFormat("server embedding check error, key is {}", keys[i]));
-      }
-    }
-#endif
-    if (perf_condition)
-      value_timer_.start();
-
-    if (response_bytes > FLAGS_rdma_per_thread_response_limit_bytes) {
-      LOG(ERROR) << "component=rdma_server event=batch_too_large shard="
-                 << XPostoffice::GetInstance()->ServerID() << " thread_id="
-                 << thread_id << " key_count=" << batch_get_kv_count
-                 << " response_bytes=" << response_bytes << " limit_bytes="
-                 << FLAGS_rdma_per_thread_response_limit_bytes;
-      auto* status_word =
-          reinterpret_cast<std::int32_t*>(dsm_->get_rdma_buffer());
-      *status_word =
-          static_cast<std::int32_t>(petps::RpcStatus::kBatchTooLarge);
-      WriteMayflyResponse(
-          request,
-          reinterpret_cast<const char*>(status_word),
-          request.receive_gaddr,
-          sizeof(std::int32_t),
-          true,
-          petps::WR_ID_GET,
-          thread_id);
-      epoch_manager_->UnProtect();
+    if (FLAGS_rdma_rc_fake_get_mode != "none" &&
+        !FLAGS_rdma_rc_fake_get_mode.empty()) {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+      response->status->response_bytes = 0;
       return;
     }
 
-    auto* status_word = reinterpret_cast<std::int32_t*>(
-        buf + batch_get_kv_count * FLAGS_value_size);
-    if (flat_get_ok) {
-      *status_word = static_cast<std::int32_t>(petps::RpcStatus::kOk);
-    } else {
-      *status_word =
-          static_cast<std::int32_t>(petps::RpcStatus::kValueSizeMismatch);
+    base::ConstArray<std::uint64_t> keys(
+        reinterpret_cast<const std::uint64_t*>(payload), descriptor.key_count);
+    CachePS::FlatGetProfile get_profile;
+    CachePS::FlatGetProfile* get_profile_ptr =
+        FLAGS_rdma_rc_profile_interval_ms > 0 ? &get_profile : nullptr;
+    const bool ok = cache_ps_->GetParameterFlat(
+        keys,
+        reinterpret_cast<float*>(response->payload),
+        descriptor.key_count,
+        descriptor.embedding_dim,
+        thread_id,
+        get_profile_ptr);
+    if (get_profile_ptr != nullptr) {
+      profile_.get_batch_get_ns.fetch_add(
+          get_profile.batch_get_ns, std::memory_order_relaxed);
+      profile_.get_zero_fill_ns.fetch_add(
+          get_profile.zero_fill_ns, std::memory_order_relaxed);
+      profile_.get_row_copy_ns.fetch_add(
+          get_profile.row_copy_ns, std::memory_order_relaxed);
+      profile_.get_rows.fetch_add(get_profile.rows, std::memory_order_relaxed);
+      profile_.get_value_bytes.fetch_add(
+          get_profile.value_bytes, std::memory_order_relaxed);
+      profile_.get_missing_rows.fetch_add(
+          get_profile.missing_rows, std::memory_order_relaxed);
     }
-
-    epoch_manager_->UnProtect();
-    GlobalAddress gaddr = request.receive_gaddr;
-    const auto trace_before_write =
-        trace_get ? std::chrono::steady_clock::now()
-                  : std::chrono::steady_clock::time_point{};
-    WriteMayflyResponse(
-        request, buf, gaddr, response_bytes, true, petps::WR_ID_GET, thread_id);
-    if (trace_get) {
-      const auto trace_done = std::chrono::steady_clock::now();
-      auto& stats           = request.descriptor_doorbell
-                                ? DescriptorGetServerHandleTraceStats()
-                                : RawGetServerHandleTraceStats();
-      stats.Add(
-          request.descriptor_doorbell ? "descriptor_doorbell" : "raw_message",
-          ToNs(trace_after_parse - trace_start),
-          ToNs(trace_after_index - trace_after_parse),
-          ToNs(trace_before_write - trace_after_index),
-          ToNs(trace_done - trace_before_write),
-          ToNs(trace_done - trace_start));
-    }
-    if (perf_condition)
-      value_timer_.end();
-
-#ifdef RPC_DEBUG
-    LOG(INFO) << "RPC done";
-#endif
-    if (perf_condition)
-      get_parameter_timer_.end();
+    response->status->status = static_cast<std::int32_t>(
+        ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
+    response->status->response_bytes =
+        static_cast<std::uint32_t>(descriptor.response_bytes);
   }
 
-  void RpcPsGet(RawMessage* recv, int thread_id) {
-    HandlePsGet(RequestViewFromRawMessage(recv), thread_id);
+  void HandlePut(const petps::RequestDescriptor& descriptor,
+                 const char* payload,
+                 petps::RcShardServerTransport::ResponseView* response,
+                 int thread_id) {
+    const auto* reader =
+        reinterpret_cast<const ParameterCompressReader*>(payload);
+    if (!reader->Valid(static_cast<int>(descriptor.payload_bytes))) {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+      response->status->response_bytes = 0;
+      return;
+    }
+    for (int i = 0; i < reader->item_size(); ++i) {
+      cache_ps_->PutSingleParameter(reader->item(i), thread_id);
+    }
+    response->status->status = static_cast<std::int32_t>(petps::RpcStatus::kOk);
+    response->status->response_bytes = 0;
   }
 
-  void RpcPsDescriptorDoorbell(const petps::RdmaDescriptorRequest& request,
-                               Slice inline_payload,
-                               int thread_id) {
-    if (request.op ==
-        static_cast<std::uint16_t>(petps::RdmaDescriptorOp::kGet)) {
-      HandlePsGet(
-          RequestView{
-              RpcType::GET,
-              static_cast<NodeIDType>(request.client_node_id),
-              static_cast<ThreadIDType>(request.client_thread_id),
-              request.response_gaddr,
-              inline_payload,
-              true,
-          },
-          thread_id);
-    } else if (request.op ==
-               static_cast<std::uint16_t>(petps::RdmaDescriptorOp::kPut)) {
-      HandlePsPut(
-          RequestView{
-              RpcType::PUT,
-              static_cast<NodeIDType>(request.client_node_id),
-              static_cast<ThreadIDType>(request.client_thread_id),
-              request.status_gaddr,
-              inline_payload,
-              true,
-          },
-          thread_id);
-    } else {
-      LOG(ERROR) << "unknown descriptor op=" << request.op;
+  void HandleUpdate(const petps::RequestDescriptor& descriptor,
+                    const char* payload,
+                    petps::RcShardServerTransport::ResponseView* response,
+                    int thread_id) {
+    const std::string_view table_name = petps::DescriptorTableName(descriptor);
+    if (table_name.empty()) {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+      response->status->response_bytes = 0;
+      return;
     }
+
+    const auto* reader =
+        reinterpret_cast<const ParameterCompressReader*>(payload);
+    if (!reader->Valid(static_cast<int>(descriptor.payload_bytes))) {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+      response->status->response_bytes = 0;
+      return;
+    }
+
+    const bool ok = cache_ps_->UpdateParameter(
+        std::string(table_name), reader, static_cast<unsigned>(thread_id));
+    response->status->status = static_cast<std::int32_t>(
+        ok ? petps::RpcStatus::kOk : petps::RpcStatus::kInvalidPayload);
+    response->status->response_bytes = 0;
   }
 
-  bool DecodeDescriptorCompletion(petps::RawVerbsTransport* raw_transport,
-                                  const petps::RawVerbsCompletion& completion,
-                                  DescriptorTask* task) {
-    if (raw_transport == nullptr || task == nullptr || !completion.has_imm) {
-      return false;
+  void HandleInitTable(const petps::RequestDescriptor& descriptor,
+                       const char* payload,
+                       petps::RcShardServerTransport::ResponseView* response) {
+    const std::string_view table_name = petps::DescriptorTableName(descriptor);
+    if (table_name.empty() ||
+        descriptor.payload_bytes != petps::InitTablePayloadBytes()) {
+      response->status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+      response->status->response_bytes = 0;
+      return;
     }
-    const std::uint32_t slot_id = completion.imm_data;
-    petps::RdmaDescriptorRequest request{};
-    request.client_node_id   = static_cast<std::uint16_t>(completion.wr_id);
-    request.slot_id          = slot_id;
-    request.descriptor_gaddr = GlobalAddress{
-        static_cast<std::uint16_t>(dsm_->getMyNodeID()),
-        FLAGS_rdma_put_v2_push_region_offset +
-            (static_cast<std::uint64_t>(request.client_node_id) *
-                 static_cast<std::uint64_t>(
-                     FLAGS_rdma_put_v2_push_slots_per_client) +
-             slot_id) *
-                FLAGS_rdma_put_v2_push_slot_bytes};
-    petps::RdmaDescriptorLaneConfig lane_config{};
-    lane_config.region_offset = FLAGS_rdma_put_v2_push_region_offset;
-    lane_config.slot_bytes    = FLAGS_rdma_put_v2_push_slot_bytes;
-    lane_config.slots_per_client =
-        static_cast<std::uint32_t>(FLAGS_rdma_put_v2_push_slots_per_client);
-    lane_config.machine_count =
-        static_cast<std::uint32_t>(dsm_->get_conf()->machineNR);
-    std::string error;
-    if (!petps::ValidateDescriptorLane(request, lane_config, &error)) {
-      LOG(ERROR) << "invalid descriptor lane: " << error;
-      return false;
-    }
-    const char* payload = static_cast<const char*>(
-        raw_transport->LocalPointer(request.descriptor_gaddr));
-    if (!petps::DecodeRdmaDescriptorRequest(
-            std::string_view(payload, sizeof(petps::RdmaDescriptorRequest)),
-            &request,
-            &error)) {
-      LOG(ERROR) << "descriptor decode error: " << error;
-      return false;
-    }
-    if (!petps::ValidateDescriptorLane(request, lane_config, &error)) {
-      LOG(ERROR) << "decoded descriptor lane mismatch: " << error;
-      return false;
-    }
-    if (request.payload_bytes > FLAGS_rdma_put_v2_push_slot_bytes -
-                                    sizeof(petps::RdmaDescriptorRequest)) {
-      LOG(ERROR) << "descriptor inline payload too large request_id="
-                 << request.request_id
-                 << " payload_bytes=" << request.payload_bytes
-                 << " slot_bytes=" << FLAGS_rdma_put_v2_push_slot_bytes;
-      return false;
-    }
-    task->request              = request;
-    task->inline_payload       = payload + sizeof(petps::RdmaDescriptorRequest);
-    task->inline_payload_bytes = request.payload_bytes;
-    return true;
+
+    std::uint64_t num_embeddings = 0;
+    std::uint64_t embedding_dim  = 0;
+    std::memcpy(&num_embeddings, payload, sizeof(num_embeddings));
+    std::memcpy(&embedding_dim,
+                payload + sizeof(num_embeddings),
+                sizeof(embedding_dim));
+    const bool ok = cache_ps_->InitTable(
+        std::string(table_name), num_embeddings, embedding_dim);
+    response->status->status = static_cast<std::int32_t>(
+        ok ? petps::RpcStatus::kOk : petps::RpcStatus::kInvalidPayload);
+    response->status->response_bytes = 0;
   }
 
-  void DescriptorPollLoop(int thread_id) {
-    auto* raw_transport =
-        raw_transports_[static_cast<std::size_t>(thread_id)].get();
-    CHECK(raw_transport != nullptr)
-        << "missing descriptor raw transport for thread_id=" << thread_id;
-    while (1) {
-      const bool trace_get = ShouldTraceRdmaGet();
-      const auto trace_start =
-          trace_get ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
-      petps::RawVerbsCompletion completion{};
-      if (!raw_transport->Poll(&completion, FLAGS_rdma_wait_timeout_ms)) {
-        std::this_thread::yield();
-        continue;
-      }
-      const auto trace_after_poll =
-          trace_get ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
-      DescriptorTask task;
-      if (!DecodeDescriptorCompletion(raw_transport, completion, &task)) {
-        continue;
-      }
-      const auto trace_after_decode =
-          trace_get ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
-      RpcPsDescriptorDoorbell(
-          task.request,
-          Slice(task.inline_payload, task.inline_payload_bytes),
-          thread_id);
-      if (trace_get &&
-          task.request.op ==
-              static_cast<std::uint16_t>(petps::RdmaDescriptorOp::kGet)) {
-        const auto trace_done = std::chrono::steady_clock::now();
-        DescriptorGetServerEnvelopeTraceStats().Add(
-            ToNs(trace_after_poll - trace_start),
-            ToNs(trace_after_decode - trace_after_poll),
-            ToNs(trace_done - trace_after_decode),
-            ToNs(trace_done - trace_start));
-      }
+  void MaybePublishServerReady() {
+    const int started =
+        started_threads_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (started != thread_count_ ||
+        ready_published_.exchange(true, std::memory_order_acq_rel)) {
+      return;
     }
+    control_plane_client_.PublishServerReady(FLAGS_global_id);
+    LOG(INFO) << "component=rdma_control_plane event=server_ready_published"
+              << " server_id=" << FLAGS_global_id
+              << " host=" << FLAGS_rdma_control_plane_host
+              << " port=" << FLAGS_rdma_control_plane_port;
   }
 
   void PollingThread(int thread_id) {
-    auto_bind_core(0);
-    dsm_->registerThread();
-    VLOG(1) << "component=rdma_server event=polling_thread_ready thread_id="
-            << thread_id;
-    const int ready_threads = registered_polling_threads_.fetch_add(1) + 1;
-    if (transport_mode_ != petps::RdmaTransportMode::kDescriptorDoorbell &&
-        ready_threads == thread_count_) {
-      PublishReadyKeys();
+    base::auto_bind_core();
+    LOG(INFO) << "component=rdma_server event=polling_thread_ready thread_id="
+              << thread_id;
+    MaybePublishServerReady();
+    const int coroutines_per_thread =
+        std::max(1, FLAGS_rdma_rc_server_coroutines_per_thread);
+    LOG(INFO) << "component=rdma_rc_server event=polling_thread_mode"
+              << " thread_id=" << thread_id
+              << " coroutines_per_thread=" << coroutines_per_thread;
+    if (coroutines_per_thread > 1) {
+      RunCoroutinePollingThread(thread_id, coroutines_per_thread);
+      return;
     }
-    if (transport_mode_ == petps::RdmaTransportMode::kDescriptorDoorbell) {
-      if (ready_threads == thread_count_) {
-        PublishDescriptorWorkerThreads();
-      }
-      auto* raw_transport =
-          raw_transports_[static_cast<std::size_t>(thread_id)].get();
-      if (raw_transport == nullptr) {
-        const int serving_thread_count = static_cast<int>(
-            petps::GetRdmaDescriptorServingThreadIDs(thread_count_).size());
-        while (!petps::CanPublishRdmaDescriptorReady(
-            registered_polling_threads_.load(std::memory_order_acquire),
-            thread_count_,
-            raw_connected_endpoints_.load(std::memory_order_acquire) ==
-                serving_thread_count)) {
-          std::this_thread::yield();
+    while (true) {
+      const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
+      const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
+      std::uint64_t scanned_slots       = 0;
+      std::uint64_t ready_slots         = 0;
+      ScanAssignedSlots(
+          thread_id,
+          /*worker_id=*/0,
+          /*worker_count=*/1,
+          profile_enabled,
+          &scanned_slots,
+          &ready_slots);
+      if (profile_enabled) {
+        profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        profile_.scanned_slots.fetch_add(
+            scanned_slots, std::memory_order_relaxed);
+        if (ready_slots == 0) {
+          profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
         }
-        PublishReadyKeys();
-        while (1) {
-          std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
+        profile_.poll_loop_ns.fetch_add(
+            NowNs() - poll_start_ns, std::memory_order_relaxed);
+        MaybeReportProfile(thread_id);
       }
-      raw_transport->PublishAndConnect();
-      raw_connected_endpoints_.fetch_add(1, std::memory_order_acq_rel);
-      const int serving_thread_count = static_cast<int>(
-          petps::GetRdmaDescriptorServingThreadIDs(thread_count_).size());
-      while (!petps::CanPublishRdmaDescriptorReady(
-          registered_polling_threads_.load(std::memory_order_acquire),
-          thread_count_,
-          raw_connected_endpoints_.load(std::memory_order_acquire) ==
-              serving_thread_count)) {
-        std::this_thread::yield();
-      }
-      PublishReadyKeys();
-      while (!ready_published_.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-      }
-      DescriptorPollLoop(thread_id);
+      std::this_thread::yield();
     }
-    auto msg = RawMessage::get_new_msg();
+  }
 
-    while (1) {
-      msg->clear();
-      uint64_t wr_id;
-      RawMessage* recv;
-      do {
-        recv = dsm_->rpc_fast_wait(&wr_id);
-        if (recv == nullptr && wr_id == petps::WR_ID_SG_GET) {
-          // RECSTORE_LOG_EVERY_MS(ERROR, 1000)
-          //     << "MaxPendingEpochNumPerThread = "
-          //     << epoch_manager_->MaxPendingEpochNumPerThread();
-          epoch_manager_->UnProtect();
+  bool ProcessSlot(int slot, int thread_id, bool profile_enabled) {
+    int client_id  = -1;
+    int qp_index   = -1;
+    int slot_in_qp = -1;
+    transport_->DecodeSlotIndex(slot, &client_id, &qp_index, &slot_in_qp);
+    auto* commit = transport_->RequestCommitAt(slot);
+    if (commit->state.load(std::memory_order_acquire) != petps::kRcSlotReady) {
+      return false;
+    }
+    const std::uint64_t seq = commit->seq.load(std::memory_order_acquire);
+    if (seq == 0 || seq == last_seq_[static_cast<std::size_t>(slot)]) {
+      return false;
+    }
+    if (profile_enabled) {
+      profile_.ready_slots.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    auto* descriptor = transport_->RequestDescriptorAt(slot);
+    std::string error;
+    if (!petps::ValidateRequestDescriptor(
+            *descriptor,
+            transport_->config().request_slot_bytes,
+            transport_->config().response_slot_bytes,
+            &error)) {
+      LOG(ERROR) << "component=rdma_rc_server event=invalid_descriptor"
+                 << " shard=" << shard_id_ << " slot=" << slot
+                 << " thread_id=" << thread_id << " seq=" << seq
+                 << " descriptor_seq=" << descriptor->seq
+                 << " client_id=" << descriptor->client_id
+                 << " qp=" << descriptor->qp_index << " op=" << descriptor->op
+                 << " key_count=" << descriptor->key_count
+                 << " payload_bytes=" << descriptor->payload_bytes
+                 << " response_bytes=" << descriptor->response_bytes
+                 << " error=\"" << error << "\"";
+      if (profile_enabled) {
+        profile_.invalid_descriptor.fetch_add(1, std::memory_order_relaxed);
+      }
+      last_seq_[static_cast<std::size_t>(slot)] = seq;
+      commit->state.store(0, std::memory_order_release);
+      return true;
+    }
+    if (descriptor->client_id != static_cast<std::uint32_t>(client_id) ||
+        descriptor->qp_index != static_cast<std::uint32_t>(qp_index)) {
+      LOG(ERROR) << "component=rdma_rc_server event=slot_descriptor_mismatch"
+                 << " shard=" << shard_id_ << " slot=" << slot
+                 << " thread_id=" << thread_id
+                 << " slot_client_id=" << client_id << " slot_qp=" << qp_index
+                 << " descriptor_client_id=" << descriptor->client_id
+                 << " descriptor_qp=" << descriptor->qp_index << " seq=" << seq;
+      if (profile_enabled) {
+        profile_.invalid_descriptor.fetch_add(1, std::memory_order_relaxed);
+      }
+      last_seq_[static_cast<std::size_t>(slot)] = seq;
+      commit->state.store(0, std::memory_order_release);
+      return true;
+    }
+
+    auto response =
+        transport_->OpenClientResponse(client_id, qp_index, slot_in_qp);
+    const char* payload = transport_->RequestPayloadAt(slot);
+    VLOG(1) << "component=rdma_rc_server event=consume shard=" << shard_id_
+            << " slot=" << slot << " client_id=" << descriptor->client_id
+            << " qp=" << descriptor->qp_index << " seq=" << seq << " op="
+            << descriptor->op << " key_count=" << descriptor->key_count
+            << " payload_bytes=" << descriptor->payload_bytes
+            << " response_bytes=" << descriptor->response_bytes;
+    response.status->status =
+        static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+    response.status->response_bytes = 0;
+
+    if (descriptor->shard_id != static_cast<std::uint32_t>(shard_id_)) {
+      LOG(ERROR) << "component=rdma_rc_server event=wrong_shard"
+                 << " expected_shard=" << shard_id_
+                 << " actual_shard=" << descriptor->shard_id << " slot=" << slot
+                 << " client_id=" << descriptor->client_id
+                 << " qp=" << descriptor->qp_index << " seq=" << seq << " op="
+                 << descriptor->op << " key_count=" << descriptor->key_count;
+      if (profile_enabled) {
+        profile_.wrong_shard.fetch_add(1, std::memory_order_relaxed);
+      }
+      response.status->status =
+          static_cast<std::int32_t>(petps::RpcStatus::kWrongShard);
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kGet)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
+      HandleGet(*descriptor, payload, &response, thread_id);
+      if (profile_enabled) {
+        profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_get_ns.fetch_add(
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kPut)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
+      HandlePut(*descriptor, payload, &response, thread_id);
+      if (profile_enabled) {
+        profile_.handled_put.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_put_ns.fetch_add(
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kUpdate)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
+      HandleUpdate(*descriptor, payload, &response, thread_id);
+      if (profile_enabled) {
+        profile_.handled_update.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_update_ns.fetch_add(
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    } else if (descriptor->op ==
+               static_cast<std::uint16_t>(petps::RcOp::kInitTable)) {
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
+      HandleInitTable(*descriptor, payload, &response);
+      if (profile_enabled) {
+        profile_.handled_init.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_init_ns.fetch_add(
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+    }
+
+    std::atomic_thread_fence(std::memory_order_release);
+    const std::uint64_t complete_start_ns = profile_enabled ? NowNs() : 0;
+    transport_->CompleteResponse(
+        client_id, qp_index, slot_in_qp, response, seq);
+    if (profile_enabled) {
+      profile_.complete_response_ns.fetch_add(
+          NowNs() - complete_start_ns, std::memory_order_relaxed);
+    }
+    VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
+            << " slot=" << slot << " client_id=" << descriptor->client_id
+            << " qp=" << descriptor->qp_index << " seq=" << seq
+            << " status=" << response.status->status
+            << " response_bytes=" << response.status->response_bytes;
+    last_seq_[static_cast<std::size_t>(slot)] = seq;
+    return true;
+  }
+
+  void ScanAssignedSlots(
+      int thread_id,
+      int worker_id,
+      int worker_count,
+      bool profile_enabled,
+      std::uint64_t* scanned_slots,
+      std::uint64_t* ready_slots) {
+    const int qp_count     = transport_->config().qps_per_client_per_shard;
+    const int slots_per_qp = transport_->config().slots_per_qp;
+    const int num_clients  = transport_->config().num_clients;
+    const int lane_slots   = num_clients * slots_per_qp;
+    for (int qp_index = thread_id; qp_index < qp_count;
+         qp_index += thread_count_) {
+      for (int lane_slot = worker_id; lane_slot < lane_slots;
+           lane_slot += worker_count) {
+        const int client_id  = lane_slot / slots_per_qp;
+        const int slot_in_qp = lane_slot % slots_per_qp;
+        const int slot_index =
+            transport_->SlotIndex(client_id, qp_index, slot_in_qp);
+        ++(*scanned_slots);
+        if (ProcessSlot(slot_index, thread_id, profile_enabled)) {
+          ++(*ready_slots);
         }
-      } while (nullptr == recv);
-
-      if (recv->type == GET_SERVER_THREADIDS) {
-        RpcGetServerServingThreadIDs(recv);
-      } else if (recv->type == PUT) {
-        RpcPsPut(recv, thread_id);
-      } else if (recv->type == GET) {
-        RpcPsGet(recv, thread_id);
-      } else {
-        LOG(FATAL) << "unknown message type";
       }
     }
   }
 
-private:
-  std::vector<std::vector<SourceList>> sourcelists_;
-  CachePS* cache_ps_;
+  void CoroutineSlotScanner(
+      boost::coroutines2::coroutine<void>::push_type& sink,
+      int thread_id,
+      int worker_id,
+      int worker_count) {
+    while (true) {
+      const bool profile_enabled        = FLAGS_rdma_rc_profile_interval_ms > 0;
+      const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
+      std::uint64_t scanned_slots       = 0;
+      std::uint64_t ready_slots         = 0;
+      ScanAssignedSlots(
+          thread_id,
+          worker_id,
+          worker_count,
+          profile_enabled,
+          &scanned_slots,
+          &ready_slots);
+      if (profile_enabled) {
+        profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        profile_.scanned_slots.fetch_add(
+            scanned_slots, std::memory_order_relaxed);
+        if (ready_slots == 0) {
+          profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        }
+        profile_.poll_loop_ns.fetch_add(
+            NowNs() - poll_start_ns, std::memory_order_relaxed);
+      }
+      sink();
+    }
+  }
+
+  void RunCoroutinePollingThread(int thread_id, int coroutines_per_thread) {
+    using Coroutine = boost::coroutines2::coroutine<void>;
+    std::vector<std::unique_ptr<Coroutine::pull_type>> coroutines;
+    coroutines.reserve(static_cast<std::size_t>(coroutines_per_thread));
+    for (int coroutine_id = 0; coroutine_id < coroutines_per_thread;
+         ++coroutine_id) {
+      coroutines.emplace_back(std::make_unique<Coroutine::pull_type>(
+          [this, thread_id, coroutine_id, coroutines_per_thread](
+              Coroutine::push_type& sink) {
+            CoroutineSlotScanner(
+                sink, thread_id, coroutine_id, coroutines_per_thread);
+          }));
+    }
+    while (true) {
+      for (auto& coroutine : coroutines) {
+        (*coroutine)();
+      }
+      MaybeReportProfile(thread_id);
+      std::this_thread::yield();
+    }
+  }
+
+  CachePS* cache_ps_ = nullptr;
+  int thread_count_  = 1;
+  int shard_id_      = 0;
+  std::unique_ptr<petps::RcShardServerTransport> transport_;
+  petps::RdmaControlPlaneClient control_plane_client_;
   std::vector<std::thread> threads_;
-  int thread_count_;
-  DSM* dsm_;
-  std::atomic_int registered_polling_threads_{0};
+  std::vector<std::uint64_t> last_seq_;
+  std::atomic<int> started_threads_{0};
   std::atomic<bool> ready_published_{false};
-  xmh::Timer get_parameter_timer_;
-  xmh::Timer index_timer_;
-  xmh::Timer value_timer_;
-
-  base::epoch::EpochManager* epoch_manager_;
-  petps::RdmaTransportMode transport_mode_ =
-      petps::RdmaTransportMode::kRawMessage;
-  std::vector<std::unique_ptr<petps::RawVerbsTransport>> raw_transports_;
-  std::atomic<int> raw_connected_endpoints_{0};
-
-  constexpr static int kMaxThread = 128;
-  uint64_t tp[kMaxThread][8];
-  std::uint64_t descriptor_dsm_write_counters_[kMaxThread] = {};
+  ProfileCounters profile_;
 };
-} // namespace recstore
+
+} // namespace
 
 int main(int argc, char* argv[]) {
   folly::init(&argc, &argv);
@@ -962,10 +678,9 @@ int main(int argc, char* argv[]) {
 
   base::PMMmapRegisterCenter::GetConfig().backend =
       base::PMMmapRegisterCenter::BackendFromUseDram(FLAGS_use_dram);
-  base::PMMmapRegisterCenter::GetConfig().numa_id  = FLAGS_numa_id;
+  base::PMMmapRegisterCenter::GetConfig().numa_id = FLAGS_numa_id;
 
-  extern int global_socket_id;
-  global_socket_id = FLAGS_numa_id;
+  base::global_socket_id = FLAGS_numa_id;
   LOG(INFO) << "set NUMA ID = " << FLAGS_numa_id;
 
   const std::string config_path =
@@ -976,28 +691,39 @@ int main(int argc, char* argv[]) {
   if (!config_file.is_open()) {
     LOG(FATAL) << "Cannot open config file: " << config_path;
   }
+
   nlohmann::json config;
   config_file >> config;
-
-  auto cache_ps = std::make_unique<CachePS>(config["cache_ps"]);
-
-  if (FLAGS_preload) {
-    LOG(INFO) << "Loading fake data for preload";
-    int64_t ps_capacity = config["cache_ps"]["base_kv_config"]["capacity"];
-    cache_ps->LoadFakeData(ps_capacity * FLAGS_warmup_ratio, FLAGS_value_size);
+  if (config.contains("cache_ps") && config["cache_ps"].is_object() &&
+      config["cache_ps"].contains("base_kv_config")) {
+    NormalizeDramValuePath(&config["cache_ps"]["base_kv_config"]);
   }
-
-  recstore::PetPSServer parameterServiceImpl(cache_ps.get(), FLAGS_thread_num);
-  parameterServiceImpl.Run();
-
-  while (1) {
-    auto micro_second1 = base::GetTimestamp();
-    uint64_t tp_sum1   = parameterServiceImpl.GetThroughputCounterSum();
+  if (config.contains("distributed_client") &&
+      config["distributed_client"].is_object() &&
+      config["distributed_client"].contains("base_kv_config")) {
+    NormalizeDramValuePath(&config["distributed_client"]["base_kv_config"]);
+  }
+  std::unique_ptr<petps::RdmaControlPlaneServer> control_plane_server;
+  if (FLAGS_global_id == 0) {
+    control_plane_server = std::make_unique<petps::RdmaControlPlaneServer>(
+        petps::RdmaControlPlaneEndpoint{
+            FLAGS_rdma_control_plane_host,
+            FLAGS_rdma_control_plane_port,
+            FLAGS_rdma_control_plane_timeout_ms,
+        });
+    control_plane_server->Start();
+    LOG(INFO) << "component=rdma_control_plane event=listening"
+              << " server_id=0"
+              << " host=" << FLAGS_rdma_control_plane_host
+              << " port=" << FLAGS_rdma_control_plane_port;
+  }
+  auto cache_ps      = std::make_unique<CachePS>(config["cache_ps"]);
+  const int shard_id = ResolveShardId(config);
+  auto ps            = std::make_unique<PetPSServer>(
+      cache_ps.get(), FLAGS_thread_num, shard_id, NamespaceToken());
+  ps->Run();
+  while (true) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    auto micro_second2 = base::GetTimestamp();
-    uint64_t tp_sum2   = parameterServiceImpl.GetThroughputCounterSum();
-    double tps = (tp_sum2 - tp_sum1) * 1.0 / (micro_second2 - micro_second1);
-    printf("throughput %.4f Mkv/s\n", tps);
   }
   return 0;
 }

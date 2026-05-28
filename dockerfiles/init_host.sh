@@ -5,9 +5,6 @@ set -e
 USER=xieminhui
 PROJECT_PATH="/home/${USER}/RecStore"
 
-sudo apt install -y libmemcached-dev 
-
-
 # git submodule add https://github.com/google/glog third_party/glog
 # sudo rm -f /usr/lib/x86_64-linux-gnu/libglog.so.0*
 
@@ -86,6 +83,3 @@ popd
 
 cd ${PROJECT_PATH}/src/kg/kg
 bash install_dgl.sh
-
-
-pip3 install pymemcache

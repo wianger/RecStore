@@ -1,5 +1,7 @@
 import os
+import socket
 import sys
+import time
 import unittest
 
 import torch
@@ -8,14 +10,22 @@ from client import RecstoreClient
 
 _server_runner = None
 TEST_PHASE = os.environ.get("RECSTORE_CLIENT_TEST_PHASE", "full").lower()
-RDMA_MEMCACHED_MODE = os.environ.get("RECSTORE_USE_LOCAL_MEMCACHED", "never").lower()
 RDMA_GFLAG_PREFIXES = (
     "--global_id=",
     "--num_server_processes=",
     "--num_client_processes=",
     "--value_size=",
     "--max_kv_num_per_request=",
+    "--rdma_rc_namespace=",
+    "--rdma_control_plane_host=",
+    "--rdma_control_plane_port=",
 )
+
+
+def allocate_local_port(host):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        return sock.getsockname()[1]
 
 
 def log(message):
@@ -63,16 +73,35 @@ def maybe_reexec_for_rdma_flags():
         return
 
     rdma_config = get_rdma_runner_config()
+    control_plane_host = os.environ.get(
+        "RECSTORE_RDMA_CONTROL_PLANE_HOST", "127.0.0.1"
+    )
+    control_plane_port = int(
+        os.environ.get(
+            "RECSTORE_RDMA_CONTROL_PLANE_PORT",
+            str(allocate_local_port(control_plane_host)),
+        )
+    )
+    rdma_namespace = os.environ.get(
+        "RECSTORE_RDMA_NAMESPACE",
+        f"recstore-rdma-op-{os.getpid()}-{time.time_ns()}",
+    )
     extra_flags = [
         f"--global_id={rdma_config['num_servers']}",
         f"--num_server_processes={rdma_config['num_servers']}",
         "--num_client_processes=1",
         f"--value_size={rdma_config['value_size']}",
         f"--max_kv_num_per_request={rdma_config['max_kv_num_per_request']}",
+        f"--rdma_rc_namespace={rdma_namespace}",
+        f"--rdma_control_plane_host={control_plane_host}",
+        f"--rdma_control_plane_port={control_plane_port}",
     ]
 
     new_env = os.environ.copy()
     new_env["RECSTORE_RDMA_BOOTSTRAPPED"] = "1"
+    new_env["RECSTORE_RDMA_CONTROL_PLANE_HOST"] = control_plane_host
+    new_env["RECSTORE_RDMA_CONTROL_PLANE_PORT"] = str(control_plane_port)
+    new_env["RECSTORE_RDMA_NAMESPACE"] = rdma_namespace
     log(f"[op-rdma] reexec with flags: {' '.join(extra_flags)}")
     os.execve(
         sys.executable,
@@ -104,16 +133,19 @@ def start_server_if_needed():
 
     backend = get_backend_type()
     if backend == "RDMA":
-        if RDMA_MEMCACHED_MODE not in ("always", "auto", "never"):
-            raise RuntimeError(
-                "RECSTORE_USE_LOCAL_MEMCACHED must be one of: "
-                "always, auto, never"
-            )
         rdma_config = get_rdma_runner_config()
+        control_plane_host = os.environ.get(
+            "RECSTORE_RDMA_CONTROL_PLANE_HOST", "127.0.0.1"
+        )
+        control_plane_port = int(os.environ["RECSTORE_RDMA_CONTROL_PLANE_PORT"])
+        rdma_namespace = os.environ["RECSTORE_RDMA_NAMESPACE"]
         log(f"\n{'=' * 70}")
         log("Starting PetPS Server for RDMA Client Tests")
         log(f"Config path: {os.environ.get('RECSTORE_CONFIG')}")
-        log(f"Memcached mode: {RDMA_MEMCACHED_MODE}")
+        log(
+            "Control plane: "
+            f"{control_plane_host}:{control_plane_port} namespace={rdma_namespace}"
+        )
         log(f"{'=' * 70}\n")
 
         from petps_cluster_runner import PetPSClusterRunner
@@ -126,18 +158,15 @@ def start_server_if_needed():
             value_size=rdma_config["value_size"],
             max_kv_num_per_request=rdma_config["max_kv_num_per_request"],
             timeout=15,
-            use_local_memcached=RDMA_MEMCACHED_MODE,
-            rdma_transport_mode=os.environ.get("RECSTORE_RDMA_TRANSPORT_MODE"),
+            rdma_namespace=rdma_namespace,
+            rdma_control_plane_host=control_plane_host,
+            rdma_control_plane_port=control_plane_port,
         )
         _server_runner.start()
-        os.environ["RECSTORE_MEMCACHED_HOST"] = _server_runner.memcached_host
-        os.environ["RECSTORE_MEMCACHED_PORT"] = str(_server_runner.memcached_port)
-        os.environ["RECSTORE_MEMCACHED_TEXT_PROTOCOL"] = "1"
-        if getattr(_server_runner, "memcached_namespace", ""):
-            os.environ["RECSTORE_MEMCACHED_NAMESPACE"] = _server_runner.memcached_namespace
         log(
-            "[op-rdma] effective memcached endpoint "
-            f"{_server_runner.memcached_host}:{_server_runner.memcached_port}"
+            "[op-rdma] effective control plane "
+            f"{_server_runner.rdma_control_plane_host}:"
+            f"{_server_runner.rdma_control_plane_port}"
         )
         return
 

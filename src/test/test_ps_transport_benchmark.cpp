@@ -49,6 +49,14 @@ TEST(PSTransportBenchmarkConfigTest, WriteReturnSemanticsMatchTransport) {
   EXPECT_FALSE(BenchmarkWriteSucceeded("local_shm", 1));
 }
 
+TEST(PSTransportBenchmarkConfigTest,
+     WriteReturnSemanticsCanOverrideDistributedRpcClients) {
+  EXPECT_TRUE(BenchmarkWriteSucceeded("grpc", 0, true));
+  EXPECT_TRUE(BenchmarkWriteSucceeded("brpc", 0, true));
+  EXPECT_FALSE(BenchmarkWriteSucceeded("grpc", 1, true));
+  EXPECT_FALSE(BenchmarkWriteSucceeded("brpc", 1, true));
+}
+
 TEST(PSTransportBenchmarkConfigTest, ReadReturnSemanticsMatchTransport) {
   EXPECT_FALSE(BenchmarkReadReturnsZeroOnSuccess("grpc"));
   EXPECT_FALSE(BenchmarkReadReturnsZeroOnSuccess("brpc"));
@@ -64,4 +72,12 @@ TEST(PSTransportBenchmarkConfigTest, ReadReturnSemanticsMatchTransport) {
   EXPECT_FALSE(BenchmarkReadSucceeded("brpc", 0));
   EXPECT_FALSE(BenchmarkReadSucceeded("rdma", 1));
   EXPECT_FALSE(BenchmarkReadSucceeded("local_shm", 1));
+}
+
+TEST(PSTransportBenchmarkConfigTest,
+     ReadReturnSemanticsCanOverrideDistributedRpcClients) {
+  EXPECT_TRUE(BenchmarkReadSucceeded("grpc", 0, true));
+  EXPECT_TRUE(BenchmarkReadSucceeded("brpc", 0, true));
+  EXPECT_FALSE(BenchmarkReadSucceeded("grpc", 1, true));
+  EXPECT_FALSE(BenchmarkReadSucceeded("brpc", 1, true));
 }

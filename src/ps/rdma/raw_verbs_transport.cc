@@ -6,9 +6,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
-#include "ps/base/Postoffice.h"
+#include "ps/rdma/control_plane.h"
 
 namespace petps {
 namespace {
@@ -20,6 +21,18 @@ constexpr int kRawVerbsCqDepth       = 4096;
 constexpr int kRawVerbsRecvDepth     = 1024;
 
 std::string IbvError(const char* op) { return std::string(op) + " failed"; }
+
+std::string QpCreateError(const RawVerbsConfig& config, int node) {
+  return "ibv_create_qp failed: likely insufficient RDMA QP resources "
+         "(global_id=" +
+         std::to_string(config.global_id) +
+         ", local_lane=" + std::to_string(config.local_lane) +
+         ", remote_lane=" + std::to_string(config.remote_lane) +
+         ", node=" + std::to_string(node) +
+         ", num_servers=" + std::to_string(config.num_servers) +
+         ", num_clients=" + std::to_string(config.num_clients) +
+         "). Reduce --client-count or --qps-per-client-per-shard.";
+}
 
 ibv_context* OpenDeviceForNuma(int numa_id) {
   int device_count     = 0;
@@ -117,6 +130,7 @@ struct RawVerbsTransport::Impl {
   std::vector<RawVerbsNodeMeta> metas;
   std::vector<RawVerbsRemoteMemory> remotes;
   std::vector<ibv_qp*> qps;
+  std::vector<std::uint32_t> max_inline_data_per_node;
   ibv_wc wc_batch[kRawVerbsPollBatchSize] = {};
   RawVerbsCompletionBatchCursor batch_cursor;
 };
@@ -159,6 +173,8 @@ RawVerbsTransport::RawVerbsTransport(const RawVerbsConfig& config)
 
   const int node_count = config.num_servers + config.num_clients;
   impl_->qps.resize(static_cast<std::size_t>(node_count), nullptr);
+  impl_->max_inline_data_per_node.assign(
+      static_cast<std::size_t>(node_count), 0);
   for (int node = 0; node < node_count; ++node) {
     if (!ShouldRawVerbsConnectToNode(config, node)) {
       continue;
@@ -171,12 +187,14 @@ RawVerbsTransport::RawVerbsTransport(const RawVerbsConfig& config)
     init_attr.cap.max_recv_wr     = kRawVerbsRecvDepth;
     init_attr.cap.max_send_sge    = 1;
     init_attr.cap.max_recv_sge    = 1;
-    init_attr.cap.max_inline_data = 64;
+    init_attr.cap.max_inline_data = config.max_inline_data;
     ibv_qp* qp                    = ibv_create_qp(impl_->pd, &init_attr);
     if (qp == nullptr) {
-      throw std::runtime_error("ibv_create_qp failed");
+      throw std::runtime_error(QpCreateError(config, node));
     }
     impl_->qps[static_cast<std::size_t>(node)] = qp;
+    impl_->max_inline_data_per_node[static_cast<std::size_t>(node)] =
+        init_attr.cap.max_inline_data;
   }
 }
 
@@ -267,19 +285,23 @@ RawVerbsNodeMeta RawVerbsTransport::LocalMeta() const {
 void RawVerbsTransport::PublishAndConnect() {
   const int node_count = impl_->config.num_servers + impl_->config.num_clients;
   const RawVerbsNodeMeta local = LocalMeta();
+  RdmaControlPlaneClient control_plane({
+      impl_->config.control_plane_host,
+      impl_->config.control_plane_port,
+      impl_->config.control_plane_timeout_ms,
+  });
   for (int node = 0; node < node_count; ++node) {
     if (!ShouldRawVerbsConnectToNode(impl_->config, node)) {
       continue;
     }
     RawVerbsNodeMeta peer_local = local;
     peer_local.qpn = impl_->qps[static_cast<std::size_t>(node)]->qp_num;
-    XPostoffice::GetInstance()->MemCachedSet(
-        RawVerbsMetaKey(impl_->config.global_id,
-                        impl_->config.local_lane,
-                        node,
-                        impl_->config.remote_lane),
-        std::string(reinterpret_cast<const char*>(&peer_local),
-                    sizeof(peer_local)));
+    control_plane.PublishMeta(
+        impl_->config.global_id,
+        impl_->config.local_lane,
+        node,
+        impl_->config.remote_lane,
+        peer_local);
   }
 
   impl_->metas.assign(static_cast<std::size_t>(node_count), RawVerbsNodeMeta{});
@@ -299,21 +321,12 @@ void RawVerbsTransport::PublishAndConnect() {
     if (!ShouldRawVerbsConnectToNode(impl_->config, node)) {
       continue;
     }
-    std::string value;
-    while (!XPostoffice::GetInstance()->MemCachedTryGet(
-        RawVerbsMetaKey(node,
-                        impl_->config.remote_lane,
-                        impl_->config.global_id,
-                        impl_->config.local_lane),
-        &value)) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    if (value.size() != sizeof(RawVerbsNodeMeta)) {
-      throw std::runtime_error(
-          "raw verbs metadata size mismatch for node " + std::to_string(node));
-    }
-    RawVerbsNodeMeta meta{};
-    std::memcpy(&meta, value.data(), sizeof(meta));
+    const RawVerbsNodeMeta meta = control_plane.GetMeta(
+        node,
+        impl_->config.remote_lane,
+        impl_->config.global_id,
+        impl_->config.local_lane,
+        impl_->config.control_plane_timeout_ms);
     impl_->metas[static_cast<std::size_t>(node)]   = meta;
     impl_->remotes[static_cast<std::size_t>(node)] = RawVerbsRemoteMemory{
         meta.node_id,
@@ -360,8 +373,13 @@ void RawVerbsTransport::Write(
   wr.wr_id      = wr_id;
   wr.opcode     = IBV_WR_RDMA_WRITE;
   wr.send_flags = signaled ? IBV_SEND_SIGNALED : 0;
-  wr.sg_list    = &sge;
-  wr.num_sge    = 1;
+  if (bytes > 0 &&
+      bytes <= impl_->max_inline_data_per_node[static_cast<std::size_t>(
+                   remote.nodeID)]) {
+    wr.send_flags |= IBV_SEND_INLINE;
+  }
+  wr.sg_list = &sge;
+  wr.num_sge = 1;
   wr.wr.rdma.remote_addr =
       impl_->remotes[remote.nodeID].base_addr + remote.offset;
   wr.wr.rdma.rkey     = impl_->remotes[remote.nodeID].rkey;
@@ -391,8 +409,13 @@ void RawVerbsTransport::WriteWithImm(
   wr.opcode     = IBV_WR_RDMA_WRITE_WITH_IMM;
   wr.imm_data   = htonl(imm_data);
   wr.send_flags = signaled ? IBV_SEND_SIGNALED : 0;
-  wr.sg_list    = &sge;
-  wr.num_sge    = 1;
+  if (bytes > 0 &&
+      bytes <= impl_->max_inline_data_per_node[static_cast<std::size_t>(
+                   remote.nodeID)]) {
+    wr.send_flags |= IBV_SEND_INLINE;
+  }
+  wr.sg_list = &sge;
+  wr.num_sge = 1;
   wr.wr.rdma.remote_addr =
       impl_->remotes[remote.nodeID].base_addr + remote.offset;
   wr.wr.rdma.rkey     = impl_->remotes[remote.nodeID].rkey;
@@ -495,6 +518,13 @@ bool RawVerbsTransport::Poll(RawVerbsCompletion* completion, int timeout_ms) {
     }
     return true;
   }
+}
+
+std::uint32_t RawVerbsTransport::max_inline_data(std::uint16_t node_id) const {
+  if (node_id >= impl_->max_inline_data_per_node.size()) {
+    throw std::runtime_error("raw verbs inline query remote node out of range");
+  }
+  return impl_->max_inline_data_per_node[static_cast<std::size_t>(node_id)];
 }
 
 } // namespace petps

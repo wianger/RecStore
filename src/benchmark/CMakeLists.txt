@@ -16,11 +16,6 @@ else()
     message(STATUS "Skipping backend_benchmark: HugeCTR CUDA headers are unavailable.")
 endif()
 
-add_executable(perf_sgl perf_sgl.cc)
-target_link_libraries(perf_sgl PUBLIC base ${warp_wq_ps_client} mayfly Folly::folly)
-target_compile_options(perf_sgl PUBLIC -fopenmp)
-target_link_options(perf_sgl PUBLIC -fopenmp)
-
 add_executable(dataset_wordcount_helper dataset_wordcount.cc)
 target_link_libraries(dataset_wordcount_helper PUBLIC pthread base Folly::folly)
 
@@ -46,6 +41,16 @@ target_link_libraries(ps_transport_benchmark PUBLIC
     brpc_ps_client
     dist_brpc_ps_client
     local_shm_ps_client
+    ${warp_wq_ps_client}
+    Folly::folly
+    OpenMP::OpenMP_CXX
+)
+
+add_executable(rdma_rc_transport_benchmark
+    rdma_rc_transport_benchmark.cc
+)
+target_link_libraries(rdma_rc_transport_benchmark PUBLIC
+    base
     ${warp_wq_ps_client}
     Folly::folly
     OpenMP::OpenMP_CXX

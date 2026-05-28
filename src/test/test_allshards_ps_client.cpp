@@ -217,4 +217,28 @@ TEST(AllShardsClientTest, ThrowsWhenBatchRpcIdOverflowsIntRange) {
                std::runtime_error);
 }
 
+TEST(AllShardsClientTest, RoutesByExplicitShardIdsWhenServerOrderIsShuffled) {
+  FLAGS_value_size             = 16;
+  FLAGS_max_kv_num_per_request = 4;
+
+  FakeShardClient shardForOne(1);
+  FakeShardClient shardForZero(0);
+  std::vector<BaseParameterClient*> clients = {&shardForOne, &shardForZero};
+  std::vector<int> shard_ids                = {1, 0};
+  AllShardsParameterClientWrapper wrapper(clients, 2, "city_hash", shard_ids);
+
+  const auto shard0_keys     = SelectKeysForShard(0, 2, 2);
+  const auto shard1_keys     = SelectKeysForShard(1, 2, 2);
+  std::vector<uint64_t> keys = {
+      shard0_keys[0], shard1_keys[0], shard0_keys[1], shard1_keys[1]};
+  std::vector<std::vector<float>> values = {
+      {10, 0, 0, 0}, {20, 0, 0, 0}, {30, 0, 0, 0}, {40, 0, 0, 0}};
+
+  ASSERT_EQ(wrapper.PutParameter(keys, values), 0);
+  EXPECT_EQ(shardForZero.storage_.size(), 2u);
+  EXPECT_EQ(shardForOne.storage_.size(), 2u);
+  EXPECT_FLOAT_EQ(shardForZero.storage_[shard0_keys[0]][0], 10.0f);
+  EXPECT_FLOAT_EQ(shardForOne.storage_[shard1_keys[0]][0], 20.0f);
+}
+
 } // namespace

@@ -97,6 +97,7 @@ if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/HugeCTR/include
+    ${PROJECT_BINARY_DIR}/third_party/HugeCTR/HugeCTR/include
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/embedding_cache/include
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/gpu_cache/include
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/librdkafka/src

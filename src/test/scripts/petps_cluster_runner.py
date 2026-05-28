@@ -3,7 +3,6 @@
 import os
 import queue
 import re
-import shutil
 import socket
 import subprocess
 import threading
@@ -36,18 +35,13 @@ class PetPSClusterRunner:
         startup_delay=2.0,
         log_dir="/tmp",
         verbose=False,
-        memcached_host="127.0.0.1",
-        memcached_port=21211,
-        use_local_memcached="auto",
-        memcached_check_timeout=2.0,
-        memcached_check_retries=3,
         status_refresh_interval=2.0,
         show_status_logs=True,
-        show_memcached_logs=True,
-        memcached_namespace="auto",
+        show_control_plane_logs=True,
+        rdma_namespace="auto",
+        rdma_control_plane_host="127.0.0.1",
+        rdma_control_plane_port=None,
         rdma_per_thread_response_limit_bytes=None,
-        rdma_server_ready_timeout_sec=None,
-        rdma_server_ready_poll_ms=None,
         rdma_client_receive_arena_bytes=None,
         rdma_put_protocol_version=None,
         rdma_put_v2_transfer_mode=None,
@@ -56,9 +50,26 @@ class PetPSClusterRunner:
         rdma_put_v2_push_region_offset=None,
         rdma_put_client_send_arena_bytes=None,
         rdma_put_server_scratch_bytes=None,
+        rdma_rc_qps_per_client_per_shard=None,
+        rdma_rc_slots_per_qp=None,
+        rdma_rc_profile_interval_ms=None,
+        rdma_rc_server_coroutines_per_thread=None,
+        rdma_rc_inline_bytes=None,
+        rdma_rc_client_numa_id=None,
+        rdma_rc_server_numa_id=None,
+        rdma_rc_fake_get_mode=None,
+        rdma_rc_skip_client_copy=None,
+        rdma_qps_per_client_per_shard=None,
+        rdma_slots_per_qp=None,
         rdma_wait_timeout_ms=None,
-        rdma_transport_mode=None,
-        rdma_transport_mode_client_flag=True,
+        rdma_profile_interval_ms=None,
+        rdma_server_coroutines_per_thread=None,
+        rdma_inline_bytes=None,
+        rdma_client_numa_id=None,
+        rdma_client_numa_ids=None,
+        rdma_server_numa_id=None,
+        rdma_fake_get_mode=None,
+        rdma_skip_client_copy=None,
         validate_routing=False,
     ):
         self.server_path = Path(server_path)
@@ -77,22 +88,21 @@ class PetPSClusterRunner:
         self.startup_delay = startup_delay
         self.log_dir = Path(log_dir)
         self.verbose = verbose
-        self.memcached_host = memcached_host
-        self.memcached_port = memcached_port
-        self.use_local_memcached = use_local_memcached
-        self.memcached_check_timeout = memcached_check_timeout
-        self.memcached_check_retries = memcached_check_retries
         self.status_refresh_interval = status_refresh_interval
         self.show_status_logs = show_status_logs
-        self.show_memcached_logs = show_memcached_logs
-        if memcached_namespace == "auto":
-            memcached_namespace = f"recstore-{os.getpid()}-{time.time_ns()}"
-        self.memcached_namespace = memcached_namespace
+        self.show_control_plane_logs = show_control_plane_logs
+        self.rdma_control_plane_host = rdma_control_plane_host
+        self.rdma_control_plane_port = (
+            rdma_control_plane_port
+            if rdma_control_plane_port is not None
+            else self._allocate_local_port(rdma_control_plane_host)
+        )
+        if rdma_namespace == "auto":
+            rdma_namespace = f"recstore-rdma-{os.getpid()}-{time.time_ns()}"
+        self.rdma_namespace = rdma_namespace
         self.rdma_per_thread_response_limit_bytes = (
             rdma_per_thread_response_limit_bytes
         )
-        self.rdma_server_ready_timeout_sec = rdma_server_ready_timeout_sec
-        self.rdma_server_ready_poll_ms = rdma_server_ready_poll_ms
         self.rdma_client_receive_arena_bytes = rdma_client_receive_arena_bytes
         self.rdma_put_protocol_version = rdma_put_protocol_version
         self.rdma_put_v2_transfer_mode = rdma_put_v2_transfer_mode
@@ -101,19 +111,95 @@ class PetPSClusterRunner:
         self.rdma_put_v2_push_region_offset = rdma_put_v2_push_region_offset
         self.rdma_put_client_send_arena_bytes = rdma_put_client_send_arena_bytes
         self.rdma_put_server_scratch_bytes = rdma_put_server_scratch_bytes
+        self.rdma_qps_per_client_per_shard = self._coalesce_optional_values(
+            "rdma_qps_per_client_per_shard",
+            rdma_qps_per_client_per_shard,
+            rdma_rc_qps_per_client_per_shard,
+        )
         self.rdma_wait_timeout_ms = rdma_wait_timeout_ms
-        self.rdma_transport_mode = rdma_transport_mode
-        self.rdma_transport_mode_client_flag = rdma_transport_mode_client_flag
+        self.rdma_slots_per_qp = self._coalesce_optional_values(
+            "rdma_slots_per_qp",
+            rdma_slots_per_qp,
+            rdma_rc_slots_per_qp,
+        )
+        self.rdma_profile_interval_ms = self._coalesce_optional_values(
+            "rdma_profile_interval_ms",
+            rdma_profile_interval_ms,
+            rdma_rc_profile_interval_ms,
+        )
+        self.rdma_server_coroutines_per_thread = self._coalesce_optional_values(
+            "rdma_server_coroutines_per_thread",
+            rdma_server_coroutines_per_thread,
+            rdma_rc_server_coroutines_per_thread,
+        )
+        self.rdma_inline_bytes = self._coalesce_optional_values(
+            "rdma_inline_bytes",
+            rdma_inline_bytes,
+            rdma_rc_inline_bytes,
+        )
+        self.rdma_client_numa_id = self._coalesce_optional_values(
+            "rdma_client_numa_id",
+            rdma_client_numa_id,
+            rdma_rc_client_numa_id,
+        )
+        self.rdma_client_numa_ids = (
+            list(rdma_client_numa_ids) if rdma_client_numa_ids is not None else None
+        )
+        if self.rdma_client_numa_ids is not None:
+            if len(self.rdma_client_numa_ids) != self.num_clients:
+                raise ValueError(
+                    "rdma_client_numa_ids length must match num_clients"
+                )
+            if self.rdma_client_numa_id is not None:
+                raise ValueError(
+                    "rdma_client_numa_id and rdma_client_numa_ids are mutually exclusive"
+                )
+        self.rdma_server_numa_id = self._coalesce_optional_values(
+            "rdma_server_numa_id",
+            rdma_server_numa_id,
+            rdma_rc_server_numa_id,
+        )
+        self.rdma_fake_get_mode = self._coalesce_optional_values(
+            "rdma_fake_get_mode",
+            rdma_fake_get_mode,
+            rdma_rc_fake_get_mode,
+        )
+        self.rdma_skip_client_copy = self._coalesce_optional_values(
+            "rdma_skip_client_copy",
+            rdma_skip_client_copy,
+            rdma_rc_skip_client_copy,
+        )
+        self.rdma_rc_qps_per_client_per_shard = self.rdma_qps_per_client_per_shard
+        self.rdma_rc_slots_per_qp = self.rdma_slots_per_qp
+        self.rdma_rc_profile_interval_ms = self.rdma_profile_interval_ms
+        self.rdma_rc_server_coroutines_per_thread = (
+            self.rdma_server_coroutines_per_thread
+        )
+        self.rdma_rc_inline_bytes = self.rdma_inline_bytes
+        self.rdma_rc_client_numa_id = self.rdma_client_numa_id
+        self.rdma_rc_client_numa_ids = self.rdma_client_numa_ids
+        self.rdma_rc_server_numa_id = self.rdma_server_numa_id
+        self.rdma_rc_fake_get_mode = self.rdma_fake_get_mode
+        self.rdma_rc_skip_client_copy = self.rdma_skip_client_copy
         self.validate_routing = validate_routing
         self.processes = []
         self.process_logs = {}
-        self.memcached_process = None
         self.ready = set()
         self.ready_threads = {}
 
-    def _allocate_local_memcached_port(self):
+    @staticmethod
+    def _coalesce_optional_values(name, primary, legacy):
+        present = [value for value in (primary, legacy) if value is not None]
+        if len(present) == 2 and present[0] != present[1]:
+            raise ValueError(
+                f"conflicting values provided for {name}: {primary!r} vs {legacy!r}"
+            )
+        return present[0] if present else None
+
+    @staticmethod
+    def _allocate_local_port(host):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.bind((self.memcached_host, 0))
+            sock.bind((host, 0))
             return sock.getsockname()[1]
 
     def emit_status(self, phase, extra=""):
@@ -134,38 +220,9 @@ class PetPSClusterRunner:
 
     def build_env(self):
         env = os.environ.copy()
-        env["RECSTORE_MEMCACHED_HOST"] = self.memcached_host
-        env["RECSTORE_MEMCACHED_PORT"] = str(self.memcached_port)
-        env["RECSTORE_MEMCACHED_TEXT_PROTOCOL"] = "1"
-        if self.memcached_namespace:
-            env["RECSTORE_MEMCACHED_NAMESPACE"] = self.memcached_namespace
-        if self.rdma_transport_mode is not None:
-            env["RECSTORE_RDMA_TRANSPORT_MODE"] = self.rdma_transport_mode
         if self.validate_routing:
             env["RECSTORE_RDMA_VALIDATE_ROUTING"] = "1"
         return env
-
-    def build_memcached_cmd(self):
-        memcached_bin = shutil.which("memcached")
-        if memcached_bin is None:
-            raise RuntimeError(
-                "memcached binary not found in PATH; install memcached or use "
-                "--use-local-memcached=never with an external memcached "
-                "instance"
-            )
-        cmd = [memcached_bin]
-        # Only pass -u root when actually running as root.
-        if hasattr(os, "geteuid") and os.geteuid() == 0:
-            cmd.extend(["-u", "root"])
-        cmd.extend([
-            "-l",
-            self.memcached_host,
-            "-p",
-            str(self.memcached_port),
-            "-c",
-            "10000",
-        ])
-        return cmd
 
     def build_server_cmd(self, global_id):
         cmd = [
@@ -177,6 +234,10 @@ class PetPSClusterRunner:
             f"--thread_num={self.thread_num}",
             f"--value_size={self.value_size}",
             f"--max_kv_num_per_request={self.max_kv_num_per_request}",
+            "--use_dram=true",
+            f"--rdma_rc_namespace={self.rdma_namespace}",
+            f"--rdma_control_plane_host={self.rdma_control_plane_host}",
+            f"--rdma_control_plane_port={self.rdma_control_plane_port}",
         ]
         if self.rdma_per_thread_response_limit_bytes is not None:
             cmd.append(
@@ -203,8 +264,29 @@ class PetPSClusterRunner:
                 "--rdma_put_v2_push_region_offset="
                 f"{self.rdma_put_v2_push_region_offset}"
             )
-        if self.rdma_transport_mode is not None:
-            cmd.append(f"--rdma_transport_mode={self.rdma_transport_mode}")
+        if self.rdma_qps_per_client_per_shard is not None:
+            cmd.append(
+                "--rdma_rc_qps_per_client_per_shard="
+                f"{self.rdma_qps_per_client_per_shard}"
+            )
+        if self.rdma_slots_per_qp is not None:
+            cmd.append(f"--rdma_rc_slots_per_qp={self.rdma_slots_per_qp}")
+        if self.rdma_profile_interval_ms is not None:
+            cmd.append(
+                "--rdma_rc_profile_interval_ms="
+                f"{self.rdma_profile_interval_ms}"
+            )
+        if self.rdma_server_coroutines_per_thread is not None:
+            cmd.append(
+                "--rdma_rc_server_coroutines_per_thread="
+                f"{self.rdma_server_coroutines_per_thread}"
+            )
+        if self.rdma_inline_bytes is not None:
+            cmd.append(f"--rdma_rc_inline_bytes={self.rdma_inline_bytes}")
+        if self.rdma_server_numa_id is not None:
+            cmd.append(f"--rdma_rc_server_numa_id={self.rdma_server_numa_id}")
+        if self.rdma_fake_get_mode is not None:
+            cmd.append(f"--rdma_rc_fake_get_mode={self.rdma_fake_get_mode}")
         return cmd
 
     def build_client_cmd(self, argv, client_index=0):
@@ -215,14 +297,10 @@ class PetPSClusterRunner:
             f"--num_client_processes={self.num_clients}",
             f"--value_size={self.value_size}",
             f"--max_kv_num_per_request={self.max_kv_num_per_request}",
+            f"--rdma_rc_namespace={self.rdma_namespace}",
+            f"--rdma_control_plane_host={self.rdma_control_plane_host}",
+            f"--rdma_control_plane_port={self.rdma_control_plane_port}",
         ]
-        if self.rdma_server_ready_timeout_sec is not None:
-            cmd.append(
-                "--rdma_server_ready_timeout_sec="
-                f"{self.rdma_server_ready_timeout_sec}"
-            )
-        if self.rdma_server_ready_poll_ms is not None:
-            cmd.append(f"--rdma_server_ready_poll_ms={self.rdma_server_ready_poll_ms}")
         if self.rdma_client_receive_arena_bytes is not None:
             cmd.append(
                 "--rdma_client_receive_arena_bytes="
@@ -258,13 +336,32 @@ class PetPSClusterRunner:
                 "--rdma_put_client_send_arena_bytes="
                 f"{self.rdma_put_client_send_arena_bytes}"
             )
+        if self.rdma_qps_per_client_per_shard is not None:
+            cmd.append(
+                "--rdma_rc_qps_per_client_per_shard="
+                f"{self.rdma_qps_per_client_per_shard}"
+            )
+        if self.rdma_slots_per_qp is not None:
+            cmd.append(f"--rdma_rc_slots_per_qp={self.rdma_slots_per_qp}")
         if self.rdma_wait_timeout_ms is not None:
             cmd.append(f"--rdma_wait_timeout_ms={self.rdma_wait_timeout_ms}")
-        if (
-            self.rdma_transport_mode is not None
-            and self.rdma_transport_mode_client_flag
-        ):
-            cmd.append(f"--rdma_transport_mode={self.rdma_transport_mode}")
+        if self.rdma_profile_interval_ms is not None:
+            cmd.append(
+                "--rdma_rc_profile_interval_ms="
+                f"{self.rdma_profile_interval_ms}"
+            )
+        if self.rdma_inline_bytes is not None:
+            cmd.append(f"--rdma_rc_inline_bytes={self.rdma_inline_bytes}")
+        client_numa_id = self.rdma_client_numa_id
+        if self.rdma_client_numa_ids is not None:
+            client_numa_id = self.rdma_client_numa_ids[client_index]
+        if client_numa_id is not None:
+            cmd.append(f"--rdma_rc_client_numa_id={client_numa_id}")
+        if self.rdma_skip_client_copy is not None:
+            cmd.append(
+                "--rdma_rc_skip_client_copy="
+                f"{str(self.rdma_skip_client_copy).lower()}"
+            )
         return cmd
 
     def is_ready_line(self, line):
@@ -301,210 +398,88 @@ class PetPSClusterRunner:
             f"(last {len(lines)} lines):\n" + "\n".join(lines)
         )
 
-    def _start_memcached(self):
-        cmd = self.build_memcached_cmd()
-        self.memcached_process = subprocess.Popen(
-            cmd,
+    def _start_server_process(self, global_id, env):
+        process = subprocess.Popen(
+            self.build_server_cmd(global_id),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
             cwd=str(REPO_ROOT),
+            env=env,
         )
-        if self.show_memcached_logs:
-            print(
-                f"[petps-memcached] started with pid={self.memcached_process.pid} "
-                f"host={self.memcached_host} port={self.memcached_port}"
-            )
+        thread = threading.Thread(
+            target=self._monitor, args=(global_id, process.stdout), daemon=True
+        )
+        thread.start()
+        self.processes.append((process, thread))
+        return process
 
-        time.sleep(0.2)
-        if self.memcached_process.poll() is not None:
-            log = ""
-            if self.memcached_process.stdout is not None:
-                log = self.memcached_process.stdout.read()
-            err = (
-                f"memcached exited early with code {self.memcached_process.returncode}"
-            )
-            if log:
-                err += f"\nmemcached output:\n{log}"
-            raise RuntimeError(err)
-
-    def check_memcached_ready(self):
-        last_error = None
-        for attempt in range(1, self.memcached_check_retries + 1):
+    def _wait_for_control_plane_ready(self, shard0_process):
+        deadline = time.time() + self.timeout
+        next_refresh = time.time() + self.status_refresh_interval
+        while True:
+            if shard0_process.poll() is not None:
+                crash_details = self._format_captured_process_output(0)
+                self.stop()
+                raise RuntimeError(
+                    "shard-0 petps_server exited early with code "
+                    f"{shard0_process.returncode}{crash_details}"
+                )
             try:
                 with socket.create_connection(
-                    (self.memcached_host, self.memcached_port),
-                    timeout=self.memcached_check_timeout,
-                ) as sock:
-                    sock.settimeout(self.memcached_check_timeout)
-                    sock.sendall(b"get serverNum\r\n")
-                    data = sock.recv(4096)
-                    if b"END\r\n" in data or b"VALUE serverNum" in data:
-                        self.emit_status(
-                            "memcached-ready",
-                            f"attempt={attempt} host={self.memcached_host}:{self.memcached_port}",
+                    (self.rdma_control_plane_host, self.rdma_control_plane_port),
+                    timeout=0.5,
+                ):
+                    if self.show_control_plane_logs:
+                        print(
+                            "[petps-control-plane] ready "
+                            f"host={self.rdma_control_plane_host} "
+                            f"port={self.rdma_control_plane_port}"
                         )
-                        return
-                    last_error = RuntimeError(
-                        "memcached responded but without expected get reply"
-                    )
-            except OSError as exc:
-                last_error = exc
-            self.emit_status(
-                "memcached-wait",
-                f"attempt={attempt}/{self.memcached_check_retries} "
-                f"host={self.memcached_host}:{self.memcached_port}",
-            )
-            time.sleep(0.2)
+                    return
+            except OSError:
+                pass
 
-        raise RuntimeError(
-            "memcached is not reachable or not ready at "
-            f"{self.memcached_host}:{self.memcached_port}; "
-            "set --use-local-memcached=always|auto|never and "
-            "RECSTORE_MEMCACHED_HOST/RECSTORE_MEMCACHED_PORT as needed"
-        ) from last_error
-
-    def reset_memcached_state(self):
-        def key(name):
-            if self.memcached_namespace:
-                return f"{self.memcached_namespace}:{name}"
-            return name
-
-        server_num_key = key("serverNum")
-        client_num_key = key("clientNum")
-        dsm_key = key("xmh-consistent-dsm")
-
-        payload_lines = []
-        # Namespace mode isolates keys per run, so no global flush_all is needed.
-        if not self.memcached_namespace:
-            payload_lines.append("flush_all")
-        payload_lines.extend(
-            [
-                f"set {server_num_key} 0 0 1",
-                "0",
-                f"set {client_num_key} 0 0 1",
-                "0",
-                f"set {dsm_key} 0 0 1",
-                "1",
-                f"get {server_num_key}",
-                f"get {client_num_key}",
-                f"get {dsm_key}",
-                "quit",
-            ]
-        )
-        payload = ("\r\n".join(payload_lines) + "\r\n").encode("ascii")
-        with socket.create_connection(
-            (self.memcached_host, self.memcached_port),
-            timeout=self.memcached_check_timeout,
-        ) as sock:
-            sock.settimeout(self.memcached_check_timeout)
-            sock.sendall(payload)
-            response = b""
-            while True:
-                try:
-                    chunk = sock.recv(4096)
-                except socket.timeout:
-                    break
-                if not chunk:
-                    break
-                response += chunk
-            if (
-                (not self.memcached_namespace and b"OK\r\n" not in response)
-                or response.count(b"STORED\r\n") < 3
-                or f"VALUE {server_num_key} 0 1\r\n0\r\n".encode("ascii")
-                not in response
-                or f"VALUE {client_num_key} 0 1\r\n0\r\n".encode("ascii")
-                not in response
-                or f"VALUE {dsm_key} 0 1\r\n1\r\n".encode("ascii")
-                not in response
-            ):
-                raise RuntimeError(
-                    "failed to initialize memcached state; "
-                    f"response was: {response!r}"
+            if time.time() > deadline:
+                self.stop()
+                raise TimeoutError(
+                    "Timed out waiting for shard-0 control plane at "
+                    f"{self.rdma_control_plane_host}:{self.rdma_control_plane_port}"
                 )
-            self.emit_status(
-                "memcached-reset",
-                f"host={self.memcached_host}:{self.memcached_port}",
-            )
-
-    def _prepare_memcached(self):
-        if self.use_local_memcached not in {"always", "auto", "never"}:
-            raise ValueError(
-                "use_local_memcached must be one of: always, auto, never"
-            )
-
-        if self.use_local_memcached == "always":
-            self._start_memcached()
-            self.check_memcached_ready()
-            self.reset_memcached_state()
-            return
-
-        try:
-            self.check_memcached_ready()
-            self.reset_memcached_state()
-            return
-        except RuntimeError:
-            if self.use_local_memcached != "auto":
-                raise
-
-        # Existing memcached may be unreachable or incompatible with the reset
-        # sequence we require. In auto mode, prefer starting local memcached on
-        # the requested endpoint (typically 127.0.0.1:21211) so legacy code
-        # paths that still read memcached.conf continue to work.
-        self.memcached_host = "127.0.0.1"
-        requested_port = self.memcached_port
-        try:
-            self._start_memcached()
-        except RuntimeError:
-            self.memcached_port = self._allocate_local_memcached_port()
-            self.emit_status(
-                "memcached-auto-port-fallback",
-                (
-                    f"requested={self.memcached_host}:{requested_port} "
-                    f"fallback={self.memcached_host}:{self.memcached_port}"
-                ),
-            )
-            self._start_memcached()
-        self.check_memcached_ready()
-        self.reset_memcached_state()
+            if (
+                self.status_refresh_interval > 0
+                and time.time() >= next_refresh
+            ):
+                self.emit_status(
+                    "control-plane-wait",
+                    f"host={self.rdma_control_plane_host}:{self.rdma_control_plane_port}",
+                )
+                next_refresh = time.time() + self.status_refresh_interval
+            time.sleep(0.2)
 
     def start(self):
         if not self.server_path.exists():
             raise FileNotFoundError(f"Server binary not found: {self.server_path}")
 
-        self._prepare_memcached()
         env = self.build_env()
-        if self.show_memcached_logs:
+        if self.show_control_plane_logs:
             print(
-                "[petps-memcached] server env "
-                f"host={env['RECSTORE_MEMCACHED_HOST']} "
-                f"port={env['RECSTORE_MEMCACHED_PORT']}"
+                "[petps-control-plane] config "
+                f"host={self.rdma_control_plane_host} "
+                f"port={self.rdma_control_plane_port} "
+                f"namespace={self.rdma_namespace}"
             )
 
-        for global_id in range(self.num_servers):
-            process = subprocess.Popen(
-                self.build_server_cmd(global_id),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                cwd=str(REPO_ROOT),
-                env=env,
-            )
-            thread = threading.Thread(
-                target=self._monitor, args=(global_id, process.stdout), daemon=True
-            )
-            thread.start()
-            self.processes.append((process, thread))
+        shard0 = self._start_server_process(0, env)
+        self._wait_for_control_plane_ready(shard0)
+
+        for global_id in range(1, self.num_servers):
+            self._start_server_process(global_id, env)
 
         if self.startup_delay > 0:
             time.sleep(self.startup_delay)
 
-        # PetPS servers cannot reach polling-ready until the client joins the
-        # DSM-init barrier. If no post-barrier ready line appears yet, let the
-        # client proceed as long as the server process is still alive; the RDMA
-        # client waits on a memcached server-ready key before sending RPCs.
         if not self.ready:
             for global_id, (process, _thread) in enumerate(self.processes):
                 if process.poll() is None:
@@ -521,10 +496,7 @@ class PetPSClusterRunner:
                 )
             for idx, (process, _thread) in enumerate(self.processes):
                 if process.poll() is not None:
-                    self.emit_status(
-                        "startup-crash",
-                        f"exit_code={process.returncode}",
-                    )
+                    self.emit_status("startup-crash", f"exit_code={process.returncode}")
                     crash_details = self._format_captured_process_output(idx)
                     self.stop()
                     raise RuntimeError(
@@ -542,11 +514,11 @@ class PetPSClusterRunner:
     def run_client(self, argv, client_index=0, stream_output=True, timeout=None):
         cmd = self.build_client_cmd(argv, client_index=client_index)
         env = self.build_env()
-        if self.show_memcached_logs:
+        if self.show_control_plane_logs:
             print(
-                "[petps-memcached] client env "
-                f"host={env['RECSTORE_MEMCACHED_HOST']} "
-                f"port={env['RECSTORE_MEMCACHED_PORT']} "
+                "[petps-control-plane] client "
+                f"host={self.rdma_control_plane_host} "
+                f"port={self.rdma_control_plane_port} "
                 f"client_index={client_index}"
             )
         if not stream_output:
@@ -678,14 +650,8 @@ class PetPSClusterRunner:
             thread.join(timeout=1)
         self.processes.clear()
         self.process_logs.clear()
-        if self.memcached_process is not None and self.memcached_process.poll() is None:
-            self.memcached_process.terminate()
-            try:
-                self.memcached_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.memcached_process.kill()
-                self.memcached_process.wait(timeout=5)
-        self.memcached_process = None
+        self.ready.clear()
+        self.ready_threads.clear()
 
     @contextmanager
     def run(self):

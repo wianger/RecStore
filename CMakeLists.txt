@@ -286,7 +286,6 @@ else()
 endif()
 
 add_subdirectory(third_party/googletest)
-add_subdirectory(third_party/Mayfly-main)
 add_subdirectory(third_party/json)
 # add_subdirectory(third_party/pybind11)
 # add_subdirectory(third_party/mimalloc)
@@ -328,10 +327,24 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 set(YCSB_SRC_DIR ${CMAKE_SOURCE_DIR}/third_party/ycsb)
 set(YCSB_BIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ycsb-build)
 option(RECSTORE_ENABLE_HDRHISTOGRAM_PROGRAMS "Build HdrHistogram programs/tests under third_party/ycsb" OFF)
-if(NOT RECSTORE_ENABLE_HDRHISTOGRAM_PROGRAMS)
-  # Keep hdr_histogram library build, but skip third-party tests/examples registration in CTest.
-  set(HDR_HISTOGRAM_BUILD_PROGRAMS OFF CACHE BOOL "Build tests and examples" FORCE)
-endif()
-if (EXISTS "${YCSB_SRC_DIR}/CMakeLists.txt")
+set(YCSB_REQUIRED_FILES
+  "${YCSB_SRC_DIR}/CMakeLists.txt"
+  "${YCSB_SRC_DIR}/core/client.h"
+  "${YCSB_SRC_DIR}/core/measurements.h"
+  "${YCSB_SRC_DIR}/HdrHistogram_c/CMakeLists.txt"
+)
+set(YCSB_SOURCE_COMPLETE ON)
+foreach(YCSB_REQUIRED_FILE ${YCSB_REQUIRED_FILES})
+  if(NOT EXISTS "${YCSB_REQUIRED_FILE}")
+    set(YCSB_SOURCE_COMPLETE OFF)
+  endif()
+endforeach()
+if (YCSB_SOURCE_COMPLETE)
+  if(NOT RECSTORE_ENABLE_HDRHISTOGRAM_PROGRAMS)
+    # Keep hdr_histogram library build, but skip third-party tests/examples registration in CTest.
+    set(HDR_HISTOGRAM_BUILD_PROGRAMS OFF CACHE BOOL "Build tests and examples" FORCE)
+  endif()
   add_subdirectory(${YCSB_SRC_DIR})
+elseif(EXISTS "${YCSB_SRC_DIR}/CMakeLists.txt")
+  message(STATUS "Skipping third_party/ycsb because its vendored sources are incomplete")
 endif()

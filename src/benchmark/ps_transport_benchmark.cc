@@ -168,6 +168,13 @@ std::vector<float> MakeFlatValues(size_t rows, int dim, int seed) {
   return values;
 }
 
+bool ClientReturnsZeroOnSuccess(recstore::BasePSClient* client) {
+  return dynamic_cast<recstore::DistributedGRPCParameterClient*>(client) !=
+             nullptr ||
+         dynamic_cast<recstore::DistributedBRPCParameterClient*>(client) !=
+             nullptr;
+}
+
 bool ShouldPrintPerRound(const std::string& mode) {
   return mode == "per_round" || mode == "both";
 }
@@ -316,7 +323,9 @@ bool PutFlat(recstore::BasePSClient* client,
     rows.emplace_back(begin, begin + dim);
   }
   return BenchmarkWriteSucceeded(
-      transport, client->PutParameter(base::ConstArray<uint64_t>(keys), rows));
+      transport,
+      client->PutParameter(base::ConstArray<uint64_t>(keys), rows),
+      ClientReturnsZeroOnSuccess(client));
 }
 
 bool GetFlat(recstore::BasePSClient* client,
@@ -333,11 +342,21 @@ bool GetFlat(recstore::BasePSClient* client,
     }
   }
   return BenchmarkReadSucceeded(
-      transport, client->GetParameter(key_array, output->data()));
+      transport,
+      client->GetParameter(key_array, output->data()),
+      ClientReturnsZeroOnSuccess(client));
 }
 
+using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
+
 PhaseStats
-LoadRecords(const std::string& transport, int load_threads, int dim) {
+LoadRecords(const std::string& transport,
+            int load_threads,
+            int dim,
+            std::vector<BenchmarkClient>* reusable_clients = nullptr) {
+  if (reusable_clients != nullptr) {
+    CHECK_EQ(static_cast<int>(reusable_clients->size()), load_threads);
+  }
   std::vector<std::thread> threads;
   std::vector<PhaseStats> stats(load_threads);
   const uint64_t record_count = static_cast<uint64_t>(FLAGS_record_count);
@@ -348,7 +367,14 @@ LoadRecords(const std::string& transport, int load_threads, int dim) {
   for (int tid = 0; tid < load_threads; ++tid) {
     threads.emplace_back([&, tid]() {
       base::auto_bind_core();
-      auto client = CreateBenchmarkClient(transport);
+      auto owned_client =
+          reusable_clients == nullptr
+              ? CreateBenchmarkClient(transport)
+              : nullptr;
+      recstore::BasePSClient* client =
+          reusable_clients == nullptr
+              ? owned_client.get()
+              : reusable_clients->at(static_cast<std::size_t>(tid)).get();
       std::vector<uint64_t> keys;
       keys.reserve(static_cast<size_t>(FLAGS_batch_keys));
       std::vector<float> values =
@@ -362,7 +388,7 @@ LoadRecords(const std::string& transport, int load_threads, int dim) {
                keys.size() < static_cast<size_t>(FLAGS_batch_keys)) {
           keys.push_back(key++);
         }
-        CHECK(PutFlat(client.get(), transport, keys, values, dim))
+        CHECK(PutFlat(client, transport, keys, values, dim))
             << transport << " preload PutParameter failed";
         ++local.batches;
         local.key_ops += keys.size();
@@ -381,7 +407,13 @@ LoadRecords(const std::string& transport, int load_threads, int dim) {
   return total;
 }
 
-PhaseStats RunTransactions(const std::string& transport, int dim) {
+PhaseStats
+RunTransactions(const std::string& transport,
+                int dim,
+                std::vector<BenchmarkClient>* reusable_clients = nullptr) {
+  if (reusable_clients != nullptr) {
+    CHECK_EQ(static_cast<int>(reusable_clients->size()), FLAGS_thread_num);
+  }
   const bool fetch_only   = FLAGS_mode == "fetch";
   const bool insert_only  = FLAGS_mode == "insert";
   const bool mixed        = FLAGS_mode == "mixed";
@@ -397,7 +429,14 @@ PhaseStats RunTransactions(const std::string& transport, int dim) {
   for (int tid = 0; tid < FLAGS_thread_num; ++tid) {
     threads.emplace_back([&, tid]() {
       base::auto_bind_core();
-      auto client = CreateBenchmarkClient(transport);
+      auto owned_client =
+          reusable_clients == nullptr
+              ? CreateBenchmarkClient(transport)
+              : nullptr;
+      recstore::BasePSClient* client =
+          reusable_clients == nullptr
+              ? owned_client.get()
+              : reusable_clients->at(static_cast<std::size_t>(tid)).get();
       KeyGenerator key_gen(
           FLAGS_distribution,
           static_cast<uint64_t>(FLAGS_record_count),
@@ -420,11 +459,11 @@ PhaseStats RunTransactions(const std::string& transport, int dim) {
             (mixed &&
              static_cast<int>(key_gen.NextUint(100)) < FLAGS_read_ratio);
         if (do_fetch) {
-          CHECK(GetFlat(client.get(), transport, keys, &output))
+          CHECK(GetFlat(client, transport, keys, &output))
               << transport << " GetParameter failed";
         }
         if (insert_only || fetch_insert || (mixed && !do_fetch)) {
-          CHECK(PutFlat(client.get(), transport, keys, values, dim))
+          CHECK(PutFlat(client, transport, keys, values, dim))
               << transport << " PutParameter failed";
         }
         ++local.batches;
@@ -495,12 +534,28 @@ int main(int argc, char** argv) {
     CHECK_GT(FLAGS_batch_keys, 0);
     CHECK_GT(FLAGS_thread_num, 0);
     CHECK_GT(FLAGS_running_seconds, 0);
+    const int load_threads =
+        FLAGS_load_thread_num > 0 ? FLAGS_load_thread_num : FLAGS_thread_num;
+    std::vector<BenchmarkClient> reusable_clients;
+    if (transport == "RDMA") {
+      CHECK_EQ(FLAGS_thread_num, 1)
+          << "RDMA transactions support one worker thread per benchmark "
+             "process; use --client-count for RDMA client concurrency";
+      CHECK_EQ(load_threads, FLAGS_thread_num)
+          << "RDMA transactions must reuse the same client for load and run";
+      reusable_clients.reserve(static_cast<std::size_t>(FLAGS_thread_num));
+      for (int tid = 0; tid < FLAGS_thread_num; ++tid) {
+        reusable_clients.push_back(CreateBenchmarkClient(transport));
+      }
+    }
     if (!FLAGS_skip_load) {
-      const int load_threads =
-          FLAGS_load_thread_num > 0 ? FLAGS_load_thread_num : FLAGS_thread_num;
       const auto load_begin = std::chrono::steady_clock::now();
-      const PhaseStats load = LoadRecords(transport, load_threads, dim);
-      const auto load_end   = std::chrono::steady_clock::now();
+      const PhaseStats load = LoadRecords(
+          transport,
+          load_threads,
+          dim,
+          reusable_clients.empty() ? nullptr : &reusable_clients);
+      const auto load_end = std::chrono::steady_clock::now();
       PrintTransactionResult(
           "load", transport, load, SecondsSince(load_begin, load_end));
     }
@@ -509,8 +564,9 @@ int main(int argc, char** argv) {
     }
 
     const auto run_begin = std::chrono::steady_clock::now();
-    const PhaseStats run = RunTransactions(transport, dim);
-    const auto run_end   = std::chrono::steady_clock::now();
+    const PhaseStats run = RunTransactions(
+        transport, dim, reusable_clients.empty() ? nullptr : &reusable_clients);
+    const auto run_end = std::chrono::steady_clock::now();
     PrintTransactionResult(
         "run", transport, run, SecondsSince(run_begin, run_end));
     return 0;
@@ -712,7 +768,8 @@ int main(int argc, char** argv) {
       report_mode,
       [&](int iteration) {
         const int ret = client->PutParameter(key_array, values);
-        CHECK(BenchmarkWriteSucceeded(transport, ret))
+        CHECK(BenchmarkWriteSucceeded(
+            transport, ret, ClientReturnsZeroOnSuccess(client.get())))
             << transport << " PutParameter failed at iteration=" << iteration;
       },
       &put_warmup_samples_us,
@@ -742,7 +799,8 @@ int main(int argc, char** argv) {
           std::vector<float> output(
               keys.size() * (FLAGS_value_size / sizeof(float)), 0.0f);
           const int ret = client->GetParameter(key_array, output.data());
-          CHECK(BenchmarkReadSucceeded(transport, ret))
+          CHECK(BenchmarkReadSucceeded(
+              transport, ret, ClientReturnsZeroOnSuccess(client.get())))
               << transport << " GetParameter failed at iteration=" << iteration;
         }
       },

@@ -14,11 +14,9 @@ from ps_test_config import (
 from ps_server_runner import PSServerRunner
 
 
-MEMCACHED_NOISE_PATTERNS = (
-    "[petps-memcached]",
-    "[petps-status] phase=memcached",
-    "[memcached-endpoint]",
-    "use memcached in ",
+CONTROL_PLANE_NOISE_PATTERNS = (
+    "[petps-control-plane]",
+    "component=rdma_control_plane",
 )
 
 BENCHMARK_NOISE_PATTERNS = (
@@ -54,18 +52,16 @@ def build_rdma_runner(args):
         thread_num=getattr(args, "rdma_thread_num", 1),
         max_kv_num_per_request=max_kv_num_per_request,
         verbose=args.show_runner_logs,
-        use_local_memcached=args.use_local_memcached,
-        memcached_host=args.memcached_host,
-        memcached_port=args.memcached_port,
         show_status_logs=args.show_runner_logs,
-        show_memcached_logs=args.show_runner_logs,
+        show_control_plane_logs=args.show_runner_logs,
+        rdma_namespace=getattr(args, "rdma_namespace", "auto"),
+        rdma_control_plane_host=getattr(
+            args, "rdma_control_plane_host", "127.0.0.1"
+        ),
+        rdma_control_plane_port=getattr(args, "rdma_control_plane_port", None),
         rdma_per_thread_response_limit_bytes=getattr(
             args, "rdma_per_thread_response_limit_bytes", None
         ),
-        rdma_server_ready_timeout_sec=getattr(
-            args, "rdma_server_ready_timeout_sec", None
-        ),
-        rdma_server_ready_poll_ms=getattr(args, "rdma_server_ready_poll_ms", None),
         rdma_client_receive_arena_bytes=getattr(
             args, "rdma_client_receive_arena_bytes", None
         ),
@@ -89,13 +85,11 @@ def build_rdma_runner(args):
             args, "rdma_put_server_scratch_bytes", None
         ),
         rdma_wait_timeout_ms=getattr(args, "rdma_wait_timeout_ms", None),
-        rdma_transport_mode=getattr(args, "rdma_transport_mode", None),
-        rdma_transport_mode_client_flag=True,
         validate_routing=getattr(args, "validate_routing", False),
     )
 
-def is_memcached_noise_line(line):
-    return any(pattern in line for pattern in MEMCACHED_NOISE_PATTERNS)
+def is_runner_noise_line(line):
+    return any(pattern in line for pattern in CONTROL_PLANE_NOISE_PATTERNS)
 
 
 def is_benchmark_noise_line(line):
@@ -105,7 +99,7 @@ def is_benchmark_noise_line(line):
 def print_filtered_output(text, show_runner_logs):
     for line in text.splitlines():
         if not show_runner_logs:
-            if is_memcached_noise_line(line) or is_benchmark_noise_line(line):
+            if is_runner_noise_line(line) or is_benchmark_noise_line(line):
                 continue
         print(line)
 
@@ -255,16 +249,10 @@ def main():
         "--brpc-config",
         default=DEFAULT_BRPC_BENCHMARK_CONFIG,
     )
-    parser.add_argument(
-        "--use-local-memcached",
-        choices=["always", "auto", "never"],
-        default="auto",
-    )
-    parser.add_argument("--memcached-host", default="127.0.0.1")
-    parser.add_argument("--memcached-port", type=int, default=21211)
+    parser.add_argument("--rdma-namespace", default="auto")
+    parser.add_argument("--rdma-control-plane-host", default="127.0.0.1")
+    parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument("--rdma-per-thread-response-limit-bytes", type=int)
-    parser.add_argument("--rdma-server-ready-timeout-sec", type=int)
-    parser.add_argument("--rdma-server-ready-poll-ms", type=int)
     parser.add_argument("--rdma-client-receive-arena-bytes", type=int)
     parser.add_argument(
         "--rdma-put-protocol-version",
@@ -286,11 +274,6 @@ def main():
     parser.add_argument("--rdma-put-server-scratch-bytes", type=int)
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
     parser.add_argument(
-        "--rdma-transport-mode",
-        choices=["raw_message", "descriptor_doorbell"],
-        default=None,
-    )
-    parser.add_argument(
         "--rdma-client-timeout-sec",
         type=int,
         default=120,
@@ -300,7 +283,7 @@ def main():
     parser.add_argument(
         "--show-runner-logs",
         action="store_true",
-        help="show memcached/status logs from runner and benchmark binaries",
+        help="show control-plane/status logs from runner and benchmark binaries",
     )
     parser.add_argument(
         "--rdma-only",
@@ -332,7 +315,6 @@ def main():
             print_filtered_output(completed.stderr, args.show_runner_logs)
         rows = collect_summary_rows(completed.stdout)
         for row in rows:
-            row["transport_mode"] = args.rdma_transport_mode or "raw_message"
             row["put_v2_transfer_mode"] = args.rdma_put_v2_transfer_mode
         summary_rows.extend(rows)
         rc = completed.returncode

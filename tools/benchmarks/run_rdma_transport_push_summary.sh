@@ -17,7 +17,6 @@ cd "${ROOT_DIR}"
 exec python3 "${RUNNER_SCRIPT}" \
   --benchmark-binary "${BENCHMARK_BINARY}" \
   --rdma-only \
-  --rdma-transport-mode descriptor_doorbell \
   --iterations 500 \
   --batch-keys 500 \
   --rounds 20 \
@@ -28,5 +27,4 @@ exec python3 "${RUNNER_SCRIPT}" \
   --rdma-client-timeout-sec 300 \
   --report-mode summary \
   --show-runner-logs \
-  --use-local-memcached auto \
   "$@"

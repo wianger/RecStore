@@ -2,16 +2,16 @@
 
 #include <folly/init/Init.h>
 
+#include "base/bind_core.h"
 #include "base/factory.h"
 #include "base/random.h"
 #include "base/string.h"
 #include "base/timer.h"
 #include "ps/base/Postoffice.h"
-#include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
+#include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/base_client.h"
 #include "sample_reader.h"
-#include "third_party/Mayfly-main/include/Common.h"
 
 DEFINE_bool(thread_cut_off, false, "thread cut off");
 DEFINE_int32(benchmark_seconds, 120, "benchmark seconds");
@@ -209,7 +209,7 @@ public:
 private:
   void
   clientThreadLoop(int tid, SampleReader* sample, BaseParameterClient* client) {
-    auto_bind_core(1);
+    base::bind_core(1);
     std::vector<uint64_t> client_keys(
         args_.batch_read_count_ * args_.async_req_num_);
     std::vector<float*> recv_buffers;
