@@ -33,7 +33,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BENCHMARK_BIN = ROOT / "build/bin/benchmark_kv_engine"
 DEFAULT_DRAM_ROOT = Path("/dev/shm/recstore")
 DEFAULT_SSD_ROOT = Path("/mnt/nvme1n1_recstore/recstore")
-
+SLAB_ALLOCATOR_CHUNK_BYTES = 1 << 20
+SLAB_ALLOCATOR_METADATA_BYTES = 8
 DISTRIBUTION_LABELS = {
     "uniform": "uniform",
     "zipfian": "zipfian(alpha=0.9)",
@@ -114,6 +115,24 @@ def normalize_workload(workload: str) -> str:
         raise ValueError(f"unknown workload '{workload}', expected a/b/c")
 
 
+def recommended_dram_capacity_bytes(
+    *, value_store_type: str | None, args: argparse.Namespace
+) -> int:
+    if args.dram_capacity_bytes > 0:
+        return args.dram_capacity_bytes
+    if value_store_type not in {"DRAM_VALUE_STORE", "TIERED_VALUE_STORE"}:
+        return 0
+    per_value_bytes = args.value_size
+    if args.dram_allocator in {"PERSIST_LOOP_SLAB", "CONCURRENT_SLAB_MEMORY_POOL"}:
+        per_value_bytes += args.dram_capacity_metadata_bytes
+        raw_capacity = args.record_count * per_value_bytes
+        return (
+            (raw_capacity + SLAB_ALLOCATOR_CHUNK_BYTES - 1)
+            // SLAB_ALLOCATOR_CHUNK_BYTES
+        ) * SLAB_ALLOCATOR_CHUNK_BYTES
+    return args.record_count * per_value_bytes
+
+
 # ── RunEnv ────────────────────────────────────────────────────────────────────
 
 
@@ -156,6 +175,7 @@ class RunEnv:
         ssd_path: Path,
     ) -> "RunEnv":
         """Construct from parsed CLI args plus the per-run resolved paths."""
+        value_store_type = getattr(args, "_current_value_store_type", None)
         return cls(
             workload=workload,
             distribution=distribution,
@@ -170,7 +190,10 @@ class RunEnv:
             dram_allocator=args.dram_allocator,
             ssd_io_backend=args.ssd_io_backend,
             ssd_queue_depth=args.ssd_queue_depth,
-            dram_capacity_bytes=args.dram_capacity_bytes,
+            dram_capacity_bytes=recommended_dram_capacity_bytes(
+                value_store_type=value_store_type,
+                args=args,
+            ),
             ssd_capacity_bytes=args.ssd_capacity_bytes,
             dram_path=dram_path,
             ssd_path=ssd_path,
@@ -455,9 +478,11 @@ def format_ops(value: float) -> str:
     return f"{value:.0f}"
 
 
-def render_chart(rows: list[dict[str, object]], svg_path: Path) -> None:
+def render_chart(
+    rows: list[dict[str, object]], svg_path: Path, *, required: bool
+) -> bool:
     if not rows:
-        return
+        return False
     try:
         import matplotlib
 
@@ -465,10 +490,16 @@ def render_chart(rows: list[dict[str, object]], svg_path: Path) -> None:
         import matplotlib.pyplot as plt
         from matplotlib.ticker import FuncFormatter
     except ImportError as exc:
-        raise SystemExit(
-            "matplotlib is required to render the YCSB chart. "
-            "Install it with: python3 -m pip install matplotlib"
-        ) from exc
+        if required:
+            raise SystemExit(
+                "matplotlib is required to render the YCSB chart. "
+                "Install it with: python3 -m pip install matplotlib"
+            ) from exc
+        print(
+            "warning: matplotlib is not installed; summary CSV files were generated, "
+            "but kvengine_ycsb_run_throughput.svg was skipped."
+        )
+        return False
 
     categories = sorted({(str(r["distribution"]), str(r["workload"])) for r in rows})
     engines = [e for e in DEFAULT_RUN_ENGINES if any(str(r["engine"]) == e for r in rows)]
@@ -521,6 +552,7 @@ def render_chart(rows: list[dict[str, object]], svg_path: Path) -> None:
     svg_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(svg_path, format="svg")
     plt.close(fig)
+    return True
 
 
 # ── Benchmark execution ───────────────────────────────────────────────────────
@@ -578,6 +610,30 @@ def run_one(
     dram_path.mkdir(parents=True, exist_ok=True)
     ssd_path.mkdir(parents=True, exist_ok=True)
     log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    args._current_value_store_type = (
+        props.get("value_store_type")
+        if "value_store_type" in props
+        else (
+            "DRAM_VALUE_STORE" if engine_name == "petkv"
+            else None
+        )
+    )
+    if engine_name in {
+        "dram_pet_dram",
+        "dram_eh_dram",
+    }:
+        args._current_value_store_type = "DRAM_VALUE_STORE"
+    elif engine_name in {
+        "dram_pet_ssd",
+        "dram_eh_ssd",
+    }:
+        args._current_value_store_type = "SSD_VALUE_STORE"
+    elif engine_name in {
+        "dram_pet_tiered",
+        "dram_eh_tiered",
+    }:
+        args._current_value_store_type = "TIERED_VALUE_STORE"
 
     env = RunEnv.from_args(
         args,
@@ -720,6 +776,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ssd-io-backend", default="IOURING")
     parser.add_argument("--ssd-queue-depth", type=int, default=512)
     parser.add_argument("--dram-capacity-bytes", type=int, default=0)
+    parser.add_argument(
+        "--dram-capacity-metadata-bytes",
+        type=int,
+        default=SLAB_ALLOCATOR_METADATA_BYTES,
+        help="Per-value allocator metadata bytes reserved for slab-based DRAM allocators.",
+    )
     parser.add_argument("--ssd-capacity-bytes", type=int, default=0)
     parser.add_argument(
         "--output-dir",
@@ -772,10 +834,10 @@ def _cmd_draw(args: argparse.Namespace) -> int:
     aggregate_path = args.output_dir / "kvengine_workload_summary.csv"
     chart_svg_path = args.output_dir / "kvengine_ycsb_run_throughput.svg"
     aggregate_rows = write_aggregate(all_rows, aggregate_path)
-    render_chart(aggregate_rows, chart_svg_path)
-    print(f"summary:   {summary_path}")
+    render_chart(aggregate_rows, chart_svg_path, required=True)
+    print(f"summary: {summary_path}")
     print(f"aggregate: {aggregate_path}")
-    print(f"chart:     {chart_svg_path}")
+    print(f"chart: {chart_svg_path}")
     return 0
 
 
@@ -809,10 +871,11 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
     aggregate_path = args.output_dir / "kvengine_workload_summary.csv"
     chart_svg_path = args.output_dir / "kvengine_ycsb_run_throughput.svg"
     aggregate_rows = write_aggregate(all_rows, aggregate_path)
-    render_chart(aggregate_rows, chart_svg_path)
-    print(f"summary:   {summary_path}")
+    chart_rendered = render_chart(aggregate_rows, chart_svg_path, required=False)
+    print(f"summary: {summary_path}")
     print(f"aggregate: {aggregate_path}")
-    print(f"chart:     {chart_svg_path}")
+    if chart_rendered:
+        print(f"chart: {chart_svg_path}")
     return 0 if all(int(row["exit_code"]) == 0 for row in all_rows) else 1
 
 
