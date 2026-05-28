@@ -47,7 +47,7 @@ DEFAULT_RUN_ENGINES = [
     # "dram_eh_ssd",
     # "dram_pet_ssd",
     # "dram_eh_tiered",
-    # "dram_pet_tiered",
+    "dram_pet_tiered",
 ]
 
 SUMMARY_FIELDS = [
