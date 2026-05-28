@@ -11,6 +11,9 @@ from .config import (
     ensure_parent_dirs,
     parse_config,
     populate_default_paths,
+    resolve_num_embeddings_per_feature,
+    total_num_embeddings_per_feature,
+    validate_hps_torch_config,
     validate_recstore_config,
     validate_torchrec_config,
 )
@@ -44,6 +47,12 @@ def estimate_recstore_kv_capacity(num_embeddings: int, table_count: int = 26) ->
     return max(int(num_embeddings) * int(table_count) * 2, 100_000)
 
 
+def estimate_recstore_kv_capacity_for_tables(
+    num_embeddings_per_feature: list[int],
+) -> int:
+    return max(total_num_embeddings_per_feature(num_embeddings_per_feature) * 2, 100_000)
+
+
 def build_runner(cfg: RunConfig, runtime_dir: Path):
     if cfg.backend == "recstore":
         from .runners.recstore_runner import RecStoreRunner
@@ -56,6 +65,13 @@ def build_runner(cfg: RunConfig, runtime_dir: Path):
             raise RuntimeError("TorchRec runner is not available") from exc
         ensure_torchrec_available()
         return TorchRecRunner(runtime_dir)
+    if cfg.backend == "hps_torch":
+        try:
+            from .runners.hps_torch_runner import HpsTorchRunner, ensure_hps_torch_available
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("HPS Torch runner is not available") from exc
+        ensure_hps_torch_available()
+        return HpsTorchRunner(runtime_dir)
     raise ValueError(f"Unsupported backend: {cfg.backend}")
 
 
@@ -64,8 +80,10 @@ def main(argv: list[str] | None = None) -> int:
     populate_default_paths(cfg)
     validate_recstore_config(cfg)
     validate_torchrec_config(cfg)
+    validate_hps_torch_config(cfg)
     is_torchrec_worker = os.environ.get("RS_DEMO_TORCHREC_WORKER") == "1"
     is_recstore_worker = os.environ.get("RS_DEMO_RECSTORE_WORKER") == "1"
+    is_hps_torch_worker = os.environ.get("RS_DEMO_HPS_TORCH_WORKER") == "1"
     if cfg.backend == "torchrec" and cfg.torchrec_profiler and not is_torchrec_worker:
         run_dir = Path(cfg.torchrec_trace_dir) / datetime.now().strftime(
             "run_%Y%m%d_%H%M%S_%f"
@@ -104,6 +122,10 @@ def main(argv: list[str] | None = None) -> int:
     runtime_dir = Path(cfg.output_root) / "runtime" / cfg.run_id
     runtime_cfg_path = runtime_dir / "recstore_config.json"
     if cfg.backend == "recstore":
+        num_embeddings_per_feature = resolve_num_embeddings_per_feature(
+            cfg.num_embeddings,
+            cfg.num_embeddings_per_feature,
+        )
         if cfg.recstore_runtime_dir:
             runtime_dir = Path(cfg.recstore_runtime_dir)
             runtime_cfg_path = runtime_dir / "recstore_config.json"
@@ -117,13 +139,13 @@ def main(argv: list[str] | None = None) -> int:
                 output_root=cfg.output_root,
                 run_id=cfg.run_id,
                 ps_type=effective_ps_type,
-                kv_capacity=estimate_recstore_kv_capacity(cfg.num_embeddings),
-                value_size_bytes=(
-                    int(cfg.embedding_dim) * 4
-                    if effective_ps_type == "LOCAL_SHM"
-                    else None
+                kv_capacity=estimate_recstore_kv_capacity_for_tables(
+                    num_embeddings_per_feature
                 ),
+                value_size_bytes=int(cfg.embedding_dim) * 4,
                 index_type=cfg.recstore_index_type,
+                ps_kv_backend=cfg.ps_kv_backend,
+                tiered_dram_capacity_multiplier=cfg.tiered_dram_capacity_multiplier,
             )
             cfg.recstore_runtime_dir = str(runtime_dir)
 
@@ -170,6 +192,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 write_compare_csv(Path(cfg.torchrec_compare_csv), compare_rows)
                 print(f"[rs_demo] torchrec compare csv: {cfg.torchrec_compare_csv}")
+            return 0
+
+        if cfg.backend == "hps_torch":
+            if is_hps_torch_worker:
+                return 0
+            print(f"[rs_demo] hps_torch main csv: {cfg.hps_torch_main_csv}")
+            agg = aggregate_torchrec_main_csv(Path(cfg.hps_torch_main_csv))
+            write_aggregate_csv(Path(cfg.hps_torch_main_agg_csv), agg)
+            print(f"[rs_demo] hps_torch main aggregate csv: {cfg.hps_torch_main_agg_csv}")
             return 0
 
         if is_recstore_worker:

@@ -69,4 +69,5 @@ public:
   }
 
   virtual std::string GetInfo() const { return "(no info)"; }
+  virtual std::string ExtraResultFields() const { return ""; }
 };

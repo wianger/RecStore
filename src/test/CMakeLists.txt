@@ -260,7 +260,9 @@ target_link_libraries(test_ps_client_factory PUBLIC
     base
     wq_ps_client
     grpc_ps_client
+    dist_grpc_ps_client
     brpc_ps_client
+    dist_brpc_ps_client
     local_shm_ps_client
     Folly::folly
     gflags

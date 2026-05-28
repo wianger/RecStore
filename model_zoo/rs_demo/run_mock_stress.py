@@ -5,9 +5,11 @@ import sys
 from pathlib import Path
 
 _THIS_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = str(_THIS_DIR.parents[1])
 _PKG_PARENT = str(_THIS_DIR.parent)
-if _PKG_PARENT not in sys.path:
-    sys.path.insert(0, _PKG_PARENT)
+for _path in (_REPO_ROOT, _PKG_PARENT):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 from rs_demo.cli import main  # noqa: E402
 

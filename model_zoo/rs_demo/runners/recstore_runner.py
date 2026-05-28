@@ -15,7 +15,12 @@ from typing import Any
 
 import torch
 
-from ..config import RunConfig, ensure_shared_dir, validate_recstore_config
+from ..config import (
+    RunConfig,
+    ensure_shared_dir,
+    resolve_num_embeddings_per_feature,
+    validate_recstore_config,
+)
 from ..data.dlrm_source import (
     build_kjt_batch_from_dense_sparse_labels,
     build_train_dataloader,
@@ -328,6 +333,7 @@ def _build_worker_fingerprint(repo_root: Path) -> dict[str, dict[str, str]]:
     rel_paths = [
         "model_zoo/rs_demo/cli.py",
         "model_zoo/rs_demo/config.py",
+        "model_zoo/rs_demo/data/dlrm_source.py",
         "model_zoo/rs_demo/runners/recstore_runner.py",
         "model_zoo/rs_demo/runtime/hybrid_dlrm.py",
     ]
@@ -416,6 +422,7 @@ def _build_train_dataloader_for_mode(
         data_dir_rel=cfg.data_dir,
         train_ratio=cfg.train_ratio,
         num_embeddings=cfg.num_embeddings,
+        num_embeddings_per_feature=cfg.num_embeddings_per_feature,
         batch_size=cfg.batch_size,
         shuffle=True,
         seed=cfg.seed,
@@ -524,6 +531,10 @@ class RecStoreRunner(BenchmarkRunner):
             str(cfg.fuse_k),
             "--recstore-index-type",
             str(cfg.recstore_index_type),
+            "--ps-kv-backend",
+            str(cfg.ps_kv_backend),
+            "--tiered-dram-capacity-multiplier",
+            str(cfg.tiered_dram_capacity_multiplier),
             "--dense-arch-layer-sizes",
             str(cfg.dense_arch_layer_sizes),
             "--over-arch-layer-sizes",
@@ -548,6 +559,13 @@ class RecStoreRunner(BenchmarkRunner):
             str(cfg.prefetch_depth),
             "--no-start-server",
         ]
+        if cfg.num_embeddings_per_feature:
+            cmd.extend(
+                [
+                    "--num-embeddings-per-feature",
+                    str(cfg.num_embeddings_per_feature),
+                ]
+            )
         if cfg.enable_single_node_distributed_fast_path:
             cmd.extend(
                 [
@@ -692,15 +710,19 @@ class RecStoreRunner(BenchmarkRunner):
                 cfg=cfg,
                 rank=rank,
             )
+            num_embeddings_per_feature = resolve_num_embeddings_per_feature(
+                cfg.num_embeddings,
+                cfg.num_embeddings_per_feature,
+            )
 
             eb_configs = [
                 {
                     "name": f"t_{feature_name}",
-                    "num_embeddings": int(cfg.num_embeddings),
+                    "num_embeddings": int(num_embeddings_per_feature[feature_idx]),
                     "embedding_dim": int(cfg.embedding_dim),
                     "feature_names": [feature_name],
                 }
-                for feature_name in default_cat_names
+                for feature_idx, feature_name in enumerate(default_cat_names)
             ]
 
             embedding_module = RecStoreEmbeddingBagCollection(
@@ -787,6 +809,8 @@ class RecStoreRunner(BenchmarkRunner):
             def prepare_next_batch(batch_step: int):
                 row: dict[str, Any] = {
                     "backend": "recstore",
+                    "ps_kv_backend": cfg.ps_kv_backend,
+                    "model_backend_label": f"recstore:{cfg.ps_kv_backend}",
                     "nproc": world_size,
                     "rank": rank,
                     "batch_size": cfg.batch_size,
@@ -840,6 +864,10 @@ class RecStoreRunner(BenchmarkRunner):
                 row, step_start, dense_batch, sparse_features, labels_batch = (
                     prepared_batches.popleft()
                 )
+                consume_step_start = time.perf_counter()
+                row["prefetch_queue_residence_ms"] = (
+                    consume_step_start - step_start
+                ) * 1e3
 
                 _reset_perf_stats(embedding_module)
                 _reset_perf_stats(sparse_optimizer)
@@ -948,6 +976,9 @@ class RecStoreRunner(BenchmarkRunner):
                 _merge_consumed_perf_stats(row, _consume_perf_stats(sparse_optimizer))
                 if step >= cfg.warmup_steps:
                     update_lat_us.append(row["sparse_update_ms"] * 1e3)
+                row["step_visible_ms"] = (
+                    time.perf_counter() - consume_step_start
+                ) * 1e3
                 row["step_total_ms"] = (time.perf_counter() - step_start) * 1e3
                 rows.append(finalize_recstore_row(row))
                 _barrier_for_step_alignment(

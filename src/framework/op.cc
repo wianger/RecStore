@@ -4,6 +4,8 @@
 #include "framework/common/op_runtime_support.h"
 #include "framework/common/ps_client_config_adapter.h"
 #include "ps/client_factory.h"
+#include "ps/brpc/dist_brpc_ps_client.h"
+#include "ps/grpc/dist_grpc_ps_client.h"
 #include "ps/rdma/rdma_ps_client_adapter.h"
 #include "base/factory.h"
 #include <algorithm>
@@ -43,6 +45,8 @@ std::string NormalizeBackendName(std::string backend_name) {
 
 bool IsReadWriteSuccess(BasePSClient* client, int ret) {
   if (dynamic_cast<RDMAPSClientAdapter*>(client) != nullptr ||
+      dynamic_cast<DistributedGRPCParameterClient*>(client) != nullptr ||
+      dynamic_cast<DistributedBRPCParameterClient*>(client) != nullptr ||
       dynamic_cast<LocalShmPSClient*>(client) != nullptr) {
     return ret == 0;
   }
@@ -60,9 +64,13 @@ std::string ResolveBackendNameWithHierKV(const json& config) {
   }
   switch (ResolveFrameworkPSClientType(config)) {
   case PSClientType::kGrpc:
-    return "grpc";
+    return HasFrameworkDistributedClientConfig(config)
+             ? "distributed_grpc"
+             : "grpc";
   case PSClientType::kBrpc:
-    return "brpc";
+    return HasFrameworkDistributedClientConfig(config)
+             ? "distributed_brpc"
+             : "brpc";
   case PSClientType::kRdma:
     return "rdma";
   case PSClientType::kLocalShm:
@@ -214,6 +222,7 @@ void KVClientOp::SetPSConfig(const std::string& host, int port) {
   }
 
   json config = file_config;
+  config.erase("distributed_client");
   if (!config.contains("client")) {
     config["client"] = json::object();
   }

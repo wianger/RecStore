@@ -3,6 +3,8 @@
 #include "framework/common/ps_client_config_adapter.h"
 #include "ps/client_factory.h"
 #include "ps/brpc/brpc_ps_client.h"
+#include "ps/brpc/dist_brpc_ps_client.h"
+#include "ps/grpc/dist_grpc_ps_client.h"
 #include "ps/local_shm/local_shm_client.h"
 
 namespace recstore {
@@ -85,6 +87,60 @@ TEST(PSClientFactoryTest, ResolvesDistributedClientConfigWithFieldFallback) {
   EXPECT_EQ(options.raw_config["distributed_client"]["num_shards"], 2);
   EXPECT_EQ(options.raw_config["distributed_client"]["hash_method"],
             "city_hash");
+}
+
+TEST(PSClientFactoryTest, DefaultsDistributedNumShardsToServerCount) {
+  json config = {
+      {"cache_ps", {{"ps_type", "GRPC"}}},
+      {"distributed_client",
+       {{"hash_method", "simple_mod"},
+        {"servers",
+         json::array(
+             {{{"host", "10.0.0.1"}, {"port", 25123}, {"shard", 0}},
+              {{"host", "10.0.0.2"}, {"port", 25124}, {"shard", 1}}})}}},
+  };
+
+  json client_config = ResolveFrameworkDistributedClientConfig(config);
+  EXPECT_EQ(client_config["num_shards"], 2);
+  EXPECT_TRUE(HasFrameworkDistributedClientConfig(config));
+}
+
+TEST(PSClientFactoryTest, CreatesDistributedGrpcClientWhenConfigured) {
+  json config = {
+      {"cache_ps", {{"ps_type", "GRPC"}}},
+      {"distributed_client",
+       {{"num_shards", 2},
+        {"hash_method", "simple_mod"},
+        {"servers",
+         json::array(
+             {{{"host", "127.0.0.1"}, {"port", 25000}, {"shard", 0}},
+              {{"host", "127.0.0.1"}, {"port", 25001}, {"shard", 1}}})}}},
+  };
+
+  std::unique_ptr<BasePSClient> client =
+      CreatePSClient(ResolvePSClientOptionsFromFrameworkConfig(config));
+  ASSERT_NE(client, nullptr);
+  EXPECT_NE(dynamic_cast<DistributedGRPCParameterClient*>(client.get()),
+            nullptr);
+}
+
+TEST(PSClientFactoryTest, CreatesDistributedBrpcClientWhenConfigured) {
+  json config = {
+      {"cache_ps", {{"ps_type", "BRPC"}}},
+      {"distributed_client",
+       {{"num_shards", 2},
+        {"hash_method", "simple_mod"},
+        {"servers",
+         json::array(
+             {{{"host", "127.0.0.1"}, {"port", 25000}, {"shard", 0}},
+              {{"host", "127.0.0.1"}, {"port", 25001}, {"shard", 1}}})}}},
+  };
+
+  std::unique_ptr<BasePSClient> client =
+      CreatePSClient(ResolvePSClientOptionsFromFrameworkConfig(config));
+  ASSERT_NE(client, nullptr);
+  EXPECT_NE(dynamic_cast<DistributedBRPCParameterClient*>(client.get()),
+            nullptr);
 }
 
 TEST(PSClientFactoryTest, CreatesBrpcClientWithoutFactoryRegistration) {
