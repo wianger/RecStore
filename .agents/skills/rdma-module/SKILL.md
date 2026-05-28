@@ -128,7 +128,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir results/rdma_ps_prefetch_$(date +%m%d%H%M)
 ```
 
-Use larger `--prefetch-depth` values only when `--rdma-rc-qps-per-client-per-shard` is at least as large as the target depth.
+Generic PS RDMA `transactions/fetch` uses a depth-16 prefetch/result pipeline by default. Use larger explicit `--prefetch-depth` values only when `--rdma-rc-qps-per-client-per-shard` is at least as large as the target depth. Use `--no-rdma-fetch-pipeline` only when you need the legacy synchronous `GetParameter` baseline.
 
 Single-client RDMA transport benchmark, current PUT-v2 read mode:
 
@@ -192,7 +192,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - `--qps-per-client-per-shard` is RC QP pool size, not a target QPS.
 - For `async_stream`, require `qps-per-client-per-shard >= async-depth`.
 - For generic PS transaction benchmarks, keep `--threads 1 --load-threads 1` for RDMA unless same-process multi-lane semantics have been explicitly changed and revalidated; scale load with `--client-count`.
-- `--prefetch-depth` on `run_benchmark_ps.py` is a diagnostic fetch-only generic PS pipeline path, not a default throughput mode. It is valid only with `transactions` and `mode=fetch`.
+- `--prefetch-depth` on `run_benchmark_ps.py` overrides the default RDMA fetch pipeline depth. It is valid only with `transactions` and `mode=fetch`.
 - Do not combine RDMA with GRPC/BRPC in the same `run_benchmark_ps.py` command when using RPC-oriented `--threads` values. Split RPC and RDMA runs because safe thread settings differ.
 - `read` and `push` PUT-v2 modes are different transport paths; do not merge them into one throughput conclusion.
 - Higher `thread-num` can increase polling capacity but can also hide low-load fixed costs.
@@ -245,5 +245,5 @@ For profile interpretation, map symptoms to components:
 - high `poll_loop_ns` or `empty_scan_rounds`: server polling fixed cost
 - high `get_batch_get_ns`: KV lookup path
 - high `complete_response_ns` or `drain_pending_response_ns`: response writeback pressure
-- `pending_rpc_peak=1` in generic PS fetch benchmarks: synchronous client request path is limiting outstanding RDMA work
+- `pending_rpc_peak=1` in generic PS fetch benchmarks: synchronous client request path is limiting outstanding RDMA work. Default RDMA fetch benchmark rows should show a higher peak unless `--no-rdma-fetch-pipeline` is set.
 - nonzero `acquire_qp_failures`: QP pool/resource exhaustion, not normal latency

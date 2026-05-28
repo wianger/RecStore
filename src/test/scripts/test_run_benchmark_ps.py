@@ -234,12 +234,42 @@ class TestRunBenchmarkPS(unittest.TestCase):
             mode="fetch",
             report_mode="summary",
             prefetch_depth=4,
+            rdma_fetch_pipeline=True,
         )
         self.assertIn("--workload=transactions", cmd)
         self.assertIn("--record_count=1000", cmd)
         self.assertIn("--config_path=/tmp/config.json", cmd)
         self.assertIn("--value_size=256", cmd)
         self.assertIn("--prefetch_depth=4", cmd)
+
+    def test_build_benchmark_cmd_can_disable_rdma_fetch_pipeline(self):
+        topology = build_topology_plan(
+            "RDMA",
+            server_hosts=["127.0.0.1"],
+            client_hosts=["127.0.0.1"],
+            server_count=1,
+            client_count=1,
+            base_port=25000,
+        )
+        cmd = build_benchmark_cmd(
+            benchmark_binary="/tmp/ps_transport_benchmark",
+            transport="RDMA",
+            topology=topology,
+            config_path="/tmp/config.json",
+            record_count=1000,
+            runtime_seconds=5,
+            threads=1,
+            load_threads=1,
+            batch_keys=64,
+            value_size=256,
+            distribution="uniform",
+            zipfian_alpha=0.9,
+            read_ratio=100,
+            mode="fetch",
+            report_mode="summary",
+            rdma_fetch_pipeline=False,
+        )
+        self.assertIn("--nordma_fetch_pipeline", cmd)
 
     def test_build_rdma_runner_forwards_profile_interval(self):
         args = argparse.Namespace(
@@ -438,6 +468,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--client-plan", completed.stdout)
         self.assertIn("--interactive", completed.stdout)
         self.assertIn("--prefetch-depth", completed.stdout)
+        self.assertIn("--no-rdma-fetch-pipeline", completed.stdout)
         self.assertIn("--rdma-rc-profile-interval-ms", completed.stdout)
         self.assertIn("--rdma-rc-fake-get-mode", completed.stdout)
         self.assertIn("--rdma-rc-skip-client-copy", completed.stdout)

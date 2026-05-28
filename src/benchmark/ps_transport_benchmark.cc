@@ -55,10 +55,14 @@ DEFINE_int32(read_ratio, 100, "read percentage for mixed mode");
 DEFINE_uint64(seed, 0x9e3779b97f4a7c15ULL, "base random seed");
 DEFINE_bool(skip_load, false, "skip transactions preload phase");
 DEFINE_bool(load_only, false, "run transactions preload phase and exit");
+DEFINE_bool(rdma_fetch_pipeline,
+            true,
+            "use the prefetch/result pipeline for RDMA transactions fetch "
+            "when --prefetch_depth is not set");
 DEFINE_int32(prefetch_depth,
              0,
              "diagnostic fetch-only prefetch pipeline depth for transactions; "
-             "0 keeps synchronous GetParameter");
+             "0 uses --rdma_fetch_pipeline policy");
 DECLARE_int32(value_size);
 
 namespace {
@@ -648,8 +652,9 @@ PhaseStats RunTransactions(
 PhaseStats RunPrefetchFetchTransactions(
     const std::string& transport,
     int dim,
+    int prefetch_depth,
     std::vector<BenchmarkClient>* reusable_clients = nullptr) {
-  CHECK_GT(FLAGS_prefetch_depth, 0);
+  CHECK_GT(prefetch_depth, 0);
   CHECK_EQ(FLAGS_mode, "fetch")
       << "--prefetch_depth currently supports fetch mode only";
   if (reusable_clients != nullptr) {
@@ -720,7 +725,7 @@ PhaseStats RunPrefetchFetchTransactions(
 
       while (!start.load(std::memory_order_acquire)) {
       }
-      for (int i = 0; i < FLAGS_prefetch_depth; ++i) {
+      for (int i = 0; i < prefetch_depth; ++i) {
         submit_one();
       }
       while (!stop.load(std::memory_order_relaxed)) {
@@ -843,11 +848,19 @@ int main(int argc, char** argv) {
     LocalShmTransportStats run_transport_stats;
     LocalShmTransportStatsByOpcode run_transport_stats_by_opcode;
     const auto run_begin = std::chrono::steady_clock::now();
-    const PhaseStats run =
+    const int effective_prefetch_depth =
         FLAGS_prefetch_depth > 0
+            ? FLAGS_prefetch_depth
+            : (transport == "RDMA" && FLAGS_rdma_fetch_pipeline &&
+                       FLAGS_mode == "fetch"
+                   ? 16
+                   : 0);
+    const PhaseStats run =
+        effective_prefetch_depth > 0
             ? RunPrefetchFetchTransactions(
                   transport,
                   dim,
+                  effective_prefetch_depth,
                   reusable_clients.empty() ? nullptr : &reusable_clients)
             : RunTransactions(
                   transport,

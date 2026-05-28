@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <boost/coroutine2/all.hpp>
+#include <cstring>
 #include <cstdint>
 #include <experimental/filesystem>
 #include <random>
@@ -249,6 +250,7 @@ public:
 
     const auto batch_get_start = std::chrono::steady_clock::now();
     std::vector<base::ConstArray<float>> value_slices;
+    value_slices.reserve(static_cast<std::size_t>(num_rows));
     base_kv_->BatchGet(keys, &value_slices, tid);
     if (profile != nullptr) {
       profile->batch_get_ns = static_cast<std::uint64_t>(
@@ -285,14 +287,14 @@ public:
     for (int64_t row = 0; row < num_rows; ++row) {
       const auto& slice = value_slices[static_cast<size_t>(row)];
       if (slice.Size() > 0) {
-        std::copy_n(slice.Data(),
-                    static_cast<int64_t>(slice.Size()),
-                    values + row * embedding_dim);
+        std::memcpy(values + row * embedding_dim,
+                    slice.Data(),
+                    static_cast<std::size_t>(embedding_dim) * sizeof(float));
       } else {
         const auto missing_zero_start = std::chrono::steady_clock::now();
-        std::fill_n(values + row * embedding_dim,
-                    static_cast<size_t>(embedding_dim),
-                    0.0f);
+        std::memset(values + row * embedding_dim,
+                    0,
+                    static_cast<std::size_t>(embedding_dim) * sizeof(float));
         if (profile != nullptr) {
           missing_zero_fill_ns += static_cast<std::uint64_t>(
               std::chrono::duration_cast< std::chrono::nanoseconds>(

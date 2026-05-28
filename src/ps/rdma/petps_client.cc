@@ -34,9 +34,15 @@ std::size_t ComputeMaxGetKeysPerRpc() {
 }
 
 std::int32_t WaitStatus(const StatusWord* status, std::uint64_t seq) {
-  const auto start = std::chrono::steady_clock::now();
+  const auto start    = std::chrono::steady_clock::now();
+  int spin_iterations = 0;
   while (!StatusWordDone(*status, seq)) {
-    std::this_thread::yield();
+    if (spin_iterations < FLAGS_rdma_rc_wait_spin_iterations) {
+      ++spin_iterations;
+    } else {
+      spin_iterations = 0;
+      std::this_thread::yield();
+    }
     if (FLAGS_rdma_wait_timeout_ms > 0) {
       const auto elapsed_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(

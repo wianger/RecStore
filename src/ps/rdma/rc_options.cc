@@ -30,6 +30,11 @@ DEFINE_int32(rdma_rc_server_coroutines_per_thread,
              1,
              "RC write server coroutine count per poll thread. Values greater "
              "than 1 enable cooperative slot scanning inside each poll thread");
+DEFINE_int32(rdma_rc_wait_spin_iterations,
+             0,
+             "Client-side status polling spin iterations before yielding. "
+             "Higher values reduce scheduler handoff overhead for low-latency "
+             "RDMA completions at the cost of more CPU busy polling");
 DEFINE_int32(rdma_rc_inline_bytes,
              64,
              "Requested RC write inline-data threshold in bytes. Small RDMA "
