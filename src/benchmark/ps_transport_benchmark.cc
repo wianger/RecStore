@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -54,6 +55,10 @@ DEFINE_int32(read_ratio, 100, "read percentage for mixed mode");
 DEFINE_uint64(seed, 0x9e3779b97f4a7c15ULL, "base random seed");
 DEFINE_bool(skip_load, false, "skip transactions preload phase");
 DEFINE_bool(load_only, false, "run transactions preload phase and exit");
+DEFINE_int32(prefetch_depth,
+             0,
+             "diagnostic fetch-only prefetch pipeline depth for transactions; "
+             "0 keeps synchronous GetParameter");
 DECLARE_int32(value_size);
 
 namespace {
@@ -467,6 +472,28 @@ void PrintLocalShmTransportStatsByOpcode(
   }
 }
 
+bool PrefetchFlat(recstore::BasePSClient* client,
+                  const std::vector<uint64_t>& keys,
+                  uint64_t* prefetch_id) {
+  if (prefetch_id == nullptr) {
+    return false;
+  }
+  *prefetch_id = client->PrefetchParameter(base::ConstArray<uint64_t>(keys));
+  return *prefetch_id != 0;
+}
+
+bool ConsumePrefetchFlat(
+    recstore::BasePSClient* client,
+    uint64_t prefetch_id,
+    std::vector<float>* output,
+    int64_t* num_rows,
+    int dim) {
+  if (output == nullptr || num_rows == nullptr) {
+    return false;
+  }
+  return client->GetPrefetchResultFlat(prefetch_id, output, num_rows, dim);
+}
+
 using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
 
 PhaseStats LoadRecords(
@@ -618,6 +645,110 @@ PhaseStats RunTransactions(
   return total;
 }
 
+PhaseStats RunPrefetchFetchTransactions(
+    const std::string& transport,
+    int dim,
+    std::vector<BenchmarkClient>* reusable_clients = nullptr) {
+  CHECK_GT(FLAGS_prefetch_depth, 0);
+  CHECK_EQ(FLAGS_mode, "fetch")
+      << "--prefetch_depth currently supports fetch mode only";
+  if (reusable_clients != nullptr) {
+    CHECK_EQ(static_cast<int>(reusable_clients->size()), FLAGS_thread_num);
+  }
+
+  std::atomic<bool> start{false};
+  std::atomic<bool> stop{false};
+  std::vector<std::thread> threads;
+  std::vector<PhaseStats> stats(FLAGS_thread_num);
+
+  struct PendingFetch {
+    uint64_t prefetch_id = 0;
+    std::vector<uint64_t> keys;
+  };
+
+  for (int tid = 0; tid < FLAGS_thread_num; ++tid) {
+    threads.emplace_back([&, tid]() {
+      base::auto_bind_core();
+      auto owned_client =
+          reusable_clients == nullptr
+              ? CreateBenchmarkClient(transport)
+              : nullptr;
+      recstore::BasePSClient* client =
+          reusable_clients == nullptr
+              ? owned_client.get()
+              : reusable_clients->at(static_cast<std::size_t>(tid)).get();
+      CHECK_EQ(client->InitEmbeddingTable(
+                   "benchmark",
+                   recstore::EmbeddingTableConfig{
+                       static_cast<uint64_t>(FLAGS_record_count),
+                       static_cast<uint64_t>(dim)}),
+               0);
+      KeyGenerator key_gen(
+          FLAGS_distribution,
+          static_cast<uint64_t>(FLAGS_record_count),
+          FLAGS_zipfian_alpha,
+          FLAGS_seed + static_cast<uint64_t>(tid));
+      std::deque<PendingFetch> pending;
+      std::vector<float> output;
+      int64_t num_rows = 0;
+      PhaseStats local;
+
+      auto make_keys = [&]() {
+        std::vector<uint64_t> keys(static_cast<size_t>(FLAGS_batch_keys));
+        for (auto& key : keys) {
+          key = key_gen.NextKey();
+        }
+        return keys;
+      };
+      auto submit_one = [&]() {
+        PendingFetch fetch;
+        fetch.keys = make_keys();
+        CHECK(PrefetchFlat(client, fetch.keys, &fetch.prefetch_id))
+            << transport << " PrefetchParameter failed";
+        pending.push_back(std::move(fetch));
+      };
+      auto consume_front = [&]() {
+        PendingFetch fetch = std::move(pending.front());
+        pending.pop_front();
+        CHECK(ConsumePrefetchFlat(
+            client, fetch.prefetch_id, &output, &num_rows, dim))
+            << transport << " GetPrefetchResultFlat failed";
+        CHECK_EQ(num_rows, static_cast<int64_t>(fetch.keys.size()));
+        ++local.batches;
+        local.key_ops += fetch.keys.size();
+      };
+
+      while (!start.load(std::memory_order_acquire)) {
+      }
+      for (int i = 0; i < FLAGS_prefetch_depth; ++i) {
+        submit_one();
+      }
+      while (!stop.load(std::memory_order_relaxed)) {
+        consume_front();
+        submit_one();
+      }
+      while (!pending.empty()) {
+        consume_front();
+      }
+      stats[tid] = local;
+    });
+  }
+
+  start.store(true, std::memory_order_release);
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_running_seconds));
+  stop.store(true, std::memory_order_relaxed);
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  PhaseStats total;
+  for (const auto& each : stats) {
+    total.batches += each.batches;
+    total.key_ops += each.key_ops;
+  }
+  return total;
+}
+
 double SecondsSince(std::chrono::steady_clock::time_point start,
                     std::chrono::steady_clock::time_point end) {
   return std::chrono::duration_cast<std::chrono::duration<double>>(end - start)
@@ -658,6 +789,13 @@ int main(int argc, char** argv) {
   CHECK_EQ(FLAGS_value_size % static_cast<int>(sizeof(float)), 0)
       << "--value_size must be divisible by sizeof(float)";
   const int dim = FLAGS_value_size / sizeof(float);
+  CHECK_GE(FLAGS_prefetch_depth, 0) << "--prefetch_depth must be non-negative";
+  if (FLAGS_prefetch_depth > 0) {
+    CHECK_EQ(FLAGS_workload, "transactions")
+        << "--prefetch_depth is only valid for transactions workload";
+    CHECK_EQ(FLAGS_mode, "fetch")
+        << "--prefetch_depth currently supports fetch mode only";
+  }
 
   if (FLAGS_workload == "transactions") {
     CHECK_GT(FLAGS_record_count, 0);
@@ -705,12 +843,18 @@ int main(int argc, char** argv) {
     LocalShmTransportStats run_transport_stats;
     LocalShmTransportStatsByOpcode run_transport_stats_by_opcode;
     const auto run_begin = std::chrono::steady_clock::now();
-    const PhaseStats run = RunTransactions(
-        transport,
-        dim,
-        reusable_clients.empty() ? nullptr : &reusable_clients,
-        &run_transport_stats,
-        &run_transport_stats_by_opcode);
+    const PhaseStats run =
+        FLAGS_prefetch_depth > 0
+            ? RunPrefetchFetchTransactions(
+                  transport,
+                  dim,
+                  reusable_clients.empty() ? nullptr : &reusable_clients)
+            : RunTransactions(
+                  transport,
+                  dim,
+                  reusable_clients.empty() ? nullptr : &reusable_clients,
+                  &run_transport_stats,
+                  &run_transport_stats_by_opcode);
     const auto run_end = std::chrono::steady_clock::now();
     PrintTransactionResult(
         "run", transport, run, SecondsSince(run_begin, run_end));

@@ -105,6 +105,31 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir results/rdma_ps_smoke_$(date +%m%d%H%M)
 ```
 
+Generic PS RDMA fetch pipeline diagnosis:
+
+```bash
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --client-hosts 127.0.0.1 \
+  --server-hosts 127.0.0.1 \
+  --server-count 2 \
+  --client-count 2 \
+  --record-count 1000000 \
+  --value-size 512 \
+  --batch-keys 1024 \
+  --threads 1 \
+  --load-threads 1 \
+  --runtime-seconds 5 \
+  --repeat 1 \
+  --execution-backend local \
+  --prefetch-depth 4 \
+  --rdma-rc-qps-per-client-per-shard 4 \
+  --rdma-rc-profile-interval-ms 1000 \
+  --output-dir results/rdma_ps_prefetch_$(date +%m%d%H%M)
+```
+
+Use larger `--prefetch-depth` values only when `--rdma-rc-qps-per-client-per-shard` is at least as large as the target depth.
+
 Single-client RDMA transport benchmark, current PUT-v2 read mode:
 
 ```bash
@@ -167,10 +192,12 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - `--qps-per-client-per-shard` is RC QP pool size, not a target QPS.
 - For `async_stream`, require `qps-per-client-per-shard >= async-depth`.
 - For generic PS transaction benchmarks, keep `--threads 1 --load-threads 1` for RDMA unless same-process multi-lane semantics have been explicitly changed and revalidated; scale load with `--client-count`.
+- `--prefetch-depth` on `run_benchmark_ps.py` is a diagnostic fetch-only generic PS pipeline path, not a default throughput mode. It is valid only with `transactions` and `mode=fetch`.
 - Do not combine RDMA with GRPC/BRPC in the same `run_benchmark_ps.py` command when using RPC-oriented `--threads` values. Split RPC and RDMA runs because safe thread settings differ.
 - `read` and `push` PUT-v2 modes are different transport paths; do not merge them into one throughput conclusion.
 - Higher `thread-num` can increase polling capacity but can also hide low-load fixed costs.
 - `--fake-get-mode` and `--skip-client-copy` are diagnostic knobs, not default benchmark settings.
+- Combine `--prefetch-depth` with `--rdma-rc-profile-interval-ms` when diagnosing generic PS bottlenecks so `pending_rpc_peak`, `get_batch_get_avg_ns`, `get_row_copy_avg_ns`, and `scan_hit_pct` are available.
 
 ## Reporting Rules
 
@@ -218,4 +245,5 @@ For profile interpretation, map symptoms to components:
 - high `poll_loop_ns` or `empty_scan_rounds`: server polling fixed cost
 - high `get_batch_get_ns`: KV lookup path
 - high `complete_response_ns` or `drain_pending_response_ns`: response writeback pressure
+- `pending_rpc_peak=1` in generic PS fetch benchmarks: synchronous client request path is limiting outstanding RDMA work
 - nonzero `acquire_qp_failures`: QP pool/resource exhaustion, not normal latency

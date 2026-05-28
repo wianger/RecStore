@@ -385,8 +385,9 @@ def build_benchmark_cmd(
     read_ratio: int,
     mode: str,
     report_mode: str,
+    prefetch_depth: int = 0,
 ) -> list[str]:
-    return [
+    cmd = [
         benchmark_binary,
         f"--transport={transport.lower()}",
         f"--host={topology.server_plan[0].host}",
@@ -406,6 +407,9 @@ def build_benchmark_cmd(
         f"--read_ratio={read_ratio}",
         f"--report_mode={report_mode}",
     ]
+    if prefetch_depth > 0:
+        cmd.append(f"--prefetch_depth={prefetch_depth}")
+    return cmd
 
 
 def replace_config_path_arg(argv: list[str], config_path: str) -> list[str]:
@@ -1155,8 +1159,11 @@ def build_rdma_runner(
         rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
         rdma_rc_qps_per_client_per_shard=args.rdma_rc_qps_per_client_per_shard,
         rdma_rc_slots_per_qp=args.rdma_rc_slots_per_qp,
+        rdma_rc_profile_interval_ms=args.rdma_rc_profile_interval_ms,
         rdma_rc_server_coroutines_per_thread=args.rdma_rc_server_coroutines_per_thread,
         rdma_rc_inline_bytes=args.rdma_rc_inline_bytes,
+        rdma_rc_fake_get_mode=args.rdma_rc_fake_get_mode,
+        rdma_rc_skip_client_copy=args.rdma_rc_skip_client_copy,
     )
 
 
@@ -1855,6 +1862,7 @@ def parse_args() -> argparse.Namespace:
         default="fetch",
     )
     parser.add_argument("--read-ratio", type=int, default=100)
+    parser.add_argument("--prefetch-depth", type=int, default=0)
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--capacity", type=int, default=0)
@@ -1888,8 +1896,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
     parser.add_argument("--rdma-rc-qps-per-client-per-shard", type=int)
     parser.add_argument("--rdma-rc-slots-per-qp", type=int)
+    parser.add_argument("--rdma-rc-profile-interval-ms", type=int)
     parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
     parser.add_argument("--rdma-rc-inline-bytes", type=int)
+    parser.add_argument(
+        "--rdma-rc-fake-get-mode",
+        choices=["none", "status_only", "payload_memset"],
+    )
+    parser.add_argument("--rdma-rc-skip-client-copy", action="store_true")
     parser.add_argument(
         "--interactive",
         action="store_true",
@@ -1998,6 +2012,7 @@ def main() -> int:
                 read_ratio=args.read_ratio,
                 mode=args.mode,
                 report_mode=args.report_mode,
+                prefetch_depth=args.prefetch_depth,
             )
 
             run_config["cases"].append(

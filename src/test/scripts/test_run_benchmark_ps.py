@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_benchmark_ps import (  # noqa: E402
     apply_interactive_prompts,
     build_benchmark_cmd,
+    build_rdma_runner,
     build_remote_exec_cmd,
     build_runtime_config,
     build_topology_plan,
@@ -232,11 +233,56 @@ class TestRunBenchmarkPS(unittest.TestCase):
             read_ratio=100,
             mode="fetch",
             report_mode="summary",
+            prefetch_depth=4,
         )
         self.assertIn("--workload=transactions", cmd)
         self.assertIn("--record_count=1000", cmd)
         self.assertIn("--config_path=/tmp/config.json", cmd)
         self.assertIn("--value_size=256", cmd)
+        self.assertIn("--prefetch_depth=4", cmd)
+
+    def test_build_rdma_runner_forwards_profile_interval(self):
+        args = argparse.Namespace(
+            rdma_thread_num=1,
+            cluster_timeout=45,
+            startup_delay=2.0,
+            output_dir=Path("/tmp/bench"),
+            show_runner_logs=False,
+            rdma_wait_timeout_ms=20000,
+            rdma_rc_qps_per_client_per_shard=16,
+            rdma_rc_slots_per_qp=1,
+            rdma_rc_profile_interval_ms=250,
+            rdma_rc_server_coroutines_per_thread=4,
+            rdma_rc_inline_bytes=64,
+            rdma_rc_fake_get_mode="status_only",
+            rdma_rc_skip_client_copy=True,
+        )
+        runner = build_rdma_runner(
+            args,
+            config_path="/tmp/config.json",
+            server_binary="/tmp/petps_server",
+            server_count=2,
+            client_count=2,
+            value_size=512,
+            max_keys_per_request=1024,
+            rdma_namespace="profile-test",
+            rdma_control_plane_host="127.0.0.1",
+            rdma_control_plane_port=25000,
+        )
+        self.assertEqual(runner.rdma_rc_profile_interval_ms, 250)
+        self.assertIn(
+            "--rdma_rc_profile_interval_ms=250",
+            runner.build_server_cmd(0),
+        )
+        self.assertIn(
+            "--rdma_rc_profile_interval_ms=250",
+            runner.build_client_cmd(["/tmp/client"], client_index=0),
+        )
+        self.assertIn("--rdma_rc_fake_get_mode=status_only", runner.build_server_cmd(0))
+        self.assertIn(
+            "--rdma_rc_skip_client_copy=true",
+            runner.build_client_cmd(["/tmp/client"], client_index=0),
+        )
 
     def test_collect_ps_result_rows_parses_load_and_run(self):
         text = (
@@ -391,6 +437,10 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--server-plan", completed.stdout)
         self.assertIn("--client-plan", completed.stdout)
         self.assertIn("--interactive", completed.stdout)
+        self.assertIn("--prefetch-depth", completed.stdout)
+        self.assertIn("--rdma-rc-profile-interval-ms", completed.stdout)
+        self.assertIn("--rdma-rc-fake-get-mode", completed.stdout)
+        self.assertIn("--rdma-rc-skip-client-copy", completed.stdout)
 
 
 if __name__ == "__main__":

@@ -103,6 +103,48 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir <output_dir>
 ```
 
+For RDMA bottleneck diagnosis, keep this separate from default benchmark rows and label it as diagnostic. Use profile/fake knobs to separate synchronous request scheduling, server GET payload work, and client copy:
+
+```bash
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --client-hosts 127.0.0.1 \
+  --server-hosts 127.0.0.1 \
+  --server-count 2 \
+  --client-count 2 \
+  --record-count <record_count> \
+  --value-size <value_size> \
+  --batch-keys <batch_keys> \
+  --threads 1 \
+  --load-threads 1 \
+  --runtime-seconds <runtime_seconds> \
+  --repeat 1 \
+  --execution-backend local \
+  --rdma-rc-profile-interval-ms 1000 \
+  --output-dir <output_dir>/rdma_profile
+
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --client-hosts 127.0.0.1 \
+  --server-hosts 127.0.0.1 \
+  --server-count 2 \
+  --client-count 2 \
+  --record-count <record_count> \
+  --value-size <value_size> \
+  --batch-keys <batch_keys> \
+  --threads 1 \
+  --load-threads 1 \
+  --runtime-seconds <runtime_seconds> \
+  --repeat 1 \
+  --execution-backend local \
+  --prefetch-depth <depth> \
+  --rdma-rc-qps-per-client-per-shard <at_least_depth> \
+  --rdma-rc-profile-interval-ms 1000 \
+  --output-dir <output_dir>/rdma_prefetch_<depth>
+```
+
+`--prefetch-depth` is a diagnostic fetch-only generic PS path. It is useful for proving whether synchronous `GetParameter` wait is limiting throughput, but do not mix it into default RDMA/RPC comparison rows.
+
 For a mixed local reliability matrix, run RPC and RDMA as separate commands because their safe thread settings differ:
 
 ```bash
@@ -183,6 +225,7 @@ Treat `summary.csv` as authoritative when any client exits nonzero. `run_benchma
 - Check for non-empty stderr logs even when all rows are `success`; report request-path warnings separately from expected teardown output.
 - Do not claim tests pass unless the exact command completed successfully.
 - Keep generated project-facing report text in Chinese.
+- Treat `--prefetch-depth`, `--rdma-rc-fake-get-mode`, and `--rdma-rc-skip-client-copy` as diagnostic-only knobs. Report them as bottleneck attribution, not as ordinary throughput comparisons.
 
 ## Verified Local Matrix
 
@@ -201,5 +244,6 @@ Use these as bring-up baselines before increasing record count, runtime, or cros
 - `run_benchmark_ps.py` writes `summary.csv` and `summary.md` even when all client rows fail. Always inspect those files before rerunning.
 - `GRPC` / `BRPC` benchmark clients may be distributed clients even in local runs because the runner writes `distributed_client` config. Distributed RPC clients report success as `0`; ordinary RPC clients report success as nonzero. Keep `ps_transport_benchmark` return-code handling aligned with the concrete client type.
 - RDMA transaction mode requires `--threads 1`; use `--client-count` for RDMA client concurrency. If `--threads > 1`, the benchmark binary aborts by design.
+- `--prefetch-depth > 0` is valid only for `transactions` + `mode=fetch`. If depth exceeds the default QP pool, also increase `--rdma-rc-qps-per-client-per-shard`.
 - Large single-shard RDMA preload can fail as `RC write RPC wait timeout` after server-side `KVEngine value allocation failed`; the runner should generate slab allocator capacity with headroom. If this recurs, inspect generated config capacity and server logs before treating it as a transport failure.
 - If `RDMA` multi-shard fails with control-plane `get_meta timeout`, report it as multi-shard bring-up failure. Do not convert it into a throughput result.
