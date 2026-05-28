@@ -249,6 +249,32 @@ public:
     }
 
     const auto batch_get_start = std::chrono::steady_clock::now();
+    BaseKV::BatchGetFlatStats flat_stats;
+    BaseKV::BatchGetFlatStats* flat_stats_ptr =
+        profile != nullptr ? &flat_stats : nullptr;
+    const bool flat_ok = base_kv_->BatchGetFlat(
+        keys, values, num_rows, embedding_dim, tid, flat_stats_ptr);
+    if (flat_ok) {
+      if (profile != nullptr) {
+        profile->batch_get_ns = static_cast<std::uint64_t>(
+            std::chrono::duration_cast< std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - batch_get_start)
+                .count());
+        profile->rows = static_cast<std::uint64_t>(num_rows);
+        profile->value_bytes =
+            static_cast<std::uint64_t>(num_rows) *
+            static_cast<std::uint64_t>(embedding_dim) * sizeof(float);
+        profile->zero_fill_ns = flat_stats.zero_fill_ns;
+        profile->row_copy_ns  = flat_stats.row_copy_ns;
+        profile->missing_rows = flat_stats.missing_rows;
+      }
+      recstore::ReportLocalShmStageMetric(
+          "cache_ps_get_batch_get_us",
+          recstore::LocalShmElapsedUs(batch_get_start));
+      recstore::ReportLocalShmStageMetric("cache_ps_get_copy_us", 0);
+      return true;
+    }
+
     std::vector<base::ConstArray<float>> value_slices;
     value_slices.reserve(static_cast<std::size_t>(num_rows));
     base_kv_->BatchGet(keys, &value_slices, tid);

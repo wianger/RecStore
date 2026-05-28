@@ -143,7 +143,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir <output_dir>/rdma_prefetch_<depth>
 ```
 
-Generic PS RDMA `transactions/fetch` now uses the prefetch/result pipeline by default when `--prefetch-depth` is not set. Use `--no-rdma-fetch-pipeline` only for legacy synchronous `GetParameter` comparison rows.
+Generic PS RDMA `transactions/fetch` uses the prefetch/result pipeline by default when `--prefetch-depth` is not set.
 
 For a mixed local reliability matrix, run RPC and RDMA as separate commands because their safe thread settings differ:
 
@@ -226,7 +226,6 @@ Treat `summary.csv` as authoritative when any client exits nonzero. `run_benchma
 - Do not claim tests pass unless the exact command completed successfully.
 - Keep generated project-facing report text in Chinese.
 - Treat `--prefetch-depth`, `--rdma-rc-fake-get-mode`, and `--rdma-rc-skip-client-copy` as diagnostic-only knobs. Report them as bottleneck attribution, not as ordinary throughput comparisons.
-- Treat `--no-rdma-fetch-pipeline` as a legacy synchronous comparison knob. Do not use it for default RDMA throughput claims.
 
 ## Verified Local Matrix
 
@@ -246,6 +245,6 @@ Use these as bring-up baselines before increasing record count, runtime, or cros
 - `GRPC` / `BRPC` benchmark clients may be distributed clients even in local runs because the runner writes `distributed_client` config. Distributed RPC clients report success as `0`; ordinary RPC clients report success as nonzero. Keep `ps_transport_benchmark` return-code handling aligned with the concrete client type.
 - RDMA transaction mode requires `--threads 1`; use `--client-count` for RDMA client concurrency. If `--threads > 1`, the benchmark binary aborts by design.
 - `--prefetch-depth > 0` is valid only for `transactions` + `mode=fetch`. If depth exceeds the default QP pool, also increase `--rdma-rc-qps-per-client-per-shard`.
-- By default, RDMA `transactions/fetch` uses a depth-16 prefetch pipeline. To reproduce the old synchronous path, pass `--no-rdma-fetch-pipeline`.
+- By default, RDMA `transactions/fetch` uses a depth-16 prefetch pipeline.
 - Large single-shard RDMA preload can fail as `RC write RPC wait timeout` after server-side `KVEngine value allocation failed`; the runner should generate slab allocator capacity with headroom. If this recurs, inspect generated config capacity and server logs before treating it as a transport failure.
 - If `RDMA` multi-shard fails with control-plane `get_meta timeout`, report it as multi-shard bring-up failure. Do not convert it into a throughput result.

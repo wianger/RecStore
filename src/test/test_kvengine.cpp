@@ -366,6 +366,63 @@ TEST_P(KVEngineCartesianTest, BatchGetMixedKeys) {
   EXPECT_EQ(batch_values[5].Size(), 0); // key 6 doesn't exist
 }
 
+TEST_P(KVEngineCartesianTest, BatchGetFlatCopiesRowsAndZerosMissing) {
+  const std::vector<uint64_t> put_keys       = {11, 13};
+  std::vector<std::vector<float>> put_values = {
+      {1.0f, 2.0f, 3.0f, 4.0f}, {10.0f, 20.0f, 30.0f, 40.0f}};
+  std::vector<base::ConstArray<float>> put_slices;
+  put_slices.reserve(put_values.size());
+  for (const auto& row : put_values) {
+    put_slices.emplace_back(row.data(), static_cast<int>(row.size()));
+  }
+  kv_engine_->BatchPut(
+      base::ConstArray<uint64_t>(put_keys.data(), put_keys.size()),
+      &put_slices,
+      0);
+
+  const std::vector<uint64_t> get_keys = {11, 12, 13};
+  std::vector<float> out(get_keys.size() * 4, -1.0f);
+  BaseKV::BatchGetFlatStats stats;
+  ASSERT_TRUE(kv_engine_->BatchGetFlat(
+      base::ConstArray<uint64_t>(get_keys.data(), get_keys.size()),
+      out.data(),
+      static_cast<int64_t>(get_keys.size()),
+      4,
+      0,
+      &stats));
+
+  EXPECT_FLOAT_EQ(out[0], 1.0f);
+  EXPECT_FLOAT_EQ(out[1], 2.0f);
+  EXPECT_FLOAT_EQ(out[2], 3.0f);
+  EXPECT_FLOAT_EQ(out[3], 4.0f);
+  EXPECT_FLOAT_EQ(out[4], 0.0f);
+  EXPECT_FLOAT_EQ(out[5], 0.0f);
+  EXPECT_FLOAT_EQ(out[6], 0.0f);
+  EXPECT_FLOAT_EQ(out[7], 0.0f);
+  EXPECT_FLOAT_EQ(out[8], 10.0f);
+  EXPECT_FLOAT_EQ(out[9], 20.0f);
+  EXPECT_FLOAT_EQ(out[10], 30.0f);
+  EXPECT_FLOAT_EQ(out[11], 40.0f);
+  EXPECT_EQ(stats.missing_rows, 1);
+}
+
+TEST_P(KVEngineCartesianTest, BatchGetFlatRejectsMismatchedDim) {
+  const std::vector<uint64_t> keys            = {21};
+  std::vector<float> row                      = {1.0f, 2.0f, 3.0f, 4.0f};
+  std::vector<base::ConstArray<float>> slices = {
+      base::ConstArray<float>(row.data(), static_cast<int>(row.size()))};
+  kv_engine_->BatchPut(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()), &slices, 0);
+
+  std::vector<float> out(3, -1.0f);
+  EXPECT_FALSE(kv_engine_->BatchGetFlat(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()),
+      out.data(),
+      1,
+      3,
+      0));
+}
+
 TEST_P(KVEngineCartesianTest, BatchPutMixedOverwriteAndRealloc) {
   const std::vector<uint64_t> keys = {7001, 7002, 7003, 7004};
   std::vector<std::vector<float>> initial_values(
@@ -604,7 +661,7 @@ TEST_P(KVEngineCartesianTest, StressTest) {
   for (int i = 0; i < num_operations; i++) {
     std::string base_value = "stress_test_value_" + std::to_string(i) + "_" +
                              std::string(20, 'x'); // 较长的值
-    std::string value      = CreateFixedLengthValue(base_value);
+    std::string value = CreateFixedLengthValue(base_value);
     kv_engine_->Put(i, value, 0);
   }
 
@@ -757,7 +814,7 @@ TEST_P(KVEngineCartesianTest, ConcurrentReadWriteTest) {
               if (is_put) {
                 std::string base_value = "mixed_thread_" + std::to_string(t) +
                                          "_value_" + std::to_string(i);
-                std::string value      = CreateFixedLengthValue(base_value);
+                std::string value = CreateFixedLengthValue(base_value);
                 kv_engine_->Put(key, value, 0);
                 successful_operations++;
               } else {
@@ -918,7 +975,7 @@ protected:
   void SetUp() override {
     engine_type_ = GetParam();
     test_dir_    = "/tmp/test_kv_engine_external_" + engine_type_ + "_" +
-                   std::to_string(getpid());
+                std::to_string(getpid());
     std::filesystem::remove_all(test_dir_);
     std::filesystem::create_directories(test_dir_);
 
@@ -1183,4 +1240,3 @@ TEST(KVEngineCompositeConfigTest, DramValueStoreAcceptsDevShmPath) {
 
   EXPECT_NO_THROW(CreateCompositeEngine(cfg));
 }
-

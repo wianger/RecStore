@@ -41,7 +41,7 @@ legacy top-level fields such as path/index_type/value_type and nested file_path.
 
 class BaseKV {
 public:
-  virtual ~BaseKV() { }
+  virtual ~BaseKV() {}
 
   explicit BaseKV(const BaseKVConfig& config){};
 
@@ -76,6 +76,22 @@ public:
   virtual void BatchGet(base::ConstArray<uint64_t> keys,
                         std::vector<base::ConstArray<float>>* values,
                         unsigned tid) = 0;
+
+  struct BatchGetFlatStats {
+    std::uint64_t zero_fill_ns = 0;
+    std::uint64_t row_copy_ns  = 0;
+    std::uint64_t missing_rows = 0;
+  };
+
+  virtual bool BatchGetFlat(
+      base::ConstArray<uint64_t> keys,
+      float* values,
+      int64_t num_rows,
+      int64_t embedding_dim,
+      unsigned tid,
+      BatchGetFlatStats* stats = nullptr) {
+    return false;
+  }
 
   virtual void BatchGet(coroutine<void>::push_type& sink,
                         base::ConstArray<uint64_t> keys,

@@ -386,7 +386,6 @@ def build_benchmark_cmd(
     mode: str,
     report_mode: str,
     prefetch_depth: int = 0,
-    rdma_fetch_pipeline: bool = True,
 ) -> list[str]:
     cmd = [
         benchmark_binary,
@@ -410,8 +409,6 @@ def build_benchmark_cmd(
     ]
     if prefetch_depth > 0:
         cmd.append(f"--prefetch_depth={prefetch_depth}")
-    if transport.upper() == "RDMA" and not rdma_fetch_pipeline:
-        cmd.append("--nordma_fetch_pipeline")
     return cmd
 
 
@@ -1866,11 +1863,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--read-ratio", type=int, default=100)
     parser.add_argument("--prefetch-depth", type=int, default=0)
-    parser.add_argument(
-        "--no-rdma-fetch-pipeline",
-        action="store_true",
-        help="Disable the default RDMA transactions/fetch prefetch pipeline",
-    )
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--capacity", type=int, default=0)
@@ -2021,7 +2013,6 @@ def main() -> int:
                 mode=args.mode,
                 report_mode=args.report_mode,
                 prefetch_depth=args.prefetch_depth,
-                rdma_fetch_pipeline=not args.no_rdma_fetch_pipeline,
             )
 
             run_config["cases"].append(

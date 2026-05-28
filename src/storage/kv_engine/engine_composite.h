@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <stdexcept>
@@ -36,6 +37,8 @@ public:
     index_.reset(IF::NewInstance(index_type, config));
     value_store_.reset(VF::NewInstance(value_type, config));
     num_threads_ = config.num_threads_;
+    default_value_size_hint_ =
+        j.at("value").value("default_value_size_hint", 0);
     if (!index_ || !value_store_) {
       throw std::runtime_error("failed to create KVEngine components");
     }
@@ -113,9 +116,9 @@ public:
     items.reserve(static_cast<size_t>(keys.Size()));
 
     for (int i = 0; i < keys.Size(); ++i) {
-      const auto& item   = (*values)[i];
-      const void* data   = item.Data();
-      const size_t size  = static_cast<size_t>(item.Size()) * sizeof(float);
+      const auto& item  = (*values)[i];
+      const void* data  = item.Data();
+      const size_t size = static_cast<size_t>(item.Size()) * sizeof(float);
       items.push_back(PutItem{keys[i], ValueStore::WriteSpec{data, size}});
     }
 
@@ -195,6 +198,83 @@ public:
             base::ConstArray<float>(buffers[idx].data(), buffers[idx].size());
       }
     }
+  }
+
+  bool BatchGetFlat(base::ConstArray<uint64_t> keys,
+                    float* values,
+                    int64_t num_rows,
+                    int64_t embedding_dim,
+                    unsigned tid,
+                    BatchGetFlatStats* stats = nullptr) override {
+    if (values == nullptr || num_rows < 0 || embedding_dim <= 0 ||
+        keys.Size() != static_cast<size_t>(num_rows)) {
+      return false;
+    }
+    const size_t row_bytes = static_cast<size_t>(embedding_dim) * sizeof(float);
+    thread_local std::vector<Value_t> handles;
+    thread_local std::vector<char> read_buffer;
+    handles.assign(keys.Size(), kValueHandleNone);
+    if (keys.Size() > 0) {
+      index_->BatchGet(keys, handles.data(), tid);
+    }
+
+    std::uint64_t missing_zero_fill_ns = 0;
+    std::uint64_t missing_rows         = 0;
+    const auto row_copy_start =
+        stats != nullptr ? std::chrono::steady_clock::now()
+                         : std::chrono::steady_clock::time_point{};
+    for (int64_t row = 0; row < num_rows; ++row) {
+      const Value_t handle = handles[static_cast<size_t>(row)];
+      float* dst           = values + row * embedding_dim;
+      if (handle == kValueHandleNone) {
+        const auto missing_zero_start =
+            stats != nullptr ? std::chrono::steady_clock::now()
+                             : std::chrono::steady_clock::time_point{};
+        std::memset(dst, 0, row_bytes);
+        if (stats != nullptr) {
+          missing_zero_fill_ns += static_cast<std::uint64_t>(
+              std::chrono::duration_cast< std::chrono::nanoseconds>(
+                  std::chrono::steady_clock::now() - missing_zero_start)
+                  .count());
+        }
+        ++missing_rows;
+        continue;
+      }
+      if (const char* ptr = value_store_->DirectPtr(handle)) {
+        if (default_value_size_hint_ != row_bytes) {
+          const size_t slot_bytes = value_store_->SlotCapacity(handle);
+          if (slot_bytes != row_bytes) {
+            LOG(ERROR) << "KVEngine::BatchGetFlat row size mismatch row=" << row
+                       << " key=" << keys[static_cast<int>(row)]
+                       << " expected_bytes=" << row_bytes
+                       << " actual_bytes=" << slot_bytes;
+            return false;
+          }
+        }
+        std::memcpy(dst, ptr, row_bytes);
+      } else {
+        read_buffer.resize(row_bytes + sizeof(float));
+        const size_t actual =
+            value_store_->Read(handle, read_buffer.data(), read_buffer.size());
+        if (actual != row_bytes) {
+          LOG(ERROR) << "KVEngine::BatchGetFlat read size mismatch row=" << row
+                     << " key=" << keys[static_cast<int>(row)]
+                     << " expected_bytes=" << row_bytes
+                     << " actual_bytes=" << actual;
+          return false;
+        }
+        std::memcpy(dst, read_buffer.data(), row_bytes);
+      }
+    }
+    if (stats != nullptr) {
+      stats->zero_fill_ns = missing_zero_fill_ns;
+      stats->row_copy_ns  = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - row_copy_start)
+              .count());
+      stats->missing_rows = missing_rows;
+    }
+    return true;
   }
 
   bool ApplySgdUpdateFlat(
@@ -298,7 +378,8 @@ private:
   BaseKVConfig config_;
   std::unique_ptr<Index> index_;
   std::unique_ptr<ValueStore> value_store_;
-  int num_threads_ = 0;
+  int num_threads_                = 0;
+  size_t default_value_size_hint_ = 0;
 };
 
 FACTORY_REGISTER(

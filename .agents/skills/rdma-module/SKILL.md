@@ -128,7 +128,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir results/rdma_ps_prefetch_$(date +%m%d%H%M)
 ```
 
-Generic PS RDMA `transactions/fetch` uses a depth-16 prefetch/result pipeline by default. Use larger explicit `--prefetch-depth` values only when `--rdma-rc-qps-per-client-per-shard` is at least as large as the target depth. Use `--no-rdma-fetch-pipeline` only when you need the legacy synchronous `GetParameter` baseline.
+Generic PS RDMA `transactions/fetch` uses a depth-16 prefetch/result pipeline by default. Use larger explicit `--prefetch-depth` values only when `--rdma-rc-qps-per-client-per-shard` is at least as large as the target depth.
 
 Single-client RDMA transport benchmark, current PUT-v2 read mode:
 
@@ -245,5 +245,5 @@ For profile interpretation, map symptoms to components:
 - high `poll_loop_ns` or `empty_scan_rounds`: server polling fixed cost
 - high `get_batch_get_ns`: KV lookup path
 - high `complete_response_ns` or `drain_pending_response_ns`: response writeback pressure
-- `pending_rpc_peak=1` in generic PS fetch benchmarks: synchronous client request path is limiting outstanding RDMA work. Default RDMA fetch benchmark rows should show a higher peak unless `--no-rdma-fetch-pipeline` is set.
+- `pending_rpc_peak=1` in generic PS fetch benchmarks: synchronous client request path is limiting outstanding RDMA work. Default RDMA fetch benchmark rows should show a higher peak.
 - nonzero `acquire_qp_failures`: QP pool/resource exhaustion, not normal latency
