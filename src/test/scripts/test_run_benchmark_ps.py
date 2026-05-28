@@ -1,13 +1,16 @@
 import json
+import argparse
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from run_benchmark_ps import (  # noqa: E402
+    apply_interactive_prompts,
     build_benchmark_cmd,
     build_remote_exec_cmd,
     build_runtime_config,
@@ -16,6 +19,8 @@ from run_benchmark_ps import (  # noqa: E402
     collect_summary_rows,
     normalize_transport_list,
     parse_csv_list,
+    parse_client_plan,
+    parse_server_plan,
     recommended_dram_capacity_bytes,
     replace_config_path_arg,
     resolve_base_port,
@@ -58,6 +63,53 @@ class TestRunBenchmarkPS(unittest.TestCase):
                 client_count=1,
                 base_port=15000,
             )
+
+    def test_parse_server_plan_supports_explicit_shard_binding(self):
+        servers = parse_server_plan(
+            "1:server-b:26000:8,0:server-a:25000:3",
+            "RDMA",
+        )
+        self.assertEqual([server.server_index for server in servers], [0, 1])
+        self.assertEqual(servers[0].host, "server-a")
+        self.assertEqual(servers[0].port, 25000)
+        self.assertEqual(servers[0].shard, 3)
+        self.assertEqual(servers[1].shard, 8)
+
+    def test_parse_client_plan_supports_repeated_hosts(self):
+        clients = parse_client_plan("1:client-b,0:client-a,2:client-a", "GRPC")
+        self.assertEqual([client.client_index for client in clients], [0, 1, 2])
+        self.assertEqual(clients[2].host, "client-a")
+
+    def test_build_topology_plan_uses_explicit_server_and_client_plan(self):
+        topology = build_topology_plan(
+            "BRPC",
+            server_hosts=["ignored"],
+            client_hosts=["ignored"],
+            server_count=1,
+            client_count=1,
+            base_port=25000,
+            server_plan="0:server-a:25010:4,1:server-b:25011:9",
+            client_plan="0:client-a,1:client-b",
+        )
+        self.assertEqual(len(topology.server_plan), 2)
+        self.assertEqual(topology.server_plan[0].shard, 4)
+        self.assertEqual(topology.server_plan[1].port, 25011)
+        self.assertEqual(len(topology.client_plan), 2)
+        self.assertEqual(topology.client_plan[1].host, "client-b")
+
+    def test_build_topology_plan_allows_server_plan_with_default_clients(self):
+        topology = build_topology_plan(
+            "GRPC",
+            server_hosts=["unused"],
+            client_hosts=["client-a"],
+            server_count=1,
+            client_count=3,
+            base_port=15000,
+            server_plan="server-a:25000:0,server-a:25001:1",
+        )
+        self.assertEqual(len(topology.server_plan), 2)
+        self.assertEqual(len(topology.client_plan), 3)
+        self.assertEqual(topology.client_plan[2].host, "client-a")
 
     def test_build_runtime_config_writes_explicit_shards(self):
         topology = build_topology_plan(
@@ -267,6 +319,52 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("transport,status,phase,client_index", text)
         self.assertIn("GRPC,success,run,0", text)
 
+    def test_apply_interactive_prompts_updates_prompted_values(self):
+        args = argparse.Namespace(
+            transports="rdma,grpc,brpc",
+            client_hosts="127.0.0.1",
+            server_hosts="127.0.0.1",
+            server_count=1,
+            client_count=1,
+            server_plan="",
+            client_plan="",
+            record_count=1000000,
+            value_size=512,
+            batch_keys=1024,
+            threads=16,
+            runtime_seconds=5,
+            repeat=1,
+            execution_backend="local",
+            output_dir=Path("/tmp/default"),
+        )
+        answers = iter(
+            [
+                "grpc",
+                "client-a",
+                "server-a",
+                "2",
+                "1",
+                "0:server-a:15000:0,1:server-b:15001:3",
+                "",
+                "4096",
+                "128",
+                "64",
+                "8",
+                "2",
+                "3",
+                "ssh",
+                "/tmp/bench-out",
+            ]
+        )
+        with mock.patch("builtins.input", side_effect=lambda _prompt: next(answers)):
+            apply_interactive_prompts(args)
+        self.assertEqual(args.transports, "grpc")
+        self.assertEqual(args.server_count, 2)
+        self.assertEqual(args.server_plan, "0:server-a:15000:0,1:server-b:15001:3")
+        self.assertEqual(args.record_count, 4096)
+        self.assertEqual(args.execution_backend, "ssh")
+        self.assertEqual(args.output_dir, Path("/tmp/bench-out"))
+
     def test_help_mentions_remote_and_topology_args(self):
         script = Path(__file__).resolve().parent / "run_benchmark_ps.py"
         completed = subprocess.run(
@@ -280,6 +378,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--remote-sync", completed.stdout)
         self.assertIn("--client-hosts", completed.stdout)
         self.assertIn("--server-hosts", completed.stdout)
+        self.assertIn("--server-plan", completed.stdout)
+        self.assertIn("--client-plan", completed.stdout)
+        self.assertIn("--interactive", completed.stdout)
 
 
 if __name__ == "__main__":

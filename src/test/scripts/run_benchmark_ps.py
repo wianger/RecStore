@@ -134,6 +134,69 @@ def normalize_host_list(value: str, field_name: str) -> list[str]:
     return hosts
 
 
+def parse_server_plan(value: str, transport: str) -> list[ServerPlan]:
+    servers = []
+    for server_index, item in enumerate(parse_csv_list(value)):
+        parts = item.split(":")
+        if len(parts) not in (3, 4):
+            raise ValueError(
+                "server_plan entries must be host:port:shard or "
+                "server_index:host:port:shard"
+            )
+        if len(parts) == 3:
+            host, port, shard = parts
+            parsed_server_index = server_index
+        else:
+            parsed_server_index_raw, host, port, shard = parts
+            parsed_server_index = int(parsed_server_index_raw)
+        if not host:
+            raise ValueError("server_plan host must not be empty")
+        servers.append(
+            ServerPlan(
+                server_index=parsed_server_index,
+                host=host,
+                shard=int(shard),
+                transport=transport,
+                port=int(port),
+            )
+        )
+    if not servers:
+        raise ValueError("server_plan must not be empty")
+    if len({server.server_index for server in servers}) != len(servers):
+        raise ValueError("server_plan server_index values must be unique")
+    if len({server.shard for server in servers}) != len(servers):
+        raise ValueError("server_plan shard values must be unique")
+    return sorted(servers, key=lambda server: server.server_index)
+
+
+def parse_client_plan(value: str, transport: str) -> list[ClientPlan]:
+    clients = []
+    for client_index, item in enumerate(parse_csv_list(value)):
+        parts = item.split(":")
+        if len(parts) == 1:
+            parsed_client_index = client_index
+            host = parts[0]
+        elif len(parts) == 2:
+            parsed_client_index = int(parts[0])
+            host = parts[1]
+        else:
+            raise ValueError("client_plan entries must be host or client_index:host")
+        if not host:
+            raise ValueError("client_plan host must not be empty")
+        clients.append(
+            ClientPlan(
+                client_index=parsed_client_index,
+                host=host,
+                transport=transport,
+            )
+        )
+    if not clients:
+        raise ValueError("client_plan must not be empty")
+    if len({client.client_index for client in clients}) != len(clients):
+        raise ValueError("client_plan client_index values must be unique")
+    return sorted(clients, key=lambda client: client.client_index)
+
+
 def build_topology_plan(
     transport: str,
     server_hosts: list[str],
@@ -141,7 +204,42 @@ def build_topology_plan(
     server_count: int,
     client_count: int,
     base_port: int,
+    server_plan: str = "",
+    client_plan: str = "",
 ) -> TopologyPlan:
+    if server_plan:
+        parsed_server_plan = parse_server_plan(server_plan, transport)
+    else:
+        parsed_server_plan = []
+    if client_plan:
+        parsed_client_plan = parse_client_plan(client_plan, transport)
+    else:
+        parsed_client_plan = []
+    if parsed_server_plan or parsed_client_plan:
+        if not parsed_server_plan:
+            parsed_server_plan = build_topology_plan(
+                transport,
+                server_hosts,
+                client_hosts,
+                server_count,
+                client_count,
+                base_port,
+            ).server_plan
+        if not parsed_client_plan:
+            parsed_client_plan = build_topology_plan(
+                transport,
+                server_hosts,
+                client_hosts,
+                len(parsed_server_plan),
+                client_count,
+                base_port,
+            ).client_plan
+        return TopologyPlan(
+            transport=transport,
+            server_plan=parsed_server_plan,
+            client_plan=parsed_client_plan,
+        )
+
     if server_count <= 0:
         raise ValueError("server_count must be positive")
     if client_count <= 0:
@@ -411,6 +509,36 @@ def resolve_output_dir(value: str) -> Path:
             path = (REPO_ROOT / path).resolve()
         return path
     return default_output_dir()
+
+
+def prompt_value(label: str, default: str) -> str:
+    value = input(f"{label} [{default}]: ").strip()
+    return value if value else default
+
+
+def apply_interactive_prompts(args: argparse.Namespace) -> None:
+    print("Benchmark PS interactive setup. Press Enter to keep defaults.")
+    args.transports = prompt_value("transports", args.transports)
+    args.client_hosts = prompt_value("client hosts", args.client_hosts)
+    args.server_hosts = prompt_value("server hosts", args.server_hosts)
+    args.server_count = int(prompt_value("server count", str(args.server_count)))
+    args.client_count = int(prompt_value("client count", str(args.client_count)))
+    args.server_plan = prompt_value("server plan", args.server_plan)
+    args.client_plan = prompt_value("client plan", args.client_plan)
+    args.record_count = int(prompt_value("record count", str(args.record_count)))
+    args.value_size = int(prompt_value("value size", str(args.value_size)))
+    args.batch_keys = int(prompt_value("batch keys", str(args.batch_keys)))
+    args.threads = int(prompt_value("thread count", str(args.threads)))
+    args.runtime_seconds = int(
+        prompt_value("runtime seconds", str(args.runtime_seconds))
+    )
+    args.repeat = int(prompt_value("repeat count", str(args.repeat)))
+    args.execution_backend = prompt_value(
+        "execution backend (local/ssh)", args.execution_backend
+    )
+    args.output_dir = resolve_output_dir(
+        prompt_value("result output directory", str(args.output_dir))
+    )
 
 
 def quote_argv(argv: list[str]) -> str:
@@ -819,6 +947,7 @@ def write_summary_markdown(
             "本次结果属于 PS/network 层。"
             f"transports={args.transports}，execution_backend={args.execution_backend}，"
             f"client_hosts={args.client_hosts}，server_hosts={args.server_hosts}，"
+            f"client_plan={args.client_plan or '-'}，server_plan={args.server_plan or '-'}，"
             f"server_count={args.server_count}，client_count={args.client_count}，"
             f"record_count={args.record_count}，value_size={args.value_size}，"
             f"batch_keys={args.batch_keys}，threads={args.threads}，"
@@ -1682,6 +1811,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transports", default="rdma,grpc,brpc")
     parser.add_argument("--client-hosts", default="127.0.0.1")
     parser.add_argument("--server-hosts", default="127.0.0.1")
+    parser.add_argument(
+        "--server-plan",
+        default="",
+        help=(
+            "Explicit server topology as comma-separated host:port:shard or "
+            "server_index:host:port:shard entries. Overrides --server-hosts/"
+            "--server-count mapping when set."
+        ),
+    )
+    parser.add_argument(
+        "--client-plan",
+        default="",
+        help=(
+            "Explicit client topology as comma-separated host or "
+            "client_index:host entries. Overrides --client-hosts/"
+            "--client-count mapping when set."
+        ),
+    )
     parser.add_argument("--server-count", type=int, default=1)
     parser.add_argument("--client-count", type=int, default=1)
     parser.add_argument("--record-count", type=int, default=1000000)
@@ -1735,9 +1882,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rdma-rc-slots-per-qp", type=int)
     parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
     parser.add_argument("--rdma-rc-inline-bytes", type=int)
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt for benchmark parameters before execution.",
+    )
     args = parser.parse_args()
     args.output_dir = resolve_output_dir(args.output_dir)
     args.remote_container = args.remote_container or None
+    if args.interactive:
+        apply_interactive_prompts(args)
+        args.remote_container = args.remote_container or None
     return args
 
 
@@ -1784,6 +1939,8 @@ def main() -> int:
             args.server_count,
             args.client_count,
             base_port,
+            server_plan=args.server_plan,
+            client_plan=args.client_plan,
         )
         rdma_control_plane_host = (
             args.rdma_control_plane_host or topology.server_plan[0].host
