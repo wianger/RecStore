@@ -142,6 +142,43 @@ class HpsBackendCompareTest(unittest.TestCase):
         self.assertIn("--ssd_queue_depth=256", cmd)
         self.assertIn("--ssd_capacity_bytes=123456789", cmd)
 
+    def test_hps_native_tiered_sweep_alias_passes_native_tiered_flags(self):
+        args = Namespace(
+            mode="fetch",
+            read_ratio=100,
+            record_count=100000,
+            runtime_seconds=5,
+            threads=16,
+            load_threads=0,
+            hps_rocksdb_load_threads=1,
+            hps_rocksdb_db_threads=1,
+            hps_native_dram_fraction=0.3,
+            hps_native_cache_missed_embeddings=False,
+            hps_native_overflow_policy="evict_random",
+            hps_native_overflow_resolution_target=0.8,
+            batch_size=1024,
+            value_size=512,
+            distribution="uniform",
+            zipfian_alpha=0.9,
+            dram_allocator="PERSIST_LOOP_SLAB",
+            dram_capacity_bytes=0,
+            ssd_io_backend="IOURING",
+            ssd_queue_depth=512,
+            ssd_capacity_bytes=0,
+            extra_arg=[],
+        )
+
+        cmd = run_hps_backend_compare.command_for(
+            "hps_native_tiered_dram0.300000",
+            run_hps_backend_compare.BACKEND_ALIASES["hps_native_tiered"],
+            Path("/tmp/hps_native_tiered"),
+            args,
+        )
+
+        self.assertIn("--backend=hps_native_tiered", cmd)
+        self.assertIn("--hps_native_dram_fraction=0.3", cmd)
+        self.assertIn("--hps_rocksdb_thread_num=1", cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

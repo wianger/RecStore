@@ -224,7 +224,7 @@ def command_for(alias: str, spec: BackendSpec, data_path: Path, args: argparse.N
         cmd.append(gflag("value_store_type", spec.value_store_type))
     if alias == "hps_rocksdb":
         cmd.append(gflag("hps_rocksdb_thread_num", args.hps_rocksdb_db_threads))
-    if alias == "hps_native_tiered":
+    if spec.backend == "hps_native_tiered":
         cmd.append(gflag("hps_rocksdb_thread_num", args.hps_rocksdb_db_threads))
         cmd.append(gflag("hps_native_dram_fraction", args.hps_native_dram_fraction))
         cmd.append(
