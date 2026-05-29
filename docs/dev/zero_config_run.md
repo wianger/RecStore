@@ -43,7 +43,7 @@ docker pull ghcr.io/choimoe/recstore/recstore-devel:latest
 建议克隆仓库，并把代码目录挂载进容器。这样可以直接复用仓库里的配置、脚本和示例：
 
 ```bash
-git clone https://github.com/RecStore/RecStore.git
+git clone --depth 1 --single-branch https://github.com/RecStore/RecStore.git
 cd RecStore
 ```
 
