@@ -13,6 +13,10 @@ class DistEmbedding:
 def _get_kv_client_if_needed(params: List[Any]):
     """Dynamically imports and returns the KV client if params are provided."""
     if params:
+        for mod in params:
+            module_kv_client = getattr(mod, "kv_client", None)
+            if module_kv_client is not None:
+                return module_kv_client
         from .KVClient import get_kv_client
         from .DistEmb import DistEmbedding as DistEmbeddingImpl
         global DistEmbedding

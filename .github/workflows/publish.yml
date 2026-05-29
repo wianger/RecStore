@@ -5,6 +5,7 @@ on:
     paths:
       - 'dockerfiles/Dockerfile.recstore'
       - 'dockerfiles/init_env_inside_docker.sh'
+      - 'dockerfiles/git_ref.sh'
       - '.gitmodules'
       - 'third_party/**'
       - '.github/workflows/publish.yml'
@@ -37,14 +38,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 0
+          submodules: false
+          fetch-depth: 1
 
       - name: Sync and update submodules
         run: |
           set -euo pipefail
           git submodule sync --recursive
           git submodule update --init --recursive --jobs 4 --depth 1
+
+      - name: Free runner disk space
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache || true
+          sudo docker system prune -af --volumes || true
+          echo "Disk after cleanup:"
+          df -h
 
       - name: Preflight publish checks
         id: preflight
@@ -89,7 +100,7 @@ jobs:
           platforms: linux/amd64
           tags: ${{ env.LOCAL_IMAGE }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
       - name: Initialize image inside container
         if: github.event_name != 'workflow_dispatch' || inputs.run_init
@@ -118,9 +129,11 @@ jobs:
             fi
             echo "Cached initialized third_party at /opt/recstore-cache/third_party"
           '
-          docker exec "${INIT_CONTAINER}" bash -lc 'rm -rf /tmp/env_setup_markers'
+          docker exec "${INIT_CONTAINER}" bash -lc 'rm -rf /tmp/env_setup_markers /workspace'
           docker commit "${INIT_CONTAINER}" "${FINAL_IMAGE}"
           docker rm -f "${INIT_CONTAINER}" || true
+          docker image rm "${LOCAL_IMAGE}" || true
+          docker builder prune -af || true
 
       - name: Use non-initialized image as final
         if: github.event_name == 'workflow_dispatch' && !inputs.run_init

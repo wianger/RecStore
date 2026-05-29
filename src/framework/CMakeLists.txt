@@ -81,14 +81,18 @@ if(TARGET recstore_torch_ops)
     )
 endif()
 
-add_test(
-    NAME dist_emb_unittest
-    COMMAND ${Python_EXECUTABLE} -m unittest recstore.unittest.test_dist_emb
-)
+if(TARGET recstore_torch_ops)
+    add_test(
+        NAME dist_emb_unittest
+        COMMAND ${Python_EXECUTABLE} -m unittest recstore.unittest.test_dist_emb
+    )
 
-set_tests_properties(dist_emb_unittest PROPERTIES
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/python/pytorch
-)
+    set_tests_properties(dist_emb_unittest PROPERTIES
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/python/pytorch
+    )
+else()
+    message(STATUS "Skipping dist_emb_unittest because recstore_torch_ops is unavailable")
+endif()
 
 add_test(
     NAME ebc_precision_test

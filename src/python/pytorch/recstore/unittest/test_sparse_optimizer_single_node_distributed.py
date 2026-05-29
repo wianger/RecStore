@@ -2,6 +2,7 @@ import unittest
 
 import torch
 
+from .. import KVClient as kv_client_module
 from .. import optimizer as optimizer_module
 from ..optimizer import SparseSGD
 from ..single_node_exchange import SparseGradPayload
@@ -90,6 +91,7 @@ class TestSparseOptimizerSingleNodeDistributed(unittest.TestCase):
             "exchange_sparse_grads",
             None,
         )
+        self._original_get_kv_client = kv_client_module.get_kv_client
 
     def tearDown(self):
         optimizer_module.torch.distributed = self._original_dist
@@ -97,6 +99,20 @@ class TestSparseOptimizerSingleNodeDistributed(unittest.TestCase):
             delattr(optimizer_module, "exchange_sparse_grads")
         else:
             optimizer_module.exchange_sparse_grads = self._original_exchange_sparse_grads
+        kv_client_module.get_kv_client = self._original_get_kv_client
+
+    def test_init_uses_injected_module_kv_client_without_loading_global_client(self):
+        kv_client = _FakeLegacyKVClient()
+        mod = _FakeModule(trace=[], kv_client=kv_client)
+
+        def fail_get_kv_client():
+            raise AssertionError("SparseSGD should use the module kv_client")
+
+        kv_client_module.get_kv_client = fail_get_kv_client
+
+        optimizer = SparseSGD([mod], lr=0.1)
+
+        self.assertIs(optimizer.kv_client, kv_client)
 
     def test_fast_path_disabled_keeps_legacy_async_update_and_flush_wait(self):
         kv_client = _FakeLegacyKVClient()
