@@ -1,17 +1,27 @@
 # cmake_minimum_required(VERSION 3.10)
 project(recstore_tf_ops)
 
+find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
+
 execute_process(
-    COMMAND python -c "import tensorflow as tf; print(tf.sysconfig.get_include())"
+    COMMAND ${Python_EXECUTABLE} -c "import tensorflow as tf; print(tf.sysconfig.get_include())"
     OUTPUT_VARIABLE TENSORFLOW_INCLUDE_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE TENSORFLOW_INCLUDE_RESULT
 )
 
 execute_process(
-    COMMAND python -c "import tensorflow as tf; print(tf.sysconfig.get_lib())"
+    COMMAND ${Python_EXECUTABLE} -c "import tensorflow as tf; print(tf.sysconfig.get_lib())"
     OUTPUT_VARIABLE TENSORFLOW_LIB_DIR
     OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE TENSORFLOW_LIB_RESULT
 )
+
+if(NOT TENSORFLOW_INCLUDE_RESULT EQUAL 0 OR NOT TENSORFLOW_LIB_RESULT EQUAL 0)
+    message(FATAL_ERROR
+        "RECSTORE_ENABLE_TENSORFLOW requires the selected Python interpreter "
+        "to have the tensorflow package installed.")
+endif()
 
 file(GLOB TENSORFLOW_FRAMEWORK_SO ${TENSORFLOW_LIB_DIR}/libtensorflow_framework.so*)
 file(GLOB TENSORFLOW_CC_SO ${TENSORFLOW_LIB_DIR}/libtensorflow_cc.so*)
@@ -20,8 +30,6 @@ set(TENSORFLOW_LIBRARIES
     ${TENSORFLOW_FRAMEWORK_SO}
     ${TENSORFLOW_CC_SO}
 )
-
-find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
 
 # --- Build shared library ---
 add_library(recstore_tf_ops SHARED
@@ -73,7 +81,7 @@ set_target_properties(recstore_tf_ops PROPERTIES
 # --- Tests ---
 add_test(
     NAME tf_client_test
-    COMMAND ${Python3_EXECUTABLE}
+    COMMAND ${Python_EXECUTABLE}
             ${PROJECT_SOURCE_DIR}/src/test/framework/tensorflow/client_test.py
             "$<TARGET_FILE:recstore_tf_ops>"
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/src/test/framework/tensorflow
