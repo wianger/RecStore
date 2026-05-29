@@ -178,22 +178,10 @@ class DLRM():
                     
                     sparse_embeddings = []
                     for col in CATEGORICAL_COLUMNS:
-                        # Create categorical column
-                        categorical_col = tf.feature_column.categorical_column_with_hash_bucket(
-                            col, hash_bucket_size=HASH_BUCKET_SIZES.get(col, 10000), dtype=tf.string)
-                        
-                        # Create embedding column
-                        embedding_col = tf.feature_column.embedding_column(
-                            categorical_col, dimension=16, combiner='mean')
-                        
-                        # Get sparse IDs
-                        sparse_ids = tf.compat.v1.feature_column.input_layer(
-                            features=self._feature,
-                            feature_columns=[embedding_col])
-                        
-                        # Use RecStore embedding layer for lookup and training
-                        sparse_ids_uint64 = tf.cast(sparse_ids, tf.uint64)
-                        embeddings = self.recstore_embedding_layer(sparse_ids_uint64, training=True)
+                        sparse_ids = tf.strings.to_hash_bucket_fast(
+                            self._feature[col], HASH_BUCKET_SIZES.get(col, 10000))
+                        embeddings = self.recstore_embedding_layer(
+                            tf.cast(sparse_ids, tf.uint64), training=True)
                         
                         sparse_embeddings.append(embeddings)
                         column_tensors[col] = embeddings
@@ -248,7 +236,8 @@ class DLRM():
             # dot op
             with tf.compat.v1.variable_scope('Op_dot_layer', reuse=tf.compat.v1.AUTO_REUSE):
                 mlp_input = [dense_inputs]
-                for cols in self._sparse_column:
+                sparse_keys = CATEGORICAL_COLUMNS if self.use_recstore else self._sparse_column
+                for cols in sparse_keys:
                     mlp_input.append(column_tensors[cols])
                 mlp_input = tf.stack(mlp_input, axis=1)
                 mlp_input = self._dot_op(mlp_input)
@@ -1008,5 +997,4 @@ if __name__ == '__main__':
         tf_config, server, tf_device = generate_cluster_info(TF_CONFIG)
         with tf_device:
             main(tf_config, server)
-
 

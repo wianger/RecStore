@@ -1,11 +1,4 @@
 import tensorflow as tf
-import os
-import sys
-
-# Add RecStore path
-RECSTORE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../src/framework/tensorflow/python_client'))
-if RECSTORE_PATH not in sys.path:
-    sys.path.insert(0, RECSTORE_PATH)
 
 from client import RecstoreClient
 
@@ -25,8 +18,6 @@ class RecStoreEmbeddingLayer(tf.keras.layers.Layer):
         self.name_prefix = name_prefix
         
 
-        if library_path is None:
-            library_path = '/home/wangyuexiang/RecStore/build/lib/lib_recstore_tf_ops.so'
         self.recstore_client = RecstoreClient(library_path)
         
     def build(self, input_shape):
@@ -106,9 +97,6 @@ class RecStoreEmbeddingBag(tf.keras.layers.Layer):
         self.pooling_mode = pooling_mode
         self.name_prefix = name_prefix
         
-        # Initialize RecStore client
-        if library_path is None:
-            library_path = '/home/wangyuexiang/RecStore/build/lib/lib_recstore_tf_ops.so'
         self.recstore_client = RecstoreClient(library_path)
         
     def build(self, input_shape):

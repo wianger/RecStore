@@ -1,4 +1,5 @@
 option(USE_FAKE_KVCLIENT "Use FakeKVClientOp for testing" OFF)
+option(RECSTORE_ENABLE_TENSORFLOW "Build TensorFlow framework ops" OFF)
 
 find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
 
@@ -9,7 +10,11 @@ else()
     message(STATUS "Skipping framework/pytorch because CUDA is disabled or nvcc not found")
 endif()
 
-# add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tensorflow)
+if(RECSTORE_ENABLE_TENSORFLOW)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tensorflow)
+else()
+    message(STATUS "Skipping framework/tensorflow because RECSTORE_ENABLE_TENSORFLOW is OFF")
+endif()
 
 if(USE_FAKE_KVCLIENT)
     message(STATUS "Using FakeKVClientOp for testing!")
