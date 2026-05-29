@@ -469,7 +469,6 @@ set_tests_properties(
 add_python_unittest(
     test_hierkv_python_ops_py
     src.python.pytorch.recstore.unittest.test_kvclient_local_fast_path
-    src.python.pytorch.recstore.unittest.test_hierkv_integration
     src.python.pytorch.recstore.unittest.test_embeddingbag_single_node_distributed
     src.python.pytorch.recstore.unittest.test_sparse_optimizer_single_node_distributed
     model_zoo.rs_demo.tests.test_recstore_distributed
@@ -479,6 +478,20 @@ set_tests_properties(
     PROPERTIES
     LABELS "hierkv;python;integration"
 )
+
+if(TARGET recstore_torch_ops)
+    add_python_unittest(
+        test_hierkv_python_ops_with_torch_ops_py
+        src.python.pytorch.recstore.unittest.test_hierkv_integration
+    )
+    set_tests_properties(
+        test_hierkv_python_ops_with_torch_ops_py
+        PROPERTIES
+        LABELS "hierkv;python;integration;torch_ops"
+    )
+else()
+    message(STATUS "Skipping HierKV torch ops Python integration tests because recstore_torch_ops is unavailable")
+endif()
 
 add_python_unittest(
     test_hierkv_rs_demo_py
