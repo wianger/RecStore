@@ -87,15 +87,14 @@ Generic PS benchmark RDMA single-client transactions smoke:
 ```bash
 python3 src/test/scripts/run_benchmark_ps.py \
   --transports rdma \
-  --client-hosts 127.0.0.1 \
-  --server-hosts 127.0.0.1 \
-  --server-count 1 \
-  --client-count 1 \
+  --client-ips 127.0.0.1 \
+  --server-shard-ips 127.0.0.1 \
+  --client-processes-per-ip 1 \
   --record-count 10000 \
   --value-size 128 \
   --batch-keys 64 \
-  --threads 1 \
-  --load-threads 1 \
+  --client-threads-per-process 1 \
+  --client-load-threads-per-process 1 \
   --runtime-seconds 1 \
   --repeat 1 \
   --rdma-wait-timeout-ms 8000 \
@@ -110,15 +109,14 @@ Generic PS RDMA fetch pipeline diagnosis:
 ```bash
 python3 src/test/scripts/run_benchmark_ps.py \
   --transports rdma \
-  --client-hosts 127.0.0.1 \
-  --server-hosts 127.0.0.1 \
-  --server-count 2 \
-  --client-count 2 \
+  --client-ips 127.0.0.1 \
+  --server-shard-ips 127.0.0.1,127.0.0.1 \
+  --client-processes-per-ip 2 \
   --record-count 1000000 \
   --value-size 512 \
   --batch-keys 1024 \
-  --threads 1 \
-  --load-threads 1 \
+  --client-threads-per-process 1 \
+  --client-load-threads-per-process 1 \
   --runtime-seconds 5 \
   --repeat 1 \
   --execution-backend local \
@@ -191,9 +189,11 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - Measured key volume is roughly `iterations * rounds * batch_keys`.
 - `--qps-per-client-per-shard` is RC QP pool size, not a target QPS.
 - For `async_stream`, require `qps-per-client-per-shard >= async-depth`.
-- For generic PS transaction benchmarks, keep `--threads 1 --load-threads 1` for RDMA unless same-process multi-lane semantics have been explicitly changed and revalidated; scale load with `--client-count`.
+- For generic PS transaction benchmarks, keep `--client-threads-per-process 1 --client-load-threads-per-process 1` for RDMA unless same-process multi-lane semantics have been explicitly changed and revalidated; scale load with `--client-processes-per-ip`.
 - `--prefetch-depth` on `run_benchmark_ps.py` overrides the default RDMA fetch pipeline depth. It is valid only with `transactions` and `mode=fetch`.
-- Do not combine RDMA with GRPC/BRPC in the same `run_benchmark_ps.py` command when using RPC-oriented `--threads` values. Split RPC and RDMA runs because safe thread settings differ.
+- Do not combine RDMA with GRPC/BRPC in the same `run_benchmark_ps.py` command when using RPC-oriented `--client-threads-per-process` values. Split RPC and RDMA runs if the safe thread settings differ.
+- When comparing RDMA with GRPC/BRPC, either align `client_threads_per_process` across transports or label the comparison as a capacity-oriented mixed-concurrency run. Do not present mixed thread counts as a fair transport comparison.
+- Local multi-shard runs where all `server-shard-ips` are `127.0.0.1` are single-machine stress tests, not evidence of cross-machine shard scaling.
 - `read` and `push` PUT-v2 modes are different transport paths; do not merge them into one throughput conclusion.
 - Higher `thread-num` can increase polling capacity but can also hide low-load fixed costs.
 - `--fake-get-mode` and `--skip-client-copy` are diagnostic knobs, not default benchmark settings.
@@ -206,7 +206,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - If verbs devices are missing, state that only build/unit-level validation was possible.
 - For benchmark reports, include:
   - exact command
-  - `client-count`, `server-count`, `thread-num` or `rdma-thread-num`
+  - `client-processes-per-ip`, `server-shard-ips`, `client-threads-per-process`, and `server-rdma-threads`
   - `iterations`, `rounds`, `warmup-rounds`
   - `batch-keys`, `value-size`, `op`, `async-depth`
   - `qps-per-client-per-shard`
@@ -221,8 +221,9 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - Treat `run_benchmark_ps.py` and `run_rdma_rc_transport_benchmark.py` as different validation layers. If the generic PS benchmark fails but the dedicated RC benchmark succeeds, report that the failure is above or beside the RC transport baseline.
 - Before diagnosing a generic PS RDMA timeout as a transport issue, inspect server logs for allocation or config failures such as `KVEngine value allocation failed`.
 - In the current repo snapshot, the low-load single-client RC benchmark is a good smoke baseline. Prefer proving this path first before escalating to multi-client or multi-shard RDMA runs.
-- As of `2026-05-27`, generic PS benchmark RDMA `transactions/fetch` is verified for `client-count=1` and `client-count=2`, with `threads=1` and `load-threads=1`, by reusing the same client across load and run inside each benchmark process.
-- For generic PS benchmark RDMA concurrency, use `--client-count` for multi-process clients. Keep `--threads=1` per process unless the adapter's same-process multi-client/lane semantics are explicitly changed and revalidated.
+- As of `2026-05-29`, generic PS benchmark RDMA `transactions/fetch` is verified locally with `client-processes-per-ip=1,2,4,8`, `server-shard-ips` counts of `1` and `2`, and `client-threads-per-process=1`.
+- For generic PS benchmark RDMA concurrency, use `--client-processes-per-ip` for multi-process clients. Keep `--client-threads-per-process=1` per process unless the adapter's same-process multi-client/lane semantics are explicitly changed and revalidated.
+- In the local `batch_keys=500`, `value_size=512`, `client_threads_per_process=1` matrix, single-shard RDMA plateaued around `3.0 M keys/s`; adding local shards on the same host reduced throughput. Treat this as a local PS/server scheduling observation, not as a NIC limit or distributed scaling result.
 - If server shutdown prints a `SIGTERM` stack trace after a successful run, do not classify that alone as a benchmark failure. Distinguish expected teardown from request-path failures such as `RC write RPC wait timeout`.
 
 ## Debugging Focus
