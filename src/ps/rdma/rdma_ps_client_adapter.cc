@@ -1,6 +1,8 @@
 #include "ps/rdma/rdma_ps_client_adapter.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -30,6 +32,17 @@ DEFINE_string(rdma_transport_mode, "rc_write", "RDMA transport mode: rc_write");
 namespace recstore {
 
 namespace {
+bool AdapterProfileEnabled() {
+  const char* value = std::getenv("RECSTORE_RDMA_ADAPTER_PROFILE");
+  return value != nullptr && std::string(value) != "0";
+}
+
+std::int64_t NsSince(std::chrono::steady_clock::time_point start,
+                     std::chrono::steady_clock::time_point end) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
+      .count();
+}
+
 int ValueSizeHintFromBaseKvConfig(const json& base_kv_config,
                                   int fallback_value_size) {
   if (!base_kv_config.is_object()) {
@@ -752,7 +765,10 @@ bool RDMAPSClientAdapter::GetPrefetchResultFlat(
     return false;
   }
 
+  const bool profile_enabled = AdapterProfileEnabled();
+  const auto wait_begin      = std::chrono::steady_clock::now();
   WaitForPrefetch(prefetch_id);
+  const auto wait_end     = std::chrono::steady_clock::now();
   const auto* status_word = petps::FixedSlotStatusWord(
       state.buffer,
       static_cast<std::size_t>(state.key_count),
@@ -766,10 +782,37 @@ bool RDMAPSClientAdapter::GetPrefetchResultFlat(
   const std::size_t value_count =
       static_cast<std::size_t>(state.key_count) *
       static_cast<std::size_t>(state.embedding_dim);
+  const auto assign_begin = std::chrono::steady_clock::now();
   values->assign(state.buffer, state.buffer + value_count);
-  *num_rows = state.key_count;
+  const auto assign_end   = std::chrono::steady_clock::now();
+  *num_rows               = state.key_count;
+  const auto revoke_begin = std::chrono::steady_clock::now();
   RevokeRPCResource(state.rpc_id);
   MarkPrefetchConsumed(prefetch_id);
+  const auto revoke_end = std::chrono::steady_clock::now();
+  if (profile_enabled) {
+    static std::atomic<std::uint64_t> count{0};
+    static std::atomic<std::uint64_t> wait_ns{0};
+    static std::atomic<std::uint64_t> assign_ns{0};
+    static std::atomic<std::uint64_t> revoke_ns{0};
+    const std::uint64_t current = count.fetch_add(1) + 1;
+    wait_ns.fetch_add(
+        static_cast<std::uint64_t>(NsSince(wait_begin, wait_end)));
+    assign_ns.fetch_add(
+        static_cast<std::uint64_t>(NsSince(assign_begin, assign_end)));
+    revoke_ns.fetch_add(
+        static_cast<std::uint64_t>(NsSince(revoke_begin, revoke_end)));
+    if (current == 1 || current % 512 == 0) {
+      const double denom = static_cast<double>(current);
+      std::cout
+          << "component=rdma_adapter_prefetch_profile"
+          << " batches=" << current
+          << " wait_avg_ns=" << static_cast<double>(wait_ns.load()) / denom
+          << " assign_avg_ns=" << static_cast<double>(assign_ns.load()) / denom
+          << " revoke_avg_ns=" << static_cast<double>(revoke_ns.load()) / denom
+          << " value_count=" << value_count << std::endl;
+    }
+  }
   return true;
 }
 

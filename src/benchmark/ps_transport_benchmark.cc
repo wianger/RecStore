@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <fstream>
 #include <iostream>
@@ -59,6 +60,9 @@ DEFINE_int32(prefetch_depth,
              0,
              "fetch-only prefetch pipeline depth for transactions; "
              "0 uses the RDMA default depth");
+DEFINE_bool(transaction_profile,
+            false,
+            "print per-thread transaction timing breakdown");
 DECLARE_int32(value_size);
 
 namespace {
@@ -114,6 +118,15 @@ const char* LocalOpcodeLabel(uint32_t opcode) {
     return "UNKNOWN";
   }
 }
+
+struct TransactionProfileStats {
+  uint64_t make_keys_ns = 0;
+  uint64_t submit_ns    = 0;
+  uint64_t consume_ns   = 0;
+  uint64_t wait_ns      = 0;
+  uint64_t copy_ns      = 0;
+  uint64_t iterations   = 0;
+};
 
 class FastRandom {
 public:
@@ -494,6 +507,12 @@ bool ConsumePrefetchFlat(
   return client->GetPrefetchResultFlat(prefetch_id, output, num_rows, dim);
 }
 
+int64_t NsSince(std::chrono::steady_clock::time_point start,
+                std::chrono::steady_clock::time_point end) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
+      .count();
+}
+
 using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
 
 PhaseStats LoadRecords(
@@ -661,6 +680,7 @@ PhaseStats RunPrefetchFetchTransactions(
   std::atomic<bool> stop{false};
   std::vector<std::thread> threads;
   std::vector<PhaseStats> stats(FLAGS_thread_num);
+  std::vector<TransactionProfileStats> profile_stats(FLAGS_thread_num);
 
   struct PendingFetch {
     uint64_t prefetch_id = 0;
@@ -693,28 +713,44 @@ PhaseStats RunPrefetchFetchTransactions(
       std::vector<float> output;
       int64_t num_rows = 0;
       PhaseStats local;
+      TransactionProfileStats local_profile;
 
       auto make_keys = [&]() {
+        const auto begin = std::chrono::steady_clock::now();
         std::vector<uint64_t> keys(static_cast<size_t>(FLAGS_batch_keys));
         for (auto& key : keys) {
           key = key_gen.NextKey();
         }
+        const auto end = std::chrono::steady_clock::now();
+        local_profile.make_keys_ns +=
+            static_cast<uint64_t>(NsSince(begin, end));
         return keys;
       };
       auto submit_one = [&]() {
         PendingFetch fetch;
-        fetch.keys = make_keys();
+        fetch.keys              = make_keys();
+        const auto submit_begin = std::chrono::steady_clock::now();
         CHECK(PrefetchFlat(client, fetch.keys, &fetch.prefetch_id))
             << transport << " PrefetchParameter failed";
+        const auto submit_end = std::chrono::steady_clock::now();
+        local_profile.submit_ns +=
+            static_cast<uint64_t>(NsSince(submit_begin, submit_end));
         pending.push_back(std::move(fetch));
       };
       auto consume_front = [&]() {
         PendingFetch fetch = std::move(pending.front());
         pending.pop_front();
+        const auto consume_begin = std::chrono::steady_clock::now();
         CHECK(ConsumePrefetchFlat(
             client, fetch.prefetch_id, &output, &num_rows, dim))
             << transport << " GetPrefetchResultFlat failed";
+        const auto consume_end = std::chrono::steady_clock::now();
         CHECK_EQ(num_rows, static_cast<int64_t>(fetch.keys.size()));
+        local_profile.consume_ns +=
+            static_cast<uint64_t>(NsSince(consume_begin, consume_end));
+        local_profile.wait_ns +=
+            static_cast<uint64_t>(NsSince(consume_begin, consume_end));
+        ++local_profile.iterations;
         ++local.batches;
         local.key_ops += fetch.keys.size();
       };
@@ -731,7 +767,8 @@ PhaseStats RunPrefetchFetchTransactions(
       while (!pending.empty()) {
         consume_front();
       }
-      stats[tid] = local;
+      stats[tid]         = local;
+      profile_stats[tid] = local_profile;
     });
   }
 
@@ -746,6 +783,32 @@ PhaseStats RunPrefetchFetchTransactions(
   for (const auto& each : stats) {
     total.batches += each.batches;
     total.key_ops += each.key_ops;
+  }
+  if (FLAGS_transaction_profile) {
+    TransactionProfileStats total_profile;
+    for (const auto& each : profile_stats) {
+      total_profile.make_keys_ns += each.make_keys_ns;
+      total_profile.submit_ns += each.submit_ns;
+      total_profile.consume_ns += each.consume_ns;
+      total_profile.wait_ns += each.wait_ns;
+      total_profile.copy_ns += each.copy_ns;
+      total_profile.iterations += each.iterations;
+    }
+    const double denom =
+        total_profile.iterations == 0
+            ? 1.0
+            : static_cast<double>(total_profile.iterations);
+    std::cout << "PS_BENCHMARK_PROFILE phase=run transport=" << transport
+              << " mode=" << FLAGS_mode << " prefetch_depth=" << prefetch_depth
+              << " batches=" << total_profile.iterations << " make_keys_avg_ns="
+              << static_cast<double>(total_profile.make_keys_ns) / denom
+              << " submit_avg_ns="
+              << static_cast<double>(total_profile.submit_ns) / denom
+              << " consume_avg_ns="
+              << static_cast<double>(total_profile.consume_ns) / denom
+              << " wait_plus_result_avg_ns="
+              << static_cast<double>(total_profile.wait_ns) / denom
+              << std::endl;
   }
   return total;
 }

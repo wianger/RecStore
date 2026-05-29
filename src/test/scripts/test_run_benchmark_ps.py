@@ -39,29 +39,33 @@ class TestRunBenchmarkPS(unittest.TestCase):
             ["GRPC", "BRPC", "RDMA"],
         )
 
-    def test_build_topology_plan_single_host_replication(self):
+    def test_build_topology_plan_expands_shards_and_client_processes(self):
         topology = build_topology_plan(
             "GRPC",
-            server_hosts=["127.0.0.1"],
-            client_hosts=["127.0.0.1"],
-            server_count=2,
-            client_count=2,
+            server_shard_ips=["server-a", "server-b"],
+            client_ips=["client-a", "client-b"],
+            client_processes_per_ip=2,
             base_port=15000,
         )
         self.assertEqual(len(topology.server_plan), 2)
-        self.assertEqual(topology.server_plan[1].host, "127.0.0.1")
+        self.assertEqual(topology.server_plan[1].host, "server-b")
         self.assertEqual(topology.server_plan[1].shard, 1)
         self.assertEqual(topology.server_plan[1].port, 15001)
-        self.assertEqual(topology.client_plan[1].host, "127.0.0.1")
+        self.assertEqual(len(topology.client_plan), 4)
+        self.assertEqual([client.host for client in topology.client_plan], [
+            "client-a",
+            "client-a",
+            "client-b",
+            "client-b",
+        ])
 
-    def test_build_topology_plan_rejects_invalid_host_lengths(self):
-        with self.assertRaisesRegex(ValueError, "server_hosts length"):
+    def test_build_topology_plan_rejects_invalid_client_processes_per_ip(self):
+        with self.assertRaisesRegex(ValueError, "client_processes_per_ip"):
             build_topology_plan(
                 "GRPC",
-                server_hosts=["a", "b"],
-                client_hosts=["127.0.0.1"],
-                server_count=3,
-                client_count=1,
+                server_shard_ips=["server-a"],
+                client_ips=["client-a"],
+                client_processes_per_ip=0,
                 base_port=15000,
             )
 
@@ -84,10 +88,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_build_topology_plan_uses_explicit_server_and_client_plan(self):
         topology = build_topology_plan(
             "BRPC",
-            server_hosts=["ignored"],
-            client_hosts=["ignored"],
-            server_count=1,
-            client_count=1,
+            server_shard_ips=["ignored"],
+            client_ips=["ignored"],
+            client_processes_per_ip=1,
             base_port=25000,
             server_plan="0:server-a:25010:4,1:server-b:25011:9",
             client_plan="0:client-a,1:client-b",
@@ -101,10 +104,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_build_topology_plan_allows_server_plan_with_default_clients(self):
         topology = build_topology_plan(
             "GRPC",
-            server_hosts=["unused"],
-            client_hosts=["client-a"],
-            server_count=1,
-            client_count=3,
+            server_shard_ips=["unused"],
+            client_ips=["client-a"],
+            client_processes_per_ip=3,
             base_port=15000,
             server_plan="server-a:25000:0,server-a:25001:1",
         )
@@ -115,10 +117,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_build_runtime_config_writes_explicit_shards(self):
         topology = build_topology_plan(
             "BRPC",
-            server_hosts=["server-a", "server-b"],
-            client_hosts=["client-a"],
-            server_count=2,
-            client_count=1,
+            server_shard_ips=["server-a", "server-b"],
+            client_ips=["client-a"],
+            client_processes_per_ip=1,
             base_port=25000,
         )
         config = build_runtime_config(
@@ -140,10 +141,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_build_runtime_config_uses_rdma_ps_type(self):
         topology = build_topology_plan(
             "RDMA",
-            server_hosts=["rdma-a"],
-            client_hosts=["client-a"],
-            server_count=1,
-            client_count=1,
+            server_shard_ips=["rdma-a"],
+            client_ips=["client-a"],
+            client_processes_per_ip=1,
             base_port=25000,
         )
         config = build_runtime_config(
@@ -162,10 +162,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_build_runtime_config_adds_slab_metadata_capacity(self):
         topology = build_topology_plan(
             "GRPC",
-            server_hosts=["127.0.0.1"],
-            client_hosts=["127.0.0.1"],
-            server_count=1,
-            client_count=1,
+            server_shard_ips=["127.0.0.1"],
+            client_ips=["127.0.0.1"],
+            client_processes_per_ip=1,
             base_port=15000,
         )
         config = build_runtime_config(
@@ -211,10 +210,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_build_benchmark_cmd_includes_transactions_args(self):
         topology = build_topology_plan(
             "GRPC",
-            server_hosts=["127.0.0.1"],
-            client_hosts=["127.0.0.1"],
-            server_count=1,
-            client_count=1,
+            server_shard_ips=["127.0.0.1"],
+            client_ips=["127.0.0.1"],
+            client_processes_per_ip=1,
             base_port=15000,
         )
         cmd = build_benchmark_cmd(
@@ -224,7 +222,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
             config_path="/tmp/config.json",
             record_count=1000,
             runtime_seconds=5,
-            threads=16,
+            client_threads_per_process=16,
             load_threads=8,
             batch_keys=64,
             value_size=256,
@@ -243,7 +241,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
 
     def test_build_rdma_runner_forwards_profile_interval(self):
         args = argparse.Namespace(
-            rdma_thread_num=1,
+            server_rdma_threads=1,
             cluster_timeout=45,
             startup_delay=2.0,
             output_dir=Path("/tmp/bench"),
@@ -261,8 +259,8 @@ class TestRunBenchmarkPS(unittest.TestCase):
             args,
             config_path="/tmp/config.json",
             server_binary="/tmp/petps_server",
-            server_count=2,
-            client_count=2,
+            server_shards=2,
+            client_processes=2,
             value_size=512,
             max_keys_per_request=1024,
             rdma_namespace="profile-test",
@@ -348,14 +346,14 @@ class TestRunBenchmarkPS(unittest.TestCase):
                         "phase": "run",
                         "client_index": 0,
                         "repeat_index": 0,
-                        "server_count": 1,
-                        "client_count": 1,
-                        "server_hosts": "127.0.0.1",
-                        "client_hosts": "127.0.0.1",
+                        "server_shards": 1,
+                        "client_processes": 1,
+                        "server_shard_ips": "127.0.0.1",
+                        "client_ips": "127.0.0.1",
                         "record_count": 1000,
                         "value_size": 128,
                         "batch_keys": 64,
-                        "threads": 16,
+                        "client_threads_per_process": 16,
                         "runtime_seconds": 1,
                         "distribution": "uniform",
                         "mode": "fetch",
@@ -378,16 +376,15 @@ class TestRunBenchmarkPS(unittest.TestCase):
     def test_apply_interactive_prompts_updates_prompted_values(self):
         args = argparse.Namespace(
             transports="rdma,grpc,brpc",
-            client_hosts="127.0.0.1",
-            server_hosts="127.0.0.1",
-            server_count=1,
-            client_count=1,
+            client_ips="127.0.0.1",
+            server_shard_ips="127.0.0.1",
+            client_processes_per_ip=1,
             server_plan="",
             client_plan="",
             record_count=1000000,
             value_size=512,
             batch_keys=1024,
-            threads=16,
+            client_threads_per_process=16,
             runtime_seconds=5,
             repeat=1,
             execution_backend="local",
@@ -397,8 +394,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
             [
                 "grpc",
                 "client-a",
-                "server-a",
-                "2",
+                "server-a,server-b",
                 "1",
                 "0:server-a:15000:0,1:server-b:15001:3",
                 "",
@@ -415,7 +411,8 @@ class TestRunBenchmarkPS(unittest.TestCase):
         with mock.patch("builtins.input", side_effect=lambda _prompt: next(answers)):
             apply_interactive_prompts(args)
         self.assertEqual(args.transports, "grpc")
-        self.assertEqual(args.server_count, 2)
+        self.assertEqual(args.server_shard_ips, "server-a,server-b")
+        self.assertEqual(args.client_processes_per_ip, 1)
         self.assertEqual(args.server_plan, "0:server-a:15000:0,1:server-b:15001:3")
         self.assertEqual(args.record_count, 4096)
         self.assertEqual(args.execution_backend, "ssh")
@@ -432,8 +429,13 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertEqual(completed.returncode, 0)
         self.assertIn("--execution-backend", completed.stdout)
         self.assertIn("--remote-sync", completed.stdout)
-        self.assertIn("--client-hosts", completed.stdout)
-        self.assertIn("--server-hosts", completed.stdout)
+        self.assertIn("--client-ips", completed.stdout)
+        self.assertIn("--server-shard-ips", completed.stdout)
+        self.assertIn("--client-processes-per-ip", completed.stdout)
+        self.assertIn("--client-threads-per-process", completed.stdout)
+        self.assertIn("--client-load-threads-per-process", completed.stdout)
+        self.assertIn("--server-worker-threads", completed.stdout)
+        self.assertIn("--server-rdma-threads", completed.stdout)
         self.assertIn("--server-plan", completed.stdout)
         self.assertIn("--client-plan", completed.stdout)
         self.assertIn("--interactive", completed.stdout)
@@ -441,6 +443,14 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--rdma-rc-profile-interval-ms", completed.stdout)
         self.assertIn("--rdma-rc-fake-get-mode", completed.stdout)
         self.assertIn("--rdma-rc-skip-client-copy", completed.stdout)
+        self.assertNotIn("--client-hosts", completed.stdout)
+        self.assertNotIn("--server-hosts", completed.stdout)
+        self.assertNotIn("--server-count", completed.stdout)
+        self.assertNotIn("--client-count", completed.stdout)
+        self.assertNotIn("--threads", completed.stdout)
+        self.assertNotIn("--load-threads", completed.stdout)
+        self.assertNotIn("--server-num-threads", completed.stdout)
+        self.assertNotIn("--rdma-thread-num", completed.stdout)
 
 
 if __name__ == "__main__":
