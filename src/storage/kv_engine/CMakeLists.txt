@@ -33,6 +33,7 @@ if(TARGET fasterkv_backend)
     kv_engine PRIVATE
     ${PROJECT_SOURCE_DIR}/src/storage/external/fasterkv/fasterkv_engine.cc)
   target_link_libraries(kv_engine PUBLIC fasterkv_backend)
+  target_compile_definitions(kv_engine PRIVATE RECSTORE_ENABLE_FASTERKV_ENGINE)
 endif()
 
 if(TARGET hps_native_support)
@@ -40,6 +41,7 @@ if(TARGET hps_native_support)
     kv_engine PRIVATE
     ${PROJECT_SOURCE_DIR}/src/storage/external/hps/hps_engine.cc)
   target_link_libraries(kv_engine PUBLIC hps_native_support)
+  target_compile_definitions(kv_engine PRIVATE RECSTORE_ENABLE_HPS_ENGINE)
 endif()
 # KV engine factory done
 

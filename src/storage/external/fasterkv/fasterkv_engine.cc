@@ -195,5 +195,7 @@ private:
   recstore::storage::fasterkv::FasterKVBackend backend_;
 };
 
+extern "C" void RecStoreForceLinkFasterKVEngine() {}
+
 FACTORY_REGISTER(
     BaseKV, KVEngineFasterKV, KVEngineFasterKV, const BaseKVConfig&);
