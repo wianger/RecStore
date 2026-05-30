@@ -2,6 +2,7 @@
 #include "ps/local_shm/local_shm_futex.h"
 #include "ps/local_shm/local_shm_queue.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -39,6 +40,18 @@ std::size_t UpdateFlatPayloadBytes(const std::string& table_name,
          sizeof(float) * key_count * embedding_dim;
 }
 
+uint64_t SteadyNowNs() {
+  return static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+}
+
+double NsToUs(uint64_t ns) { return static_cast<double>(ns) / 1000.0; }
+
+thread_local LocalShmRequestProfile g_last_request_profile;
+thread_local LocalShmActiveRequestProfile g_active_request_profile;
+
 void ResetFlatGetHandle(LocalShmFlatGetHandle* handle) {
   if (handle == nullptr) {
     return;
@@ -61,6 +74,13 @@ bool IsFlatGetHandleClear(const LocalShmFlatGetHandle& handle) {
 void MarkError(LocalShmSlotHeader* header, LocalStatusCode code) {
   header->status_code = static_cast<uint32_t>(code);
   header->state.store(static_cast<uint32_t>(LocalSlotState::kError));
+}
+
+void MarkActiveRequestOpcode(uint32_t opcode) {
+  if (!g_active_request_profile.active) {
+    return;
+  }
+  g_active_request_profile.opcode = opcode;
 }
 
 uint32_t ReadQueueSelector(const json& config, uint32_t fallback) {
@@ -99,11 +119,14 @@ LocalShmPSClient::LocalShmPSClient(json config) : BasePSClient(config) {
     return;
   }
   ready_queue_id_ = ResolveReadyQueueId(config);
+  thread_ready_queue_sharding_ =
+      config.value("thread_ready_queue_sharding", false);
   LOG(INFO) << "LocalShmPSClient attached region=" << region_name_
             << " pid=" << ::getpid() << " client_id=" << client_id_
             << " timeout_ms=" << timeout_ms_
             << " ready_queue_count=" << region_.ready_queue_count()
-            << " ready_queue_id=" << ready_queue_id_;
+            << " ready_queue_id=" << ready_queue_id_
+            << " thread_ready_queue_sharding=" << thread_ready_queue_sharding_;
 }
 
 int LocalShmPSClient::GetParameter(const base::ConstArray<uint64_t>& keys,
@@ -137,12 +160,16 @@ int LocalShmPSClient::GetParameterFlat(
   if (values == nullptr) {
     LOG(ERROR) << "LocalShmPSClient::GetParameter invalid_state"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " key_count="
-               << num_rows << " embedding_dim=" << embedding_dim;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " key_count=" << num_rows
+               << " embedding_dim=" << embedding_dim;
     return -1;
   }
   LocalShmFlatGetHandle handle;
+  ResetActiveRequestProfile();
+  g_active_request_profile.active        = true;
+  g_active_request_profile.request_start = std::chrono::steady_clock::now();
   if (SubmitGetParameterFlat(keys, num_rows, embedding_dim, &handle) != 0) {
     return -1;
   }
@@ -163,31 +190,35 @@ int LocalShmPSClient::SubmitGetParameterFlat(
   if (handle == nullptr) {
     LOG(ERROR) << "LocalShmPSClient::SubmitGetParameterFlat null_handle"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
+               << " backend=local_shm"
+               << " region_name=" << region_name_
                << " ready_queue_id=" << ready_queue_id_;
     return -1;
   }
   if (!IsFlatGetHandleClear(*handle)) {
     LOG(ERROR) << "LocalShmPSClient::SubmitGetParameterFlat handle_not_clear"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " slot_id="
-               << handle->slot_id << " request_id=" << handle->request_id
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " slot_id=" << handle->slot_id
+               << " request_id=" << handle->request_id
                << " output_bytes=" << handle->output_bytes;
     return -1;
   }
   if (!region_.IsOpen()) {
     LOG(ERROR) << "LocalShmPSClient::SubmitGetParameterFlat invalid_state"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " key_count="
-               << num_rows << " embedding_dim=" << embedding_dim;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " key_count=" << num_rows
+               << " embedding_dim=" << embedding_dim;
     return -1;
   }
   if (num_rows < 0 || keys.Size() != static_cast<size_t>(num_rows)) {
     LOG(ERROR) << "LocalShmPSClient::SubmitGetParameterFlat invalid_row_count"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
+               << " backend=local_shm"
+               << " region_name=" << region_name_
                << " ready_queue_id=" << ready_queue_id_
                << " key_count=" << keys.Size() << " num_rows=" << num_rows
                << " embedding_dim=" << embedding_dim;
@@ -207,9 +238,10 @@ int LocalShmPSClient::SubmitGetParameterFlat(
   if (slot < 0) {
     LOG(ERROR) << "LocalShmPSClient::SubmitGetParameterFlat acquire_slot_failed"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " key_count="
-               << num_rows << " embedding_dim=" << embedding_dim;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " key_count=" << num_rows
+               << " embedding_dim=" << embedding_dim;
     return -1;
   }
 
@@ -234,6 +266,7 @@ int LocalShmPSClient::SubmitGetParameterFlat(
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kGet);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -245,16 +278,28 @@ int LocalShmPSClient::SubmitGetParameterFlat(
   header->output_bytes      = 0;
   header->server_seen_epoch = region_.control()->server_epoch;
   header->error_message_len = 0;
+  header->client_enqueue_timestamp_ns = 0;
+  header->server_dequeue_timestamp_ns = 0;
+  header->server_backend_duration_us  = 0;
 
   if (keys.Size() > 0) {
     std::memcpy(payload, keys.Data(), input_bytes);
   }
   header->state.store(static_cast<uint32_t>(LocalSlotState::kReady));
-  CHECK(LocalShmQueueEnqueue(region_.ready_queue_header(ready_queue_id_),
-                             region_.ready_queue_cells(ready_queue_id_),
+  const uint32_t ready_queue_id       = CurrentReadyQueueId();
+  const auto enqueue_start            = std::chrono::steady_clock::now();
+  header->client_enqueue_timestamp_ns = SteadyNowNs();
+  auto* ready_header = region_.ready_queue_header(ready_queue_id);
+  CHECK(LocalShmQueueEnqueue(ready_header,
+                             region_.ready_queue_cells(ready_queue_id),
                              static_cast<uint32_t>(slot)));
-  region_.control()->request_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&region_.control()->request_doorbell);
+  FutexWakeOne(&ready_header->enqueue_pos);
+  if (g_active_request_profile.active) {
+    g_active_request_profile.enqueue_us =
+        std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+            std::chrono::steady_clock::now() - enqueue_start)
+            .count();
+  }
 
   handle->slot_id       = static_cast<uint32_t>(slot);
   handle->request_id    = request_id;
@@ -269,7 +314,8 @@ int LocalShmPSClient::WaitGetParameterFlat(LocalShmFlatGetHandle* handle) {
   if (handle == nullptr) {
     LOG(ERROR) << "LocalShmPSClient::WaitGetParameterFlat null_handle"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
+               << " backend=local_shm"
+               << " region_name=" << region_name_
                << " ready_queue_id=" << ready_queue_id_;
     return -1;
   }
@@ -277,36 +323,47 @@ int LocalShmPSClient::WaitGetParameterFlat(LocalShmFlatGetHandle* handle) {
       handle->request_id == 0) {
     LOG(ERROR) << "LocalShmPSClient::WaitGetParameterFlat invalid_handle"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " slot_id="
-               << handle->slot_id << " request_id=" << handle->request_id;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " slot_id=" << handle->slot_id
+               << " request_id=" << handle->request_id;
     return -1;
   }
   if (handle->values != nullptr) {
     LOG(ERROR) << "LocalShmPSClient::WaitGetParameterFlat already_waited"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " slot_id="
-               << handle->slot_id << " request_id=" << handle->request_id;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " slot_id=" << handle->slot_id
+               << " request_id=" << handle->request_id;
     return -1;
   }
 
-  auto* header  = region_.slot_header(handle->slot_id);
-  const bool ok = WaitForSlot(handle->slot_id, handle->request_id);
+  auto* header          = region_.slot_header(handle->slot_id);
+  const auto wait_start = std::chrono::steady_clock::now();
+  const bool ok         = WaitForSlot(handle->slot_id, handle->request_id);
+  if (g_active_request_profile.active) {
+    g_active_request_profile.wait_us =
+        std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+            std::chrono::steady_clock::now() - wait_start)
+            .count();
+  }
   if (!ok) {
     LOG(ERROR) << "LocalShmPSClient::WaitGetParameterFlat wait_failed"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " slot_id="
-               << handle->slot_id << " request_id=" << handle->request_id;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " slot_id=" << handle->slot_id
+               << " request_id=" << handle->request_id;
     return -1;
   }
   if (header->status_code != static_cast<uint32_t>(LocalStatusCode::kOk)) {
     LOG(ERROR) << "LocalShmPSClient::WaitGetParameterFlat request_failed"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_ << " slot_id="
-               << handle->slot_id << " request_id=" << handle->request_id
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " slot_id=" << handle->slot_id
+               << " request_id=" << handle->request_id
                << " status_code=" << header->status_code;
     return -1;
   }
@@ -333,6 +390,10 @@ int LocalShmPSClient::WaitGetParameterFlat(LocalShmFlatGetHandle* handle) {
   handle->values =
       reinterpret_cast<float*>(payload + GetPayloadBytes(handle->num_rows));
   handle->output_bytes = header->output_bytes;
+  if (g_active_request_profile.active) {
+    FinalizeActiveRequestProfile(
+        header, g_active_request_profile.request_start);
+  }
   return 0;
 }
 
@@ -340,16 +401,17 @@ void LocalShmPSClient::ReleaseGetParameterFlat(LocalShmFlatGetHandle* handle) {
   if (handle == nullptr) {
     LOG(ERROR) << "LocalShmPSClient::ReleaseGetParameterFlat null_handle"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
+               << " backend=local_shm"
+               << " region_name=" << region_name_
                << " ready_queue_id=" << ready_queue_id_;
     return;
   }
   if (handle->slot_id == LocalShmFlatGetHandle::kInvalidSlotId) {
     LOG(ERROR) << "LocalShmPSClient::ReleaseGetParameterFlat invalid_handle"
                << " pid=" << static_cast<int>(::getpid())
-               << " backend=local_shm" << " region_name=" << region_name_
-               << " ready_queue_id=" << ready_queue_id_
-               << " request_id=" << handle->request_id;
+               << " backend=local_shm"
+               << " region_name=" << region_name_ << " ready_queue_id="
+               << ready_queue_id_ << " request_id=" << handle->request_id;
     ResetFlatGetHandle(handle);
     return;
   }
@@ -377,6 +439,9 @@ int LocalShmPSClient::PutParameter(
   if (slot < 0) {
     return -1;
   }
+  ResetActiveRequestProfile();
+  g_active_request_profile.active        = true;
+  g_active_request_profile.request_start = std::chrono::steady_clock::now();
   auto* header  = region_.slot_header(static_cast<uint32_t>(slot));
   auto* payload = region_.slot_payload(static_cast<uint32_t>(slot));
   const std::size_t input_bytes = PutPayloadBytes(keys.Size(), embedding_dim);
@@ -388,6 +453,7 @@ int LocalShmPSClient::PutParameter(
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kPut);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -399,6 +465,9 @@ int LocalShmPSClient::PutParameter(
   header->output_bytes      = 0;
   header->server_seen_epoch = region_.control()->server_epoch;
   header->error_message_len = 0;
+  header->client_enqueue_timestamp_ns = 0;
+  header->server_dequeue_timestamp_ns = 0;
+  header->server_backend_duration_us  = 0;
 
   uint8_t* cursor = payload;
   if (keys.Size() > 0) {
@@ -412,15 +481,28 @@ int LocalShmPSClient::PutParameter(
     }
   }
   header->state.store(static_cast<uint32_t>(LocalSlotState::kReady));
-  CHECK(LocalShmQueueEnqueue(region_.ready_queue_header(ready_queue_id_),
-                             region_.ready_queue_cells(ready_queue_id_),
+  const uint32_t ready_queue_id       = CurrentReadyQueueId();
+  const auto enqueue_start            = std::chrono::steady_clock::now();
+  header->client_enqueue_timestamp_ns = SteadyNowNs();
+  auto* ready_header = region_.ready_queue_header(ready_queue_id);
+  CHECK(LocalShmQueueEnqueue(ready_header,
+                             region_.ready_queue_cells(ready_queue_id),
                              static_cast<uint32_t>(slot)));
-  region_.control()->request_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&region_.control()->request_doorbell);
+  FutexWakeOne(&ready_header->enqueue_pos);
+  g_active_request_profile.enqueue_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - enqueue_start)
+          .count();
 
+  const auto wait_start = std::chrono::steady_clock::now();
   const bool ok =
       WaitForSlot(static_cast<uint32_t>(slot), request_id) &&
       header->status_code == static_cast<uint32_t>(LocalStatusCode::kOk);
+  g_active_request_profile.wait_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - wait_start)
+          .count();
+  FinalizeActiveRequestProfile(header, g_active_request_profile.request_start);
   ReleaseSlot(static_cast<uint32_t>(slot));
   return ok ? 0 : -1;
 }
@@ -474,6 +556,9 @@ int LocalShmPSClient::UpdateParameterFlat(
   if (slot < 0) {
     return -1;
   }
+  ResetActiveRequestProfile();
+  g_active_request_profile.active        = true;
+  g_active_request_profile.request_start = std::chrono::steady_clock::now();
 
   auto* header  = region_.slot_header(static_cast<uint32_t>(slot));
   auto* payload = region_.slot_payload(static_cast<uint32_t>(slot));
@@ -487,6 +572,7 @@ int LocalShmPSClient::UpdateParameterFlat(
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kUpdateFlat);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -498,6 +584,9 @@ int LocalShmPSClient::UpdateParameterFlat(
   header->output_bytes      = 0;
   header->server_seen_epoch = region_.control()->server_epoch;
   header->error_message_len = 0;
+  header->client_enqueue_timestamp_ns = 0;
+  header->server_dequeue_timestamp_ns = 0;
+  header->server_backend_duration_us  = 0;
 
   uint8_t* cursor = payload;
   if (!table_name.empty()) {
@@ -512,15 +601,28 @@ int LocalShmPSClient::UpdateParameterFlat(
               grads,
               sizeof(float) * keys.Size() * static_cast<size_t>(embedding_dim));
   header->state.store(static_cast<uint32_t>(LocalSlotState::kReady));
-  CHECK(LocalShmQueueEnqueue(region_.ready_queue_header(ready_queue_id_),
-                             region_.ready_queue_cells(ready_queue_id_),
+  const uint32_t ready_queue_id       = CurrentReadyQueueId();
+  const auto enqueue_start            = std::chrono::steady_clock::now();
+  header->client_enqueue_timestamp_ns = SteadyNowNs();
+  auto* ready_header = region_.ready_queue_header(ready_queue_id);
+  CHECK(LocalShmQueueEnqueue(ready_header,
+                             region_.ready_queue_cells(ready_queue_id),
                              static_cast<uint32_t>(slot)));
-  region_.control()->request_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&region_.control()->request_doorbell);
+  FutexWakeOne(&ready_header->enqueue_pos);
+  g_active_request_profile.enqueue_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - enqueue_start)
+          .count();
 
+  const auto wait_start = std::chrono::steady_clock::now();
   const bool ok =
       WaitForSlot(static_cast<uint32_t>(slot), request_id) &&
       header->status_code == static_cast<uint32_t>(LocalStatusCode::kOk);
+  g_active_request_profile.wait_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - wait_start)
+          .count();
+  FinalizeActiveRequestProfile(header, g_active_request_profile.request_start);
   ReleaseSlot(static_cast<uint32_t>(slot));
   return ok ? 0 : -1;
 }
@@ -534,6 +636,9 @@ int LocalShmPSClient::InitEmbeddingTable(const std::string& table_name,
   if (slot < 0) {
     return -1;
   }
+  ResetActiveRequestProfile();
+  g_active_request_profile.active        = true;
+  g_active_request_profile.request_start = std::chrono::steady_clock::now();
 
   auto* header  = region_.slot_header(static_cast<uint32_t>(slot));
   auto* payload = region_.slot_payload(static_cast<uint32_t>(slot));
@@ -546,6 +651,7 @@ int LocalShmPSClient::InitEmbeddingTable(const std::string& table_name,
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kInitTable);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -557,6 +663,9 @@ int LocalShmPSClient::InitEmbeddingTable(const std::string& table_name,
   header->output_bytes      = 0;
   header->server_seen_epoch = region_.control()->server_epoch;
   header->error_message_len = 0;
+  header->client_enqueue_timestamp_ns = 0;
+  header->server_dequeue_timestamp_ns = 0;
+  header->server_backend_duration_us  = 0;
 
   uint8_t* cursor = payload;
   if (!table_name.empty()) {
@@ -567,15 +676,28 @@ int LocalShmPSClient::InitEmbeddingTable(const std::string& table_name,
   cursor += sizeof(config.num_embeddings);
   std::memcpy(cursor, &config.embedding_dim, sizeof(config.embedding_dim));
   header->state.store(static_cast<uint32_t>(LocalSlotState::kReady));
-  CHECK(LocalShmQueueEnqueue(region_.ready_queue_header(ready_queue_id_),
-                             region_.ready_queue_cells(ready_queue_id_),
+  const uint32_t ready_queue_id       = CurrentReadyQueueId();
+  const auto enqueue_start            = std::chrono::steady_clock::now();
+  header->client_enqueue_timestamp_ns = SteadyNowNs();
+  auto* ready_header = region_.ready_queue_header(ready_queue_id);
+  CHECK(LocalShmQueueEnqueue(ready_header,
+                             region_.ready_queue_cells(ready_queue_id),
                              static_cast<uint32_t>(slot)));
-  region_.control()->request_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&region_.control()->request_doorbell);
+  FutexWakeOne(&ready_header->enqueue_pos);
+  g_active_request_profile.enqueue_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - enqueue_start)
+          .count();
 
+  const auto wait_start = std::chrono::steady_clock::now();
   const bool ok =
       WaitForSlot(static_cast<uint32_t>(slot), request_id) &&
       header->status_code == static_cast<uint32_t>(LocalStatusCode::kOk);
+  g_active_request_profile.wait_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - wait_start)
+          .count();
+  FinalizeActiveRequestProfile(header, g_active_request_profile.request_start);
   ReleaseSlot(static_cast<uint32_t>(slot));
   if (ok) {
     table_embedding_dims_[table_name] = config.embedding_dim;
@@ -613,9 +735,10 @@ int LocalShmPSClient::AcquireSlot() {
   if (!region_.IsOpen()) {
     return -1;
   }
-  auto* control      = region_.control();
-  auto* queue_header = region_.queue_header(LocalQueueKind::kFree);
-  auto* queue_cells  = region_.queue_cells(LocalQueueKind::kFree);
+  const uint32_t free_queue_id = CurrentReadyQueueId();
+  auto* queue_header           = region_.free_queue_header(free_queue_id);
+  auto* queue_cells            = region_.free_queue_cells(free_queue_id);
+  const auto acquire_start     = std::chrono::steady_clock::now();
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms_);
 
@@ -625,30 +748,42 @@ int LocalShmPSClient::AcquireSlot() {
       auto* header = region_.slot_header(slot_id);
       header->state.store(static_cast<uint32_t>(LocalSlotState::kWriting),
                           std::memory_order_release);
+      if (g_active_request_profile.active) {
+        g_active_request_profile.acquire_slot_us =
+            std::chrono::duration_cast<
+                std::chrono::duration<double, std::micro>>(
+                std::chrono::steady_clock::now() - acquire_start)
+                .count();
+      }
       return static_cast<int>(slot_id);
     }
     const uint32_t observed =
-        control->free_doorbell.load(std::memory_order_acquire);
+        queue_header->enqueue_pos.load(std::memory_order_acquire);
     const auto now = std::chrono::steady_clock::now();
     if (now >= deadline) {
       break;
     }
     const auto remaining =
         std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
-    FutexWaitUntilValueChange(&control->free_doorbell, observed, remaining);
+    FutexWaitUntilValueChange(&queue_header->enqueue_pos, observed, remaining);
   }
   return -1;
 }
 
 void LocalShmPSClient::ReleaseSlot(uint32_t slot_id) {
-  auto* header = region_.slot_header(slot_id);
+  const auto release_start = std::chrono::steady_clock::now();
+  auto* header             = region_.slot_header(slot_id);
   header->state.store(
       static_cast<uint32_t>(LocalSlotState::kFree), std::memory_order_release);
-  CHECK(LocalShmQueueEnqueue(region_.queue_header(LocalQueueKind::kFree),
-                             region_.queue_cells(LocalQueueKind::kFree),
-                             slot_id));
-  region_.control()->free_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&region_.control()->free_doorbell);
+  const uint32_t free_queue_id = slot_id % region_.ready_queue_count();
+  auto* free_header            = region_.free_queue_header(free_queue_id);
+  CHECK(LocalShmQueueEnqueue(
+      free_header, region_.free_queue_cells(free_queue_id), slot_id));
+  FutexWakeOne(&free_header->enqueue_pos);
+  g_last_request_profile.release_us =
+      std::chrono::duration_cast< std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - release_start)
+          .count();
 }
 
 bool LocalShmPSClient::WaitForSlot(uint32_t slot_id, uint64_t request_id) {
@@ -693,6 +828,51 @@ uint32_t LocalShmPSClient::ResolveReadyQueueId(const json& config) const {
   const uint32_t queue_count = region_.ready_queue_count();
   CHECK_GT(queue_count, 0U);
   return ReadQueueSelector(config, client_id_) % queue_count;
+}
+
+uint32_t LocalShmPSClient::CurrentReadyQueueId() const {
+  const uint32_t queue_count = region_.ready_queue_count();
+  CHECK_GT(queue_count, 0U);
+  if (!thread_ready_queue_sharding_ || queue_count == 1) {
+    return ready_queue_id_;
+  }
+  static std::atomic<uint32_t> next_thread_queue{0};
+  thread_local const uint32_t thread_queue =
+      next_thread_queue.fetch_add(1, std::memory_order_relaxed);
+  return (ready_queue_id_ + thread_queue) % queue_count;
+}
+
+LocalShmRequestProfile LocalShmPSClient::GetLastRequestProfile() const {
+  return g_last_request_profile;
+}
+
+void LocalShmPSClient::ResetActiveRequestProfile() const {
+  g_last_request_profile   = LocalShmRequestProfile{};
+  g_active_request_profile = LocalShmActiveRequestProfile{};
+}
+
+void LocalShmPSClient::FinalizeActiveRequestProfile(
+    const LocalShmSlotHeader* header,
+    const std::chrono::steady_clock::time_point& request_start) const {
+  g_last_request_profile.opcode = g_active_request_profile.opcode;
+  g_last_request_profile.acquire_slot_us =
+      g_active_request_profile.acquire_slot_us;
+  g_last_request_profile.enqueue_us = g_active_request_profile.enqueue_us;
+  g_last_request_profile.wait_us    = g_active_request_profile.wait_us;
+  g_last_request_profile.request_total_us =
+      std::chrono::duration_cast<std::chrono::duration<double, std::micro>>(
+          std::chrono::steady_clock::now() - request_start)
+          .count();
+  g_last_request_profile.server_backend_us =
+      static_cast<double>(header->server_backend_duration_us);
+  if (header->client_enqueue_timestamp_ns != 0 &&
+      header->server_dequeue_timestamp_ns >=
+          header->client_enqueue_timestamp_ns) {
+    g_last_request_profile.server_queue_wait_us =
+        NsToUs(header->server_dequeue_timestamp_ns -
+               header->client_enqueue_timestamp_ns);
+  }
+  g_active_request_profile.active = false;
 }
 
 FACTORY_REGISTER(BasePSClient, local_shm, LocalShmPSClient, json);

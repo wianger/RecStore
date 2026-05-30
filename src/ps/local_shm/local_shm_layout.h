@@ -21,7 +21,7 @@ inline std::size_t QueueHeadersOffset() {
 }
 
 inline std::size_t TotalQueueCount(uint32_t ready_queue_count) {
-  return static_cast<std::size_t>(1 + ready_queue_count);
+  return static_cast<std::size_t>(ready_queue_count) * 2;
 }
 
 inline std::size_t QueueHeadersBytes(uint32_t ready_queue_count = 1) {
@@ -62,12 +62,34 @@ inline std::size_t ReadyQueueHeaderOffset(uint32_t ready_queue_id) {
              static_cast<std::size_t>(1 + ready_queue_id);
 }
 
+inline std::size_t
+FreeQueueHeaderOffset(uint32_t free_queue_id, uint32_t ready_queue_count = 1) {
+  (void)ready_queue_count;
+  return QueueHeadersOffset() +
+         sizeof(LocalShmQueueHeader) * static_cast<std::size_t>(free_queue_id);
+}
+
+inline std::size_t FreeQueueCellsOffset(uint32_t slot_count,
+                                        uint32_t free_queue_id,
+                                        uint32_t ready_queue_count = 1) {
+  return QueueCellsOffset(ready_queue_count) +
+         QueueCellsStrideBytes(slot_count) *
+             static_cast<std::size_t>(free_queue_id);
+}
+
+inline std::size_t
+ReadyQueueHeaderOffset(uint32_t ready_queue_id, uint32_t ready_queue_count) {
+  return QueueHeadersOffset() +
+         sizeof(LocalShmQueueHeader) *
+             static_cast<std::size_t>(ready_queue_count + ready_queue_id);
+}
+
 inline std::size_t ReadyQueueCellsOffset(uint32_t slot_count,
                                          uint32_t ready_queue_id,
                                          uint32_t ready_queue_count = 1) {
   return QueueCellsOffset(ready_queue_count) +
          QueueCellsStrideBytes(slot_count) *
-             static_cast<std::size_t>(1 + ready_queue_id);
+             static_cast<std::size_t>(ready_queue_count + ready_queue_id);
 }
 
 inline std::size_t

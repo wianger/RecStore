@@ -12,6 +12,10 @@ int FutexWait(std::atomic<uint32_t>* addr,
 
 int FutexWake(std::atomic<uint32_t>* addr, int count);
 
+inline int FutexWakeOne(std::atomic<uint32_t>* addr) {
+  return FutexWake(addr, 1);
+}
+
 inline int FutexWakeAll(std::atomic<uint32_t>* addr) {
   return FutexWake(addr, 1 << 30);
 }

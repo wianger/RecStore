@@ -76,9 +76,12 @@ bool LocalShmRegion::Create(const std::string& region_name,
   ctrl->active_clients    = 0;
   std::memset(ctrl->reserved, 0, sizeof(ctrl->reserved));
 
-  LocalShmQueueInitialize(queue_header(LocalQueueKind::kFree),
-                          queue_cells(LocalQueueKind::kFree),
-                          slot_count_);
+  for (uint32_t free_queue_id = 0; free_queue_id < ready_queue_count_;
+       ++free_queue_id) {
+    LocalShmQueueInitialize(free_queue_header(free_queue_id),
+                            free_queue_cells(free_queue_id),
+                            slot_count_);
+  }
   for (uint32_t ready_queue_id = 0; ready_queue_id < ready_queue_count_;
        ++ready_queue_id) {
     LocalShmQueueInitialize(ready_queue_header(ready_queue_id),
@@ -87,27 +90,31 @@ bool LocalShmRegion::Create(const std::string& region_name,
   }
 
   for (uint32_t slot_id = 0; slot_id < slot_count_; ++slot_id) {
-    auto* header                = slot_header(slot_id);
-    header->state               = static_cast<uint32_t>(LocalSlotState::kFree);
-    header->opcode              = static_cast<uint32_t>(LocalOpcode::kInvalid);
-    header->status_code         = static_cast<uint32_t>(LocalStatusCode::kOk);
-    header->client_id           = 0;
-    header->request_id          = 0;
-    header->client_pid          = 0;
-    header->table_name_len      = 0;
-    header->key_count           = 0;
-    header->embedding_dim       = 0;
-    header->reserved0           = 0;
-    header->input_bytes         = 0;
-    header->output_bytes        = 0;
-    header->server_seen_epoch   = ctrl->server_epoch;
-    header->user_tag            = 0;
-    header->completion_doorbell = 0;
-    header->error_message_len   = 0;
+    auto* header              = slot_header(slot_id);
+    header->state             = static_cast<uint32_t>(LocalSlotState::kFree);
+    header->opcode            = static_cast<uint32_t>(LocalOpcode::kInvalid);
+    header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
+    header->client_id         = 0;
+    header->request_id        = 0;
+    header->client_pid        = 0;
+    header->table_name_len    = 0;
+    header->key_count         = 0;
+    header->embedding_dim     = 0;
+    header->reserved0         = 0;
+    header->input_bytes       = 0;
+    header->output_bytes      = 0;
+    header->server_seen_epoch = ctrl->server_epoch;
+    header->user_tag          = 0;
+    header->client_enqueue_timestamp_ns = 0;
+    header->server_dequeue_timestamp_ns = 0;
+    header->server_backend_duration_us  = 0;
+    header->completion_doorbell         = 0;
+    header->error_message_len           = 0;
     std::memset(header->reserved, 0, sizeof(header->reserved));
     std::memset(slot_payload(slot_id), 0, slot_buffer_bytes_);
-    CHECK(LocalShmQueueEnqueue(queue_header(LocalQueueKind::kFree),
-                               queue_cells(LocalQueueKind::kFree),
+    const uint32_t free_queue_id = slot_id % ready_queue_count_;
+    CHECK(LocalShmQueueEnqueue(free_queue_header(free_queue_id),
+                               free_queue_cells(free_queue_id),
                                slot_id));
   }
 
@@ -208,19 +215,52 @@ LocalShmRegion::queue_cells(LocalQueueKind kind) const {
   return reinterpret_cast<const LocalShmQueueCell*>(bytes);
 }
 
+LocalShmQueueHeader* LocalShmRegion::free_queue_header(uint32_t free_queue_id) {
+  CHECK_LT(free_queue_id, ready_queue_count_);
+  auto* bytes = reinterpret_cast<uint8_t*>(base_) +
+                FreeQueueHeaderOffset(free_queue_id, ready_queue_count_);
+  return reinterpret_cast<LocalShmQueueHeader*>(bytes);
+}
+
+const LocalShmQueueHeader*
+LocalShmRegion::free_queue_header(uint32_t free_queue_id) const {
+  CHECK_LT(free_queue_id, ready_queue_count_);
+  const auto* bytes = reinterpret_cast<const uint8_t*>(base_) +
+                      FreeQueueHeaderOffset(free_queue_id, ready_queue_count_);
+  return reinterpret_cast<const LocalShmQueueHeader*>(bytes);
+}
+
+LocalShmQueueCell* LocalShmRegion::free_queue_cells(uint32_t free_queue_id) {
+  CHECK_LT(free_queue_id, ready_queue_count_);
+  auto* bytes =
+      reinterpret_cast<uint8_t*>(base_) +
+      FreeQueueCellsOffset(slot_count_, free_queue_id, ready_queue_count_);
+  return reinterpret_cast<LocalShmQueueCell*>(bytes);
+}
+
+const LocalShmQueueCell*
+LocalShmRegion::free_queue_cells(uint32_t free_queue_id) const {
+  CHECK_LT(free_queue_id, ready_queue_count_);
+  const auto* bytes =
+      reinterpret_cast<const uint8_t*>(base_) +
+      FreeQueueCellsOffset(slot_count_, free_queue_id, ready_queue_count_);
+  return reinterpret_cast<const LocalShmQueueCell*>(bytes);
+}
+
 LocalShmQueueHeader*
 LocalShmRegion::ready_queue_header(uint32_t ready_queue_id) {
   CHECK_LT(ready_queue_id, ready_queue_count_);
   auto* bytes = reinterpret_cast<uint8_t*>(base_) +
-                ReadyQueueHeaderOffset(ready_queue_id);
+                ReadyQueueHeaderOffset(ready_queue_id, ready_queue_count_);
   return reinterpret_cast<LocalShmQueueHeader*>(bytes);
 }
 
 const LocalShmQueueHeader*
 LocalShmRegion::ready_queue_header(uint32_t ready_queue_id) const {
   CHECK_LT(ready_queue_id, ready_queue_count_);
-  const auto* bytes = reinterpret_cast<const uint8_t*>(base_) +
-                      ReadyQueueHeaderOffset(ready_queue_id);
+  const auto* bytes =
+      reinterpret_cast<const uint8_t*>(base_) +
+      ReadyQueueHeaderOffset(ready_queue_id, ready_queue_count_);
   return reinterpret_cast<const LocalShmQueueHeader*>(bytes);
 }
 

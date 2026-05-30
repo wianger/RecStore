@@ -30,13 +30,14 @@ target_link_libraries(local_shm_ps_server_runtime PUBLIC
 )
 
 target_link_libraries(local_shm_ps_server_runtime PRIVATE
-    kv_engine
     sparse_tensor
     gflags
     glog
+    jemalloc_compat
     TBB::tbb
     pthread
 )
+target_compile_options(local_shm_ps_server_runtime PRIVATE -msse4.2)
 
 if(TARGET report_client)
   target_compile_definitions(local_shm_ps_server_runtime PRIVATE ENABLE_PERF_REPORT)

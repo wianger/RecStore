@@ -15,6 +15,13 @@ namespace recstore {
 
 namespace {
 
+uint64_t SteadyNowNs() {
+  return static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count());
+}
+
 void FinishWithStatus(LocalShmSlotHeader* header, LocalStatusCode code) {
   header->status_code = static_cast<uint32_t>(code);
   header->state.store(
@@ -23,7 +30,7 @@ void FinishWithStatus(LocalShmSlotHeader* header, LocalStatusCode code) {
           : static_cast<uint32_t>(LocalSlotState::kError),
       std::memory_order_release);
   header->completion_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&header->completion_doorbell);
+  FutexWakeOne(&header->completion_doorbell);
 }
 
 } // namespace
@@ -42,16 +49,16 @@ LocalShmStoreRuntime::LocalShmStoreRuntime(
 }
 
 void LocalShmStoreRuntime::Run() {
+  auto* ready_header = region_->ready_queue_header(ready_queue_id_);
   while (!stop_.load()) {
-    auto* control = region_->control();
     const uint32_t observed_before_wait =
-        control->request_doorbell.load(std::memory_order_acquire);
+        ready_header->enqueue_pos.load(std::memory_order_acquire);
     uint32_t processed = 0;
     DrainReadyQueue(ready_queue_id_, &processed);
     if (processed == 0) {
       if (!stop_.load(std::memory_order_acquire)) {
         FutexWaitUntilValueChange(
-            &control->request_doorbell,
+            &ready_header->enqueue_pos,
             observed_before_wait,
             std::chrono::milliseconds(100));
       }
@@ -72,6 +79,7 @@ bool LocalShmStoreRuntime::DrainReadyQueue(uint32_t ready_queue_id,
     uint32_t expected = static_cast<uint32_t>(LocalSlotState::kReady);
     if (header->state.compare_exchange_strong(
             expected, static_cast<uint32_t>(LocalSlotState::kRunning))) {
+      header->server_dequeue_timestamp_ns = SteadyNowNs();
       ProcessSlot(slot_id);
       ++(*processed);
       ++burst_count;
@@ -83,9 +91,9 @@ bool LocalShmStoreRuntime::DrainReadyQueue(uint32_t ready_queue_id,
 
 void LocalShmStoreRuntime::Stop() {
   stop_.store(true, std::memory_order_release);
-  auto* control = region_->control();
-  control->request_doorbell.fetch_add(1, std::memory_order_release);
-  FutexWakeAll(&control->request_doorbell);
+  auto* ready_header = region_->ready_queue_header(ready_queue_id_);
+  ready_header->enqueue_pos.fetch_add(1, std::memory_order_release);
+  FutexWakeOne(&ready_header->enqueue_pos);
 }
 
 void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
@@ -112,6 +120,8 @@ void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
       const auto backend_start = std::chrono::steady_clock::now();
       const bool ok =
           cache_ps_->InitTable(table_name, num_embeddings, embedding_dim);
+      header->server_backend_duration_us =
+          static_cast<uint64_t>(LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(
           "init_table_backend_us", LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(
@@ -133,7 +143,8 @@ void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
           LOG(ERROR) << "LocalShmStoreRuntime::ProcessSlot get_failed"
                      << " slot_id=" << slot_id << " request_id="
                      << header->request_id << " key_count=" << header->key_count
-                     << " computed_embedding_dim=0" << " output_bytes=0"
+                     << " computed_embedding_dim=0"
+                     << " output_bytes=0"
                      << " reason=GetParameterRun2Completion";
           ReportLocalShmStageMetric(
               "get_backend_us", LocalShmElapsedUs(backend_start));
@@ -142,6 +153,8 @@ void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
           FinishWithStatus(header, LocalStatusCode::kUnknownError);
           return;
         }
+        header->server_backend_duration_us =
+            static_cast<uint64_t>(LocalShmElapsedUs(backend_start));
         ReportLocalShmStageMetric(
             "get_backend_us", LocalShmElapsedUs(backend_start));
         int64_t max_embedding_dim = 0;
@@ -228,6 +241,8 @@ void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
         FinishWithStatus(header, LocalStatusCode::kUnknownError);
         return;
       }
+      header->server_backend_duration_us =
+          static_cast<uint64_t>(LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(
           "get_backend_us", LocalShmElapsedUs(backend_start));
       header->output_bytes = output_bytes;
@@ -247,6 +262,8 @@ void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
           static_cast<int>(header->key_count),
           static_cast<int>(header->embedding_dim),
           static_cast<int>(worker_tid_));
+      header->server_backend_duration_us =
+          static_cast<uint64_t>(LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(
           "put_backend_us", LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(
@@ -270,6 +287,8 @@ void LocalShmStoreRuntime::ProcessSlot(uint32_t slot_id) {
           static_cast<int64_t>(header->key_count),
           static_cast<int64_t>(header->embedding_dim),
           static_cast<int>(worker_tid_));
+      header->server_backend_duration_us =
+          static_cast<uint64_t>(LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(
           "update_backend_us", LocalShmElapsedUs(backend_start));
       ReportLocalShmStageMetric(

@@ -12,6 +12,7 @@ from run_local_shm_mixed_benchmark import (
     build_local_shm_server_cmd,
     build_runtime_config,
     collect_summary_rows,
+    resolve_kv_path,
 )
 
 
@@ -95,7 +96,7 @@ def main() -> int:
             ready_queue_burst_limit=args.ready_queue_burst_limit,
             slot_buffer_bytes=args.slot_buffer_bytes,
             client_timeout_ms=args.client_timeout_ms,
-            kv_path=str(runtime_dir / "kv_store"),
+            kv_path=str(resolve_kv_path(runtime_dir)),
             capacity=args.capacity,
             value_size=args.embedding_dim * 4,
         )

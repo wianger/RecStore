@@ -138,6 +138,7 @@ def build_runtime_config(
     local_shm_ready_queue_burst_limit: int,
     local_shm_slot_buffer_bytes: int,
     local_shm_client_timeout_ms: int,
+    local_shm_thread_ready_queue_sharding: bool,
     dram_capacity_multiplier: float,
     ssd_capacity_multiplier: float = 2.0,
     ssd_io_backend: str = "IOURING",
@@ -197,6 +198,7 @@ def build_runtime_config(
             "ready_queue_burst_limit": local_shm_ready_queue_burst_limit,
             "slot_buffer_bytes": local_shm_slot_buffer_bytes,
             "client_timeout_ms": local_shm_client_timeout_ms,
+            "thread_ready_queue_sharding": local_shm_thread_ready_queue_sharding,
         }
     return config
 
@@ -806,6 +808,11 @@ def print_summary_table(rows: list[dict[str, str | int | float]]) -> None:
             continue
         if str(row.get("aggregate", "true")) == "false":
             continue
+        throughput_keys_sec = row.get("throughput_keys_sec", "")
+        status = str(row.get("status", "success"))
+        throughput_label = status
+        if throughput_keys_sec not in ("", None):
+            throughput_label = f"{float(throughput_keys_sec) / 1e6:,.3f}"
         table.append(
             [
                 str(row["index_type"]),
@@ -819,7 +826,7 @@ def print_summary_table(rows: list[dict[str, str | int | float]]) -> None:
                 str(row.get("aggregate", "true")),
                 str(row["batch_size"]),
                 str(row["records"]),
-                f"{float(row['throughput_keys_sec']) / 1e6:,.3f}",
+                throughput_label,
             ]
         )
 
@@ -903,6 +910,14 @@ def resolve_case_load_threads(backend_alias: str, args: argparse.Namespace) -> i
     return args.load_threads
 
 
+def resolve_local_shm_ready_queue_count(
+    configured_ready_queue_count: int, benchmark_threads: int
+) -> int:
+    if configured_ready_queue_count > 0:
+        return configured_ready_queue_count
+    return max(1, benchmark_threads)
+
+
 def resolve_failure_stage(exc: Exception) -> str:
     if isinstance(exc, BenchmarkCaseError):
         return exc.stage
@@ -959,10 +974,20 @@ def main() -> int:
     parser.add_argument("--keep-runtime-dir", action="store_true", default=False)
     parser.add_argument("--local-shm-region", default="recstore_local_ps")
     parser.add_argument("--local-shm-slot-count", type=int, default=64)
-    parser.add_argument("--local-shm-ready-queue-count", type=int, default=1)
+    parser.add_argument(
+        "--local-shm-ready-queue-count",
+        type=int,
+        default=0,
+        help="0 means auto: use --threads",
+    )
     parser.add_argument("--local-shm-ready-queue-burst-limit", type=int, default=8)
     parser.add_argument("--local-shm-slot-buffer-bytes", type=int, default=8 * 1024 * 1024)
     parser.add_argument("--local-shm-client-timeout-ms", type=int, default=30000)
+    parser.add_argument(
+        "--local-shm-thread-ready-queue-sharding",
+        action="store_true",
+        default=False,
+    )
     args = parser.parse_args()
 
     repo_root = Path(args.repo_root).resolve()
@@ -972,6 +997,8 @@ def main() -> int:
         raise FileNotFoundError(f"benchmark binary not found: {benchmark_binary}")
     if args.client_processes <= 0:
         raise ValueError("--client-processes must be positive")
+    if args.threads <= 0:
+        raise ValueError("--threads must be positive")
 
     transports = parse_csv_list(args.transports)
     backend_aliases = (
@@ -1001,6 +1028,13 @@ def main() -> int:
                 if not server_binary.exists():
                     raise FileNotFoundError(f"server binary not found: {server_binary}")
                 case_num_shards = 1 if transport == "LOCAL_SHM" else args.num_shards
+                case_local_shm_ready_queue_count = (
+                    resolve_local_shm_ready_queue_count(
+                        args.local_shm_ready_queue_count, args.threads
+                    )
+                    if transport == "LOCAL_SHM"
+                    else args.local_shm_ready_queue_count
+                )
                 base_port = resolve_case_base_port(
                     transport, case_num_shards, args
                 )
@@ -1017,10 +1051,11 @@ def main() -> int:
                     dram_allocator=args.dram_allocator,
                     local_shm_region=args.local_shm_region,
                     local_shm_slot_count=args.local_shm_slot_count,
-                    local_shm_ready_queue_count=args.local_shm_ready_queue_count,
+                    local_shm_ready_queue_count=case_local_shm_ready_queue_count,
                     local_shm_ready_queue_burst_limit=args.local_shm_ready_queue_burst_limit,
                     local_shm_slot_buffer_bytes=args.local_shm_slot_buffer_bytes,
                     local_shm_client_timeout_ms=args.local_shm_client_timeout_ms,
+                    local_shm_thread_ready_queue_sharding=args.local_shm_thread_ready_queue_sharding,
                     dram_capacity_multiplier=args.dram_capacity_multiplier,
                     ssd_capacity_multiplier=args.ssd_capacity_multiplier,
                     ssd_io_backend=args.ssd_io_backend,

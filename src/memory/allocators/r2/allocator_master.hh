@@ -33,7 +33,7 @@ public:
       tls.erase(it);
     }
 
-    (void)jemallctl("thread.tcache.flush", nullptr, nullptr, nullptr, 0);
+    (void)je_mallctl("thread.tcache.flush", nullptr, nullptr, nullptr, 0);
     std::vector<Entry> entries;
     {
       std::lock_guard<std::mutex> g(created_mu_);
@@ -43,7 +43,7 @@ public:
     for (auto& e : entries) {
       if (e.tcache != 0) {
         size_t z = 0;
-        (void)jemallctl("tcache.destroy", &e.tcache, &z, nullptr, 0);
+        (void)je_mallctl("tcache.destroy", &e.tcache, &z, nullptr, 0);
       }
     }
 
@@ -53,14 +53,14 @@ public:
 
       char purge[64];
       std::snprintf(purge, sizeof(purge), "arena.%u.purge", e.arena);
-      (void)jemallctl(purge, nullptr, nullptr, nullptr, 0);
+      (void)je_mallctl(purge, nullptr, nullptr, nullptr, 0);
 
       char d1[64];
       std::snprintf(d1, sizeof(d1), "arena.%u.destroy", e.arena);
       char d2[64];
       std::snprintf(d2, sizeof(d2), "arenas.%u.destroy", e.arena);
-      int rc1 = jemallctl(d1, nullptr, nullptr, nullptr, 0);
-      int rc2 = (rc1 == 0) ? 0 : jemallctl(d2, nullptr, nullptr, nullptr, 0);
+      int rc1 = je_mallctl(d1, nullptr, nullptr, nullptr, 0);
+      int rc2 = (rc1 == 0) ? 0 : je_mallctl(d2, nullptr, nullptr, nullptr, 0);
 
       if (rc1 == 0 || rc2 == 0) {
         if (e.pack) {
@@ -128,7 +128,7 @@ public:
       return nullptr;
     }
 
-    int e = jemallctl("tcache.create", &cache_id, &olen, nullptr, 0);
+    int e = je_mallctl("tcache.create", &cache_id, &olen, nullptr, 0);
     if (e != 0) {
       LOG(INFO) << "tcache.create fail!";
       return new Allocator(MALLOCX_ARENA(arena_id));
@@ -208,7 +208,7 @@ private:
     unsigned new_arena_id     = 0;
     size_t olen               = sizeof(unsigned);
     extent_hooks_t* hooks_ptr = &pack->hooks;
-    int e                     = jemallctl(
+    int e                     = je_mallctl(
         "arenas.create",
         &new_arena_id,
         &olen,

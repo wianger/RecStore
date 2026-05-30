@@ -21,15 +21,14 @@ public:
     LOG(INFO) << "filename:" << filename << ", memory_size:" << memory_size
               << ", medium:" << medium;
     bool file_exists = base::file_util::PathExists(filename);
-    shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
-        medium, filename, memory_size));
+    shm_file_ =
+        ShmFile::New(ShmFile::ConfigForMedium(medium, filename, memory_size));
     if (!shm_file_) {
       file_exists = false;
       CHECK(base::file_util::Delete(filename, false));
-      shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
-          medium, filename, memory_size));
-      CHECK(shm_file_)
-          << filename << " " << memory_size;
+      shm_file_ =
+          ShmFile::New(ShmFile::ConfigForMedium(medium, filename, memory_size));
+      CHECK(shm_file_) << filename << " " << memory_size;
     }
 
     data_ = shm_file_->Data();
@@ -121,7 +120,7 @@ public:
   }
 
   int GetMallocSize(const char* data) const {
-    int malloc_size = jemalloc_usable_size((void*)data);
+    int malloc_size = static_cast<int>(je_malloc_usable_size((void*)data));
     return malloc_size;
   }
 

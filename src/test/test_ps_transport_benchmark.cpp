@@ -32,6 +32,13 @@ TEST(PSTransportBenchmarkConfigTest, UsesVectorGetForBrpcOnly) {
   EXPECT_FALSE(BenchmarkUsesVectorGet("rdma"));
 }
 
+TEST(PSTransportBenchmarkConfigTest, UsesFlatGetForLocalShmOnly) {
+  EXPECT_TRUE(BenchmarkUsesFlatGet("local_shm"));
+  EXPECT_FALSE(BenchmarkUsesFlatGet("grpc"));
+  EXPECT_FALSE(BenchmarkUsesFlatGet("brpc"));
+  EXPECT_FALSE(BenchmarkUsesFlatGet("rdma"));
+}
+
 TEST(PSTransportBenchmarkConfigTest, WriteReturnSemanticsMatchTransport) {
   EXPECT_FALSE(BenchmarkWriteReturnsZeroOnSuccess("grpc"));
   EXPECT_FALSE(BenchmarkWriteReturnsZeroOnSuccess("brpc"));

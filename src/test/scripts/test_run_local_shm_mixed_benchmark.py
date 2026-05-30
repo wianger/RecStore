@@ -13,6 +13,7 @@ from run_local_shm_mixed_benchmark import (  # noqa: E402
     build_local_shm_server_cmd,
     build_runtime_config,
     collect_summary_rows,
+    resolve_kv_path,
     print_summary_table,
 )
 
@@ -37,8 +38,16 @@ class TestRunLocalShmMixedBenchmark(unittest.TestCase):
         self.assertEqual(config["local_shm"]["ready_queue_burst_limit"], 16)
         self.assertEqual(
             config["cache_ps"]["base_kv_config"]["value"]["path"],
-            "/tmp/bench_kv/value"
+            "/dev/shm/bench_kv/value"
         )
+
+    def test_resolve_kv_path_moves_tmp_runtime_under_dev_shm(self):
+        path = resolve_kv_path(Path("/tmp/recstore_local_shm_bench_abc"))
+        self.assertEqual(path, Path("/dev/shm/recstore_local_shm_bench_abc/kv_store"))
+
+    def test_resolve_kv_path_keeps_dev_shm_runtime(self):
+        path = resolve_kv_path(Path("/dev/shm/recstore_local_shm_bench_abc"))
+        self.assertEqual(path, Path("/dev/shm/recstore_local_shm_bench_abc/kv_store"))
 
     def test_build_local_shm_server_cmd_contains_config_path(self):
         cmd = build_local_shm_server_cmd(
@@ -123,7 +132,7 @@ class TestRunLocalShmMixedBenchmark(unittest.TestCase):
             ready_queue_burst_limit=8,
             slot_buffer_bytes=4096,
             client_timeout_ms=2000,
-            kv_path="/tmp/bench_kv",
+            kv_path="/dev/shm/bench_kv",
             capacity=2048,
             value_size=64,
         )

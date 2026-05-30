@@ -40,6 +40,10 @@ public:
   const LocalShmQueueHeader* queue_header(LocalQueueKind kind) const;
   LocalShmQueueCell* queue_cells(LocalQueueKind kind);
   const LocalShmQueueCell* queue_cells(LocalQueueKind kind) const;
+  LocalShmQueueHeader* free_queue_header(uint32_t free_queue_id);
+  const LocalShmQueueHeader* free_queue_header(uint32_t free_queue_id) const;
+  LocalShmQueueCell* free_queue_cells(uint32_t free_queue_id);
+  const LocalShmQueueCell* free_queue_cells(uint32_t free_queue_id) const;
   LocalShmQueueHeader* ready_queue_header(uint32_t ready_queue_id);
   const LocalShmQueueHeader* ready_queue_header(uint32_t ready_queue_id) const;
   LocalShmQueueCell* ready_queue_cells(uint32_t ready_queue_id);

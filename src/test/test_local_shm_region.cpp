@@ -54,22 +54,26 @@ TEST(LocalShmRegionTest, CreateAndAttachRegion) {
 
   std::vector<uint32_t> seen;
   seen.reserve(kSlotCount);
-  for (uint32_t i = 0; i < kSlotCount; ++i) {
+  for (uint32_t free_queue_id = 0; free_queue_id < kReadyQueueCount;
+       ++free_queue_id) {
     uint32_t slot_id = 0;
-    ASSERT_TRUE(LocalShmQueueDequeue(
-        client_region.queue_header(LocalQueueKind::kFree),
-        client_region.queue_cells(LocalQueueKind::kFree),
-        &slot_id));
-    seen.push_back(slot_id);
+    while (LocalShmQueueDequeue(client_region.free_queue_header(free_queue_id),
+                                client_region.free_queue_cells(free_queue_id),
+                                &slot_id)) {
+      EXPECT_EQ(slot_id % kReadyQueueCount, free_queue_id);
+      seen.push_back(slot_id);
+    }
   }
-  EXPECT_FALSE(LocalShmQueueDequeue(
-      client_region.queue_header(LocalQueueKind::kFree),
-      client_region.queue_cells(LocalQueueKind::kFree),
-      &seen[0]));
   EXPECT_EQ(seen.size(), static_cast<size_t>(kSlotCount));
+
+  for (uint32_t free_queue_id = 0; free_queue_id < kReadyQueueCount;
+       ++free_queue_id) {
+    EXPECT_EQ(client_region.free_queue_header(free_queue_id)->reserved0, 0u);
+  }
 
   for (uint32_t ready_queue_id = 0; ready_queue_id < kReadyQueueCount;
        ++ready_queue_id) {
+    EXPECT_EQ(client_region.ready_queue_header(ready_queue_id)->reserved0, 0u);
     uint32_t slot_id = 0;
     EXPECT_FALSE(LocalShmQueueDequeue(
         client_region.ready_queue_header(ready_queue_id),

@@ -3,7 +3,7 @@ add_library(sparse_tensor
 	optimizer.cpp
 )
 
-target_link_libraries(sparse_tensor PUBLIC
+target_link_libraries(sparse_tensor PRIVATE
     kv_engine
 )
 
