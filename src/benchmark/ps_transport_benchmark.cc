@@ -345,12 +345,26 @@ bool GetFlat(recstore::BasePSClient* client,
              const std::vector<uint64_t>& keys,
              std::vector<float>* output) {
   const auto key_array = base::ConstArray<uint64_t>(keys);
+  const int dim        = FLAGS_value_size / sizeof(float);
   if (BenchmarkUsesVectorGet(transport)) {
     auto* brpc_client = dynamic_cast<BRPCParameterClient*>(client);
     if (brpc_client != nullptr) {
       std::vector<std::vector<float>> vectors;
       return BenchmarkReadSucceeded(
           transport, brpc_client->GetParameter(key_array, &vectors));
+    }
+  }
+  if (BenchmarkUsesFlatGet(transport)) {
+    auto* local_shm_client = dynamic_cast<recstore::LocalShmPSClient*>(client);
+    if (local_shm_client != nullptr) {
+      return BenchmarkReadSucceeded(
+          transport,
+          local_shm_client->GetParameterFlat(
+              key_array,
+              output->data(),
+              static_cast<int64_t>(keys.size()),
+              static_cast<int64_t>(dim)),
+          ClientReturnsZeroOnSuccess(client));
     }
   }
   return BenchmarkReadSucceeded(

@@ -37,6 +37,10 @@ inline bool BenchmarkUsesVectorGet(const std::string& transport) {
   return NormalizeBenchmarkTransport(transport) == "BRPC";
 }
 
+inline bool BenchmarkUsesFlatGet(const std::string& transport) {
+  return NormalizeBenchmarkTransport(transport) == "LOCAL_SHM";
+}
+
 inline bool BenchmarkWriteReturnsZeroOnSuccess(const std::string& transport) {
   const auto normalized = NormalizeBenchmarkTransport(transport);
   return normalized == "RDMA" || normalized == "LOCAL_SHM";
