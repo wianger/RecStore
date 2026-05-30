@@ -10,7 +10,7 @@
 2. 这几块已经通过 buffer pool、borrowed RC response payload、fixed-row flat read 等修复缓解；`status_only` 已经能到约 `28M keys/s`，说明轻 payload pipeline 不再是最早那种几 M 的调度上限。
 3. 真实 512B value GET 的当前主瓶颈转移到 server GET payload 路径：`PetPSServer::HandleGet -> CachePS::GetParameterFlat -> KVEngineComposite::BatchGetFlat -> DramValueStore::ReadFlatFixedRows`。
 4. 本轮新增的 `--rdma_rc_server_get_workers` 把 GET payload 读取/填充从 polling thread 拆出去，`p4/N4` 从约 `5.07M` 提升到约 `10.06M keys/s`。
-5. 在 `p8/N8` 上继续增加 polling threads 后，当前最高单次结果为 `14.37M keys/s`，per-client 分布也最均衡；但本地单机测试波动仍明显，默认值需要 repeat 和 affinity 进一步确认。
+5. 在 `p8/N8` 上继续增加 polling threads 后，当前最高单次结果为 `14.57M keys/s`；同条件 `C1` 三次复跑平均 `14.45M keys/s`，明显高于 `C4` 的 `12.17M keys/s`。所以 coroutine scanner 功能可用，但不是当前性能默认。
 
 ## 测试边界
 
@@ -133,7 +133,8 @@ run_rdma_rc_transport_benchmark.py
 - GET task 记录 `poll_thread_id`。
 - completion 按 `poll_thread_id` 分桶。
 - 只有原始 poller drain 自己的 completion 并调用 `RcShardServerTransport::CompleteResponse`，避免多个 poller 同时操作同一 lane 的 pending response 状态。
-- `rdma_rc_server_coroutines_per_thread > 1` 与 get workers 仍禁用组合，避免 coroutine 内部 ownership 复杂化。
+- 最新代码已经允许 `rdma_rc_server_coroutines_per_thread > 1` 与 get workers 组合；coroutine scanner 每轮扫描前后都会 drain 原 poller 的 GET completion。
+- 多 shard client wait 也改成 Boost coroutine cooperative wait：每个 shard RPC 一个 waiter，未完成时 yield，完成后再 assemble batch。
 
 ## GET worker 实验
 
@@ -163,8 +164,15 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --transaction-profile \
   --server-rdma-threads <T> \
   --rdma-rc-server-get-workers <N> \
+  --rdma-rc-server-coroutines-per-thread <C> \
   --output-dir <DIR>
 ```
+
+参数标记：
+
+- `T`：server RDMA polling thread 数。
+- `N`：server GET payload worker 数。
+- `C`：每个 polling thread 内的 Boost coroutine scanner 数。历史结果没有显式设置时等价于 `C=1`。
 
 `p4` 结果：
 
@@ -214,6 +222,9 @@ python3 src/test/scripts/run_benchmark_ps.py \
 | 8 | 8 | 2 | 12.796790M | 1.203M / 1.735M | `results/benchmark_ps_get_workers_shared_0530_n8_p8_t2` |
 | 8 | 8 | 4 | 13.352040M | 1.150M / 1.998M | `results/benchmark_ps_get_workers_shared_0530_n8_p8_t4` |
 | 8 | 8 | 8 | 14.370420M | 1.760M / 1.844M | `results/benchmark_ps_get_workers_shared_0530_n8_p8_t8` |
+| 8 | 8 | 8 | 14.198180M | 1.529M / 1.981M | `results/benchmark_ps_profile_0530_n8_p8_t8_rerun` |
+| 8 | 8 | 12 | 14.506580M | 1.564M / 2.045M | `results/benchmark_ps_profile_0530_n8_p8_t12` |
+| 8 | 8 | 16 | 14.571230M | 1.138M / 2.138M | `results/benchmark_ps_profile_0530_n8_p8_t16` |
 
 对应 server profile 摘要：
 
@@ -222,13 +233,129 @@ python3 src/test/scripts/run_benchmark_ps.py \
 | 8 | 1 | 189.387us | 102.746us | 3.361us | 23.601us |
 | 8 | 4 | 186.283us | 102.144us | 4.149us | 12.552us |
 | 8 | 8 | 178.531us | 93.766us | 4.954us | 15.454us |
+| 8 | 12 | 172.041us | 87.998us | 4.738us | 22.006us |
+| 8 | 16 | 167.789us | 83.284us | 4.689us | 25.194us |
 
 解读：
 
-- 增加 poll threads 在 `p8/N8` 下有帮助，最高到 `14.37M keys/s`。
-- `t8` per-client 最均衡，说明多 poller 改善了 lane 扫描和 completion 进度。
+- 增加 poll threads 在 `p8/N8` 下有帮助，最高单次到 `14.57M keys/s`。
+- `T8` per-client 最均衡；`T12/T16` 继续提高 aggregate，但 `T16` 的 client 间差异变大。
 - `complete_response_avg_ns` 随 poller 增加略高，但总体不是最大项。
-- 这仍是本地单机、repeat=1 的结果，需要 repeat=3/5 或 CPU affinity 后才能固化为默认推荐。
+- 这仍是本地单机、repeat=1 的结果，需要 repeat=3/5 或 CPU affinity 后才能固化为默认推荐；当前候选可以按“吞吐优先 T16、稳定优先 T12”区分。
+
+## 继续扩并发的复测
+
+在当前较优的 `p8/N8/T8` 或 `p8/N8/T16` 基础上，又补了三类实验：
+
+| 实验 | 参数变化 | 聚合吞吐 | 结果目录 |
+|---|---|---:|---|
+| 增加 client 进程 | `p8 -> p12`, `N8/T8/depth16/slots1` | 13.700087M | `results/benchmark_ps_get_workers_shared_0530_n8_p12_t8` |
+| 增加单 client in-flight | `prefetch_depth=16 -> 32`, `slots_per_qp=1 -> 2`, `p8/N8/T8` | 8.865387M | `results/benchmark_ps_profile_0530_n8_p8_t8_depth32_slots2` |
+| 增加 GET workers | `N8 -> N12`, `p8/T16/depth16/slots1` | 9.509550M | `results/benchmark_ps_profile_0530_n12_p8_t16` |
+
+结论：
+
+- 增加 client 进程到 `p12` 没有提升，`scan_hit_pct` 从 `0.345%` 降到 `0.272%`，说明更多 client 主要增加扫描和调度压力。
+- 增加单 client in-flight 到 `depth32/slots2` 明显退化：server `scanned_slots` 翻倍，但 `handled_get` 下降，`scan_hit_pct` 从约 `0.410%` 降到 `0.123%`。
+- 在 `T16` 下继续把 GET workers 加到 `N12` 也退化：`handle_get_avg_ns` 从 `168us` 升到 `282us`，说明 worker 过量后 CPU/cache/memory bandwidth 或 KVEngine 内部共享结构竞争变重。
+
+## Coroutine scanner 复测
+
+这组只改变每个 polling thread 内的 coroutine scanner 数 `C`，其余都保持一致：
+
+```text
+client_processes=8
+rdma_rc_server_get_workers=8
+server_rdma_threads=16
+prefetch_depth=16
+rdma_rc_qps_per_client_per_shard=16
+rdma_rc_slots_per_qp=1
+runtime_seconds=8
+repeat=3
+```
+
+| C | repeat 0 | repeat 1 | repeat 2 | 三轮平均 | min/max aggregate | 结果目录 |
+|---:|---:|---:|---:|---:|---:|---|
+| 1 | 14.427890M | 14.542330M | 14.387140M | 14.452453M | 14.387140M / 14.542330M | `results/benchmark_ps_profile_0530_n8_p8_t16_c1_repeat3` |
+| 4 | 12.246780M | 11.728780M | 12.541760M | 12.172440M | 11.728780M / 12.541760M | `results/benchmark_ps_profile_0530_n8_p8_t16_c4_repeat3` |
+
+尾部 server profile 均值：
+
+| C | `handle_get_avg_ns` | `get_row_copy_avg_ns` | `complete_response_avg_ns` | `poll_loop_avg_ns` | `scan_hit_pct` |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 163-166us | 83-87us | 4.6-4.7us | 24.6-25.5us | 0.58-0.60% |
+| 4 | 161-165us | 81-83us | 4.6-4.7us | 23.1-25.1us | 1.83-1.90% |
+
+解读：
+
+- `C4` 会提高扫描命中比例，但吞吐反而下降，说明当前损失主要来自 coroutine 调度开销或 poll loop cadence 被改变，而不是 GET payload 本身更慢。
+- 两组 `handle_get` 和 `get_row_copy` 基本同量级，瓶颈仍在 server GET payload path。
+- `C1` 是当前推荐性能默认；`C>1` 只作为扫描调度实验维度，结果目录需要显式带 `c<C>`。
+
+## 当前最优参数 Profile
+
+当前最高单次结果是：
+
+```text
+client_processes=8
+rdma_rc_server_get_workers=8
+server_rdma_threads=16
+prefetch_depth=16
+rdma_rc_qps_per_client_per_shard=16
+rdma_rc_slots_per_qp=1
+```
+
+结果目录：
+
+```text
+results/benchmark_ps_profile_0530_n8_p8_t16
+```
+
+吞吐：
+
+```text
+aggregate = 14.571230M keys/s
+min_client = 1.138M keys/s
+max_client = 2.138M keys/s
+```
+
+同参数 `C1` repeat=3 复跑结果为：
+
+```text
+results/benchmark_ps_profile_0530_n8_p8_t16_c1_repeat3
+aggregate_avg = 14.452453M keys/s
+aggregate_min = 14.387140M keys/s
+aggregate_max = 14.542330M keys/s
+```
+
+加权 profile：
+
+| 层级 | 指标 | 数值 |
+|---|---|---:|
+| server | `handle_get_avg_ns` | 167.512us |
+| server | `get_batch_get_avg_ns` | 166.766us |
+| server | `get_row_copy_avg_ns` | 83.267us |
+| server | `complete_response_avg_ns` | 4.643us |
+| server | `poll_loop_avg_ns` | 25.270us |
+| server | `scan_hit_pct` | 0.594% |
+| client | `submit_avg_ns` | 39.702us |
+| client | `wait_status_avg_ns` | 107.615us |
+| client | `copy_response_avg_ns` | 0 |
+| client | `acquire_qp_failures` | 0 |
+| server transport | `complete_avg_ns` | 4.187us |
+| server transport | `drain_response_avg_ns` | 0.889us |
+
+当前最优参数下的瓶颈仍然是 server GET payload 路径：
+
+```text
+PetPSServer::GetPayloadWorkerLoop
+  -> PetPSServer::HandleGet
+  -> CachePS::GetParameterFlat
+  -> KVEngineComposite::BatchGetFlat
+  -> DramValueStore::ReadFlatFixedRows
+```
+
+一次 batch 是 `500 * 512B = 256KB`。当前每 batch 的 `HandleGet` 约 `167.5us`，其中 `get_row_copy` 约 `83.3us`，约占一半。`complete_response` 只有 `4-5us`，server transport complete 也只有约 `4.2us`，client `copy_response_avg_ns=0`，因此当前不是 RDMA completion 或 client copy 主导。
 
 ## 当前瓶颈排序
 
@@ -243,8 +370,8 @@ python3 src/test/scripts/run_benchmark_ps.py \
 
 1. server GET payload copy / `BatchGetFlat` / `ReadFlatFixedRows`。
 2. index lookup / key handling 固定成本。
-3. polling/completion 调度能力，特别是高 client 并发下单 poller 对 lane 扫描和 response completion 的限制。
-4. worker 数过高后的 CPU/cache/memory contention。
+3. polling/completion 调度能力，特别是高 client 并发下单 poller 对 lane 扫描和 response completion 的限制；`T12/T16` 能缓解但已经接近平台期。
+4. worker 数过高、client in-flight 过深或 client 进程过多后的 CPU/cache/memory contention。
 
 ## 代码风险与后续建议
 
@@ -252,15 +379,15 @@ python3 src/test/scripts/run_benchmark_ps.py \
 
 - 默认 `--rdma_rc_server_get_workers=0`，不改变现有同步路径。
 - 只 offload GET，PUT / UPDATE / InitTable 保持同步路径。
-- get workers 与 coroutine scanning 不组合。
+- get workers 已可与 coroutine scanning 组合；但 `p8/N8/T16` 下 `C4` repeat=3 平均 `12.17M keys/s`，低于 `C1` 的 `14.45M keys/s`。因此 `C1` 保持默认，`C>1` 只作为显式实验维度，结果目录需要带上 `c<C>`。
 - completion 保留由 poller 调用 `CompleteResponse`，避免 worker 直接操作 transport lane state。
 
 建议下一步：
 
-1. 对 `p8/N8/T8` 做 repeat=3/5，最好加 CPU affinity/NUMA 绑定，确认 `14M` 是否稳定。
-2. 扫 `N8/T12/T16`，看 poller 是否还有高点。
-3. 对 `HandleGet` 内部继续 profile：拆 `CachePS::GetParameterFlat`、`KVEngineComposite::BatchGetFlat`、`DramValueStore::ReadFlatFixedRows`。
-4. 如果要接近 RC 专项 `30-40M keys/s`，需要继续减少 generic PS API 的 result materialize 和 server payload copy 成本；仅靠加 worker 不会线性到达。
+1. 若继续研究 coroutine scanner，先加 CPU affinity/NUMA 绑定后再做 `C2/C4` repeat=3/5；当前无绑定本地结果已经显示 `C4` 不适合作为性能默认。
+2. 对 `HandleGet` 内部继续 profile：拆 `CachePS::GetParameterFlat`、`KVEngineComposite::BatchGetFlat`、`DramValueStore::ReadFlatFixedRows`。
+3. 优先优化 `DramValueStore::ReadFlatFixedRows` 的 fixed-row copy，或者让 KVEngine 更直接写入 RDMA response staging buffer。
+4. 如果要接近 RC 专项 `30-40M keys/s`，需要继续减少 generic PS API 的 result materialize 和 server payload copy 成本；仅靠加 worker/coroutine 不会线性到达。
 
 ## 验证记录
 
@@ -272,6 +399,8 @@ python3 src/test/scripts/run_benchmark_ps.py ... --server-rdma-threads 2 --rdma-
 python3 src/test/scripts/run_benchmark_ps.py ... --server-rdma-threads 2 --rdma-rc-server-get-workers 8 --output-dir results/benchmark_ps_get_workers_shared_0530_n8_p8_t2
 python3 src/test/scripts/run_benchmark_ps.py ... --server-rdma-threads 4 --rdma-rc-server-get-workers 8 --output-dir results/benchmark_ps_get_workers_shared_0530_n8_p8_t4
 python3 src/test/scripts/run_benchmark_ps.py ... --server-rdma-threads 8 --rdma-rc-server-get-workers 8 --output-dir results/benchmark_ps_get_workers_shared_0530_n8_p8_t8
+python3 src/test/scripts/run_benchmark_ps.py ... --server-rdma-threads 16 --rdma-rc-server-get-workers 8 --rdma-rc-server-coroutines-per-thread 4 --repeat 3 --output-dir results/benchmark_ps_profile_0530_n8_p8_t16_c4_repeat3
+python3 src/test/scripts/run_benchmark_ps.py ... --server-rdma-threads 16 --rdma-rc-server-get-workers 8 --rdma-rc-server-coroutines-per-thread 1 --repeat 3 --output-dir results/benchmark_ps_profile_0530_n8_p8_t16_c1_repeat3
 git diff --check
 ```
 
@@ -284,7 +413,7 @@ python3 -m unittest \
   src/test/scripts/test_run_rdma_rc_transport_benchmark.py \
   src/test/scripts/test_run_rdma_transport_benchmarks.py
 
-cmake --build build --target petps_server rdma_rc_transport_benchmark ps_transport_benchmark -j
+cmake --build build --target petps_server test_allshards_ps_client rdma_rc_transport_benchmark ps_transport_benchmark -j
 
-ctest --test-dir build -R 'test_rdma_rc_protocol|test_raw_verbs_allocator|test_rdmaps_client_adapter' -VV
+ctest --test-dir build -R 'test_allshards_ps_client|test_rdma_rc_protocol|test_raw_verbs_allocator|test_rdmaps_client_adapter' -VV
 ```

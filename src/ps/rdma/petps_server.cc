@@ -148,11 +148,6 @@ public:
     if (get_payload_worker_count_ < 0) {
       LOG(FATAL) << "--rdma_rc_server_get_workers must be non-negative";
     }
-    if (get_payload_worker_count_ > 0 &&
-        FLAGS_rdma_rc_server_coroutines_per_thread != 1) {
-      LOG(FATAL) << "--rdma_rc_server_get_workers currently requires "
-                 << "--rdma_rc_server_coroutines_per_thread=1";
-    }
     get_payload_completions_.resize(
         static_cast<std::size_t>(std::max(1, thread_count_)));
   }
@@ -816,6 +811,7 @@ private:
       const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
       std::uint64_t scanned_slots       = 0;
       std::uint64_t ready_slots         = 0;
+      DrainGetPayloadCompletions(thread_id, profile_enabled);
       ScanAssignedSlots(
           thread_id,
           worker_id,
@@ -823,6 +819,7 @@ private:
           profile_enabled,
           &scanned_slots,
           &ready_slots);
+      DrainGetPayloadCompletions(thread_id, profile_enabled);
       if (profile_enabled) {
         profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
         profile_.scanned_slots.fetch_add(

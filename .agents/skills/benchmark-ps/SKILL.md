@@ -1,6 +1,6 @@
 ---
 name: benchmark-ps
-description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and BRPC. Use when Codex needs to prompt for client/server hosts, record count, value size, and topology, then execute src/test/scripts/run_benchmark_ps.py and generate summary.csv plus Chinese summary.md.
+description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and BRPC. Use when Codex needs explicit client/server hosts, record count, value size, and topology, then execute src/test/scripts/run_benchmark_ps.py and generate summary.csv plus Chinese summary.md.
 ---
 
 # Benchmark PS
@@ -10,7 +10,7 @@ description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and
 Use this skill from a RecStore checkout. Do not run helper scripts from this skill directory; call the project script directly.
 
 1. Confirm the current directory is the RecStore repo root.
-2. Prompt the user for:
+2. Use explicit CLI parameters. Ask the user only when required topology or workload values are missing:
    - transports (default = `rdma,grpc,brpc`)
    - client IPs (default = `127.0.0.1`)
    - server shard IPs, one entry per shard (default = `127.0.0.1`)
@@ -24,6 +24,8 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - client load threads per process (default = client threads per process)
    - server worker threads (default = `32`)
    - server RDMA polling threads (default = `1`; use client processes for RDMA client concurrency)
+   - RDMA GET worker threads (default = `0`)
+   - RDMA server coroutines per polling thread (default = `1`; treat values above `1` as scheduling experiments)
    - runtime seconds (default = `5`)
    - repeat count (default = `1`)
    - execution backend (default = `local`)
@@ -58,13 +60,6 @@ python3 -m unittest src/test/scripts/test_run_benchmark_ps.py
 ctest -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_transport_benchmark|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure
 ```
 
-For an interactive setup:
-
-```bash
-python3 src/test/scripts/run_benchmark_ps.py \
-  --interactive
-```
-
 For a local RDMA smoke run, prefer this stable baseline:
 
 ```bash
@@ -81,6 +76,9 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --runtime-seconds 1 \
   --repeat 1 \
   --execution-backend local \
+  --server-rdma-threads 1 \
+  --rdma-rc-server-get-workers 0 \
+  --rdma-rc-server-coroutines-per-thread 1 \
   --output-dir <output_dir>
 ```
 
@@ -120,6 +118,9 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --repeat 1 \
   --execution-backend local \
   --rdma-rc-profile-interval-ms 1000 \
+  --server-rdma-threads <rdma_threads> \
+  --rdma-rc-server-get-workers <get_workers> \
+  --rdma-rc-server-coroutines-per-thread <coroutines_per_thread> \
   --output-dir <output_dir>/rdma_profile
 
 python3 src/test/scripts/run_benchmark_ps.py \
@@ -138,6 +139,9 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --prefetch-depth <depth> \
   --rdma-rc-qps-per-client-per-shard <at_least_depth> \
   --rdma-rc-profile-interval-ms 1000 \
+  --server-rdma-threads <rdma_threads> \
+  --rdma-rc-server-get-workers <get_workers> \
+  --rdma-rc-server-coroutines-per-thread <coroutines_per_thread> \
   --output-dir <output_dir>/rdma_prefetch_<depth>
 ```
 
@@ -195,8 +199,10 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --execution-backend local \
   --server-worker-threads <threads> \
   --server-rdma-threads <rdma_threads> \
+  --rdma-rc-server-get-workers <get_workers> \
+  --rdma-rc-server-coroutines-per-thread 1 \
   --rdma-rc-qps-per-client-per-shard <qps_pool> \
-  --output-dir <matrix_root>/b<batch>_s<shards>_p<processes>_t1
+  --output-dir <matrix_root>/b<batch>_s<shards>_p<processes>_t<rdma_threads>_n<get_workers>_c1
 ```
 
 Recommended first matrix:
@@ -205,6 +211,8 @@ Recommended first matrix:
 - `client_processes_per_ip`: `1,2,4,8`
 - `client_threads_per_process`: `1`
 - `batch_keys`: user-requested value, or `500` when reproducing the 2026-05-29 matrix
+
+For RDMA scheduling experiments, keep `--rdma-rc-server-coroutines-per-thread=1` unless explicitly testing coroutine scanner behavior. Encode `t<T>`, `n<N>`, and `c<C>` in result directories. In the 2026-05-30 local `p8/N8/T16` repeat=3 run, `C1` averaged `14.45M keys/s` and `C4` averaged `12.17M keys/s`, so `C4` is not a performance default.
 
 For explicit cross-host or multi-shard placement, use `--server-plan` and `--client-plan`:
 

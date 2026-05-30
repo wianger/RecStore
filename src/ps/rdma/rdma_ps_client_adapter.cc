@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <atomic>
+#include <boost/coroutine2/all.hpp>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <thread>
 #include <utility>
@@ -171,6 +173,41 @@ bool RDMAPSClientAdapter::FinalizeBatchIfNeeded(BatchRequest* batch) {
   *batch_status_word = batch->status_code;
   batch->assembled   = true;
   return batch->status_code == static_cast<std::int32_t>(petps::RpcStatus::kOk);
+}
+
+void RDMAPSClientAdapter::WaitShardRpcsCooperatively(
+    const std::vector<PendingShardRpc>& shard_rpcs) {
+  using Coroutine = boost::coroutines2::coroutine<void>;
+  std::vector<std::unique_ptr<Coroutine::pull_type>> waiters;
+  waiters.reserve(shard_rpcs.size());
+  for (const auto& pending : shard_rpcs) {
+    waiters.emplace_back(std::make_unique<Coroutine::pull_type>(
+        [this, pending](Coroutine::push_type& sink) {
+          auto& client =
+              shard_clients_[static_cast<std::size_t>(pending.client_index)];
+          while (!client->QueryRPCFinished(pending.rpc_id)) {
+            sink();
+          }
+          client->WaitRPCFinish(pending.rpc_id);
+        }));
+  }
+
+  while (!waiters.empty()) {
+    for (auto it = waiters.begin(); it != waiters.end();) {
+      auto& waiter = *it;
+      if (*waiter) {
+        (*waiter)();
+      }
+      if (!*waiter) {
+        it = waiters.erase(it);
+      } else {
+        ++it;
+      }
+    }
+    if (!waiters.empty()) {
+      std::this_thread::yield();
+    }
+  }
 }
 
 void InitializeRdmaProcessRuntime() {
@@ -360,16 +397,25 @@ void RDMAPSClientAdapter::WaitRPCFinish(int rpc_id) {
     return;
   }
 
-  std::lock_guard<std::mutex> guard(batches_mu_);
-  auto it = batches_.find(rpc_id);
-  CHECK(it != batches_.end());
-
-  for (const auto& pending : it->second.shard_rpcs) {
-    shard_clients_[static_cast<std::size_t>(pending.client_index)]
-        ->WaitRPCFinish(pending.rpc_id);
+  std::vector<PendingShardRpc> shard_rpcs;
+  {
+    std::lock_guard<std::mutex> guard(batches_mu_);
+    auto it = batches_.find(rpc_id);
+    CHECK(it != batches_.end());
+    if (it->second.assembled) {
+      return;
+    }
+    shard_rpcs = it->second.shard_rpcs;
   }
 
-  FinalizeBatchIfNeeded(&it->second);
+  WaitShardRpcsCooperatively(shard_rpcs);
+
+  {
+    std::lock_guard<std::mutex> guard(batches_mu_);
+    auto it = batches_.find(rpc_id);
+    CHECK(it != batches_.end());
+    FinalizeBatchIfNeeded(&it->second);
+  }
 }
 
 void RDMAPSClientAdapter::RevokeRPCResource(int rpc_id) {

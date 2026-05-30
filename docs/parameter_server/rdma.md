@@ -1,6 +1,6 @@
 # RDMA 模块运行手册
 
-更新时间：2026-05-29
+更新时间：2026-05-30
 
 本文档整理当前 RecStore RDMA 主路径的边界、参数、验证入口、已知限制和下一步路线图。默认工作目录为仓库根目录：
 
@@ -139,6 +139,8 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 | `--rdma-put-v2-transfer-mode` | PUT-v2 payload 传输方式 | `read` 表示 server 读 payload，`push` 表示 client 主动写 payload |
 | `--rdma-wait-timeout-ms` | RDMA 请求等待超时 | 过短会导致 benchmark 误判为超时失败 |
 | `--profile-interval-ms` | RDMA RC 统计输出间隔 | `0` 表示不做周期性 profiling，仅输出 benchmark 结果 |
+| `--rdma-rc-server-get-workers` | generic PS runner 的 server GET payload worker 数 | `0` 表示 poller 同步处理 GET；`>0` 会把 payload 读取/填充 offload 给 worker |
+| `--rdma-rc-server-coroutines-per-thread` | generic PS runner 每个 polling thread 内的 scanner coroutine 数 | 当前作为调度实验维度；`C=1` 是推荐 benchmark 默认 |
 | `--server-coroutines-per-thread` | 每个 polling thread 上的 server 协程数 | 值越大越偏向 coop 扫描，不代表一定更快 |
 | `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`index_only`、`payload_memset` |
 | `--skip-client-copy` | 是否跳过 client 端 GET payload 拷贝 | 只用于 benchmark 排查，不适合作为默认配置 |
@@ -283,6 +285,8 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 - `--client-threads-per-process`：每个 benchmark 进程内的线程数。
 - `--server-worker-threads`：PS/KV worker 线程数。
 - `--server-rdma-threads`：RDMA server polling 线程数。
+- `--rdma-rc-server-get-workers`：server GET payload worker 线程数；`0` 表示 poller 同步处理 GET。
+- `--rdma-rc-server-coroutines-per-thread`：每个 polling thread 内的 scanner coroutine 数；当前作为调度实验维度，不作为性能默认。
 
 本地单 shard、4 client 进程的 RDMA fetch profile 示例：
 
@@ -300,6 +304,8 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --client-load-threads-per-process 1 \
   --server-worker-threads 32 \
   --server-rdma-threads 1 \
+  --rdma-rc-server-get-workers 0 \
+  --rdma-rc-server-coroutines-per-thread 1 \
   --rdma-rc-qps-per-client-per-shard 16 \
   --rdma-rc-profile-interval-ms 1000 \
   --runtime-seconds 3 \
@@ -326,6 +332,38 @@ get_meta timeout key=2:0->0:0
 ```
 
 通用 PS benchmark 的 RDMA 并发建议通过 `--client-ips` 和 `--client-processes-per-ip` 增加 client 进程数。单个 benchmark 进程内仍建议保持 `--client-threads-per-process=1`，除非已经重新验证同进程多线程下的 RDMA client/lane 语义。
+
+如果要复现当前 GET worker / poller 调度实验，建议显式写出 `T/N/C` 三个维度，并把它们编码进结果目录名：
+
+```bash
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --client-ips 127.0.0.1 \
+  --server-shard-ips 127.0.0.1 \
+  --client-processes-per-ip 8 \
+  --record-count 200000 \
+  --value-size 512 \
+  --batch-keys 500 \
+  --client-threads-per-process 1 \
+  --client-load-threads-per-process 1 \
+  --runtime-seconds 8 \
+  --repeat 3 \
+  --execution-backend local \
+  --prefetch-depth 16 \
+  --rdma-rc-qps-per-client-per-shard 16 \
+  --rdma-rc-slots-per-qp 1 \
+  --rdma-rc-profile-interval-ms 1000 \
+  --rdma-wait-timeout-ms 20000 \
+  --client-timeout 240 \
+  --cluster-timeout 80 \
+  --transaction-profile \
+  --server-rdma-threads 16 \
+  --rdma-rc-server-get-workers 8 \
+  --rdma-rc-server-coroutines-per-thread 1 \
+  --output-dir results/benchmark_ps_profile_<date>_n8_p8_t16_c1_repeat3
+```
+
+当前本机结果里，`p8/N8/T16/C1` repeat=3 平均 `14.45M keys/s`；同条件 `C4` 平均 `12.17M keys/s`。因此 `C=1` 是当前推荐 benchmark 默认，`C>1` 只能作为 coroutine scanner 调度实验，不应默认为优化项。
 
 公平比较 RDMA / GRPC / BRPC 时，必须对齐 `--client-threads-per-process` 和 `--client-load-threads-per-process`。如果 RPC 使用 16 线程而 RDMA 使用 1 线程，这只能称为 mixed-concurrency capacity check，不能作为公平 transport 对比。
 

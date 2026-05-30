@@ -94,6 +94,8 @@ private:
   int PartitionKey(uint64_t key) const;
   std::vector<ShardChunk> BuildChunks(base::ConstArray<uint64_t> keys) const;
   bool FinalizeBatchIfNeeded(BatchRequest* batch);
+  void
+  WaitShardRpcsCooperatively(const std::vector<PendingShardRpc>& shard_rpcs);
   int SubmitGetParameter(base::ConstArray<uint64_t> keys,
                          float* values,
                          bool isAsync,
