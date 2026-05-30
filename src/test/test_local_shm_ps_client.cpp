@@ -203,6 +203,7 @@ TEST_F(LocalShmPSClientTest, LastRequestProfileCapturesTransportStages) {
   ASSERT_EQ(client.GetParameter(key_array, readback.data()), 0);
 
   const auto profile = client.GetLastRequestProfile();
+  EXPECT_EQ(profile.opcode, static_cast<uint32_t>(LocalOpcode::kGet));
   EXPECT_GT(profile.request_total_us, 0.0);
   EXPECT_GE(profile.acquire_slot_us, 0.0);
   EXPECT_GE(profile.enqueue_us, 0.0);
@@ -210,6 +211,44 @@ TEST_F(LocalShmPSClientTest, LastRequestProfileCapturesTransportStages) {
   EXPECT_GE(profile.release_us, 0.0);
   EXPECT_GE(profile.server_queue_wait_us, 0.0);
   EXPECT_GE(profile.server_backend_us, 0.0);
+
+  server.Stop();
+  server_thread.join();
+}
+
+TEST_F(LocalShmPSClientTest, LastRequestProfileCapturesOpcodePerRequestType) {
+  const auto config = MakeLocalShmConfig(
+      MakeUniqueRegionName("recstore_local_shm_ps_client_profile_opcode"));
+  LocalShmParameterServer server;
+  server.Init(config);
+
+  std::thread server_thread([&]() { server.Run(); });
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+  LocalShmPSClient client(config["local_shm"]);
+  ASSERT_EQ(client.InitEmbeddingTable("table_profile_opcode", {128, 4}), 0);
+  EXPECT_EQ(client.GetLastRequestProfile().opcode,
+            static_cast<uint32_t>(LocalOpcode::kInitTable));
+
+  std::vector<uint64_t> keys             = {7, 9};
+  std::vector<std::vector<float>> values = {
+      {1.0f, 2.0f, 3.0f, 4.0f}, {5.0f, 6.0f, 7.0f, 8.0f}};
+  base::ConstArray<uint64_t> key_array(keys);
+  ASSERT_EQ(client.PutParameter(key_array, values), 0);
+  EXPECT_EQ(client.GetLastRequestProfile().opcode,
+            static_cast<uint32_t>(LocalOpcode::kPut));
+
+  std::vector<float> readback(8, 0.0f);
+  ASSERT_EQ(client.GetParameterFlat(key_array, readback.data(), 2, 4), 0);
+  EXPECT_EQ(client.GetLastRequestProfile().opcode,
+            static_cast<uint32_t>(LocalOpcode::kGet));
+
+  std::vector<float> grads = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f};
+  ASSERT_EQ(client.UpdateParameterFlat(
+                "table_profile_opcode", key_array, grads.data(), 2, 4),
+            0);
+  EXPECT_EQ(client.GetLastRequestProfile().opcode,
+            static_cast<uint32_t>(LocalOpcode::kUpdateFlat));
 
   server.Stop();
   server_thread.join();

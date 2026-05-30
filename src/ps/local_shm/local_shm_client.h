@@ -27,6 +27,7 @@ struct LocalShmFlatGetHandle {
 };
 
 struct LocalShmRequestProfile {
+  uint32_t opcode             = 0;
   double acquire_slot_us      = 0.0;
   double enqueue_us           = 0.0;
   double wait_us              = 0.0;
@@ -38,6 +39,7 @@ struct LocalShmRequestProfile {
 
 struct LocalShmActiveRequestProfile {
   std::chrono::steady_clock::time_point request_start{};
+  uint32_t opcode        = 0;
   double acquire_slot_us = 0.0;
   double enqueue_us      = 0.0;
   double wait_us         = 0.0;

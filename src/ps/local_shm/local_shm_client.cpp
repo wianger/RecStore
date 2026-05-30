@@ -76,6 +76,13 @@ void MarkError(LocalShmSlotHeader* header, LocalStatusCode code) {
   header->state.store(static_cast<uint32_t>(LocalSlotState::kError));
 }
 
+void MarkActiveRequestOpcode(uint32_t opcode) {
+  if (!g_active_request_profile.active) {
+    return;
+  }
+  g_active_request_profile.opcode = opcode;
+}
+
 uint32_t ReadQueueSelector(const json& config, uint32_t fallback) {
   if (config.contains("ready_queue_index")) {
     return config["ready_queue_index"].get<uint32_t>();
@@ -259,6 +266,7 @@ int LocalShmPSClient::SubmitGetParameterFlat(
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kGet);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -445,6 +453,7 @@ int LocalShmPSClient::PutParameter(
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kPut);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -563,6 +572,7 @@ int LocalShmPSClient::UpdateParameterFlat(
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kUpdateFlat);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -641,6 +651,7 @@ int LocalShmPSClient::InitEmbeddingTable(const std::string& table_name,
 
   const uint64_t request_id = NextRequestId();
   header->opcode            = static_cast<uint32_t>(LocalOpcode::kInitTable);
+  MarkActiveRequestOpcode(header->opcode);
   header->status_code       = static_cast<uint32_t>(LocalStatusCode::kOk);
   header->client_id         = client_id_;
   header->request_id        = request_id;
@@ -843,6 +854,7 @@ void LocalShmPSClient::ResetActiveRequestProfile() const {
 void LocalShmPSClient::FinalizeActiveRequestProfile(
     const LocalShmSlotHeader* header,
     const std::chrono::steady_clock::time_point& request_start) const {
+  g_last_request_profile.opcode = g_active_request_profile.opcode;
   g_last_request_profile.acquire_slot_us =
       g_active_request_profile.acquire_slot_us;
   g_last_request_profile.enqueue_us = g_active_request_profile.enqueue_us;
