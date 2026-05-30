@@ -342,6 +342,26 @@ public:
     return true;
   }
 
+  bool ProbeParameterIndex(base::ConstArray<uint64_t> keys,
+                           int tid,
+                           FlatGetProfile* profile = nullptr) {
+    const auto batch_get_start = std::chrono::steady_clock::now();
+    BaseKV::BatchGetFlatStats flat_stats;
+    BaseKV::BatchGetFlatStats* flat_stats_ptr =
+        profile != nullptr ? &flat_stats : nullptr;
+    const bool ok = base_kv_->BatchGetIndexOnly(keys, tid, flat_stats_ptr);
+    if (profile != nullptr) {
+      profile->batch_get_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - batch_get_start)
+              .count());
+      profile->rows         = static_cast<std::uint64_t>(keys.Size());
+      profile->value_bytes  = 0;
+      profile->missing_rows = flat_stats.missing_rows;
+    }
+    return ok;
+  }
+
   bool GetParameterRun2Completion(
       coroutine<void>::push_type& sink,
       base::ConstArray<uint64_t> keys,

@@ -150,6 +150,51 @@ void* PetPSClient::GetReceiveBuffer(size_t size) {
   return receive_buffers_.back().data();
 }
 
+const float* PetPSClient::BorrowGetResultPayload(
+    int rpc_id,
+    std::size_t* key_count,
+    std::size_t* response_bytes,
+    std::int32_t* status_code) {
+  PendingRpc pending;
+  {
+    std::lock_guard<std::mutex> guard(mu_);
+    const auto it = pending_rpcs_.find(rpc_id);
+    if (it == pending_rpcs_.end()) {
+      return nullptr;
+    }
+    pending = it->second;
+  }
+
+  auto& slot                 = SlotAt(pending.qp_index, pending.slot_in_qp);
+  const bool profile_enabled = FLAGS_rdma_rc_profile_interval_ms > 0;
+  const std::uint64_t wait_start_ns = profile_enabled ? NowNs() : 0;
+  const std::int32_t rc_status      = WaitStatus(slot.view.status, pending.seq);
+  if (profile_enabled) {
+    profile_.wait_rpc_count.fetch_add(1, std::memory_order_relaxed);
+    profile_.wait_status_ns.fetch_add(
+        NowNs() - wait_start_ns, std::memory_order_relaxed);
+  }
+
+  const std::size_t actual_response_bytes = std::min<std::size_t>(
+      slot.view.status->response_bytes, pending.response_bytes);
+  if (key_count != nullptr) {
+    *key_count = pending.key_count;
+  }
+  if (response_bytes != nullptr) {
+    *response_bytes = actual_response_bytes;
+  }
+  if (status_code != nullptr) {
+    *status_code = rc_status;
+  }
+  if (pending.recv_buffer != nullptr) {
+    auto* user_status = FixedSlotStatusWord(
+        pending.recv_buffer, pending.key_count, FLAGS_value_size);
+    *user_status = rc_status;
+  }
+  MaybeReportProfile();
+  return reinterpret_cast<const float*>(slot.view.response_payload);
+}
+
 PetPSClient::SlotHandle PetPSClient::AcquireIdleSlot() {
   if (FLAGS_rdma_rc_profile_interval_ms > 0) {
     profile_.acquire_qp_count.fetch_add(1, std::memory_order_relaxed);

@@ -60,8 +60,8 @@ DEFINE_string(rdma_control_plane_host,
               "Shard-0 RDMA control-plane TCP host");
 DEFINE_string(rdma_rc_fake_get_mode,
               "none",
-              "Benchmark-only fake GET mode: none, status_only, or "
-              "payload_memset");
+              "Benchmark-only fake GET mode: none, status_only, index_only, "
+              "or payload_memset");
 DEFINE_bool(rdma_rc_skip_client_copy,
             false,
             "Benchmark-only option to skip copying GET response payload from "

@@ -377,6 +377,9 @@ def build_benchmark_cmd(
     report_mode: str,
     prefetch_depth: int = 0,
     transaction_profile: bool = False,
+    rdma_direct_async_fetch: bool = False,
+    rdma_adapter_skip_prefetch_result_copy: bool = False,
+    skip_load: bool = False,
 ) -> list[str]:
     cmd = [
         benchmark_binary,
@@ -402,6 +405,12 @@ def build_benchmark_cmd(
         cmd.append(f"--prefetch_depth={prefetch_depth}")
     if transaction_profile:
         cmd.append("--transaction_profile=true")
+    if rdma_direct_async_fetch:
+        cmd.append("--rdma_direct_async_fetch=true")
+    if rdma_adapter_skip_prefetch_result_copy:
+        cmd.append("--rdma_adapter_skip_prefetch_result_copy=true")
+    if skip_load:
+        cmd.append("--skip_load=true")
     return cmd
 
 
@@ -1913,10 +1922,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rdma-rc-inline-bytes", type=int)
     parser.add_argument(
         "--rdma-rc-fake-get-mode",
-        choices=["none", "status_only", "payload_memset"],
+        choices=["none", "status_only", "index_only", "payload_memset"],
     )
     parser.add_argument("--rdma-rc-skip-client-copy", action="store_true")
     parser.add_argument("--transaction-profile", action="store_true")
+    parser.add_argument("--rdma-direct-async-fetch", action="store_true")
+    parser.add_argument("--rdma-adapter-skip-prefetch-result-copy", action="store_true")
+    parser.add_argument("--skip-load", action="store_true")
     parser.add_argument(
         "--interactive",
         action="store_true",
@@ -1928,6 +1940,23 @@ def parse_args() -> argparse.Namespace:
     if args.interactive:
         apply_interactive_prompts(args)
         args.remote_container = args.remote_container or None
+    transports = normalize_transport_list(args.transports)
+    if "RDMA" in transports and args.mode == "fetch":
+        qps_per_client_per_shard = args.rdma_rc_qps_per_client_per_shard or 32
+        slots_per_qp = args.rdma_rc_slots_per_qp or 1
+        prefetch_depth = args.prefetch_depth or 16
+        if qps_per_client_per_shard <= 0:
+            parser.error("--rdma-rc-qps-per-client-per-shard must be positive")
+        if slots_per_qp <= 0:
+            parser.error("--rdma-rc-slots-per-qp must be positive")
+        slot_capacity = qps_per_client_per_shard * slots_per_qp
+        if prefetch_depth > slot_capacity:
+            parser.error(
+                "RDMA fetch prefetch depth exceeds RC slot capacity: "
+                f"prefetch_depth={prefetch_depth}, "
+                f"rdma_rc_qps_per_client_per_shard={qps_per_client_per_shard}, "
+                f"rdma_rc_slots_per_qp={slots_per_qp}"
+            )
     return args
 
 
@@ -2032,6 +2061,11 @@ def main() -> int:
                 report_mode=args.report_mode,
                 prefetch_depth=args.prefetch_depth,
                 transaction_profile=args.transaction_profile,
+                rdma_direct_async_fetch=args.rdma_direct_async_fetch,
+                rdma_adapter_skip_prefetch_result_copy=(
+                    args.rdma_adapter_skip_prefetch_result_copy
+                ),
+                skip_load=args.skip_load,
             )
 
             run_config["cases"].append(

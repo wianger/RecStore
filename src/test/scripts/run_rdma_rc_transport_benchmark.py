@@ -515,7 +515,7 @@ def main():
         "--fake-get-mode",
         "--rdma-rc-fake-get-mode",
         dest="fake_get_mode",
-        choices=["none", "status_only", "payload_memset"],
+        choices=["none", "status_only", "index_only", "payload_memset"],
     )
     parser.add_argument(
         "--skip-client-copy",

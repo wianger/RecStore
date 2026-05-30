@@ -271,6 +271,28 @@ private:
           static_cast<std::uint32_t>(descriptor.response_bytes);
       return;
     }
+    if (FLAGS_rdma_rc_fake_get_mode == "index_only") {
+      base::ConstArray<std::uint64_t> keys(
+          reinterpret_cast<const std::uint64_t*>(payload),
+          descriptor.key_count);
+      CachePS::FlatGetProfile get_profile;
+      CachePS::FlatGetProfile* get_profile_ptr =
+          FLAGS_rdma_rc_profile_interval_ms > 0 ? &get_profile : nullptr;
+      const bool ok =
+          cache_ps_->ProbeParameterIndex(keys, thread_id, get_profile_ptr);
+      if (get_profile_ptr != nullptr) {
+        profile_.get_batch_get_ns.fetch_add(
+            get_profile.batch_get_ns, std::memory_order_relaxed);
+        profile_.get_rows.fetch_add(
+            get_profile.rows, std::memory_order_relaxed);
+        profile_.get_missing_rows.fetch_add(
+            get_profile.missing_rows, std::memory_order_relaxed);
+      }
+      response->status->status = static_cast<std::int32_t>(
+          ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
+      response->status->response_bytes = 0;
+      return;
+    }
     if (FLAGS_rdma_rc_fake_get_mode != "none" &&
         !FLAGS_rdma_rc_fake_get_mode.empty()) {
       response->status->status =

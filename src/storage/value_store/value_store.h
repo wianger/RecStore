@@ -58,6 +58,20 @@ public:
     }
   }
 
+  virtual bool ReadFlatFixedRows(
+      const uint64_t* handles,
+      size_t num_rows,
+      void* out_buf,
+      size_t row_bytes,
+      uint64_t* missing_rows) const {
+    (void)handles;
+    (void)num_rows;
+    (void)out_buf;
+    (void)row_bytes;
+    (void)missing_rows;
+    return false;
+  }
+
   virtual std::vector<uint64_t>
   BatchAllocAndWrite(const std::vector<WriteSpec>& specs) {
     std::vector<uint64_t> handles;

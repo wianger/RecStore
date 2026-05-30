@@ -28,6 +28,10 @@ DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
 DECLARE_string(rdma_transport_mode);
 DEFINE_string(rdma_transport_mode, "rc_write", "RDMA transport mode: rc_write");
+DEFINE_bool(rdma_adapter_skip_prefetch_result_copy,
+            false,
+            "Benchmark-only option to skip copying RDMA prefetch results into "
+            "the GetPrefetchResultFlat output vector");
 
 namespace recstore {
 
@@ -321,7 +325,12 @@ RDMAPSClientAdapter::GetPrefetchState(uint64_t prefetch_id) {
 
 void RDMAPSClientAdapter::MarkPrefetchConsumed(uint64_t prefetch_id) {
   std::lock_guard<std::mutex> guard(state_mu_);
-  prefetches_.erase(prefetch_id);
+  const auto it = prefetches_.find(prefetch_id);
+  if (it == prefetches_.end()) {
+    return;
+  }
+  free_prefetch_buffer_ids_.push_back(it->second.buffer_id);
+  prefetches_.erase(it);
 }
 
 bool RDMAPSClientAdapter::QueryRPCFinished(int rpc_id) {
@@ -381,6 +390,57 @@ void RDMAPSClientAdapter::RevokeRPCResource(int rpc_id) {
   }
 
   batches_.erase(it);
+}
+
+float* RDMAPSClientAdapter::AcquirePrefetchBuffer(std::size_t bytes,
+                                                  std::size_t* buffer_id) {
+  if (buffer_id == nullptr) {
+    throw std::invalid_argument("RDMA prefetch buffer_id must not be null");
+  }
+  std::lock_guard<std::mutex> guard(state_mu_);
+  while (!free_prefetch_buffer_ids_.empty()) {
+    const std::size_t id = free_prefetch_buffer_ids_.back();
+    free_prefetch_buffer_ids_.pop_back();
+    if (id < prefetch_buffer_capacities_.size() &&
+        prefetch_buffer_capacities_[id] >= bytes) {
+      *buffer_id = id;
+      return reinterpret_cast<float*>(prefetch_buffers_[id].get());
+    }
+  }
+
+  const std::size_t id = prefetch_buffers_.size();
+  prefetch_buffers_.push_back(std::make_unique<char[]>(bytes));
+  prefetch_buffer_capacities_.push_back(bytes);
+  *buffer_id = id;
+  return reinterpret_cast<float*>(prefetch_buffers_.back().get());
+}
+
+void RDMAPSClientAdapter::ReleasePrefetchBuffer(std::size_t buffer_id) {
+  std::lock_guard<std::mutex> guard(state_mu_);
+  if (buffer_id < prefetch_buffers_.size()) {
+    free_prefetch_buffer_ids_.push_back(buffer_id);
+  }
+}
+
+const float* RDMAPSClientAdapter::BorrowPrefetchResult(
+    const PrefetchState& state,
+    std::int32_t* status_code,
+    std::size_t* response_bytes) {
+  if (!state.borrowed_response || client_ == nullptr) {
+    return nullptr;
+  }
+  auto* pet_client = dynamic_cast<petps::PetPSClient*>(client_);
+  if (pet_client == nullptr) {
+    return nullptr;
+  }
+  std::size_t key_count = 0;
+  const float* payload  = pet_client->BorrowGetResultPayload(
+      state.rpc_id, &key_count, response_bytes, status_code);
+  if (payload == nullptr ||
+      key_count != static_cast<std::size_t>(state.key_count)) {
+    return nullptr;
+  }
+  return payload;
 }
 
 int RDMAPSClientAdapter::SubmitGetParameter(
@@ -681,22 +741,20 @@ RDMAPSClientAdapter::PrefetchParameter(const base::ConstArray<uint64_t>& keys) {
   const int64_t embedding_dim = DefaultEmbeddingDimOrThrow();
   const std::size_t response_bytes =
       petps::FixedSlotResponseBytes(keys.Size(), FLAGS_value_size);
-  float* buffer = nullptr;
-  if (num_shards_ <= 1) {
-    if (client_ == nullptr) {
-      throw std::runtime_error("RDMA adapter has no initialized client");
-    }
-    buffer = static_cast<float*>(client_->GetReceiveBuffer(response_bytes));
-  } else {
-    if (shard_clients_.empty()) {
-      throw std::runtime_error("RDMA adapter has no initialized clients");
-    }
-    buffer = static_cast<float*>(
-        shard_clients_.front()->GetReceiveBuffer(response_bytes));
-  }
-  std::memset(buffer, 0, response_bytes);
+  std::size_t buffer_id                   = 0;
+  const bool borrow_single_shard_response = num_shards_ <= 1;
+  float* buffer     = AcquirePrefetchBuffer(response_bytes, &buffer_id);
+  auto* status_word = petps::FixedSlotStatusWord(
+      buffer, static_cast<std::size_t>(keys.Size()), FLAGS_value_size);
+  *status_word = static_cast<std::int32_t>(petps::RpcStatus::kPending);
 
-  const int rpc_id = SubmitGetParameter(keys, buffer, true, 0);
+  int rpc_id = -1;
+  try {
+    rpc_id = SubmitGetParameter(keys, buffer, true, 0);
+  } catch (...) {
+    ReleasePrefetchBuffer(buffer_id);
+    throw;
+  }
 
   std::lock_guard<std::mutex> guard(state_mu_);
   const uint64_t prefetch_id = next_prefetch_id_++;
@@ -704,9 +762,11 @@ RDMAPSClientAdapter::PrefetchParameter(const base::ConstArray<uint64_t>& keys) {
       prefetch_id,
       PrefetchState{
           buffer,
+          buffer_id,
           rpc_id,
           static_cast<int64_t>(keys.Size()),
           embedding_dim,
+          borrow_single_shard_response,
       });
   return prefetch_id;
 }
@@ -767,13 +827,23 @@ bool RDMAPSClientAdapter::GetPrefetchResultFlat(
 
   const bool profile_enabled = AdapterProfileEnabled();
   const auto wait_begin      = std::chrono::steady_clock::now();
-  WaitForPrefetch(prefetch_id);
-  const auto wait_end     = std::chrono::steady_clock::now();
-  const auto* status_word = petps::FixedSlotStatusWord(
-      state.buffer,
-      static_cast<std::size_t>(state.key_count),
-      FLAGS_value_size);
-  if (*status_word != static_cast<std::int32_t>(petps::RpcStatus::kOk)) {
+  std::int32_t status_code   = static_cast<std::int32_t>(petps::RpcStatus::kOk);
+  std::size_t response_bytes = 0;
+  const float* result_payload =
+      BorrowPrefetchResult(state, &status_code, &response_bytes);
+  if (result_payload == nullptr) {
+    WaitForPrefetch(prefetch_id);
+    const auto* status_word = petps::FixedSlotStatusWord(
+        state.buffer,
+        static_cast<std::size_t>(state.key_count),
+        FLAGS_value_size);
+    status_code    = *status_word;
+    response_bytes = static_cast<std::size_t>(state.key_count) *
+                     static_cast<std::size_t>(FLAGS_value_size);
+    result_payload = state.buffer;
+  }
+  const auto wait_end = std::chrono::steady_clock::now();
+  if (status_code != static_cast<std::int32_t>(petps::RpcStatus::kOk)) {
     RevokeRPCResource(state.rpc_id);
     MarkPrefetchConsumed(prefetch_id);
     return false;
@@ -783,7 +853,22 @@ bool RDMAPSClientAdapter::GetPrefetchResultFlat(
       static_cast<std::size_t>(state.key_count) *
       static_cast<std::size_t>(state.embedding_dim);
   const auto assign_begin = std::chrono::steady_clock::now();
-  values->assign(state.buffer, state.buffer + value_count);
+  if (FLAGS_rdma_adapter_skip_prefetch_result_copy) {
+    values->clear();
+  } else if (response_bytes == 0) {
+    values->clear();
+  } else {
+    values->resize(value_count);
+    if (value_count > 0) {
+      const std::size_t expected_bytes = value_count * sizeof(values->front());
+      if (response_bytes < expected_bytes) {
+        RevokeRPCResource(state.rpc_id);
+        MarkPrefetchConsumed(prefetch_id);
+        return false;
+      }
+      std::memcpy(values->data(), result_payload, expected_bytes);
+    }
+  }
   const auto assign_end   = std::chrono::steady_clock::now();
   *num_rows               = state.key_count;
   const auto revoke_begin = std::chrono::steady_clock::now();

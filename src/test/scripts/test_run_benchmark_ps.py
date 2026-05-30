@@ -1,5 +1,6 @@
 import json
 import argparse
+import io
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ from run_benchmark_ps import (  # noqa: E402
     collect_ps_result_rows,
     collect_summary_rows,
     normalize_transport_list,
+    parse_args,
     parse_csv_list,
     parse_client_plan,
     parse_server_plan,
@@ -232,12 +234,29 @@ class TestRunBenchmarkPS(unittest.TestCase):
             mode="fetch",
             report_mode="summary",
             prefetch_depth=4,
+            rdma_adapter_skip_prefetch_result_copy=True,
         )
         self.assertIn("--workload=transactions", cmd)
         self.assertIn("--record_count=1000", cmd)
         self.assertIn("--config_path=/tmp/config.json", cmd)
         self.assertIn("--value_size=256", cmd)
         self.assertIn("--prefetch_depth=4", cmd)
+        self.assertIn("--rdma_adapter_skip_prefetch_result_copy=true", cmd)
+
+    def test_parse_args_rejects_rdma_prefetch_depth_above_slot_capacity(self):
+        argv = [
+            "run_benchmark_ps.py",
+            "--transports",
+            "rdma",
+            "--rdma-rc-qps-per-client-per-shard",
+            "4",
+            "--rdma-rc-slots-per-qp",
+            "1",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            with mock.patch.object(sys, "stderr", io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    parse_args()
 
     def test_build_rdma_runner_forwards_profile_interval(self):
         args = argparse.Namespace(

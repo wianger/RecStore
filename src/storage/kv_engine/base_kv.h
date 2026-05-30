@@ -93,6 +93,12 @@ public:
     return false;
   }
 
+  virtual bool BatchGetIndexOnly(base::ConstArray<uint64_t> keys,
+                                 unsigned tid,
+                                 BatchGetFlatStats* stats = nullptr) {
+    return false;
+  }
+
   virtual void BatchGet(coroutine<void>::push_type& sink,
                         base::ConstArray<uint64_t> keys,
                         std::vector<base::ConstArray<float>>* values,

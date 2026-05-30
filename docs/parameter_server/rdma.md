@@ -140,7 +140,7 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 | `--rdma-wait-timeout-ms` | RDMA 请求等待超时 | 过短会导致 benchmark 误判为超时失败 |
 | `--profile-interval-ms` | RDMA RC 统计输出间隔 | `0` 表示不做周期性 profiling，仅输出 benchmark 结果 |
 | `--server-coroutines-per-thread` | 每个 polling thread 上的 server 协程数 | 值越大越偏向 coop 扫描，不代表一定更快 |
-| `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`payload_memset` |
+| `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`index_only`、`payload_memset` |
 | `--skip-client-copy` | 是否跳过 client 端 GET payload 拷贝 | 只用于 benchmark 排查，不适合作为默认配置 |
 
 ### 4.1 重要解读

@@ -223,6 +223,23 @@ public:
     const auto row_copy_start =
         stats != nullptr ? std::chrono::steady_clock::now()
                          : std::chrono::steady_clock::time_point{};
+    if (default_value_size_hint_ == row_bytes &&
+        value_store_->ReadFlatFixedRows(
+            handles.data(),
+            static_cast<size_t>(num_rows),
+            values,
+            row_bytes,
+            &missing_rows)) {
+      if (stats != nullptr) {
+        stats->zero_fill_ns = 0;
+        stats->row_copy_ns  = static_cast<std::uint64_t>(
+            std::chrono::duration_cast< std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - row_copy_start)
+                .count());
+        stats->missing_rows = missing_rows;
+      }
+      return true;
+    }
     for (int64_t row = 0; row < num_rows; ++row) {
       const Value_t handle = handles[static_cast<size_t>(row)];
       float* dst           = values + row * embedding_dim;
@@ -272,6 +289,26 @@ public:
           std::chrono::duration_cast< std::chrono::nanoseconds>(
               std::chrono::steady_clock::now() - row_copy_start)
               .count());
+      stats->missing_rows = missing_rows;
+    }
+    return true;
+  }
+
+  bool BatchGetIndexOnly(base::ConstArray<uint64_t> keys,
+                         unsigned tid,
+                         BatchGetFlatStats* stats = nullptr) override {
+    thread_local std::vector<Value_t> handles;
+    handles.assign(keys.Size(), kValueHandleNone);
+    if (keys.Size() > 0) {
+      index_->BatchGet(keys, handles.data(), tid);
+    }
+    if (stats != nullptr) {
+      std::uint64_t missing_rows = 0;
+      for (const Value_t handle : handles) {
+        if (handle == kValueHandleNone) {
+          ++missing_rows;
+        }
+      }
       stats->missing_rows = missing_rows;
     }
     return true;
