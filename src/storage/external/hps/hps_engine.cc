@@ -239,6 +239,8 @@ public:
       : KVEngineHPSBase(config, CreateRocksDBBackend(config)) {}
 };
 
+extern "C" void RecStoreForceLinkHPSEngine() {}
+
 FACTORY_REGISTER(
     BaseKV, KVEngineHPSHashMap, KVEngineHPSHashMap, const BaseKVConfig&);
 FACTORY_REGISTER(

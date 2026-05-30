@@ -4,9 +4,20 @@
 
 #include "gflags/gflags.h"
 
+extern "C" void RecStoreForceLinkFasterKVEngine();
+extern "C" void RecStoreForceLinkHPSEngine();
+
 namespace {
 struct IOBackendLinkGuard {
-  IOBackendLinkGuard() { ForceLinkIOBackends(); }
+  IOBackendLinkGuard() {
+    ForceLinkIOBackends();
+#ifdef RECSTORE_ENABLE_FASTERKV_ENGINE
+    RecStoreForceLinkFasterKVEngine();
+#endif
+#ifdef RECSTORE_ENABLE_HPS_ENGINE
+    RecStoreForceLinkHPSEngine();
+#endif
+  }
 };
 const IOBackendLinkGuard kIoBackendLinkGuard;
 } // namespace
