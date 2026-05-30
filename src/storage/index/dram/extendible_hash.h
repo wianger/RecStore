@@ -125,6 +125,9 @@ private:
   Directory dir;
   size_t global_depth;
 
+  size_t DirectoryIndex(size_t key_hash) const;
+  void HintPrefetch(size_t key_hash) const;
+  Value_t ExtractWithHash(Key_t& key, size_t key_hash);
   Value_t Extract(Key_t& key);
   Value_t Insert(Key_t& key, Value_t value);
   bool InsertOnly(Key_t& key, Value_t value);

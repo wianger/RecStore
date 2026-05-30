@@ -12,6 +12,106 @@
 4. 本轮新增的 `--rdma_rc_server_get_workers` 把 GET payload 读取/填充从 polling thread 拆出去，`p4/N4` 从约 `5.07M` 提升到约 `10.06M keys/s`。
 5. 在 `p8/N8` 上继续增加 polling threads 后，当前最高单次结果为 `14.57M keys/s`；同条件 `C1` 三次复跑平均 `14.45M keys/s`，明显高于 `C4` 的 `12.17M keys/s`。所以 coroutine scanner 功能可用，但不是当前性能默认。
 
+## 当前最新瓶颈判断
+
+截至本轮追加实验，PS RDMA 512B GET 的瓶颈可以更具体地拆成两层：
+
+1. 单 shard 内，主要瓶颈在 server GET payload 路径，不在 BasePS 虚调用或 RDMA completion 回写：
+
+```text
+PetPSServer::HandleGet
+  -> CachePS::GetParameterFlat
+  -> KVEngineComposite::BatchGetFlat
+  -> index_->BatchGet
+  -> value_store_->ReadFlatFixedRows / row copy
+```
+
+对应函数位置：
+
+- `PetPSServer::HandleGet`：`src/ps/rdma/petps_server.cc`
+- `CachePS::GetParameterFlat`：`src/ps/base/cache_ps_impl.h`
+- `KVEngineComposite::BatchGetFlat`：`src/storage/kv_engine/engine_composite.h`
+- `ExtendibleHash::BatchGet` / `ExtendibleHash::Extract`：`src/storage/index/dram/extendible_hash.cpp`
+- `DramPetHashIndex::BatchGet`：`src/storage/index/dram/pet_hash_index.h`
+
+2. `GET worker` 已经证明有价值，但不能靠继续加线程线性扩展。当前 `p8/T16/C1/value512/batch500/prefetch16` 下：
+
+| index | get workers | 聚合吞吐 |
+|---|---:|---:|
+| `DRAM_EXTENDIBLE_HASH` | N8 | 14.852399M |
+| `DRAM_EXTENDIBLE_HASH` | N12 | 9.146058M |
+| `DRAM_EXTENDIBLE_HASH` | N16 | 7.252709M |
+| `DRAM_PET_HASH` | N8 | 15.113670M |
+| `DRAM_PET_HASH` | N12 | 10.190840M |
+| `DRAM_PET_HASH` | N16 | 7.890341M |
+
+这说明瓶颈不是“GET worker 数量不够”。继续加 worker 后，更多线程同时打同一份 index/value store，cache miss、TLB、内存带宽和 hash/index 内部共享结构竞争会放大，单个 GET 请求反而变慢。
+
+profile 也支持这个判断：
+
+| 场景 | 聚合吞吐 | `handle_get_avg_ns` | `get_index_lookup_avg_ns` | `get_row_copy_avg_ns` | `complete_response_avg_ns` |
+|---|---:|---:|---:|---:|---:|
+| N8/T16 | 14.572350M | 约 163us | 约 76us | 约 84us | 约 4.6us |
+| N16/T16 | 7.340866M | 约 487-510us | 约 371-395us | 约 107-111us | 约 4.8us |
+
+关键点：
+
+- `complete_response_avg_ns` 基本不变，说明 completion 回写不是主要退化点。
+- `get_index_lookup_avg_ns` 在 N16 下膨胀最明显，是继续加 GET worker 不 scale 的主要证据。
+- `get_row_copy_avg_ns` 也变差，但幅度小于 index lookup；512B value copy 仍然是常驻成本，但不是 N16 退化的最大来源。
+
+## 已验证但收益有限的方向
+
+### 切换 `DRAM_PET_HASH`
+
+只把 index 从默认 `DRAM_EXTENDIBLE_HASH` 改成 `DRAM_PET_HASH`，其他参数保持 `p8/N8/T16/C1/value512/batch500/prefetch16`：
+
+| index | 聚合吞吐 |
+|---|---:|
+| `DRAM_EXTENDIBLE_HASH` | 14.852399M |
+| `DRAM_PET_HASH` | 15.113670M |
+
+结论：`DRAM_PET_HASH` 有小幅提升，但不是突破口。带 profile 时，PET_HASH 的 `index_lookup_avg_ns` 没有下降，吞吐提升更像是整体访问形态和 row copy 分布带来的小变化。
+
+### `ExtendibleHash::BatchGet` 批内 prefetch
+
+尝试在 `ExtendibleHash::BatchGet` 中对未来 key 的 directory entry 和 block 做 prefetch，并复用当前 key 的 hash：
+
+| 场景 | 聚合吞吐 |
+|---|---:|
+| baseline `DRAM_EXTENDIBLE_HASH` N8 | 14.852399M |
+| prefetch 初版 | 14.900620M |
+| prefetch + 当前 key hash 复用 | 14.985290M |
+
+结论：批内 prefetch 只有约 `0.9%` 的小收益，不能解释或解决主瓶颈。更激进的 index/data layout 改造才可能明显减少 lookup 成本。
+
+### 简单 2 shard fanout
+
+把 `--server-shard-ips` 从一个 `127.0.0.1` 改成两个 `127.0.0.1,127.0.0.1` 后，结果只有：
+
+| 场景 | 聚合吞吐 |
+|---|---:|
+| 单 shard N8 | 14.985290M |
+| 本机 2 shard fanout | 1.323520M |
+
+这个结果不能解释为“两台 server shard 处理能力差”。当前 generic PS multi-shard fetch 语义是：
+
+```text
+一个 500-key 逻辑 GET
+  -> client 按 key hash 拆成 shard0 子 batch + shard1 子 batch
+  -> 分别发多个 shard RPC
+  -> 等所有 shard RPC 完成
+  -> 按原始 key 顺序 merge 回一个逻辑结果
+```
+
+因此它测到的是 multi-shard distributed client 的 fanout、等待和 merge 成本，而不是干净的 server-side shard scale。这个 2 shard 结果只能说明：当前 generic PS RDMA multi-shard fetch 路径不能直接拿来证明 server scale-out；如果要测“一个 client 只打一个 shard”的 server 扩展能力，需要 runner 支持 client 到 shard 的显式绑定，避免每个 batch 被 fanout。
+
+## 当前仍有意义的下一步
+
+1. 如果继续优化单 shard，应优先减少 index lookup 成本，而不是继续堆 GET worker。可选方向是 dense/direct index 专用路径：在 dense embedding id 场景下用 `key -> value_handle_array[key]` 替代 hash probe。
+2. 如果要验证 shard scale-out，需要先修正 benchmark 拓扑：让不同 client 进程绑定不同 shard，或增加显式 shard-affinity 模式，避免一个逻辑 batch 被拆成多个 shard RPC 再 merge。
+3. value copy 仍是常驻成本。`500 * 512B = 256KB` 的 payload 必须被填入连续 response buffer；在不改协议为 scatter-gather / zero-copy 前，这部分不会消失。
+
 ## 测试边界
 
 - 分支：`feat/newrdma`
