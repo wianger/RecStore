@@ -44,6 +44,10 @@ if(TARGET report_client)
   target_link_libraries(local_shm_ps_server_runtime PRIVATE report_client)
 endif()
 
+if(NOT BUILD_SHARED_LIBS)
+  target_link_libraries(local_shm_ps_server_runtime PUBLIC spdk_backend)
+endif()
+
 add_executable(local_shm_ps_server
     local_shm_server_main.cpp
 )

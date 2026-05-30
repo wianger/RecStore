@@ -13,36 +13,33 @@ if(USE_PMKV MATCHES "ON")
 endif()
 
 # KV engine factory
-add_library(kv_engine INTERFACE)
-target_link_libraries(kv_engine INTERFACE base)
+add_library(kv_engine
+  kv_engine_register.cc
+)
+target_link_libraries(kv_engine PUBLIC base)
 if(USE_PMKV MATCHES "ON")
-  target_link_libraries(kv_engine INTERFACE ${LIBPMEMKV_LIBRARIES})
+  target_link_libraries(kv_engine PUBLIC ${LIBPMEMKV_LIBRARIES})
 endif()
 
 target_link_libraries(
   kv_engine
-  INTERFACE pet_kv index io_backend
+  PUBLIC pet_kv index io_backend
   # spdk_wrapper
 )
   # INTERFACE pet_kv dash_hash PMHashPCLHT PMHashLevel PMHashClevel PMHashCCEHVM)
 
-cmake_policy(SET CMP0076 NEW)
-
-target_sources(
-  kv_engine INTERFACE kv_engine_register.cc)
-
 if(TARGET fasterkv_backend)
   target_sources(
-    kv_engine INTERFACE
+    kv_engine PRIVATE
     ${PROJECT_SOURCE_DIR}/src/storage/external/fasterkv/fasterkv_engine.cc)
-  target_link_libraries(kv_engine INTERFACE fasterkv_backend)
+  target_link_libraries(kv_engine PUBLIC fasterkv_backend)
 endif()
 
 if(TARGET hps_native_support)
   target_sources(
-    kv_engine INTERFACE
+    kv_engine PRIVATE
     ${PROJECT_SOURCE_DIR}/src/storage/external/hps/hps_engine.cc)
-  target_link_libraries(kv_engine INTERFACE hps_native_support)
+  target_link_libraries(kv_engine PUBLIC hps_native_support)
 endif()
 # KV engine factory done
 
@@ -54,4 +51,3 @@ if(USE_GPERF_PROFILING)
   target_compile_definitions(benchmark_kv_engine PRIVATE RECSTORE_USE_GPERF_PROFILING)
   target_link_libraries(benchmark_kv_engine PRIVATE profiler)
 endif()
-
