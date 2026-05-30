@@ -78,9 +78,10 @@ public:
                         unsigned tid) = 0;
 
   struct BatchGetFlatStats {
-    std::uint64_t zero_fill_ns = 0;
-    std::uint64_t row_copy_ns  = 0;
-    std::uint64_t missing_rows = 0;
+    std::uint64_t index_lookup_ns = 0;
+    std::uint64_t zero_fill_ns    = 0;
+    std::uint64_t row_copy_ns     = 0;
+    std::uint64_t missing_rows    = 0;
   };
 
   virtual bool BatchGetFlat(

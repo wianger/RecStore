@@ -195,6 +195,7 @@ private:
     std::atomic<std::uint64_t> wrong_shard{0};
     std::atomic<std::uint64_t> handle_get_ns{0};
     std::atomic<std::uint64_t> get_batch_get_ns{0};
+    std::atomic<std::uint64_t> get_index_lookup_ns{0};
     std::atomic<std::uint64_t> get_zero_fill_ns{0};
     std::atomic<std::uint64_t> get_row_copy_ns{0};
     std::atomic<std::uint64_t> get_rows{0};
@@ -241,6 +242,8 @@ private:
         handled_get + handled_put + handled_update + handled_init;
     const std::uint64_t handle_get_ns    = Exchange(&profile_.handle_get_ns);
     const std::uint64_t get_batch_get_ns = Exchange(&profile_.get_batch_get_ns);
+    const std::uint64_t get_index_lookup_ns =
+        Exchange(&profile_.get_index_lookup_ns);
     const std::uint64_t get_zero_fill_ns = Exchange(&profile_.get_zero_fill_ns);
     const std::uint64_t get_row_copy_ns  = Exchange(&profile_.get_row_copy_ns);
     const std::uint64_t get_rows         = Exchange(&profile_.get_rows);
@@ -270,6 +273,8 @@ private:
         << (handled_get == 0 ? 0 : handle_get_ns / handled_get)
         << " get_batch_get_avg_ns="
         << (handled_get == 0 ? 0 : get_batch_get_ns / handled_get)
+        << " get_index_lookup_avg_ns="
+        << (handled_get == 0 ? 0 : get_index_lookup_ns / handled_get)
         << " get_zero_fill_avg_ns="
         << (handled_get == 0 ? 0 : get_zero_fill_ns / handled_get)
         << " get_row_copy_avg_ns="
@@ -448,6 +453,8 @@ private:
       if (get_profile_ptr != nullptr) {
         profile_.get_batch_get_ns.fetch_add(
             get_profile.batch_get_ns, std::memory_order_relaxed);
+        profile_.get_index_lookup_ns.fetch_add(
+            get_profile.index_lookup_ns, std::memory_order_relaxed);
         profile_.get_rows.fetch_add(
             get_profile.rows, std::memory_order_relaxed);
         profile_.get_missing_rows.fetch_add(
@@ -481,6 +488,8 @@ private:
     if (get_profile_ptr != nullptr) {
       profile_.get_batch_get_ns.fetch_add(
           get_profile.batch_get_ns, std::memory_order_relaxed);
+      profile_.get_index_lookup_ns.fetch_add(
+          get_profile.index_lookup_ns, std::memory_order_relaxed);
       profile_.get_zero_fill_ns.fetch_add(
           get_profile.zero_fill_ns, std::memory_order_relaxed);
       profile_.get_row_copy_ns.fetch_add(

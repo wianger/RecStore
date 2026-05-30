@@ -214,8 +214,17 @@ public:
     thread_local std::vector<Value_t> handles;
     thread_local std::vector<char> read_buffer;
     handles.assign(keys.Size(), kValueHandleNone);
+    const auto index_lookup_start =
+        stats != nullptr ? std::chrono::steady_clock::now()
+                         : std::chrono::steady_clock::time_point{};
     if (keys.Size() > 0) {
       index_->BatchGet(keys, handles.data(), tid);
+    }
+    if (stats != nullptr) {
+      stats->index_lookup_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - index_lookup_start)
+              .count());
     }
 
     std::uint64_t missing_zero_fill_ns = 0;

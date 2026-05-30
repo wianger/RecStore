@@ -48,12 +48,13 @@ public:
   using key_t = uint64_t;
 
   struct FlatGetProfile {
-    std::uint64_t batch_get_ns = 0;
-    std::uint64_t zero_fill_ns = 0;
-    std::uint64_t row_copy_ns  = 0;
-    std::uint64_t rows         = 0;
-    std::uint64_t value_bytes  = 0;
-    std::uint64_t missing_rows = 0;
+    std::uint64_t batch_get_ns    = 0;
+    std::uint64_t index_lookup_ns = 0;
+    std::uint64_t zero_fill_ns    = 0;
+    std::uint64_t row_copy_ns     = 0;
+    std::uint64_t rows            = 0;
+    std::uint64_t value_bytes     = 0;
+    std::uint64_t missing_rows    = 0;
   };
 
   CachePS(json config) {
@@ -264,9 +265,10 @@ public:
         profile->value_bytes =
             static_cast<std::uint64_t>(num_rows) *
             static_cast<std::uint64_t>(embedding_dim) * sizeof(float);
-        profile->zero_fill_ns = flat_stats.zero_fill_ns;
-        profile->row_copy_ns  = flat_stats.row_copy_ns;
-        profile->missing_rows = flat_stats.missing_rows;
+        profile->zero_fill_ns    = flat_stats.zero_fill_ns;
+        profile->index_lookup_ns = flat_stats.index_lookup_ns;
+        profile->row_copy_ns     = flat_stats.row_copy_ns;
+        profile->missing_rows    = flat_stats.missing_rows;
       }
       recstore::ReportLocalShmStageMetric(
           "cache_ps_get_batch_get_us",
