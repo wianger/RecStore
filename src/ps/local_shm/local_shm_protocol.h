@@ -7,7 +7,7 @@
 namespace recstore {
 
 constexpr uint64_t kLocalShmMagic         = 0x52454353544F5245ULL; // "RECSTORE"
-constexpr uint32_t kLocalShmVersion       = 1;
+constexpr uint32_t kLocalShmVersion       = 2;
 constexpr uint32_t kLocalShmReservedBytes = 64;
 
 enum class LocalQueueKind : uint32_t {
@@ -99,11 +99,14 @@ struct alignas(64) LocalShmSlotHeader {
 
   uint64_t server_seen_epoch;
   uint64_t user_tag;
+  uint64_t client_enqueue_timestamp_ns;
+  uint64_t server_dequeue_timestamp_ns;
+  uint64_t server_backend_duration_us;
 
   std::atomic<uint32_t> completion_doorbell;
   uint32_t error_message_len;
 
-  uint8_t reserved[kLocalShmReservedBytes];
+  uint8_t reserved[kLocalShmReservedBytes - sizeof(uint64_t) * 3];
 };
 
 static_assert(std::is_standard_layout<LocalShmControlBlock>::value,

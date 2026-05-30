@@ -23,6 +23,7 @@
 #include "ps/brpc/brpc_ps_client.h"
 #include "ps/brpc/dist_brpc_ps_client.h"
 #include "ps/grpc/dist_grpc_ps_client.h"
+#include "ps/local_shm/local_shm_client.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
 
@@ -59,6 +60,17 @@ namespace {
 struct PhaseStats {
   uint64_t batches = 0;
   uint64_t key_ops = 0;
+};
+
+struct LocalShmTransportStats {
+  double acquire_slot_us      = 0.0;
+  double enqueue_us           = 0.0;
+  double wait_us              = 0.0;
+  double release_us           = 0.0;
+  double request_total_us     = 0.0;
+  double server_queue_wait_us = 0.0;
+  double server_backend_us    = 0.0;
+  uint64_t samples            = 0;
 };
 
 class FastRandom {
@@ -347,13 +359,51 @@ bool GetFlat(recstore::BasePSClient* client,
       ClientReturnsZeroOnSuccess(client));
 }
 
+void AccumulateLocalShmTransportStats(recstore::BasePSClient* client,
+                                      LocalShmTransportStats* stats) {
+  if (stats == nullptr) {
+    return;
+  }
+  auto* local_client = dynamic_cast<recstore::LocalShmPSClient*>(client);
+  if (local_client == nullptr) {
+    return;
+  }
+  const auto profile = local_client->GetLastRequestProfile();
+  stats->acquire_slot_us += profile.acquire_slot_us;
+  stats->enqueue_us += profile.enqueue_us;
+  stats->wait_us += profile.wait_us;
+  stats->release_us += profile.release_us;
+  stats->request_total_us += profile.request_total_us;
+  stats->server_queue_wait_us += profile.server_queue_wait_us;
+  stats->server_backend_us += profile.server_backend_us;
+  ++stats->samples;
+}
+
+void PrintLocalShmTransportStats(const char* phase,
+                                 const LocalShmTransportStats& stats) {
+  if (stats.samples == 0) {
+    return;
+  }
+  const double samples = static_cast<double>(stats.samples);
+  std::cout
+      << "PS_LOCAL_SHM_PROFILE phase=" << phase << " samples=" << stats.samples
+      << " acquire_slot_us_mean=" << (stats.acquire_slot_us / samples)
+      << " enqueue_us_mean=" << (stats.enqueue_us / samples)
+      << " wait_us_mean=" << (stats.wait_us / samples)
+      << " release_us_mean=" << (stats.release_us / samples)
+      << " request_total_us_mean=" << (stats.request_total_us / samples)
+      << " server_queue_wait_us_mean=" << (stats.server_queue_wait_us / samples)
+      << " server_backend_us_mean=" << (stats.server_backend_us / samples)
+      << std::endl;
+}
+
 using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
 
-PhaseStats
-LoadRecords(const std::string& transport,
-            int load_threads,
-            int dim,
-            std::vector<BenchmarkClient>* reusable_clients = nullptr) {
+PhaseStats LoadRecords(const std::string& transport,
+                       int load_threads,
+                       int dim,
+                       std::vector<BenchmarkClient>* reusable_clients = nullptr,
+                       LocalShmTransportStats* local_shm_stats = nullptr) {
   if (reusable_clients != nullptr) {
     CHECK_EQ(static_cast<int>(reusable_clients->size()), load_threads);
   }
@@ -390,6 +440,7 @@ LoadRecords(const std::string& transport,
         }
         CHECK(PutFlat(client, transport, keys, values, dim))
             << transport << " preload PutParameter failed";
+        AccumulateLocalShmTransportStats(client, local_shm_stats);
         ++local.batches;
         local.key_ops += keys.size();
       }
@@ -407,10 +458,11 @@ LoadRecords(const std::string& transport,
   return total;
 }
 
-PhaseStats
-RunTransactions(const std::string& transport,
-                int dim,
-                std::vector<BenchmarkClient>* reusable_clients = nullptr) {
+PhaseStats RunTransactions(
+    const std::string& transport,
+    int dim,
+    std::vector<BenchmarkClient>* reusable_clients = nullptr,
+    LocalShmTransportStats* local_shm_stats        = nullptr) {
   if (reusable_clients != nullptr) {
     CHECK_EQ(static_cast<int>(reusable_clients->size()), FLAGS_thread_num);
   }
@@ -461,10 +513,12 @@ RunTransactions(const std::string& transport,
         if (do_fetch) {
           CHECK(GetFlat(client, transport, keys, &output))
               << transport << " GetParameter failed";
+          AccumulateLocalShmTransportStats(client, local_shm_stats);
         }
         if (insert_only || fetch_insert || (mixed && !do_fetch)) {
           CHECK(PutFlat(client, transport, keys, values, dim))
               << transport << " PutParameter failed";
+          AccumulateLocalShmTransportStats(client, local_shm_stats);
         }
         ++local.batches;
         local.key_ops += keys.size();
@@ -549,26 +603,38 @@ int main(int argc, char** argv) {
       }
     }
     if (!FLAGS_skip_load) {
+      LocalShmTransportStats load_transport_stats;
       const auto load_begin = std::chrono::steady_clock::now();
       const PhaseStats load = LoadRecords(
           transport,
           load_threads,
           dim,
-          reusable_clients.empty() ? nullptr : &reusable_clients);
+          reusable_clients.empty() ? nullptr : &reusable_clients,
+          &load_transport_stats);
       const auto load_end = std::chrono::steady_clock::now();
       PrintTransactionResult(
           "load", transport, load, SecondsSince(load_begin, load_end));
+      if (transport == "LOCAL_SHM") {
+        PrintLocalShmTransportStats("load", load_transport_stats);
+      }
     }
     if (FLAGS_load_only) {
       return 0;
     }
 
+    LocalShmTransportStats run_transport_stats;
     const auto run_begin = std::chrono::steady_clock::now();
     const PhaseStats run = RunTransactions(
-        transport, dim, reusable_clients.empty() ? nullptr : &reusable_clients);
+        transport,
+        dim,
+        reusable_clients.empty() ? nullptr : &reusable_clients,
+        &run_transport_stats);
     const auto run_end = std::chrono::steady_clock::now();
     PrintTransactionResult(
         "run", transport, run, SecondsSince(run_begin, run_end));
+    if (transport == "LOCAL_SHM") {
+      PrintLocalShmTransportStats("run", run_transport_stats);
+    }
     return 0;
   }
   CHECK_EQ(FLAGS_workload, "micro") << "workload must be micro|transactions";

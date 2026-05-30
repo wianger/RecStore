@@ -26,6 +26,24 @@ struct LocalShmFlatGetHandle {
   uint64_t output_bytes = 0;
 };
 
+struct LocalShmRequestProfile {
+  double acquire_slot_us      = 0.0;
+  double enqueue_us           = 0.0;
+  double wait_us              = 0.0;
+  double release_us           = 0.0;
+  double request_total_us     = 0.0;
+  double server_queue_wait_us = 0.0;
+  double server_backend_us    = 0.0;
+};
+
+struct LocalShmActiveRequestProfile {
+  std::chrono::steady_clock::time_point request_start{};
+  double acquire_slot_us = 0.0;
+  double enqueue_us      = 0.0;
+  double wait_us         = 0.0;
+  bool active            = false;
+};
+
 class LocalShmPSClient : public BasePSClient {
 public:
   explicit LocalShmPSClient(json config);
@@ -58,6 +76,8 @@ public:
   int AsyncGetParameter(const base::ConstArray<uint64_t>& keys,
                         float* values) override;
   bool GetSlotPayloadRegion(const void** base, std::size_t* bytes) const;
+  uint32_t CurrentReadyQueueId() const;
+  LocalShmRequestProfile GetLastRequestProfile() const;
 
   void Command(PSCommand command) override;
 
@@ -77,13 +97,18 @@ private:
   bool WaitForSlot(uint32_t slot_id, uint64_t request_id);
   uint64_t NextRequestId();
   uint32_t ResolveReadyQueueId(const json& config) const;
+  void ResetActiveRequestProfile() const;
+  void FinalizeActiveRequestProfile(
+      const LocalShmSlotHeader* header,
+      const std::chrono::steady_clock::time_point& request_start) const;
 
 private:
   LocalShmRegion region_;
   std::string region_name_;
-  uint32_t client_id_      = 0;
-  uint32_t ready_queue_id_ = 0;
-  uint32_t timeout_ms_     = 30000;
+  uint32_t client_id_               = 0;
+  uint32_t ready_queue_id_          = 0;
+  bool thread_ready_queue_sharding_ = false;
+  uint32_t timeout_ms_              = 30000;
   std::unordered_map<std::string, int64_t> table_embedding_dims_;
   std::unordered_map<uint64_t, std::pair<uint32_t, uint64_t>> prefetch_map_;
 };

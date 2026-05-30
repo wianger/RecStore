@@ -6,11 +6,15 @@
 #include <filesystem>
 #include <limits>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <sys/mman.h>
 
 #include "base/json.h"
+#define private public
 #include "ps/local_shm/local_shm_client.h"
+#undef private
 #include "ps/local_shm/local_shm_queue.h"
 #define private public
 #include "ps/local_shm/local_shm_server.h"
@@ -130,6 +134,106 @@ TEST_F(LocalShmPSClientTest, InitCreatesOneRuntimePerReadyQueue) {
   ASSERT_NE(server.runtimes_[1], nullptr);
   EXPECT_EQ(server.runtimes_[0]->ready_queue_id_, 0u);
   EXPECT_EQ(server.runtimes_[1]->ready_queue_id_, 1u);
+}
+
+TEST_F(LocalShmPSClientTest, ThreadReadyQueueShardingIsOptIn) {
+  auto config = MakeLocalShmConfig(
+      MakeUniqueRegionName("recstore_local_shm_ps_client_thread_queues"),
+      /*ready_queue_count=*/4);
+  LocalShmParameterServer server;
+  server.Init(config);
+
+  LocalShmPSClient fixed_client(config["local_shm"]);
+  const uint32_t fixed_queue = fixed_client.CurrentReadyQueueId();
+  ASSERT_LT(fixed_queue, 4u);
+
+  std::vector<uint32_t> fixed_observed(8, 0);
+  std::vector<std::thread> fixed_threads;
+  for (std::size_t i = 0; i < fixed_observed.size(); ++i) {
+    fixed_threads.emplace_back([&fixed_client, &fixed_observed, i]() {
+      fixed_observed[i] = fixed_client.CurrentReadyQueueId();
+    });
+  }
+  for (auto& thread : fixed_threads) {
+    thread.join();
+  }
+  for (const auto queue_id : fixed_observed) {
+    EXPECT_EQ(queue_id, fixed_queue);
+  }
+
+  config["local_shm"]["thread_ready_queue_sharding"] = true;
+  LocalShmPSClient sharded_client(config["local_shm"]);
+  std::vector<uint32_t> sharded_observed(8, 0);
+  std::vector<std::thread> sharded_threads;
+  for (std::size_t i = 0; i < sharded_observed.size(); ++i) {
+    sharded_threads.emplace_back([&sharded_client, &sharded_observed, i]() {
+      sharded_observed[i] = sharded_client.CurrentReadyQueueId();
+    });
+  }
+  for (auto& thread : sharded_threads) {
+    thread.join();
+  }
+  for (const auto queue_id : sharded_observed) {
+    EXPECT_LT(queue_id, 4u);
+  }
+  std::unordered_set<uint32_t> sharded_unique(
+      sharded_observed.begin(), sharded_observed.end());
+  EXPECT_GT(sharded_unique.size(), 1u);
+}
+
+TEST_F(LocalShmPSClientTest, LastRequestProfileCapturesTransportStages) {
+  const auto config = MakeLocalShmConfig(
+      MakeUniqueRegionName("recstore_local_shm_ps_client_profile"));
+  LocalShmParameterServer server;
+  server.Init(config);
+
+  std::thread server_thread([&]() { server.Run(); });
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+  LocalShmPSClient client(config["local_shm"]);
+  ASSERT_EQ(client.InitEmbeddingTable("table_profile", {128, 4}), 0);
+
+  std::vector<uint64_t> keys             = {1, 3};
+  std::vector<std::vector<float>> values = {
+      {1.0f, 2.0f, 3.0f, 4.0f}, {5.0f, 6.0f, 7.0f, 8.0f}};
+  base::ConstArray<uint64_t> key_array(keys);
+  ASSERT_EQ(client.PutParameter(key_array, values), 0);
+
+  std::vector<float> readback(8, 0.0f);
+  ASSERT_EQ(client.GetParameter(key_array, readback.data()), 0);
+
+  const auto profile = client.GetLastRequestProfile();
+  EXPECT_GT(profile.request_total_us, 0.0);
+  EXPECT_GE(profile.acquire_slot_us, 0.0);
+  EXPECT_GE(profile.enqueue_us, 0.0);
+  EXPECT_GE(profile.wait_us, 0.0);
+  EXPECT_GE(profile.release_us, 0.0);
+  EXPECT_GE(profile.server_queue_wait_us, 0.0);
+  EXPECT_GE(profile.server_backend_us, 0.0);
+
+  server.Stop();
+  server_thread.join();
+}
+
+TEST_F(LocalShmPSClientTest, ReleaseSlotDoesNotUseGlobalFreeDoorbell) {
+  auto config = MakeLocalShmConfig(
+      MakeUniqueRegionName("recstore_local_shm_ps_client_free_queue_wait"),
+      /*ready_queue_count=*/2);
+  config["local_shm"]["thread_ready_queue_sharding"] = true;
+  LocalShmParameterServer server;
+  server.Init(config);
+  LocalShmPSClient client(config["local_shm"]);
+
+  ASSERT_TRUE(client.region_.IsOpen());
+  auto* control = client.region_.control();
+  ASSERT_NE(control, nullptr);
+  EXPECT_EQ(control->free_doorbell.load(std::memory_order_acquire), 0u);
+
+  const int slot = client.AcquireSlot();
+  ASSERT_GE(slot, 0);
+  client.ReleaseSlot(static_cast<uint32_t>(slot));
+
+  EXPECT_EQ(control->free_doorbell.load(std::memory_order_acquire), 0u);
 }
 
 TEST_F(LocalShmPSClientTest, PutGetAndUpdateFlatRoundTrip) {
