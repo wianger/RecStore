@@ -27,6 +27,22 @@ SUMMARY_RE = re.compile(
     r"key_ops_per_sec=(?P<key_ops>[0-9.eE+-]+)"
 )
 
+DEFAULT_DRAM_DATA_ROOT = Path("/dev/shm")
+
+
+def resolve_kv_path(runtime_dir: Path) -> Path:
+    runtime_dir = Path(runtime_dir)
+    if runtime_dir.is_absolute() and str(runtime_dir).startswith("/dev/shm/"):
+        return runtime_dir / "kv_store"
+    return DEFAULT_DRAM_DATA_ROOT / runtime_dir.name / "kv_store"
+
+
+def normalize_dram_kv_path(kv_path: str) -> str:
+    path = Path(kv_path)
+    if path.is_absolute() and str(path).startswith("/dev/shm/"):
+        return str(path)
+    return str(DEFAULT_DRAM_DATA_ROOT / path.name)
+
 
 def build_runtime_config(
     region_name: str,
@@ -39,6 +55,7 @@ def build_runtime_config(
     capacity: int,
     value_size: int,
 ) -> dict:
+    kv_path = normalize_dram_kv_path(kv_path)
     return {
         "cache_ps": {
             "ps_type": "LOCAL_SHM",
@@ -264,7 +281,7 @@ def main() -> int:
         if runtime_dir_obj is not None
         else Path(tempfile.mkdtemp(prefix="recstore_local_shm_bench_keep_"))
     )
-    kv_path = runtime_dir / "kv_store"
+    kv_path = resolve_kv_path(runtime_dir)
     config_path = runtime_dir / "local_shm_config.json"
     server_log_path = runtime_dir / "local_shm_server.log"
     derived_value_size = args.embedding_dim * 4

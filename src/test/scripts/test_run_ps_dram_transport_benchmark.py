@@ -23,6 +23,7 @@ from run_ps_dram_transport_benchmark import (  # noqa: E402
     resolve_case_base_port,
     resolve_failure_stage,
     resolve_case_load_threads,
+    resolve_local_shm_ready_queue_count,
     write_csv,
 )
 
@@ -47,6 +48,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=8,
                 local_shm_slot_buffer_bytes=4096,
                 local_shm_client_timeout_ms=1000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
         cache_ps = config["cache_ps"]
@@ -81,6 +83,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=8,
                 local_shm_slot_buffer_bytes=4096,
                 local_shm_client_timeout_ms=1000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
         self.assertEqual(config["client"]["port"], 25000)
@@ -105,11 +108,13 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=4,
                 local_shm_slot_buffer_bytes=8192,
                 local_shm_client_timeout_ms=2000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
         self.assertEqual(config["cache_ps"]["ps_type"], "LOCAL_SHM")
         self.assertEqual(config["local_shm"]["region_name"], "bench_region")
         self.assertEqual(config["local_shm"]["ready_queue_count"], 2)
+        self.assertFalse(config["local_shm"]["thread_ready_queue_sharding"])
 
     def test_build_runtime_config_uses_hps_hash_map_external_engine(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -130,6 +135,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=8,
                 local_shm_slot_buffer_bytes=4096,
                 local_shm_client_timeout_ms=1000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
         base_kv = config["cache_ps"]["base_kv_config"]
@@ -158,6 +164,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=8,
                 local_shm_slot_buffer_bytes=4096,
                 local_shm_client_timeout_ms=1000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
         base_kv = config["cache_ps"]["base_kv_config"]
@@ -184,6 +191,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=8,
                 local_shm_slot_buffer_bytes=4096,
                 local_shm_client_timeout_ms=1000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
         ssd = config["cache_ps"]["base_kv_config"]["value"]["ssd_allocator"]
@@ -283,6 +291,33 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         self.assertIn("DRAM_EXTENDIBLE_HASH", text)
         self.assertIn("BRPC", text)
 
+    def test_print_summary_table_handles_failure_rows_without_throughput(self):
+        out = StringIO()
+        with redirect_stdout(out):
+            print_summary_table(
+                [
+                    {
+                        "backend_alias": "dram_eh_dram",
+                        "backend_layer": "PS/network",
+                        "index_type": "DRAM_EXTENDIBLE_HASH",
+                        "transport": "LOCAL_SHM",
+                        "mode": "fetch",
+                        "phase": "run",
+                        "threads": 8,
+                        "client_processes": 1,
+                        "process_id": "all",
+                        "aggregate": "true",
+                        "batch_size": 256,
+                        "records": 20000,
+                        "throughput_keys_sec": "",
+                        "status": "failed",
+                    }
+                ]
+            )
+        text = out.getvalue()
+        self.assertIn("LOCAL_SHM", text)
+        self.assertIn("failed", text)
+
     def test_write_csv_writes_rows(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = Path(tmpdir) / "out.csv"
@@ -371,6 +406,7 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
                 local_shm_ready_queue_burst_limit=8,
                 local_shm_slot_buffer_bytes=8192,
                 local_shm_client_timeout_ms=1000,
+                local_shm_thread_ready_queue_sharding=False,
                 dram_capacity_multiplier=2.0,
             )
             loaded = json.loads(json.dumps(config))
@@ -419,6 +455,13 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
 
         self.assertEqual(resolve_case_load_threads("hps_rocksdb", Args()), 1)
         self.assertEqual(resolve_case_load_threads("hps_hash_map", Args()), 0)
+
+    def test_resolve_local_shm_ready_queue_count_uses_manual_value(self):
+        self.assertEqual(resolve_local_shm_ready_queue_count(8, 16), 8)
+
+    def test_resolve_local_shm_ready_queue_count_auto_from_threads(self):
+        self.assertEqual(resolve_local_shm_ready_queue_count(0, 16), 16)
+        self.assertEqual(resolve_local_shm_ready_queue_count(0, 1), 1)
 
     def test_collect_ps_result_rows_parses_transactions(self):
         text = (
