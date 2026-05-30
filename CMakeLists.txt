@@ -225,11 +225,19 @@ set(RECSTORE_FOLLY_INSTALL_DIR
     "${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/lib/cmake/folly")
 set(RECSTORE_FOLLY_BUILD_DIR "${PROJECT_SOURCE_DIR}/third_party/folly/_build")
 set(RECSTORE_FOLLY_BUILD_LIBRARY "${RECSTORE_FOLLY_BUILD_DIR}/libfolly.a")
+set(RECSTORE_GLOG_INSTALL_DIR
+    "${PROJECT_SOURCE_DIR}/third_party/glog/glog-install-fPIC/usr/local/lib/cmake/glog")
 set(folly_DIR "${RECSTORE_FOLLY_INSTALL_DIR}")
 set(FOLLY_ROOT_DIR "${folly_DIR}")
 
 set(FMT_DEBUG_POSTFIX "" CACHE STRING "Debug library postfix." FORCE)
 add_subdirectory(third_party/fmt)
+
+add_library(jemalloc_compat STATIC
+  ${PROJECT_SOURCE_DIR}/src/base/jemalloc_compat.cc
+)
+target_link_libraries(jemalloc_compat PUBLIC jemalloc)
+
 if(EXISTS "${RECSTORE_FOLLY_INSTALL_DIR}/folly-config.cmake")
   find_package(folly REQUIRED)
   if(TARGET Folly::folly)
@@ -251,7 +259,7 @@ elseif(EXISTS "${RECSTORE_FOLLY_BUILD_LIBRARY}")
     INTERFACE_INCLUDE_DIRECTORIES
       "${PROJECT_SOURCE_DIR}/third_party/folly;${RECSTORE_FOLLY_BUILD_DIR};${PROJECT_SOURCE_DIR}/third_party/liburing/src/include"
     INTERFACE_LINK_LIBRARIES
-      "fmt::fmt;Threads::Threads;Boost::context;Boost::filesystem;Boost::program_options;Boost::regex;Boost::system;Boost::thread;/usr/lib/x86_64-linux-gnu/libdouble-conversion.so;/usr/lib/x86_64-linux-gnu/libgflags.so.2.2.2;${PROJECT_SOURCE_DIR}/third_party/glog/glog-install-fPIC/usr/local/lib/libglog.so;/usr/lib/x86_64-linux-gnu/libevent.so;/usr/lib/x86_64-linux-gnu/libz.so;/usr/lib/x86_64-linux-gnu/libssl.so;/usr/lib/x86_64-linux-gnu/libcrypto.so;/usr/lib/x86_64-linux-gnu/libbz2.so;/usr/lib/x86_64-linux-gnu/liblzma.so;/usr/lib/x86_64-linux-gnu/liblz4.so;/usr/lib/x86_64-linux-gnu/libzstd.so;/usr/lib/x86_64-linux-gnu/libsnappy.so;/usr/local/lib/libdwarf.a;/usr/lib/x86_64-linux-gnu/libiberty.a;/usr/lib/x86_64-linux-gnu/libaio.so;${PROJECT_SOURCE_DIR}/third_party/liburing/src/liburing.a;dl;/usr/lib/x86_64-linux-gnu/libunwind.so"
+      "fmt::fmt;Threads::Threads;Boost::context;Boost::filesystem;Boost::program_options;Boost::regex;Boost::system;Boost::thread;/usr/lib/x86_64-linux-gnu/libdouble-conversion.so;/usr/lib/x86_64-linux-gnu/libgflags.so.2.2.2;glog::glog;jemalloc_compat;/usr/lib/x86_64-linux-gnu/libevent.so;/usr/lib/x86_64-linux-gnu/libz.so;/usr/lib/x86_64-linux-gnu/libssl.so;/usr/lib/x86_64-linux-gnu/libcrypto.so;/usr/lib/x86_64-linux-gnu/libbz2.so;/usr/lib/x86_64-linux-gnu/liblzma.so;/usr/lib/x86_64-linux-gnu/liblz4.so;/usr/lib/x86_64-linux-gnu/libzstd.so;/usr/lib/x86_64-linux-gnu/libsnappy.so;/usr/local/lib/libdwarf.a;/usr/lib/x86_64-linux-gnu/libiberty.a;/usr/lib/x86_64-linux-gnu/libaio.so;${PROJECT_SOURCE_DIR}/third_party/liburing/src/liburing.a;dl;/usr/lib/x86_64-linux-gnu/libunwind.so"
   )
 else()
   add_library(Folly::folly INTERFACE IMPORTED)
@@ -265,15 +273,20 @@ find_package(gflags REQUIRED)
 if(EXISTS "${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/include")
   include_directories(${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/include)
   link_directories(${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/lib)
-else()
-  include_directories(
-    ${PROJECT_SOURCE_DIR}/third_party/folly
-    ${PROJECT_SOURCE_DIR}/third_party/folly/_build
-  )
 endif()
+include_directories(
+  ${PROJECT_SOURCE_DIR}/third_party/folly
+  ${PROJECT_SOURCE_DIR}/third_party/folly/_build
+)
 
-set(glog_DIR "${PROJECT_SOURCE_DIR}/third_party/glog/glog-install-fPIC/usr/local/lib/cmake/glog")
-find_package(glog CONFIG REQUIRED)
+set(glog_DIR "${RECSTORE_GLOG_INSTALL_DIR}")
+if(EXISTS "${RECSTORE_GLOG_INSTALL_DIR}/glog-config.cmake")
+  find_package(glog CONFIG REQUIRED)
+elseif(EXISTS "${PROJECT_SOURCE_DIR}/third_party/glog/CMakeLists.txt")
+  add_subdirectory(third_party/glog EXCLUDE_FROM_ALL)
+else()
+  find_package(glog CONFIG REQUIRED)
+endif()
 
 
 if(OPENMP_FOUND)
@@ -307,12 +320,11 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/
   include_directories(
     ${PROJECT_SOURCE_DIR}/third_party/folly/folly-install-fPIC/usr/local/include
   )
-else()
-  include_directories(
-    ${PROJECT_SOURCE_DIR}/third_party/folly
-    ${PROJECT_SOURCE_DIR}/third_party/folly/_build
-  )
 endif()
+include_directories(
+  ${PROJECT_SOURCE_DIR}/third_party/folly
+  ${PROJECT_SOURCE_DIR}/third_party/folly/_build
+)
 
 
 set(ONEAPI_ROOT /opt/intel/oneapi)

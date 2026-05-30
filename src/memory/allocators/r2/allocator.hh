@@ -16,7 +16,7 @@ public:
 
   inline ptr_t alloc(uint32_t size, int flag = 0)
   {
-    auto ptr = jemallocx(size, id | flag | MALLOCX_ALIGN(8));
+    auto ptr = je_mallocx(size, id | flag | MALLOCX_ALIGN(8));
     return ptr;
   }
 
@@ -31,7 +31,7 @@ public:
      */
     //jedallocx(ptr,0);
     if (!ptr) return;
-    jedallocx(ptr, MALLOCX_TCACHE_NONE); 
+    je_dallocx(ptr, MALLOCX_TCACHE_NONE);
   }
 
 private:
