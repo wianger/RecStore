@@ -476,6 +476,26 @@ class TestRunPSDramTransportBenchmark(unittest.TestCase):
         self.assertEqual(rows[0]["threads"], 16)
         self.assertEqual(rows[0]["throughput_keys_sec"], 2048.0)
 
+    def test_collect_ps_result_rows_ignores_local_shm_profile_lines(self):
+        text = (
+            "PS_LOCAL_SHM_PROFILE phase=run samples=100 acquire_slot_us_mean=1 "
+            "enqueue_us_mean=2 wait_us_mean=3 release_us_mean=4 "
+            "request_total_us_mean=5 server_queue_wait_us_mean=6 "
+            "server_backend_us_mean=7 opcode=GET\n"
+            "PS_LOCAL_SHM_PROFILE_OPCODE phase=run opcode=PUT samples=50 "
+            "acquire_slot_us_mean=1 enqueue_us_mean=2 wait_us_mean=3 "
+            "release_us_mean=4 request_total_us_mean=5 "
+            "server_queue_wait_us_mean=6 server_backend_us_mean=7\n"
+            "PS_BENCHMARK_RESULT phase=run transport=LOCAL_SHM mode=mixed "
+            "distribution=uniform zipfian_alpha=0.9 threads=8 batch_size=256 "
+            "records=20000 runtime_s=5.0 batches=10 key_ops=2560 "
+            "throughput_batches_sec=2 throughput_keys_sec=512\n"
+        )
+        rows = collect_ps_result_rows(text)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["transport"], "LOCAL_SHM")
+        self.assertEqual(rows[0]["throughput_keys_sec"], 512.0)
+
     def test_collect_case_rows_adds_process_metadata_and_aggregate(self):
         outputs = [
             (

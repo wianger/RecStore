@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -63,6 +64,7 @@ struct PhaseStats {
 };
 
 struct LocalShmTransportStats {
+  uint32_t opcode             = 0;
   double acquire_slot_us      = 0.0;
   double enqueue_us           = 0.0;
   double wait_us              = 0.0;
@@ -72,6 +74,41 @@ struct LocalShmTransportStats {
   double server_backend_us    = 0.0;
   uint64_t samples            = 0;
 };
+
+using LocalShmTransportStatsByOpcode =
+    std::map<uint32_t, LocalShmTransportStats>;
+
+void AddLocalShmTransportSample(
+    LocalShmTransportStats* stats,
+    const recstore::LocalShmRequestProfile& profile) {
+  if (stats == nullptr) {
+    return;
+  }
+  stats->opcode = profile.opcode;
+  stats->acquire_slot_us += profile.acquire_slot_us;
+  stats->enqueue_us += profile.enqueue_us;
+  stats->wait_us += profile.wait_us;
+  stats->release_us += profile.release_us;
+  stats->request_total_us += profile.request_total_us;
+  stats->server_queue_wait_us += profile.server_queue_wait_us;
+  stats->server_backend_us += profile.server_backend_us;
+  ++stats->samples;
+}
+
+const char* LocalOpcodeLabel(uint32_t opcode) {
+  switch (static_cast<recstore::LocalOpcode>(opcode)) {
+  case recstore::LocalOpcode::kInitTable:
+    return "INIT_TABLE";
+  case recstore::LocalOpcode::kGet:
+    return "GET";
+  case recstore::LocalOpcode::kPut:
+    return "PUT";
+  case recstore::LocalOpcode::kUpdateFlat:
+    return "UPDATE_FLAT";
+  default:
+    return "UNKNOWN";
+  }
+}
 
 class FastRandom {
 public:
@@ -373,9 +410,11 @@ bool GetFlat(recstore::BasePSClient* client,
       ClientReturnsZeroOnSuccess(client));
 }
 
-void AccumulateLocalShmTransportStats(recstore::BasePSClient* client,
-                                      LocalShmTransportStats* stats) {
-  if (stats == nullptr) {
+void AccumulateLocalShmTransportStats(
+    recstore::BasePSClient* client,
+    LocalShmTransportStats* stats,
+    LocalShmTransportStatsByOpcode* by_opcode = nullptr) {
+  if (stats == nullptr && by_opcode == nullptr) {
     return;
   }
   auto* local_client = dynamic_cast<recstore::LocalShmPSClient*>(client);
@@ -383,14 +422,10 @@ void AccumulateLocalShmTransportStats(recstore::BasePSClient* client,
     return;
   }
   const auto profile = local_client->GetLastRequestProfile();
-  stats->acquire_slot_us += profile.acquire_slot_us;
-  stats->enqueue_us += profile.enqueue_us;
-  stats->wait_us += profile.wait_us;
-  stats->release_us += profile.release_us;
-  stats->request_total_us += profile.request_total_us;
-  stats->server_queue_wait_us += profile.server_queue_wait_us;
-  stats->server_backend_us += profile.server_backend_us;
-  ++stats->samples;
+  AddLocalShmTransportSample(stats, profile);
+  if (by_opcode != nullptr) {
+    AddLocalShmTransportSample(&(*by_opcode)[profile.opcode], profile);
+  }
 }
 
 void PrintLocalShmTransportStats(const char* phase,
@@ -408,16 +443,39 @@ void PrintLocalShmTransportStats(const char* phase,
       << " request_total_us_mean=" << (stats.request_total_us / samples)
       << " server_queue_wait_us_mean=" << (stats.server_queue_wait_us / samples)
       << " server_backend_us_mean=" << (stats.server_backend_us / samples)
-      << std::endl;
+      << " opcode=" << LocalOpcodeLabel(stats.opcode) << std::endl;
+}
+
+void PrintLocalShmTransportStatsByOpcode(
+    const char* phase, const LocalShmTransportStatsByOpcode& by_opcode) {
+  for (const auto& [opcode, stats] : by_opcode) {
+    if (stats.samples == 0) {
+      continue;
+    }
+    const double samples = static_cast<double>(stats.samples);
+    std::cout << "PS_LOCAL_SHM_PROFILE_OPCODE phase=" << phase << " opcode="
+              << LocalOpcodeLabel(opcode) << " samples=" << stats.samples
+              << " acquire_slot_us_mean=" << (stats.acquire_slot_us / samples)
+              << " enqueue_us_mean=" << (stats.enqueue_us / samples)
+              << " wait_us_mean=" << (stats.wait_us / samples)
+              << " release_us_mean=" << (stats.release_us / samples)
+              << " request_total_us_mean=" << (stats.request_total_us / samples)
+              << " server_queue_wait_us_mean="
+              << (stats.server_queue_wait_us / samples)
+              << " server_backend_us_mean="
+              << (stats.server_backend_us / samples) << std::endl;
+  }
 }
 
 using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
 
-PhaseStats LoadRecords(const std::string& transport,
-                       int load_threads,
-                       int dim,
-                       std::vector<BenchmarkClient>* reusable_clients = nullptr,
-                       LocalShmTransportStats* local_shm_stats = nullptr) {
+PhaseStats LoadRecords(
+    const std::string& transport,
+    int load_threads,
+    int dim,
+    std::vector<BenchmarkClient>* reusable_clients            = nullptr,
+    LocalShmTransportStats* local_shm_stats                   = nullptr,
+    LocalShmTransportStatsByOpcode* local_shm_stats_by_opcode = nullptr) {
   if (reusable_clients != nullptr) {
     CHECK_EQ(static_cast<int>(reusable_clients->size()), load_threads);
   }
@@ -454,7 +512,8 @@ PhaseStats LoadRecords(const std::string& transport,
         }
         CHECK(PutFlat(client, transport, keys, values, dim))
             << transport << " preload PutParameter failed";
-        AccumulateLocalShmTransportStats(client, local_shm_stats);
+        AccumulateLocalShmTransportStats(
+            client, local_shm_stats, local_shm_stats_by_opcode);
         ++local.batches;
         local.key_ops += keys.size();
       }
@@ -475,8 +534,9 @@ PhaseStats LoadRecords(const std::string& transport,
 PhaseStats RunTransactions(
     const std::string& transport,
     int dim,
-    std::vector<BenchmarkClient>* reusable_clients = nullptr,
-    LocalShmTransportStats* local_shm_stats        = nullptr) {
+    std::vector<BenchmarkClient>* reusable_clients            = nullptr,
+    LocalShmTransportStats* local_shm_stats                   = nullptr,
+    LocalShmTransportStatsByOpcode* local_shm_stats_by_opcode = nullptr) {
   if (reusable_clients != nullptr) {
     CHECK_EQ(static_cast<int>(reusable_clients->size()), FLAGS_thread_num);
   }
@@ -527,12 +587,14 @@ PhaseStats RunTransactions(
         if (do_fetch) {
           CHECK(GetFlat(client, transport, keys, &output))
               << transport << " GetParameter failed";
-          AccumulateLocalShmTransportStats(client, local_shm_stats);
+          AccumulateLocalShmTransportStats(
+              client, local_shm_stats, local_shm_stats_by_opcode);
         }
         if (insert_only || fetch_insert || (mixed && !do_fetch)) {
           CHECK(PutFlat(client, transport, keys, values, dim))
               << transport << " PutParameter failed";
-          AccumulateLocalShmTransportStats(client, local_shm_stats);
+          AccumulateLocalShmTransportStats(
+              client, local_shm_stats, local_shm_stats_by_opcode);
         }
         ++local.batches;
         local.key_ops += keys.size();
@@ -618,18 +680,22 @@ int main(int argc, char** argv) {
     }
     if (!FLAGS_skip_load) {
       LocalShmTransportStats load_transport_stats;
+      LocalShmTransportStatsByOpcode load_transport_stats_by_opcode;
       const auto load_begin = std::chrono::steady_clock::now();
       const PhaseStats load = LoadRecords(
           transport,
           load_threads,
           dim,
           reusable_clients.empty() ? nullptr : &reusable_clients,
-          &load_transport_stats);
+          &load_transport_stats,
+          &load_transport_stats_by_opcode);
       const auto load_end = std::chrono::steady_clock::now();
       PrintTransactionResult(
           "load", transport, load, SecondsSince(load_begin, load_end));
       if (transport == "LOCAL_SHM") {
         PrintLocalShmTransportStats("load", load_transport_stats);
+        PrintLocalShmTransportStatsByOpcode(
+            "load", load_transport_stats_by_opcode);
       }
     }
     if (FLAGS_load_only) {
@@ -637,17 +703,20 @@ int main(int argc, char** argv) {
     }
 
     LocalShmTransportStats run_transport_stats;
+    LocalShmTransportStatsByOpcode run_transport_stats_by_opcode;
     const auto run_begin = std::chrono::steady_clock::now();
     const PhaseStats run = RunTransactions(
         transport,
         dim,
         reusable_clients.empty() ? nullptr : &reusable_clients,
-        &run_transport_stats);
+        &run_transport_stats,
+        &run_transport_stats_by_opcode);
     const auto run_end = std::chrono::steady_clock::now();
     PrintTransactionResult(
         "run", transport, run, SecondsSince(run_begin, run_end));
     if (transport == "LOCAL_SHM") {
       PrintLocalShmTransportStats("run", run_transport_stats);
+      PrintLocalShmTransportStatsByOpcode("run", run_transport_stats_by_opcode);
     }
     return 0;
   }
