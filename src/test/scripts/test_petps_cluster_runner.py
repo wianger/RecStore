@@ -106,6 +106,7 @@ class TestPetPSClusterRunner(unittest.TestCase):
             rdma_qps_per_client_per_shard=4,
             rdma_slots_per_qp=6,
             rdma_server_coroutines_per_thread=3,
+            rdma_server_get_workers=2,
             rdma_inline_bytes=64,
             rdma_client_numa_id=1,
             rdma_server_numa_id=2,
@@ -116,6 +117,7 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--rdma_rc_qps_per_client_per_shard=4", server_cmd)
         self.assertIn("--rdma_rc_slots_per_qp=6", server_cmd)
         self.assertIn("--rdma_rc_server_coroutines_per_thread=3", server_cmd)
+        self.assertIn("--rdma_rc_server_get_workers=2", server_cmd)
         self.assertIn("--rdma_rc_inline_bytes=64", server_cmd)
         self.assertIn("--rdma_rc_server_numa_id=2", server_cmd)
         self.assertIn("--rdma_client_receive_arena_bytes=134217728", client_cmd)
@@ -147,6 +149,7 @@ class TestPetPSClusterRunner(unittest.TestCase):
             rdma_rc_slots_per_qp=5,
             rdma_rc_profile_interval_ms=250,
             rdma_rc_server_coroutines_per_thread=2,
+            rdma_rc_server_get_workers=3,
             rdma_rc_inline_bytes=48,
             rdma_rc_client_numa_id=1,
             rdma_rc_server_numa_id=2,
@@ -159,6 +162,7 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertEqual(runner.rdma_slots_per_qp, 5)
         self.assertEqual(runner.rdma_profile_interval_ms, 250)
         self.assertEqual(runner.rdma_server_coroutines_per_thread, 2)
+        self.assertEqual(runner.rdma_server_get_workers, 3)
         self.assertEqual(runner.rdma_inline_bytes, 48)
         self.assertEqual(runner.rdma_client_numa_id, 1)
         self.assertEqual(runner.rdma_server_numa_id, 2)
@@ -168,6 +172,7 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--rdma_rc_slots_per_qp=5", server_cmd)
         self.assertIn("--rdma_rc_profile_interval_ms=250", server_cmd)
         self.assertIn("--rdma_rc_server_coroutines_per_thread=2", server_cmd)
+        self.assertIn("--rdma_rc_server_get_workers=3", server_cmd)
         self.assertIn("--rdma_rc_inline_bytes=48", server_cmd)
         self.assertIn("--rdma_rc_server_numa_id=2", server_cmd)
         self.assertIn("--rdma_rc_fake_get_mode=status_only", server_cmd)

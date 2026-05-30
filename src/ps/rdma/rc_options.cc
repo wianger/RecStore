@@ -30,6 +30,10 @@ DEFINE_int32(rdma_rc_server_coroutines_per_thread,
              1,
              "RC write server coroutine count per poll thread. Values greater "
              "than 1 enable cooperative slot scanning inside each poll thread");
+DEFINE_int32(rdma_rc_server_get_workers,
+             0,
+             "Experimental RC write server GET payload worker thread count. "
+             "0 keeps GET handling on the polling thread");
 DEFINE_int32(rdma_rc_wait_spin_iterations,
              0,
              "Client-side status polling spin iterations before yielding. "

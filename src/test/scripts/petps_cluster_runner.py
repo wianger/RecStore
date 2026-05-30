@@ -54,6 +54,7 @@ class PetPSClusterRunner:
         rdma_rc_slots_per_qp=None,
         rdma_rc_profile_interval_ms=None,
         rdma_rc_server_coroutines_per_thread=None,
+        rdma_rc_server_get_workers=None,
         rdma_rc_inline_bytes=None,
         rdma_rc_client_numa_id=None,
         rdma_rc_server_numa_id=None,
@@ -64,6 +65,7 @@ class PetPSClusterRunner:
         rdma_wait_timeout_ms=None,
         rdma_profile_interval_ms=None,
         rdma_server_coroutines_per_thread=None,
+        rdma_server_get_workers=None,
         rdma_inline_bytes=None,
         rdma_client_numa_id=None,
         rdma_client_numa_ids=None,
@@ -132,6 +134,11 @@ class PetPSClusterRunner:
             rdma_server_coroutines_per_thread,
             rdma_rc_server_coroutines_per_thread,
         )
+        self.rdma_server_get_workers = self._coalesce_optional_values(
+            "rdma_server_get_workers",
+            rdma_server_get_workers,
+            rdma_rc_server_get_workers,
+        )
         self.rdma_inline_bytes = self._coalesce_optional_values(
             "rdma_inline_bytes",
             rdma_inline_bytes,
@@ -175,6 +182,7 @@ class PetPSClusterRunner:
         self.rdma_rc_server_coroutines_per_thread = (
             self.rdma_server_coroutines_per_thread
         )
+        self.rdma_rc_server_get_workers = self.rdma_server_get_workers
         self.rdma_rc_inline_bytes = self.rdma_inline_bytes
         self.rdma_rc_client_numa_id = self.rdma_client_numa_id
         self.rdma_rc_client_numa_ids = self.rdma_client_numa_ids
@@ -280,6 +288,11 @@ class PetPSClusterRunner:
             cmd.append(
                 "--rdma_rc_server_coroutines_per_thread="
                 f"{self.rdma_server_coroutines_per_thread}"
+            )
+        if self.rdma_server_get_workers is not None:
+            cmd.append(
+                "--rdma_rc_server_get_workers="
+                f"{self.rdma_server_get_workers}"
             )
         if self.rdma_inline_bytes is not None:
             cmd.append(f"--rdma_rc_inline_bytes={self.rdma_inline_bytes}")

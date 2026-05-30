@@ -12,6 +12,7 @@ DECLARE_int32(rdma_rc_response_slot_bytes);
 DECLARE_int32(rdma_wait_timeout_ms);
 DECLARE_int32(rdma_rc_profile_interval_ms);
 DECLARE_int32(rdma_rc_server_coroutines_per_thread);
+DECLARE_int32(rdma_rc_server_get_workers);
 DECLARE_int32(rdma_rc_wait_spin_iterations);
 DECLARE_int32(rdma_rc_inline_bytes);
 DECLARE_int32(rdma_rc_client_numa_id);

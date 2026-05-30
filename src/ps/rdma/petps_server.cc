@@ -5,12 +5,15 @@
 #include <atomic>
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -139,15 +142,51 @@ public:
     transport_ = std::make_unique<petps::RcShardServerTransport>(config);
     last_seq_.assign(
         static_cast<std::size_t>(transport_->TotalSlots()), std::uint64_t{0});
+    inflight_seq_.assign(
+        static_cast<std::size_t>(transport_->TotalSlots()), std::uint64_t{0});
+    get_payload_worker_count_ = FLAGS_rdma_rc_server_get_workers;
+    if (get_payload_worker_count_ < 0) {
+      LOG(FATAL) << "--rdma_rc_server_get_workers must be non-negative";
+    }
+    if (get_payload_worker_count_ > 0 &&
+        FLAGS_rdma_rc_server_coroutines_per_thread != 1) {
+      LOG(FATAL) << "--rdma_rc_server_get_workers currently requires "
+                 << "--rdma_rc_server_coroutines_per_thread=1";
+    }
+    get_payload_completions_.resize(
+        static_cast<std::size_t>(std::max(1, thread_count_)));
   }
 
   void Run() {
+    StartGetPayloadWorkers();
     for (int i = 0; i < thread_count_; ++i) {
       threads_.emplace_back(&PetPSServer::PollingThread, this, i);
     }
   }
 
 private:
+  struct GetPayloadTask {
+    int slot           = -1;
+    int client_id      = -1;
+    int qp_index       = -1;
+    int slot_in_qp     = -1;
+    int poll_thread_id = -1;
+    std::uint64_t seq  = 0;
+    petps::RequestDescriptor descriptor{};
+    const char* payload = nullptr;
+    petps::RcShardServerTransport::ResponseView response{};
+  };
+
+  struct GetPayloadCompletion {
+    int slot           = -1;
+    int client_id      = -1;
+    int qp_index       = -1;
+    int slot_in_qp     = -1;
+    int poll_thread_id = -1;
+    std::uint64_t seq  = 0;
+    petps::RcShardServerTransport::ResponseView response{};
+  };
+
   struct ProfileCounters {
     std::atomic<std::uint64_t> scan_rounds{0};
     std::atomic<std::uint64_t> scanned_slots{0};
@@ -251,6 +290,137 @@ private:
         << (complete_count == 0 ? 0 : complete_response_ns / complete_count)
         << " poll_loop_avg_ns="
         << (scan_rounds == 0 ? 0 : poll_loop_ns / scan_rounds) << std::endl;
+  }
+
+  bool GetPayloadOffloadEnabled() const {
+    return get_payload_worker_count_ > 0;
+  }
+
+  std::size_t MaxGetPayloadQueueDepth() const {
+    return static_cast<std::size_t>(std::max(1, transport_->TotalSlots()));
+  }
+
+  void StartGetPayloadWorkers() {
+    if (!GetPayloadOffloadEnabled()) {
+      return;
+    }
+    for (int worker_id = 0; worker_id < get_payload_worker_count_;
+         ++worker_id) {
+      get_payload_workers_.emplace_back(
+          &PetPSServer::GetPayloadWorkerLoop, this, worker_id);
+    }
+    LOG(INFO) << "component=rdma_rc_server event=get_payload_workers_started"
+              << " count=" << get_payload_worker_count_;
+  }
+
+  bool EnqueueGetPayloadTask(const GetPayloadTask& task) {
+    std::lock_guard<std::mutex> guard(get_payload_mu_);
+    if (get_payload_tasks_.size() >= MaxGetPayloadQueueDepth()) {
+      return false;
+    }
+    get_payload_tasks_.push_back(task);
+    get_payload_cv_.notify_one();
+    return true;
+  }
+
+  std::size_t PollThreadIndex(int poll_thread_id) const {
+    return static_cast<std::size_t>(poll_thread_id);
+  }
+
+  bool TryPopGetPayloadCompletion(int poll_thread_id,
+                                  GetPayloadCompletion* completion) {
+    std::lock_guard<std::mutex> guard(get_payload_mu_);
+    auto& completions =
+        get_payload_completions_.at(PollThreadIndex(poll_thread_id));
+    if (completions.empty()) {
+      return false;
+    }
+    *completion = completions.front();
+    completions.pop_front();
+    return true;
+  }
+
+  void PushGetPayloadCompletion(const GetPayloadCompletion& completion) {
+    std::lock_guard<std::mutex> guard(get_payload_mu_);
+    get_payload_completions_.at(PollThreadIndex(completion.poll_thread_id))
+        .push_back(completion);
+  }
+
+  void GetPayloadWorkerLoop(int worker_id) {
+    base::auto_bind_core();
+    LOG(INFO) << "component=rdma_rc_server event=get_payload_worker_ready"
+              << " worker_id=" << worker_id;
+    while (true) {
+      GetPayloadTask task;
+      {
+        std::unique_lock<std::mutex> lock(get_payload_mu_);
+        get_payload_cv_.wait(lock, [this] {
+          return !get_payload_tasks_.empty();
+        });
+        task = get_payload_tasks_.front();
+        get_payload_tasks_.pop_front();
+      }
+
+      const bool profile_enabled = FLAGS_rdma_rc_profile_interval_ms > 0;
+      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
+      HandleGet(task.descriptor, task.payload, &task.response, worker_id);
+      if (profile_enabled) {
+        profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
+        profile_.handle_get_ns.fetch_add(
+            NowNs() - handle_start_ns, std::memory_order_relaxed);
+      }
+      const GetPayloadCompletion completion{
+          task.slot,
+          task.client_id,
+          task.qp_index,
+          task.slot_in_qp,
+          task.poll_thread_id,
+          task.seq,
+          task.response,
+      };
+      PushGetPayloadCompletion(completion);
+    }
+  }
+
+  void CompleteResponseForSlot(
+      int slot,
+      int client_id,
+      int qp_index,
+      int slot_in_qp,
+      const petps::RcShardServerTransport::ResponseView& response,
+      std::uint64_t seq,
+      bool profile_enabled) {
+    std::atomic_thread_fence(std::memory_order_release);
+    const std::uint64_t complete_start_ns = profile_enabled ? NowNs() : 0;
+    transport_->CompleteResponse(
+        client_id, qp_index, slot_in_qp, response, seq);
+    if (profile_enabled) {
+      profile_.complete_response_ns.fetch_add(
+          NowNs() - complete_start_ns, std::memory_order_relaxed);
+    }
+    VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
+            << " slot=" << slot << " client_id=" << client_id
+            << " qp=" << qp_index << " seq=" << seq
+            << " status=" << response.status->status
+            << " response_bytes=" << response.status->response_bytes;
+    last_seq_[static_cast<std::size_t>(slot)] = seq;
+    if (GetPayloadOffloadEnabled()) {
+      inflight_seq_[static_cast<std::size_t>(slot)] = 0;
+    }
+  }
+
+  void DrainGetPayloadCompletions(int poll_thread_id, bool profile_enabled) {
+    GetPayloadCompletion completion;
+    while (TryPopGetPayloadCompletion(poll_thread_id, &completion)) {
+      CompleteResponseForSlot(
+          completion.slot,
+          completion.client_id,
+          completion.qp_index,
+          completion.slot_in_qp,
+          completion.response,
+          completion.seq,
+          profile_enabled);
+    }
   }
 
   void HandleGet(const petps::RequestDescriptor& descriptor,
@@ -437,6 +607,7 @@ private:
       const std::uint64_t poll_start_ns = profile_enabled ? NowNs() : 0;
       std::uint64_t scanned_slots       = 0;
       std::uint64_t ready_slots         = 0;
+      DrainGetPayloadCompletions(thread_id, profile_enabled);
       ScanAssignedSlots(
           thread_id,
           /*worker_id=*/0,
@@ -444,6 +615,7 @@ private:
           profile_enabled,
           &scanned_slots,
           &ready_slots);
+      DrainGetPayloadCompletions(thread_id, profile_enabled);
       if (profile_enabled) {
         profile_.scan_rounds.fetch_add(1, std::memory_order_relaxed);
         profile_.scanned_slots.fetch_add(
@@ -470,6 +642,10 @@ private:
     }
     const std::uint64_t seq = commit->seq.load(std::memory_order_acquire);
     if (seq == 0 || seq == last_seq_[static_cast<std::size_t>(slot)]) {
+      return false;
+    }
+    if (GetPayloadOffloadEnabled() &&
+        seq == inflight_seq_[static_cast<std::size_t>(slot)]) {
       return false;
     }
     if (profile_enabled) {
@@ -543,12 +719,31 @@ private:
           static_cast<std::int32_t>(petps::RpcStatus::kWrongShard);
     } else if (descriptor->op ==
                static_cast<std::uint16_t>(petps::RcOp::kGet)) {
-      const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
-      HandleGet(*descriptor, payload, &response, thread_id);
-      if (profile_enabled) {
-        profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
-        profile_.handle_get_ns.fetch_add(
-            NowNs() - handle_start_ns, std::memory_order_relaxed);
+      if (GetPayloadOffloadEnabled()) {
+        const GetPayloadTask task{
+            slot,
+            client_id,
+            qp_index,
+            slot_in_qp,
+            thread_id,
+            seq,
+            *descriptor,
+            payload,
+            response,
+        };
+        if (!EnqueueGetPayloadTask(task)) {
+          return false;
+        }
+        inflight_seq_[static_cast<std::size_t>(slot)] = seq;
+        return true;
+      } else {
+        const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
+        HandleGet(*descriptor, payload, &response, thread_id);
+        if (profile_enabled) {
+          profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
+          profile_.handle_get_ns.fetch_add(
+              NowNs() - handle_start_ns, std::memory_order_relaxed);
+        }
       }
     } else if (descriptor->op ==
                static_cast<std::uint16_t>(petps::RcOp::kPut)) {
@@ -579,20 +774,8 @@ private:
       }
     }
 
-    std::atomic_thread_fence(std::memory_order_release);
-    const std::uint64_t complete_start_ns = profile_enabled ? NowNs() : 0;
-    transport_->CompleteResponse(
-        client_id, qp_index, slot_in_qp, response, seq);
-    if (profile_enabled) {
-      profile_.complete_response_ns.fetch_add(
-          NowNs() - complete_start_ns, std::memory_order_relaxed);
-    }
-    VLOG(1) << "component=rdma_rc_server event=complete shard=" << shard_id_
-            << " slot=" << slot << " client_id=" << descriptor->client_id
-            << " qp=" << descriptor->qp_index << " seq=" << seq
-            << " status=" << response.status->status
-            << " response_bytes=" << response.status->response_bytes;
-    last_seq_[static_cast<std::size_t>(slot)] = seq;
+    CompleteResponseForSlot(
+        slot, client_id, qp_index, slot_in_qp, response, seq, profile_enabled);
     return true;
   }
 
@@ -683,6 +866,13 @@ private:
   petps::RdmaControlPlaneClient control_plane_client_;
   std::vector<std::thread> threads_;
   std::vector<std::uint64_t> last_seq_;
+  std::vector<std::uint64_t> inflight_seq_;
+  int get_payload_worker_count_ = 0;
+  std::vector<std::thread> get_payload_workers_;
+  std::mutex get_payload_mu_;
+  std::condition_variable get_payload_cv_;
+  std::deque<GetPayloadTask> get_payload_tasks_;
+  std::vector<std::deque<GetPayloadCompletion>> get_payload_completions_;
   std::atomic<int> started_threads_{0};
   std::atomic<bool> ready_published_{false};
   ProfileCounters profile_;

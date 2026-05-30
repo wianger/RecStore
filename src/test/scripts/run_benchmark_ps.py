@@ -1175,6 +1175,7 @@ def build_rdma_runner(
         rdma_rc_slots_per_qp=args.rdma_rc_slots_per_qp,
         rdma_rc_profile_interval_ms=args.rdma_rc_profile_interval_ms,
         rdma_rc_server_coroutines_per_thread=args.rdma_rc_server_coroutines_per_thread,
+        rdma_rc_server_get_workers=args.rdma_rc_server_get_workers,
         rdma_rc_inline_bytes=args.rdma_rc_inline_bytes,
         rdma_rc_fake_get_mode=args.rdma_rc_fake_get_mode,
         rdma_rc_skip_client_copy=args.rdma_rc_skip_client_copy,
@@ -1919,6 +1920,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rdma-rc-slots-per-qp", type=int)
     parser.add_argument("--rdma-rc-profile-interval-ms", type=int)
     parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
+    parser.add_argument("--rdma-rc-server-get-workers", type=int)
     parser.add_argument("--rdma-rc-inline-bytes", type=int)
     parser.add_argument(
         "--rdma-rc-fake-get-mode",

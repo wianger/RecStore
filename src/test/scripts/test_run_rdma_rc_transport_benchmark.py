@@ -103,6 +103,7 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
         self.assertIn("--slots-per-qp", completed.stdout)
         self.assertIn("--profile-interval-ms", completed.stdout)
         self.assertIn("--server-coroutines-per-thread", completed.stdout)
+        self.assertIn("--server-get-workers", completed.stdout)
         self.assertIn("--inline-bytes", completed.stdout)
         self.assertIn("--client-numa-id", completed.stdout)
         self.assertIn("--client-numa-ids", completed.stdout)

@@ -270,6 +270,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
             rdma_rc_slots_per_qp=1,
             rdma_rc_profile_interval_ms=250,
             rdma_rc_server_coroutines_per_thread=4,
+            rdma_rc_server_get_workers=2,
             rdma_rc_inline_bytes=64,
             rdma_rc_fake_get_mode="status_only",
             rdma_rc_skip_client_copy=True,
@@ -289,6 +290,10 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertEqual(runner.rdma_rc_profile_interval_ms, 250)
         self.assertIn(
             "--rdma_rc_profile_interval_ms=250",
+            runner.build_server_cmd(0),
+        )
+        self.assertIn(
+            "--rdma_rc_server_get_workers=2",
             runner.build_server_cmd(0),
         )
         self.assertIn(

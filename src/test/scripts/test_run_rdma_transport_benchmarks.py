@@ -40,6 +40,7 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
             rdma_put_client_send_arena_bytes=123456,
             rdma_put_server_scratch_bytes=654321,
             rdma_wait_timeout_ms=15000,
+            rdma_rc_server_get_workers=2,
         )
 
         runner = build_rdma_runner(args)
@@ -59,6 +60,7 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         self.assertEqual(runner.rdma_put_client_send_arena_bytes, 123456)
         self.assertEqual(runner.rdma_put_server_scratch_bytes, 654321)
         self.assertEqual(runner.rdma_wait_timeout_ms, 15000)
+        self.assertEqual(runner.rdma_server_get_workers, 2)
 
     def test_load_client_endpoint_for_default_grpc_config(self):
         host, port = load_client_endpoint(DEFAULT_GRPC_MAIN_CONFIG)

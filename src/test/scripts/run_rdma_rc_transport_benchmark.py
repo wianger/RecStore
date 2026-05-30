@@ -489,6 +489,12 @@ def main():
         type=int,
     )
     parser.add_argument(
+        "--server-get-workers",
+        "--rdma-rc-server-get-workers",
+        dest="server_get_workers",
+        type=int,
+    )
+    parser.add_argument(
         "--inline-bytes",
         "--rdma-rc-inline-bytes",
         dest="inline_bytes",
@@ -593,6 +599,7 @@ def main():
             rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
             rdma_profile_interval_ms=args.profile_interval_ms,
             rdma_server_coroutines_per_thread=args.server_coroutines_per_thread,
+            rdma_server_get_workers=args.server_get_workers,
             rdma_inline_bytes=args.inline_bytes,
             rdma_client_numa_id=args.client_numa_id,
             rdma_client_numa_ids=client_numa_ids,
