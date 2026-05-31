@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+import json
 
 UNITTEST_DIR = os.path.dirname(__file__)
 PYTORCH_ROOT = os.path.abspath(os.path.join(UNITTEST_DIR, '../..'))
@@ -17,7 +18,13 @@ class TestEBCPrecisionWrapperConfig(unittest.TestCase):
         self.assertTrue(os.path.exists(config_path))
 
     def test_resolve_ps_endpoint_uses_repo_config(self):
-        host, port = wrapper._resolve_ps_endpoint()
-        self.assertEqual(host, "127.0.0.1")
-        self.assertEqual(port, 15123)
+        config_path = wrapper._resolve_repo_config_path()
+        with open(config_path, "r") as f:
+            config = json.load(f)
 
+        expected_host = config["client"]["host"]
+        expected_port = config["client"]["port"]
+
+        host, port = wrapper._resolve_ps_endpoint()
+        self.assertEqual(host, expected_host)
+        self.assertEqual(port, expected_port)

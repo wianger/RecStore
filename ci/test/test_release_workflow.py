@@ -28,6 +28,13 @@ def test_release_workflow_builds_cpu_libtorch_ops_package() -> None:
     assert "build/lib/lib_recstore_ops.so" in workflow
 
 
+def test_release_workflow_does_not_require_ycsb_artifact() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "build/bin/ycsb" not in workflow
+    assert "linux-x86_64-ycsb.tar.gz" not in workflow
+
+
 def test_weekly_prerelease_can_be_manually_dispatched() -> None:
     workflow = (REPO_ROOT / ".github/workflows/release.yml").read_text()
 
