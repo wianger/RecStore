@@ -4,6 +4,34 @@ RecStore 内置了完善的性能埋点与分析机制，涵盖了从 PyTorch OP
 
 ## 1. 快速使用
 
+### Benchmark 分层报告
+
+做性能结论时先区分层级：
+
+- storage-only：直接测 KVEngine / index / value store。
+- PS/network：通过 RecStore PS client/server 与 transport。
+- PyTorch/model：模型训练侧端到端。
+
+不要把某一层的结果直接扩展成整体架构结论。当前 RDMA GET 的阶段性完整报告是：
+
+```text
+ps_rdma_benchmark_report_0531.md
+```
+
+这份报告对齐了 storage-only 的 `BatchGetFlat(500 random keys)` 和 PS/network 的
+RDMA GET `batch_keys=500`，结论是：
+
+| 层级 | 场景 | 吞吐 |
+|---|---|---:|
+| storage-only | `DRAM_EXTENDIBLE_HASH BatchGetFlat` | `19.45M keys/s` |
+| PS/network | `DRAM_EXTENDIBLE_HASH + direct-SG` | `19.37M keys/s` |
+| storage-only | `DRAM_PET_HASH BatchGetFlat` | `51.96M keys/s` |
+| PS/network | `DRAM_PET_HASH + staging-copy` | `44.87M keys/s` |
+
+因此当前 RDMA GET 默认优化主线是
+`DRAM_PET_HASH + rdma-get-response-mode=auto`，而不是继续单纯增加 client、
+GET worker 或 coroutine scanner。
+
 ### Grafana
 
 编译时开启性能上报宏：

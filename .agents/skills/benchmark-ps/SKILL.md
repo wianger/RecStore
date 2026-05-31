@@ -1,6 +1,6 @@
 ---
 name: benchmark-ps
-description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and BRPC. Use when Codex needs explicit client/server hosts, record count, value size, and topology, then execute src/test/scripts/run_benchmark_ps.py and generate summary.csv plus Chinese summary.md.
+description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and BRPC, including optimized RDMA GET where DRAM_PET_HASH uses auto/staging-copy response mode. Use when Codex needs explicit client/server hosts, record count, value size, topology, and response mode, then execute src/test/scripts/run_benchmark_ps.py and generate summary.csv plus Chinese summary.md.
 ---
 
 # Benchmark PS
@@ -19,13 +19,14 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - client processes per IP (default = `1`)
    - record count (default = `1000000`)
    - value size (default = `512`)
-   - batch keys (default = `1024`)
+   - batch keys (default = `500` for current RDMA GET capacity runs; use a user-requested value for other workloads)
    - client threads per process (default = `16`)
    - client load threads per process (default = client threads per process)
    - server worker threads (default = `32`)
    - server RDMA polling threads (default = `1`; use client processes for RDMA client concurrency)
    - RDMA GET worker threads (default = `0`)
    - RDMA server coroutines per polling thread (default = `1`; treat values above `1` as scheduling experiments)
+   - RDMA GET response mode (default = `auto`; resolves to `staging_copy` for `DRAM_PET_HASH` and `direct_sg` otherwise)
    - RDMA NUMA and bind-core placement when running local RDMA capacity tests
    - runtime seconds (default = `5`)
    - repeat count (default = `1`)
@@ -102,7 +103,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir <output_dir>
 ```
 
-For local RDMA capacity on a multi-socket host, prefer RNIC-local same-socket placement with disjoint physical cores over socket-split placement. Socket-split is useful to prove CPU isolation, but it can understate the transport ceiling by adding cross-NUMA RNIC/PCIe/DMA cost. On the 2026-05-30 host, the clean default was server NUMA0/client NUMA0, server bind offset `0`, client bind offset `16`, client stride `2`, `client-processes-per-ip=6`, and `server-rdma-threads=16`.
+For local optimized PS RDMA GET capacity on a multi-socket host, prefer RNIC-local same-socket placement with disjoint physical cores over socket-split placement. Socket-split is useful to prove CPU isolation, but it can understate the transport ceiling by adding cross-NUMA RNIC/PCIe/DMA cost. On the 2026-05-31 host, the clean default was server NUMA0/client NUMA0, server bind offset `0`, client bind offset `16`, client stride `2`, `client-processes-per-ip=6`, `server-rdma-threads=16`, `DRAM_PET_HASH`, and `--rdma-get-response-mode auto`.
 
 ```bash
 python3 src/test/scripts/run_benchmark_ps.py \
@@ -113,6 +114,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --record-count 1000000 \
   --value-size 512 \
   --batch-keys 500 \
+  --index-type DRAM_PET_HASH \
   --client-threads-per-process 1 \
   --client-load-threads-per-process 1 \
   --runtime-seconds 5 \
@@ -124,6 +126,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --server-rdma-threads 16 \
   --rdma-rc-server-get-workers 0 \
   --rdma-rc-server-coroutines-per-thread 1 \
+  --rdma-get-response-mode auto \
   --rdma-rc-profile-interval-ms 1000 \
   --rdma-rc-server-numa-id 0 \
   --rdma-rc-client-numa-id 0 \
@@ -242,11 +245,11 @@ Recommended first matrix:
 - `server_shards`: `1,2`
 - `client_processes_per_ip`: `1,2,4,8`
 - `client_threads_per_process`: `1`
-- `batch_keys`: user-requested value, or `500` when reproducing the 2026-05-29 matrix
+- `batch_keys`: user-requested value, or `500` when reproducing current RDMA GET capacity / storage-aligned runs
 
-For RDMA scheduling experiments, keep `--rdma-rc-server-coroutines-per-thread=1` unless explicitly testing coroutine scanner behavior. Encode `t<T>`, `n<N>`, and `c<C>` in result directories. In the 2026-05-30 local `p8/N8/T16` repeat=3 run, `C1` averaged `14.45M keys/s` and `C4` averaged `12.17M keys/s`, so `C4` is not a performance default.
+For historical RDMA scheduling experiments, keep `--rdma-rc-server-coroutines-per-thread=1` unless explicitly testing coroutine scanner behavior. Encode `t<T>`, `n<N>`, and `c<C>` in result directories. The `~9M -> ~14-15M keys/s` jump came from increasing GET workers by larger multiples of 4 and increasing server RDMA poll threads, not from sglist/direct-SG. In the 2026-05-30 local `p8/N8/T16` repeat=3 run, `C1` averaged `14.45M keys/s` and `C4` averaged `12.17M keys/s`, so `C4` is not a performance default.
 
-GET direct-SG is now the default RDMA GET response path with internal fallback to staging-copy. Do not add old direct-SG enable/disable flags to benchmark commands. Do not use removed inner lookup parallelism flags as a tuning dimension; that experiment regressed throughput.
+Do not assume direct-SG is the universal RDMA GET default. Use `--rdma-get-response-mode auto`: it resolves `DRAM_PET_HASH` to `staging_copy` and other index types to `direct_sg`. PET direct-SG is a diagnostic/regression case and was around `14.93M keys/s`; PET auto/staging-copy reached around `44.87M keys/s`. Do not add old direct-SG enable/disable flags to benchmark commands. Do not use removed inner lookup parallelism flags as a tuning dimension; that experiment regressed throughput.
 
 For explicit cross-host or multi-shard placement, use `--server-plan` and `--client-plan`:
 
@@ -294,7 +297,7 @@ Treat `summary.csv` as authoritative when any client exits nonzero. `run_benchma
 
 For matrix reports, aggregate `run` rows by summing `key_ops_per_sec` across clients for each transport and case. Include a per-client min/max table when `client_processes_per_ip > 1`; large min/max spread is a scheduling or fairness signal and should not be hidden by the aggregate.
 
-When replacing earlier exploratory reports, create one new root-level report with a clear name such as `benchmark_ps_transport_matrix_<date>.md`, then remove superseded root-level scratch reports and transient result directories. Keep the raw result directory for the final matrix.
+When replacing earlier exploratory reports, create one new root-level report with a clear name such as `ps_rdma_benchmark_report_<date>.md`, then remove superseded root-level scratch reports and transient result directories. Keep the raw result directory for the final matrix.
 
 ## Reporting Rules
 
@@ -320,6 +323,7 @@ The current local environment has validated these paths after the latest benchma
 - RDMA local 2 clients: passed with `--client-threads-per-process 1 --client-processes-per-ip 2`.
 - RDMA local 2 shards x 2 clients: passed with `--client-threads-per-process 1 --server-shard-ips 127.0.0.1,127.0.0.1 --client-processes-per-ip 2`.
 - Fair local transport matrix with `batch_keys=500`, `value_size=512`, `client_threads_per_process=1`, `server_shards=1,2`, and `client_processes_per_ip=1,2,4,8` completed successfully.
+- Current optimized RDMA GET result: `DRAM_PET_HASH + --rdma-get-response-mode auto` resolves to staging-copy and reached about `44.87M keys/s`, near the observed RDMA transport/device ceiling of about `48.7M keys/s`.
 
 Use these as bring-up baselines before increasing record count, runtime, or cross-host complexity.
 
@@ -330,6 +334,8 @@ Use these as bring-up baselines before increasing record count, runtime, or cros
 - RDMA transaction mode requires `--client-threads-per-process 1`; use `--client-processes-per-ip` for RDMA client concurrency. If the benchmark binary sees `--thread_num > 1`, it aborts by design.
 - `--prefetch-depth > 0` is valid only for `transactions` + `mode=fetch`. If depth exceeds the default QP pool, also increase `--rdma-rc-qps-per-client-per-shard`.
 - By default, RDMA `transactions/fetch` uses a depth-16 prefetch pipeline.
+- For current optimized RDMA GET runs, prefer `batch_keys=500`, `value_size=512`, `DRAM_PET_HASH`, `--rdma-get-response-mode auto`, `client-processes-per-ip=6`, `server-rdma-threads=16`, `rdma-rc-server-get-workers=0`, and same-socket disjoint core binding.
+- Historical note: direct-SG/sglist improved the then-current EH path by only about `0.5M keys/s`; the later `~19M keys/s` EH result was mainly from CPU affinity, while EH prefetch/array-view style changes were only about `0.1M keys/s`.
 - In the 2026-05-29 local fair matrix, single-shard RDMA plateaued around `3.0 M keys/s`, while local two-shard RDMA was lower. Treat this as local PS/server scheduling behavior, not a NIC-limit conclusion.
 - Large single-shard RDMA preload can fail as `RC write RPC wait timeout` after server-side `KVEngine value allocation failed`; the runner should generate slab allocator capacity with headroom. If this recurs, inspect generated config capacity and server logs before treating it as a transport failure.
 - If `RDMA` multi-shard fails with control-plane `get_meta timeout`, report it as multi-shard bring-up failure. Do not convert it into a throughput result.

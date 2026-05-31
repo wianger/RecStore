@@ -35,6 +35,7 @@ DEFAULT_DRAM_ROOT = Path("/dev/shm/recstore")
 DEFAULT_SSD_ROOT = Path("/mnt/nvme1n1_recstore/recstore")
 SLAB_ALLOCATOR_CHUNK_BYTES = 1 << 20
 SLAB_ALLOCATOR_METADATA_BYTES = 8
+SLAB_ALLOCATOR_LOAD_FACTOR = 1.2
 DISTRIBUTION_LABELS = {
     "uniform": "uniform",
     "zipfian": "zipfian(alpha=0.9)",
@@ -63,6 +64,7 @@ SUMMARY_FIELDS = [
     "distribution",
     "zipfian_alpha",
     "read_mode",
+    "batch_keys",
     "phase",
     "exit_code",
     "load_runtime_sec",
@@ -115,6 +117,27 @@ def normalize_workload(workload: str) -> str:
         raise ValueError(f"unknown workload '{workload}', expected a/b/c")
 
 
+def slab_entries_per_chunk(slab_size: int) -> int:
+    """Mirror ConcurrentSlabMemoryPool's per-chunk entry calculation."""
+    if slab_size <= 0:
+        raise ValueError("slab_size must be positive")
+    entries = SLAB_ALLOCATOR_CHUNK_BYTES // slab_size
+    entries -= entries % 64
+    # ChunkHeader is 8 bytes and BitMap is 4 bytes plus one uint64 per 64 slots.
+    while 12 + (entries // 64) * 8 + entries * slab_size > SLAB_ALLOCATOR_CHUNK_BYTES:
+        entries -= 64
+    if entries <= 0:
+        raise ValueError(f"slab_size {slab_size} is too large for one slab chunk")
+    return entries
+
+
+def recommended_slab_capacity_bytes(*, record_count: int, slab_size: int) -> int:
+    target_records = int(record_count * SLAB_ALLOCATOR_LOAD_FACTOR)
+    entries_per_chunk = slab_entries_per_chunk(slab_size)
+    chunks = (target_records + entries_per_chunk - 1) // entries_per_chunk
+    return chunks * SLAB_ALLOCATOR_CHUNK_BYTES
+
+
 def recommended_dram_capacity_bytes(
     *, value_store_type: str | None, args: argparse.Namespace
 ) -> int:
@@ -125,11 +148,10 @@ def recommended_dram_capacity_bytes(
     per_value_bytes = args.value_size
     if args.dram_allocator in {"PERSIST_LOOP_SLAB", "CONCURRENT_SLAB_MEMORY_POOL"}:
         per_value_bytes += args.dram_capacity_metadata_bytes
-        raw_capacity = args.record_count * per_value_bytes
-        return (
-            (raw_capacity + SLAB_ALLOCATOR_CHUNK_BYTES - 1)
-            // SLAB_ALLOCATOR_CHUNK_BYTES
-        ) * SLAB_ALLOCATOR_CHUNK_BYTES
+        return recommended_slab_capacity_bytes(
+            record_count=args.record_count,
+            slab_size=per_value_bytes,
+        )
     return args.record_count * per_value_bytes
 
 
@@ -153,6 +175,7 @@ class RunEnv:
     runtime_seconds: int
     value_size: int
     read_mode: str
+    batch_keys: int
     skip_load: bool
     skip_run: bool
     dram_allocator: str
@@ -185,6 +208,7 @@ class RunEnv:
             runtime_seconds=args.runtime_seconds,
             value_size=args.value_size,
             read_mode=args.read_mode,
+            batch_keys=args.batch_keys,
             skip_load=args.skip_load,
             skip_run=args.skip_run,
             dram_allocator=args.dram_allocator,
@@ -214,6 +238,7 @@ class RunEnv:
             gflag("running_seconds", self.runtime_seconds),
             gflag("value_size", self.value_size),
             gflag("read_mode", self.read_mode),
+            gflag("batch_keys", self.batch_keys),
             gflag("load", str(not self.skip_load).lower()),
             gflag("run", str(not self.skip_run).lower()),
             gflag("dram_allocator", self.dram_allocator),
@@ -612,8 +637,8 @@ def run_one(
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     args._current_value_store_type = (
-        props.get("value_store_type")
-        if "value_store_type" in props
+        engine_props.get("value_store_type")
+        if "value_store_type" in engine_props
         else (
             "DRAM_VALUE_STORE" if engine_name == "petkv"
             else None
@@ -675,6 +700,7 @@ def run_one(
         "distribution": distribution,
         "zipfian_alpha": args.zipfian_alpha,
         "read_mode": args.read_mode,
+        "batch_keys": args.batch_keys,
         "phase": "load-run",
         "exit_code": proc.returncode,
         "load_runtime_sec": load.get("seconds", ""),
@@ -770,7 +796,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--load-threads", type=int, default=0)
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--value-size", type=int, default=128)
-    parser.add_argument("--read-mode", choices=["exists", "get"], default="get")
+    parser.add_argument(
+        "--read-mode",
+        choices=["exists", "get", "batch_get_flat"],
+        default="get",
+    )
+    parser.add_argument("--batch-keys", type=int, default=500)
     parser.add_argument("--bulk-load", action="store_true")
     parser.add_argument("--dram-allocator", default="CONCURRENT_SLAB_MEMORY_POOL")
     parser.add_argument("--ssd-io-backend", default="IOURING")

@@ -18,6 +18,9 @@ DECLARE_int32(num_server_processes);
 DECLARE_int32(num_client_processes);
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
+DEFINE_string(rdma_get_response_mode,
+              "direct_sg",
+              "RDMA GET response mode: direct_sg or staging_copy");
 
 namespace petps {
 namespace {
@@ -290,7 +293,12 @@ void PetPSClient::FillGetDescriptor(
   descriptor->payload_bytes =
       static_cast<std::uint32_t>(GetRequestBytes(key_count));
   descriptor->response_bytes = static_cast<std::uint32_t>(response_bytes);
-  descriptor->flags |= kRcFlagGetDirectSg | kRcFlagGetAllowFallbackCopy;
+  if (FLAGS_rdma_get_response_mode == "direct_sg") {
+    descriptor->flags |= kRcFlagGetDirectSg | kRcFlagGetAllowFallbackCopy;
+  } else if (FLAGS_rdma_get_response_mode != "staging_copy") {
+    LOG(FATAL) << "unsupported --rdma_get_response_mode="
+               << FLAGS_rdma_get_response_mode;
+  }
 }
 
 void PetPSClient::FillPutDescriptor(

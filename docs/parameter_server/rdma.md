@@ -1,6 +1,6 @@
 # RDMA 模块运行手册
 
-更新时间：2026-05-30
+更新时间：2026-05-31
 
 本文档整理当前 RecStore RDMA 主路径的边界、参数、验证入口、已知限制和下一步路线图。默认工作目录为仓库根目录：
 
@@ -144,6 +144,7 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 | `--server-coroutines-per-thread` | 每个 polling thread 上的 server 协程数 | 值越大越偏向 coop 扫描，不代表一定更快 |
 | `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`index_only`、`payload_memset` |
 | `--skip-client-copy` | 是否跳过 client 端 GET payload 拷贝 | 只用于 benchmark 排查，不适合作为默认配置 |
+| `--rdma-get-response-mode` | RDMA GET response payload 路径 | `auto`、`direct_sg`、`staging_copy`；generic PS runner 参数 |
 
 ### 4.1 重要解读
 
@@ -153,6 +154,8 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 - `qps-per-client-per-shard` 变大通常会增加连接并发，但也会增加资源占用和初始化成本。
 - `slots-per-qp` 变大通常会增加单条 QP 的并发深度，但也会增加每条 lane 的本地状态和回写压力。
 - `profile-interval-ms` 只影响周期性统计输出，不应和吞吐提升直接画等号。
+- `rdma-get-response-mode=auto` 当前按 index/value layout 选择 GET response path：
+  `DRAM_PET_HASH` 走 `staging_copy`，其他 index 默认走 `direct_sg`。
 
 ### 4.2 启动前硬约束
 
@@ -287,6 +290,7 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 - `--server-rdma-threads`：RDMA server polling 线程数。
 - `--rdma-rc-server-get-workers`：server GET payload worker 线程数；`0` 表示 poller 同步处理 GET。
 - `--rdma-rc-server-coroutines-per-thread`：每个 polling thread 内的 scanner coroutine 数；当前作为调度实验维度，不作为性能默认。
+- `--rdma-get-response-mode`：GET response payload 路径；推荐默认用 `auto`。
 
 本地单 shard、4 client 进程的 RDMA fetch profile 示例：
 
@@ -388,10 +392,10 @@ raw results 保存在：
 results/benchmark_ps_matrix_0529
 ```
 
-系统报告保存在仓库根目录：
+这组历史矩阵已经由当前完整报告承接：
 
 ```text
-benchmark_ps_transport_matrix_0529.md
+ps_rdma_benchmark_report_0531.md
 ```
 
 总吞吐矩阵如下，单位为 `M keys/s`：
@@ -429,6 +433,55 @@ benchmark_ps_transport_matrix_0529.md
 - generic PS benchmark 失败，也不能直接证明底层 RC transport 已坏
 
 排障时先用 dedicated RC benchmark 建立 transport baseline，再看 generic benchmark 是否是更上层生命周期或调用方式问题。
+
+#### 6.2.4 2026-05-31 RDMA GET response path 固化
+
+当前完整报告见仓库根目录：
+
+```text
+ps_rdma_benchmark_report_0531.md
+```
+
+本轮对齐了 storage-only 与 PS/network 两层：
+
+- storage-only：`benchmark_kv_engine --read_mode=batch_get_flat --batch_keys=500`
+- PS/network：`run_benchmark_ps.py --batch-keys 500`
+
+关键结论：
+
+| 层级 | index | response path | 吞吐 |
+|---|---|---|---:|
+| storage-only | `DRAM_EXTENDIBLE_HASH` | `BatchGetFlat(500 random keys)` | `19.45M keys/s` |
+| PS/network | `DRAM_EXTENDIBLE_HASH` | direct-SG | `19.37M keys/s` |
+| storage-only | `DRAM_PET_HASH` | `BatchGetFlat(500 random keys)` | `51.96M keys/s` |
+| PS/network | `DRAM_PET_HASH` | direct-SG | `14.93M keys/s` |
+| PS/network | `DRAM_PET_HASH` | staging-copy | `44.87M keys/s` |
+
+这修正了 2026-05-30 的阶段性判断：`direct-SG` 不是所有 index 的默认最优路径。
+`DRAM_EXTENDIBLE_HASH` 的主要瓶颈已经是 index lookup；`DRAM_PET_HASH` 的 lookup
+更快，但随机 row refs 更离散，direct-SG 需要组织更多 SGE/WR，反而慢于把 value
+先聚合到连续 response buffer 的 staging-copy。
+
+推荐默认：
+
+```bash
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --index-type DRAM_PET_HASH \
+  --rdma-get-response-mode auto \
+  --batch-keys 500 \
+  --value-size 512
+```
+
+`auto` 当前解析为：
+
+| index | response path |
+|---|---|
+| `DRAM_PET_HASH` | `staging_copy` |
+| 其他 index | `direct_sg` |
+
+如果需要回归 direct-SG 本身，显式使用 `--rdma-get-response-mode direct_sg`；如果
+需要验证连续 response buffer 路径，显式使用 `--rdma-get-response-mode staging_copy`。
 
 ### 6.3 RDMA RC 专项入口
 
@@ -588,9 +641,29 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 
 ## 8. 当前路线图
 
-目标是提升低负载下的 req qps 上限，而不是单纯追更高并发。
+当前主线已经从“单纯追更高并发”调整为“按 KVEngine 和 value layout 选择正确的
+GET response path”。根目录 `ps_rdma_benchmark_report_0531.md` 记录从
+`~2M keys/s` 到 `~44.87M keys/s` 的完整阶段。
 
-### 8.1 第一优先级：减少 server 空转
+### 8.1 第一优先级：固化 PET staging-copy 主线
+
+现阶段推荐把下面的组合视为 RDMA GET 默认性能 case：
+
+- `DRAM_PET_HASH`
+- `--rdma-get-response-mode auto`
+- `batch_keys=500`
+- `value_size=512`
+
+后续优化应先保持这条路径可复现，再观察是否接近当前 RDMA transport/device 观测上限
+`~48.7M keys/s`。
+
+### 8.2 第二优先级：保留 EH direct-SG 回归
+
+`DRAM_EXTENDIBLE_HASH + direct-SG` 仍然有价值，因为它验证 SG response path 本身，
+也能作为 index lookup 瓶颈的稳定对照。当前 EH direct-SG 与 EH storage-only
+batch lookup 都在 `~19M keys/s` 附近，说明继续优化 EH 需要先优化 index lookup。
+
+### 8.3 第三优先级：减少 server 空转
 
 先看 `petps_server` 的：
 
@@ -604,7 +677,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - 让“没有活跃请求”的时候更轻
 - 避免 polling thread 大量空转抢 CPU
 
-### 8.2 第二优先级：压低 client 提交和等待成本
+### 8.4 第四优先级：压低 client 提交和等待成本
 
 再看 `PetPSClient` 的：
 
@@ -619,7 +692,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - 减少 QP 选择和状态维护开销
 - 减少 response copy 和 slot 清理成本
 
-### 8.3 第三优先级：压薄 transport 提交/完成路径
+### 8.5 第五优先级：压薄 transport 提交/完成路径
 
 再看 `rc_transport` 的：
 
@@ -634,7 +707,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - 让提交和完成路径更短
 - 避免让背压在低负载下提前出现
 
-### 8.4 不作为主路线的方向
+### 8.6 不作为主路线的方向
 
 - 继续加 `client-count`
 - 继续抬高 `async-depth` 到超过 QP 池承受范围

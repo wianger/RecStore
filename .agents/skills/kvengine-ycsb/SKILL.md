@@ -1,6 +1,6 @@
 ---
 name: kvengine-ycsb
-description: Run RecStore KVEngine correctness and YCSB benchmark workflows. Use when Codex needs to validate src/test/test_kvengine.cpp, run tools/benchmarks/run_ycsb_compare.py, prompt for thread count, SSD benchmark path, and results directory, then generate a three-table Chinese summary.md with workload descriptions, Run throughput, and Load throughput.
+description: Run RecStore KVEngine correctness, YCSB, and storage-only batch lookup benchmark workflows, including read_mode=batch_get_flat for aligning KVEngine limits with PS RDMA batch GET. Use when Codex needs to validate src/test/test_kvengine.cpp, run tools/benchmarks/run_ycsb_compare.py, prompt for thread count, SSD benchmark path, results directory, read mode, and batch keys, then generate a Chinese summary.md.
 ---
 
 # KVEngine YCSB
@@ -18,6 +18,8 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - repeat count for YCSB (default = 3, ask if user wants 1)
    - distributions to use (default = uniform and zipfian)
    - record-count (default=10M)
+   - read mode (default = `get`; use `batch_get_flat` when aligning with PS RDMA GET)
+   - batch keys (default = `500` for `batch_get_flat`)
 3. Run:
    - `cmake -S . -B build`
    - `cmake --build build --target test_kvengine -j`
@@ -59,6 +61,24 @@ python3 tools/benchmarks/run_ycsb_compare.py \
 
 If the user asks for "3 次平均", pass `--repeat 3`; otherwise preserve the requested repeat count in the `summary.md` heading.
 
+For storage-only PS RDMA alignment, use random batch lookup rather than single-key reads. This is the path used to establish that `DRAM_EXTENDIBLE_HASH` is around `19.45M keys/s` for `BatchGetFlat(500 random keys)`, while `DRAM_PET_HASH` is around `51.96M keys/s`.
+
+```bash
+python3 tools/benchmarks/run_ycsb_compare.py \
+  --output-dir <output_dir> \
+  --engines dram_eh_dram dram_pet_dram \
+  --workloads workloadc \
+  --distributions uniform \
+  --record-count 300000 \
+  --runtime-seconds 3 \
+  --threads 16 \
+  --load-threads 16 \
+  --repeat 1 \
+  --value-size 512 \
+  --read-mode batch_get_flat \
+  --batch-keys 500
+```
+
 ## Summary Format
 
 Generate `<output_dir>/summary.md` from `kvengine_workload_summary.csv` after YCSB finishes. Keep only these three sections:
@@ -67,7 +87,7 @@ Generate `<output_dir>/summary.md` from `kvengine_workload_summary.csv` after YC
 2. `Run 吞吐（ops/s，...）`
 3. `Load 吞吐（ops/s，...）`
 
-Under `Workload 说明`, before the workload table, record the benchmark hyperparameters in Chinese prose. Include at least: `threads`, `load_threads`, `record_count`, `runtime_seconds`, `repeat`, `value_size`, `read_mode`, `distributions`, `workloads`, SSD root path, output directory, `ssd_io_backend`, `ssd_queue_depth`, and allocator choices that affect the benchmark.
+Under `Workload 说明`, before the workload table, record the benchmark hyperparameters in Chinese prose. Include at least: `threads`, `load_threads`, `record_count`, `runtime_seconds`, `repeat`, `value_size`, `read_mode`, `batch_keys` when applicable, `distributions`, `workloads`, SSD root path, output directory, `ssd_io_backend`, `ssd_queue_depth`, and allocator choices that affect the benchmark.
 
 Use `M` for values >= 1,000,000 and `K` for values >= 1,000. Include the `三 workload 平均` column only in the Run table.
 
@@ -84,3 +104,4 @@ Use `M` for values >= 1,000,000 and `K` for values >= 1,000. Include the `三 wo
 - In that case, still generate `summary.md` from `kvengine_workload_summary.csv` and report the missing chart dependency separately.
 - For `DRAM_VALUE_STORE` lanes, watch for allocator failures such as `ConcurrentSlabMemoryPool OOM`. If that happens, record the failing engine row and consider rerunning with explicit `--dram-capacity-bytes` or a different allocator.
 - Judge `petkv` success by exit code plus `YCSB_LOAD_RESULT` / `YCSB_RESULT`, not by incidental `PetHash invalid. capacity_ == 0` log lines alone.
+- Use `read_mode=batch_get_flat --batch-keys 500` when the goal is to compare storage-only KVEngine limits with PS RDMA GET `batch_keys=500`. Do not compare that number directly with ordinary single-key YCSB `get` throughput without labeling the operation mismatch.

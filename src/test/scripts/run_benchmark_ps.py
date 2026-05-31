@@ -391,6 +391,7 @@ def build_benchmark_cmd(
     transaction_profile: bool = False,
     rdma_direct_async_fetch: bool = False,
     rdma_adapter_skip_prefetch_result_copy: bool = False,
+    rdma_get_response_mode: str = "direct_sg",
     skip_load: bool = False,
 ) -> list[str]:
     cmd = [
@@ -421,6 +422,8 @@ def build_benchmark_cmd(
         cmd.append("--rdma_direct_async_fetch=true")
     if rdma_adapter_skip_prefetch_result_copy:
         cmd.append("--rdma_adapter_skip_prefetch_result_copy=true")
+    if transport == "RDMA":
+        cmd.append(f"--rdma_get_response_mode={rdma_get_response_mode}")
     if skip_load:
         cmd.append("--skip_load=true")
     return cmd
@@ -535,6 +538,17 @@ def resolve_output_dir(value: str) -> Path:
             path = (REPO_ROOT / path).resolve()
         return path
     return default_output_dir()
+
+
+def resolve_rdma_get_response_mode(index_type: str, requested_mode: str) -> str:
+    mode = requested_mode.lower()
+    if mode == "auto":
+        return "staging_copy" if index_type == "DRAM_PET_HASH" else "direct_sg"
+    if mode not in {"direct_sg", "staging_copy"}:
+        raise ValueError(
+            "rdma_get_response_mode must be auto, direct_sg, or staging_copy"
+        )
+    return mode
 
 
 def prompt_value(label: str, default: str) -> str:
@@ -1954,6 +1968,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--transaction-profile", action="store_true")
     parser.add_argument("--rdma-direct-async-fetch", action="store_true")
     parser.add_argument("--rdma-adapter-skip-prefetch-result-copy", action="store_true")
+    parser.add_argument(
+        "--rdma-get-response-mode",
+        choices=["auto", "direct_sg", "staging_copy"],
+        default="auto",
+        help=(
+            "RDMA GET response path. auto uses staging_copy for "
+            "DRAM_PET_HASH and direct_sg otherwise."
+        ),
+    )
     parser.add_argument("--skip-load", action="store_true")
     parser.add_argument(
         "--interactive",
@@ -1966,6 +1989,9 @@ def parse_args() -> argparse.Namespace:
     if args.interactive:
         apply_interactive_prompts(args)
         args.remote_container = args.remote_container or None
+    args.rdma_get_response_mode = resolve_rdma_get_response_mode(
+        args.index_type, args.rdma_get_response_mode
+    )
     transports = normalize_transport_list(args.transports)
     if "RDMA" in transports and args.mode == "fetch":
         qps_per_client_per_shard = args.rdma_rc_qps_per_client_per_shard or 32
@@ -2123,6 +2149,7 @@ def main() -> int:
                 rdma_adapter_skip_prefetch_result_copy=(
                     args.rdma_adapter_skip_prefetch_result_copy
                 ),
+                rdma_get_response_mode=args.rdma_get_response_mode,
                 skip_load=args.skip_load,
             )
 

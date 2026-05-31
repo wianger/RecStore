@@ -27,6 +27,7 @@ from run_benchmark_ps import (  # noqa: E402
     recommended_dram_capacity_bytes,
     replace_config_path_arg,
     resolve_base_port,
+    resolve_rdma_get_response_mode,
     write_summary_csv,
 )
 
@@ -209,9 +210,19 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertEqual(resolve_base_port("BRPC", 25000, 1), 15000)
         self.assertEqual(resolve_base_port("BRPC", 25000, 2), 25000)
 
+    def test_resolve_rdma_get_response_mode_auto_binds_pet_hash_to_staging(self):
+        self.assertEqual(
+            resolve_rdma_get_response_mode("DRAM_PET_HASH", "auto"),
+            "staging_copy",
+        )
+        self.assertEqual(
+            resolve_rdma_get_response_mode("DRAM_EXTENDIBLE_HASH", "auto"),
+            "direct_sg",
+        )
+
     def test_build_benchmark_cmd_includes_transactions_args(self):
         topology = build_topology_plan(
-            "GRPC",
+            "RDMA",
             server_shard_ips=["127.0.0.1"],
             client_ips=["127.0.0.1"],
             client_processes_per_ip=1,
@@ -219,7 +230,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
         )
         cmd = build_benchmark_cmd(
             benchmark_binary="/tmp/ps_transport_benchmark",
-            transport="GRPC",
+            transport="RDMA",
             topology=topology,
             config_path="/tmp/config.json",
             record_count=1000,
@@ -235,6 +246,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
             report_mode="summary",
             prefetch_depth=4,
             rdma_adapter_skip_prefetch_result_copy=True,
+            rdma_get_response_mode="staging_copy",
         )
         self.assertIn("--workload=transactions", cmd)
         self.assertIn("--record_count=1000", cmd)
@@ -242,6 +254,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--value_size=256", cmd)
         self.assertIn("--prefetch_depth=4", cmd)
         self.assertIn("--rdma_adapter_skip_prefetch_result_copy=true", cmd)
+        self.assertIn("--rdma_get_response_mode=staging_copy", cmd)
 
     def test_parse_args_rejects_rdma_prefetch_depth_above_slot_capacity(self):
         argv = [

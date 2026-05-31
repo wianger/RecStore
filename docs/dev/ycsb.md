@@ -76,6 +76,58 @@ python3 tools/benchmarks/run_ycsb_compare.py \
 
 每个 engine、workload、repeat 都有独立数据目录。默认会删除同名旧目录，避免复用上次 load 的数据。需要保留数据时加 `--keep-data`。
 
+## KVEngine 随机 batch lookup 对齐
+
+当目标是对齐 PS RDMA GET 的 `batch_keys=N` 形态时，优先使用
+`benchmark_kv_engine` 的 `batch_get_flat` 模式，而不是普通 YCSB 单 key read。
+这个模式每次生成一组随机 key，并直接调用 `BaseKV::BatchGetFlat`，吞吐单位按
+keys/s 统计。
+
+通过对比 storage-only 与 PS/network，可以判断 PS RDMA 是否已经被 KVEngine 本地
+lookup 上限卡住。2026-05-31 的 RDMA GET 报告使用了 `batch_keys=500`：
+
+| index | storage-only `BatchGetFlat(500 random keys)` | PS RDMA 对齐结论 |
+|---|---:|---|
+| `DRAM_EXTENDIBLE_HASH` | `19.45M keys/s` | PS RDMA EH `19.37M keys/s` 基本碰到存储层上限 |
+| `DRAM_PET_HASH` | `51.96M keys/s` | PET 需要搭配 staging-copy response path 才能释放存储层优势 |
+
+完整报告见仓库根目录：
+
+```text
+ps_rdma_benchmark_report_0531.md
+```
+
+直接运行二进制示例：
+
+```bash
+./build/bin/benchmark_kv_engine \
+  --engine=dram \
+  --index_type=DRAM_PET_HASH \
+  --record_count=300000 \
+  --operation_count=300000 \
+  --value_size=512 \
+  --threads=16 \
+  --workload=c \
+  --read_mode=batch_get_flat \
+  --batch_keys=500
+```
+
+通过 compare runner 运行时，对应参数是：
+
+```bash
+python3 tools/benchmarks/run_ycsb_compare.py \
+  --engines kvdb \
+  --workloads workloadc \
+  --record-count 300000 \
+  --operation-count 300000 \
+  --threads 16 \
+  --read-mode batch_get_flat \
+  --batch-keys 500 \
+  --output-dir results/kv_batchget_compare
+```
+
+`summary.csv` 会记录 `read_mode` 和 `batch_keys`，用于和 PS/network 层报告对齐。
+
 ## 外部存储
 
 配好环境后执行：

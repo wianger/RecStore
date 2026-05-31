@@ -1,6 +1,6 @@
 ---
 name: rdma-module
-description: Work on RecStore RDMA parameter-server code, tests, and benchmarks. Use when Codex needs to inspect or modify src/ps/rdma, validate RDMA correctness with PetPS/RDMAPS tests, run RC transport benchmarks, compare RDMA read/push modes, or summarize RDMA profile output and bottlenecks.
+description: Work on RecStore RDMA parameter-server code, tests, and benchmarks, including optimized PS RDMA GET where DRAM_PET_HASH binds to auto/staging-copy response mode. Use when Codex needs to inspect or modify src/ps/rdma, validate RDMA correctness with PetPS/RDMAPS tests, run RC transport benchmarks, compare RDMA read/push modes, or summarize RDMA profile output and bottlenecks.
 ---
 
 # RDMA Module
@@ -117,22 +117,25 @@ Generic PS RDMA fetch pipeline diagnosis:
 python3 src/test/scripts/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
-  --server-shard-ips 127.0.0.1,127.0.0.1 \
-  --client-processes-per-ip 2 \
+  --server-shard-ips 127.0.0.1 \
+  --client-processes-per-ip 6 \
   --record-count 1000000 \
   --value-size 512 \
-  --batch-keys 1024 \
+  --batch-keys 500 \
+  --index-type DRAM_PET_HASH \
   --client-threads-per-process 1 \
   --client-load-threads-per-process 1 \
   --runtime-seconds 5 \
   --repeat 1 \
   --execution-backend local \
-  --prefetch-depth 4 \
-  --rdma-rc-qps-per-client-per-shard 4 \
+  --prefetch-depth 16 \
+  --rdma-rc-qps-per-client-per-shard 16 \
+  --rdma-rc-slots-per-qp 1 \
   --rdma-rc-profile-interval-ms 1000 \
-  --server-rdma-threads <rdma_threads> \
-  --rdma-rc-server-get-workers <get_workers> \
+  --server-rdma-threads 16 \
+  --rdma-rc-server-get-workers 0 \
   --rdma-rc-server-coroutines-per-thread 1 \
+  --rdma-get-response-mode auto \
   --output-dir results/rdma_ps_prefetch_$(date +%m%d%H%M)
 ```
 
@@ -228,12 +231,12 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - `--batch-keys` is keys per request, not total keys.
 - Measured key volume is roughly `iterations * rounds * batch_keys`.
 - `--qps-per-client-per-shard` is RC QP pool size, not a target QPS.
-- For `async_stream`, require `qps-per-client-per-shard >= async-depth`.
+- For `async_stream`, require `qps-per-client-per-shard * slots-per-qp >= async-depth`.
 - For generic PS transaction benchmarks, keep `--client-threads-per-process 1 --client-load-threads-per-process 1` for RDMA unless same-process multi-lane semantics have been explicitly changed and revalidated; scale load with `--client-processes-per-ip`.
 - `--prefetch-depth` on `run_benchmark_ps.py` overrides the default RDMA fetch pipeline depth. It is valid only with `transactions` and `mode=fetch`.
 - `--server-rdma-threads`, `--rdma-rc-server-get-workers`, and `--rdma-rc-server-coroutines-per-thread` are distinct generic PS scheduling dimensions. Encode them in result dirs as `t<T>_n<N>_c<C>`.
 - Keep `--rdma-rc-server-coroutines-per-thread=1` unless explicitly testing scanner scheduling. `C>1` can now combine with GET workers, but it is not a performance default.
-- GET direct-SG is now the default RDMA GET response path with internal staging-copy fallback. Do not pass old direct-SG enable/disable benchmark flags; they have been retired.
+- RDMA GET response mode is layout-dependent. Use `--rdma-get-response-mode auto` by default: it maps `DRAM_PET_HASH` to `staging_copy` and other index types to `direct_sg`. Do not pass old direct-SG enable/disable benchmark flags; they have been retired.
 - Do not reintroduce `rdma_rc_get_inner_parallelism` as a default tuning dimension. On the 2026-05-30 direct-SG tests, inner parallelism reduced one sub-stage but cut end-to-end PS throughput roughly in half because queue/synchronization overhead dominated.
 - Do not combine RDMA with GRPC/BRPC in the same `run_benchmark_ps.py` command when using RPC-oriented `--client-threads-per-process` values. Split RPC and RDMA runs if the safe thread settings differ.
 - When comparing RDMA with GRPC/BRPC, either align `client_threads_per_process` across transports or label the comparison as a capacity-oriented mixed-concurrency run. Do not present mixed thread counts as a fair transport comparison.
@@ -269,7 +272,8 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 - For generic PS benchmark RDMA concurrency, use `--client-processes-per-ip` for multi-process clients. Keep `--client-threads-per-process=1` per process unless the adapter's same-process multi-client/lane semantics are explicitly changed and revalidated.
 - In the local `batch_keys=500`, `value_size=512`, `client_threads_per_process=1` matrix, single-shard RDMA plateaued around `3.0 M keys/s`; adding local shards on the same host reduced throughput. Treat this as a local PS/server scheduling observation, not as a NIC limit or distributed scaling result.
 - As of `2026-05-30`, generic PS RDMA `p8/N8/T16/C1` repeat=3 averaged `14.45M keys/s`; same topology `C4` averaged `12.17M keys/s`. Treat coroutine scanner as functionally validated but not a throughput default.
-- As of `2026-05-30`, direct-SG is the default GET path. Local socket0-disjoint transport reached `48.69M keys/s`, while generic PS socket0-disjoint reached `18.87M keys/s`; the remaining bottleneck is server GET/index lookup rather than RDMA bandwidth.
+- As of `2026-05-31`, direct-SG is not the universal GET default. `DRAM_EXTENDIBLE_HASH + direct-SG` is around the EH storage-only limit (`~19M keys/s`), while `DRAM_PET_HASH + direct-SG` regressed to about `14.93M keys/s`. `DRAM_PET_HASH + auto/staging-copy` reached about `44.87M keys/s`, close to the observed RDMA transport/device ceiling of about `48.7M keys/s`.
+- Historical note: sglist/direct-SG improved the then-current EH path by only about `0.5M keys/s`; the later `~19M keys/s` EH result mainly came from CPU affinity. EH prefetch/array-view style micro-optimizations were only about `0.1M keys/s`.
 - If server shutdown prints a `SIGTERM` stack trace after a successful run, do not classify that alone as a benchmark failure. Distinguish expected teardown from request-path failures such as `RC write RPC wait timeout`.
 
 ## Debugging Focus
