@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -119,10 +120,11 @@ struct RawVerbsTransport::Impl {
       : config(c), allocator(c.local_region_bytes, c.allocation_start_offset) {}
 
   RawVerbsConfig config;
-  ibv_context* context    = nullptr;
-  ibv_pd* pd              = nullptr;
-  ibv_cq* cq              = nullptr;
-  ibv_mr* local_mr        = nullptr;
+  ibv_context* context = nullptr;
+  ibv_pd* pd           = nullptr;
+  ibv_cq* cq           = nullptr;
+  ibv_mr* local_mr     = nullptr;
+  std::vector<ibv_mr*> extra_mrs;
   void* local_base        = nullptr;
   bool owns_local_base    = false;
   std::size_t local_bytes = 0;
@@ -185,7 +187,7 @@ RawVerbsTransport::RawVerbsTransport(const RawVerbsConfig& config)
     init_attr.qp_type             = IBV_QPT_RC;
     init_attr.cap.max_send_wr     = 1024;
     init_attr.cap.max_recv_wr     = kRawVerbsRecvDepth;
-    init_attr.cap.max_send_sge    = 1;
+    init_attr.cap.max_send_sge    = 32;
     init_attr.cap.max_recv_sge    = 1;
     init_attr.cap.max_inline_data = config.max_inline_data;
     ibv_qp* qp                    = ibv_create_qp(impl_->pd, &init_attr);
@@ -210,6 +212,11 @@ RawVerbsTransport::~RawVerbsTransport() {
   if (impl_->local_mr != nullptr) {
     ibv_dereg_mr(impl_->local_mr);
   }
+  for (ibv_mr* mr : impl_->extra_mrs) {
+    if (mr != nullptr) {
+      ibv_dereg_mr(mr);
+    }
+  }
   if (impl_->cq != nullptr) {
     ibv_destroy_cq(impl_->cq);
   }
@@ -225,6 +232,51 @@ RawVerbsTransport::~RawVerbsTransport() {
 }
 
 void RawVerbsTransport::RegisterThread() {}
+
+namespace {
+bool MrContains(ibv_mr* mr, const void* ptr, std::size_t bytes) {
+  if (mr == nullptr) {
+    return false;
+  }
+  const auto begin    = reinterpret_cast<std::uintptr_t>(ptr);
+  const auto end      = begin + bytes;
+  const auto mr_begin = reinterpret_cast<std::uintptr_t>(mr->addr);
+  const auto mr_end   = mr_begin + static_cast<std::uintptr_t>(mr->length);
+  return begin >= mr_begin && end >= begin && end <= mr_end;
+}
+} // namespace
+
+ibv_mr*
+RawVerbsTransport::FindLocalMr(const void* ptr, std::size_t bytes) const {
+  if (impl_->local_mr != nullptr && MrContains(impl_->local_mr, ptr, bytes)) {
+    return impl_->local_mr;
+  }
+  for (ibv_mr* mr : impl_->extra_mrs) {
+    if (MrContains(mr, ptr, bytes)) {
+      return mr;
+    }
+  }
+  return nullptr;
+}
+
+void RawVerbsTransport::RegisterMemoryRegion(void* base, std::size_t bytes) {
+  if (base == nullptr || bytes == 0) {
+    return;
+  }
+  if (FindLocalMr(base, bytes) != nullptr) {
+    return;
+  }
+  ibv_mr* mr = ibv_reg_mr(
+      impl_->pd,
+      base,
+      bytes,
+      IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+          IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_ATOMIC);
+  if (mr == nullptr) {
+    throw std::runtime_error("ibv_reg_mr failed for extra raw verbs region");
+  }
+  impl_->extra_mrs.push_back(mr);
+}
 
 void* RawVerbsTransport::AllocateRegistered(std::size_t bytes) {
   const std::uint64_t offset = impl_->allocator.Allocate(bytes);
@@ -366,9 +418,13 @@ void RawVerbsTransport::Write(
     throw std::runtime_error("raw verbs write remote node out of range");
   }
   ibv_sge sge{};
-  sge.addr   = reinterpret_cast<std::uint64_t>(local);
-  sge.length = static_cast<std::uint32_t>(bytes);
-  sge.lkey   = impl_->local_mr->lkey;
+  sge.addr         = reinterpret_cast<std::uint64_t>(local);
+  sge.length       = static_cast<std::uint32_t>(bytes);
+  ibv_mr* local_mr = FindLocalMr(local, bytes);
+  if (local_mr == nullptr) {
+    throw std::runtime_error("raw verbs write local buffer is not registered");
+  }
+  sge.lkey = local_mr->lkey;
   ibv_send_wr wr{};
   wr.wr_id      = wr_id;
   wr.opcode     = IBV_WR_RDMA_WRITE;
@@ -386,6 +442,55 @@ void RawVerbsTransport::Write(
   ibv_send_wr* bad_wr = nullptr;
   if (ibv_post_send(impl_->qps[remote.nodeID], &wr, &bad_wr) != 0) {
     throw std::runtime_error("ibv_post_send write failed");
+  }
+}
+
+void RawVerbsTransport::WriteSg(
+    base::ConstArray<RawVerbsSge> sges,
+    GlobalAddress remote,
+    std::uint64_t wr_id,
+    bool signaled) {
+  if (remote.nodeID >= impl_->remotes.size()) {
+    throw std::runtime_error("raw verbs write-sg remote node out of range");
+  }
+  if (sges.Size() == 0) {
+    return;
+  }
+  std::vector<ibv_sge> verbs_sges;
+  verbs_sges.reserve(static_cast<std::size_t>(sges.Size()));
+  for (const auto& entry : sges) {
+    if (entry.bytes == 0) {
+      continue;
+    }
+    if (entry.bytes > std::numeric_limits<std::uint32_t>::max()) {
+      throw std::runtime_error("raw verbs write-sg entry too large");
+    }
+    ibv_mr* local_mr = FindLocalMr(entry.data, entry.bytes);
+    if (local_mr == nullptr) {
+      throw std::runtime_error(
+          "raw verbs write-sg local buffer is not registered");
+    }
+    ibv_sge sge{};
+    sge.addr   = reinterpret_cast<std::uint64_t>(entry.data);
+    sge.length = static_cast<std::uint32_t>(entry.bytes);
+    sge.lkey   = local_mr->lkey;
+    verbs_sges.push_back(sge);
+  }
+  if (verbs_sges.empty()) {
+    return;
+  }
+  ibv_send_wr wr{};
+  wr.wr_id      = wr_id;
+  wr.opcode     = IBV_WR_RDMA_WRITE;
+  wr.send_flags = signaled ? IBV_SEND_SIGNALED : 0;
+  wr.sg_list    = verbs_sges.data();
+  wr.num_sge    = static_cast<int>(verbs_sges.size());
+  wr.wr.rdma.remote_addr =
+      impl_->remotes[remote.nodeID].base_addr + remote.offset;
+  wr.wr.rdma.rkey     = impl_->remotes[remote.nodeID].rkey;
+  ibv_send_wr* bad_wr = nullptr;
+  if (ibv_post_send(impl_->qps[remote.nodeID], &wr, &bad_wr) != 0) {
+    throw std::runtime_error("ibv_post_send write-sg failed");
   }
 }
 

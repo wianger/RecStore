@@ -84,6 +84,17 @@ public:
     std::uint64_t missing_rows    = 0;
   };
 
+  struct DirectFixedRow {
+    const char* data = nullptr;
+    size_t size      = 0;
+    bool missing     = false;
+  };
+
+  struct RDMABackingRegion {
+    char* data  = nullptr;
+    size_t size = 0;
+  };
+
   virtual bool BatchGetFlat(
       base::ConstArray<uint64_t> keys,
       float* values,
@@ -99,6 +110,18 @@ public:
                                  BatchGetFlatStats* stats = nullptr) {
     return false;
   }
+
+  virtual bool BatchGetDirectFixedRows(
+      base::ConstArray<uint64_t> keys,
+      int64_t num_rows,
+      int64_t embedding_dim,
+      unsigned tid,
+      std::vector<DirectFixedRow>* rows,
+      BatchGetFlatStats* stats = nullptr) {
+    return false;
+  }
+
+  virtual RDMABackingRegion GetRDMABackingRegion() const { return {}; }
 
   virtual void BatchGet(coroutine<void>::push_type& sink,
                         base::ConstArray<uint64_t> keys,

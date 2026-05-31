@@ -290,6 +290,7 @@ void PetPSClient::FillGetDescriptor(
   descriptor->payload_bytes =
       static_cast<std::uint32_t>(GetRequestBytes(key_count));
   descriptor->response_bytes = static_cast<std::uint32_t>(response_bytes);
+  descriptor->flags |= kRcFlagGetDirectSg | kRcFlagGetAllowFallbackCopy;
 }
 
 void PetPSClient::FillPutDescriptor(

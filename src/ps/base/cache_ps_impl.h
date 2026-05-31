@@ -57,6 +57,9 @@ public:
     std::uint64_t missing_rows    = 0;
   };
 
+  using DirectFixedRow    = BaseKV::DirectFixedRow;
+  using RDMABackingRegion = BaseKV::RDMABackingRegion;
+
   CachePS(json config) {
     LOG(INFO) << "cache ps config: " << config.dump(2);
     BaseKVConfig kv_config;
@@ -362,6 +365,40 @@ public:
       profile->missing_rows = flat_stats.missing_rows;
     }
     return ok;
+  }
+
+  bool GetParameterDirectFixedRows(
+      base::ConstArray<uint64_t> keys,
+      int64_t num_rows,
+      int64_t embedding_dim,
+      int tid,
+      std::vector<DirectFixedRow>* rows,
+      FlatGetProfile* profile = nullptr) {
+    const auto batch_get_start = std::chrono::steady_clock::now();
+    BaseKV::BatchGetFlatStats flat_stats;
+    BaseKV::BatchGetFlatStats* flat_stats_ptr =
+        profile != nullptr ? &flat_stats : nullptr;
+    const bool ok = base_kv_->BatchGetDirectFixedRows(
+        keys, num_rows, embedding_dim, tid, rows, flat_stats_ptr);
+    if (profile != nullptr) {
+      profile->batch_get_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - batch_get_start)
+              .count());
+      profile->rows = static_cast<std::uint64_t>(num_rows);
+      profile->value_bytes =
+          static_cast<std::uint64_t>(num_rows) *
+          static_cast<std::uint64_t>(embedding_dim) * sizeof(float);
+      profile->zero_fill_ns    = flat_stats.zero_fill_ns;
+      profile->index_lookup_ns = flat_stats.index_lookup_ns;
+      profile->row_copy_ns     = 0;
+      profile->missing_rows    = flat_stats.missing_rows;
+    }
+    return ok;
+  }
+
+  RDMABackingRegion GetRDMABackingRegion() const {
+    return base_kv_->GetRDMABackingRegion();
   }
 
   bool GetParameterRun2Completion(

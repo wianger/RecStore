@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base/array.h"
+#include "base/bind_core.h"
 #include "benchmark/rdma_rc_transport_benchmark_values.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
@@ -450,6 +451,7 @@ int main(int argc, char** argv) {
   try {
     folly::Init init(&argc, &argv);
     ValidateFlags();
+    base::global_socket_id = FLAGS_rdma_rc_client_numa_id;
 
     BenchmarkInput input = MakeInput();
     BenchmarkClient benchmark_client(FLAGS_num_shards);

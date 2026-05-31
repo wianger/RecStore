@@ -62,6 +62,25 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertEqual(env["RECSTORE_RDMA_VALIDATE_ROUTING"], "1")
         self.assertNotIn("RECSTORE_MEMCACHED_HOST", env)
 
+    def test_build_env_supports_bind_core_offset(self):
+        runner = PetPSClusterRunner(
+            rdma_server_bind_core_offset=4,
+            thread_num=2,
+            rdma_server_get_workers=1,
+            rdma_client_bind_core_offset=20,
+            rdma_client_bind_core_stride=3,
+        )
+
+        server_env = runner.build_server_env(0)
+        server1_env = runner.build_server_env(1)
+        client0_env = runner.build_client_env(0)
+        client2_env = runner.build_client_env(2)
+
+        self.assertEqual(server_env["RECSTORE_BIND_CORE_OFFSET"], "4")
+        self.assertEqual(server1_env["RECSTORE_BIND_CORE_OFFSET"], "7")
+        self.assertEqual(client0_env["RECSTORE_BIND_CORE_OFFSET"], "20")
+        self.assertEqual(client2_env["RECSTORE_BIND_CORE_OFFSET"], "26")
+
     def test_auto_namespace_uses_generated_value(self):
         runner = PetPSClusterRunner(rdma_namespace="auto")
         self.assertTrue(runner.rdma_namespace.startswith("recstore-rdma-"))

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -62,10 +63,62 @@ std::vector<std::vector<int>> parse_numa_nodes() {
 
 std::vector<std::vector<int>> core_table = parse_numa_nodes();
 
+int ReadEnvInt(const char* name, int fallback) {
+  const char* value = std::getenv(name);
+  if (value == nullptr || *value == '\0') {
+    return fallback;
+  }
+  char* end         = nullptr;
+  const long parsed = std::strtol(value, &end, 10);
+  if (end == value || *end != '\0' ||
+      parsed < std::numeric_limits<int>::min() ||
+      parsed > std::numeric_limits<int>::max()) {
+    LOG(WARNING) << "invalid " << name << "=" << value
+                 << ", fallback=" << fallback;
+    return fallback;
+  }
+  return static_cast<int>(parsed);
+}
+
+void bind_core_by_index(int raw_core_idx) {
+  if (core_table.empty()) {
+    LOG(WARNING) << "skip core binding: no NUMA core table";
+    return;
+  }
+  if (global_socket_id < 0 ||
+      global_socket_id >= static_cast<int>(core_table.size())) {
+    LOG(WARNING) << "skip core binding: invalid global_socket_id="
+                 << global_socket_id << " numa_nodes=" << core_table.size();
+    return;
+  }
+  const auto& cores = core_table[global_socket_id];
+  if (cores.empty()) {
+    LOG(WARNING) << "skip core binding: empty core list for socket "
+                 << global_socket_id;
+    return;
+  }
+  const int core_idx =
+      ((raw_core_idx % static_cast<int>(cores.size())) +
+       static_cast<int>(cores.size())) %
+      static_cast<int>(cores.size());
+  LOG(WARNING) << "bind to core " << cores[core_idx] << " socket="
+               << global_socket_id << " requested_core_index=" << raw_core_idx
+               << " core_index=" << core_idx;
+  std::cerr << "component=bind_core event=bind"
+            << " socket=" << global_socket_id << " requested_core_index="
+            << raw_core_idx << " core_index=" << core_idx
+            << " cpu=" << cores[core_idx] << std::endl;
+  bind_core(cores[core_idx]);
+}
+
 void auto_bind_core() {
   static std::atomic<int> cur_id{0};
-  int core_idx = cur_id.fetch_add(1);
-  LOG(WARNING) << "bind to core " << core_table[global_socket_id][core_idx];
-  bind_core(core_table[global_socket_id][core_idx]);
+  const int offset = ReadEnvInt("RECSTORE_BIND_CORE_OFFSET", 0);
+  const int next   = cur_id.fetch_add(1);
+  bind_core_by_index(offset + next);
+}
+
+void bind_core_with_env_offset(int core_idx) {
+  bind_core_by_index(ReadEnvInt("RECSTORE_BIND_CORE_OFFSET", 0) + core_idx);
 }
 } // namespace base

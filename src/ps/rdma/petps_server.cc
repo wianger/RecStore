@@ -3,6 +3,7 @@
 #include <boost/coroutine2/all.hpp>
 
 #include <atomic>
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -47,6 +48,8 @@ namespace {
 using petps::Exchange;
 using petps::NamespaceToken;
 using petps::NowNs;
+
+constexpr std::size_t kMaxDirectSgesPerWr = 32;
 
 bool ShouldTraceRdmaGet() {
   static const bool enabled = [] {
@@ -140,6 +143,14 @@ public:
     config.control_plane_timeout_ms = FLAGS_rdma_control_plane_timeout_ms;
     config.namespace_token          = namespace_token;
     transport_ = std::make_unique<petps::RcShardServerTransport>(config);
+    const auto backing = cache_ps_->GetRDMABackingRegion();
+    if (backing.data != nullptr && backing.size > 0) {
+      transport_->RegisterLocalMemoryRegion(backing.data, backing.size);
+      LOG(INFO) << "component=rdma_rc_server event=value_region_registered"
+                << " bytes=" << backing.size;
+    } else {
+      LOG(INFO) << "component=rdma_rc_server event=value_region_unavailable";
+    }
     last_seq_.assign(
         static_cast<std::size_t>(transport_->TotalSlots()), std::uint64_t{0});
     inflight_seq_.assign(
@@ -180,6 +191,7 @@ private:
     int poll_thread_id = -1;
     std::uint64_t seq  = 0;
     petps::RcShardServerTransport::ResponseView response{};
+    bool payload_written_direct = false;
   };
 
   struct ProfileCounters {
@@ -201,6 +213,10 @@ private:
     std::atomic<std::uint64_t> get_rows{0};
     std::atomic<std::uint64_t> get_value_bytes{0};
     std::atomic<std::uint64_t> get_missing_rows{0};
+    std::atomic<std::uint64_t> get_direct_sg{0};
+    std::atomic<std::uint64_t> get_direct_sg_fallback{0};
+    std::atomic<std::uint64_t> get_direct_sg_ns{0};
+    std::atomic<std::uint64_t> get_direct_sg_wr{0};
     std::atomic<std::uint64_t> handle_put_ns{0};
     std::atomic<std::uint64_t> handle_update_ns{0};
     std::atomic<std::uint64_t> handle_init_ns{0};
@@ -249,6 +265,8 @@ private:
     const std::uint64_t get_rows         = Exchange(&profile_.get_rows);
     const std::uint64_t get_value_bytes  = Exchange(&profile_.get_value_bytes);
     const std::uint64_t get_missing_rows = Exchange(&profile_.get_missing_rows);
+    const std::uint64_t get_direct_sg    = Exchange(&profile_.get_direct_sg);
+    const std::uint64_t get_direct_sg_ns = Exchange(&profile_.get_direct_sg_ns);
     const std::uint64_t handle_put_ns    = Exchange(&profile_.handle_put_ns);
     const std::uint64_t handle_update_ns = Exchange(&profile_.handle_update_ns);
     const std::uint64_t handle_init_ns   = Exchange(&profile_.handle_init_ns);
@@ -280,7 +298,13 @@ private:
         << " get_row_copy_avg_ns="
         << (handled_get == 0 ? 0 : get_row_copy_ns / handled_get)
         << " get_rows=" << get_rows << " get_value_bytes=" << get_value_bytes
-        << " get_missing_rows=" << get_missing_rows << " handle_put_avg_ns="
+        << " get_missing_rows=" << get_missing_rows
+        << " get_direct_sg=" << get_direct_sg << " get_direct_sg_fallback="
+        << Exchange(&profile_.get_direct_sg_fallback)
+        << " get_direct_sg_avg_ns="
+        << (get_direct_sg == 0 ? 0 : get_direct_sg_ns / get_direct_sg)
+        << " get_direct_sg_wr=" << Exchange(&profile_.get_direct_sg_wr)
+        << " handle_put_avg_ns="
         << (handled_put == 0 ? 0 : handle_put_ns / handled_put)
         << " handle_update_avg_ns="
         << (handled_update == 0 ? 0 : handle_update_ns / handled_update)
@@ -311,6 +335,10 @@ private:
     }
     LOG(INFO) << "component=rdma_rc_server event=get_payload_workers_started"
               << " count=" << get_payload_worker_count_;
+  }
+
+  void BindServerCore(int core_index) {
+    base::bind_core_with_env_offset(core_index);
   }
 
   bool EnqueueGetPayloadTask(const GetPayloadTask& task) {
@@ -347,7 +375,7 @@ private:
   }
 
   void GetPayloadWorkerLoop(int worker_id) {
-    base::auto_bind_core();
+    BindServerCore(thread_count_ + worker_id);
     LOG(INFO) << "component=rdma_rc_server event=get_payload_worker_ready"
               << " worker_id=" << worker_id;
     while (true) {
@@ -363,7 +391,12 @@ private:
 
       const bool profile_enabled = FLAGS_rdma_rc_profile_interval_ms > 0;
       const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
-      HandleGet(task.descriptor, task.payload, &task.response, worker_id);
+      const bool payload_written_direct   = HandleGet(
+          task.descriptor,
+          task.payload,
+          &task.response,
+          worker_id,
+          task.slot_in_qp);
       if (profile_enabled) {
         profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
         profile_.handle_get_ns.fetch_add(
@@ -377,6 +410,7 @@ private:
           task.poll_thread_id,
           task.seq,
           task.response,
+          payload_written_direct,
       };
       PushGetPayloadCompletion(completion);
     }
@@ -409,29 +443,168 @@ private:
     }
   }
 
-  void DrainGetPayloadCompletions(int poll_thread_id, bool profile_enabled) {
-    GetPayloadCompletion completion;
-    while (TryPopGetPayloadCompletion(poll_thread_id, &completion)) {
-      CompleteResponseForSlot(
-          completion.slot,
-          completion.client_id,
-          completion.qp_index,
-          completion.slot_in_qp,
-          completion.response,
-          completion.seq,
-          profile_enabled);
+  void CompleteResponseStatusOnlyForSlot(
+      int slot,
+      int client_id,
+      int qp_index,
+      int slot_in_qp,
+      const petps::RcShardServerTransport::ResponseView& response,
+      std::uint64_t seq,
+      bool profile_enabled) {
+    std::atomic_thread_fence(std::memory_order_release);
+    const std::uint64_t complete_start_ns = profile_enabled ? NowNs() : 0;
+    transport_->CompleteResponseStatusOnly(
+        client_id, qp_index, slot_in_qp, response, seq);
+    if (profile_enabled) {
+      profile_.complete_response_ns.fetch_add(
+          NowNs() - complete_start_ns, std::memory_order_relaxed);
+    }
+    VLOG(1) << "component=rdma_rc_server event=complete_direct shard="
+            << shard_id_ << " slot=" << slot << " client_id=" << client_id
+            << " qp=" << qp_index << " seq=" << seq
+            << " status=" << response.status->status
+            << " response_bytes=" << response.status->response_bytes;
+    last_seq_[static_cast<std::size_t>(slot)] = seq;
+    if (GetPayloadOffloadEnabled()) {
+      inflight_seq_[static_cast<std::size_t>(slot)] = 0;
     }
   }
 
-  void HandleGet(const petps::RequestDescriptor& descriptor,
+  void DrainGetPayloadCompletions(int poll_thread_id, bool profile_enabled) {
+    GetPayloadCompletion completion;
+    while (TryPopGetPayloadCompletion(poll_thread_id, &completion)) {
+      if (completion.payload_written_direct) {
+        CompleteResponseStatusOnlyForSlot(
+            completion.slot,
+            completion.client_id,
+            completion.qp_index,
+            completion.slot_in_qp,
+            completion.response,
+            completion.seq,
+            profile_enabled);
+      } else {
+        CompleteResponseForSlot(
+            completion.slot,
+            completion.client_id,
+            completion.qp_index,
+            completion.slot_in_qp,
+            completion.response,
+            completion.seq,
+            profile_enabled);
+      }
+    }
+  }
+
+  bool HandleGetDirectSg(
+      const petps::RequestDescriptor& descriptor,
+      base::ConstArray<std::uint64_t> keys,
+      petps::RcShardServerTransport::ResponseView* response,
+      int thread_id,
+      int slot_in_qp,
+      CachePS::FlatGetProfile* get_profile) {
+    if (descriptor.response_bytes == 0 || descriptor.embedding_dim == 0) {
+      return false;
+    }
+    const std::size_t row_bytes =
+        static_cast<std::size_t>(descriptor.embedding_dim) * sizeof(float);
+    if (row_bytes == 0 ||
+        descriptor.response_bytes !=
+            descriptor.key_count * static_cast<std::uint32_t>(row_bytes)) {
+      return false;
+    }
+
+    thread_local std::vector<CachePS::DirectFixedRow> rows;
+    rows.clear();
+    const std::uint64_t direct_start_ns =
+        FLAGS_rdma_rc_profile_interval_ms > 0 ? NowNs() : 0;
+    const bool ok = cache_ps_->GetParameterDirectFixedRows(
+        keys,
+        descriptor.key_count,
+        descriptor.embedding_dim,
+        thread_id,
+        &rows,
+        get_profile);
+    if (!ok || rows.size() != descriptor.key_count) {
+      return false;
+    }
+    std::uint64_t response_offset = 0;
+    std::uint64_t wr_count        = 0;
+    for (std::size_t row = 0; row < rows.size();) {
+      std::array<petps::RawVerbsSge, kMaxDirectSgesPerWr> sges{};
+      std::size_t sge_count = 0;
+      std::size_t row_count = 0;
+      for (; row < rows.size(); ++row) {
+        const auto& ref = rows[row];
+        if (ref.missing || ref.data == nullptr || ref.size != row_bytes) {
+          return false;
+        }
+        if (sge_count > 0) {
+          auto& last = sges[sge_count - 1];
+          const char* last_end =
+              static_cast<const char*>(last.data) + last.bytes;
+          if (last_end == ref.data) {
+            last.bytes += row_bytes;
+            ++row_count;
+            continue;
+          }
+        }
+        if (sge_count == kMaxDirectSgesPerWr) {
+          break;
+        }
+        sges[sge_count++] = petps::RawVerbsSge{ref.data, row_bytes};
+        ++row_count;
+      }
+      const std::uint64_t bytes =
+          static_cast<std::uint64_t>(row_count * row_bytes);
+      transport_->WriteResponsePayloadSg(
+          descriptor.client_id,
+          descriptor.qp_index,
+          slot_in_qp,
+          base::ConstArray<petps::RawVerbsSge>(
+              sges.data(), static_cast<int>(sge_count)),
+          response_offset,
+          bytes);
+      response_offset += bytes;
+      ++wr_count;
+    }
+    response->status->status = static_cast<std::int32_t>(petps::RpcStatus::kOk);
+    response->status->response_bytes =
+        static_cast<std::uint32_t>(descriptor.response_bytes);
+    if (FLAGS_rdma_rc_profile_interval_ms > 0) {
+      profile_.get_direct_sg.fetch_add(1, std::memory_order_relaxed);
+      profile_.get_direct_sg_ns.fetch_add(
+          NowNs() - direct_start_ns, std::memory_order_relaxed);
+      profile_.get_direct_sg_wr.fetch_add(wr_count, std::memory_order_relaxed);
+      if (get_profile != nullptr) {
+        profile_.get_batch_get_ns.fetch_add(
+            get_profile->batch_get_ns, std::memory_order_relaxed);
+        profile_.get_index_lookup_ns.fetch_add(
+            get_profile->index_lookup_ns, std::memory_order_relaxed);
+        profile_.get_zero_fill_ns.fetch_add(
+            get_profile->zero_fill_ns, std::memory_order_relaxed);
+        profile_.get_row_copy_ns.fetch_add(
+            get_profile->row_copy_ns, std::memory_order_relaxed);
+        profile_.get_rows.fetch_add(
+            get_profile->rows, std::memory_order_relaxed);
+        profile_.get_value_bytes.fetch_add(
+            get_profile->value_bytes, std::memory_order_relaxed);
+        profile_.get_missing_rows.fetch_add(
+            get_profile->missing_rows, std::memory_order_relaxed);
+      }
+    }
+    return true;
+  }
+
+  bool HandleGet(const petps::RequestDescriptor& descriptor,
                  const char* payload,
                  petps::RcShardServerTransport::ResponseView* response,
-                 int thread_id) {
+                 int thread_id,
+                 int slot_in_qp) {
     if (FLAGS_rdma_rc_fake_get_mode == "status_only") {
       response->status->status =
           static_cast<std::int32_t>(petps::RpcStatus::kOk);
       response->status->response_bytes = 0;
-      return;
+      return false;
     }
     if (FLAGS_rdma_rc_fake_get_mode == "payload_memset") {
       std::memset(response->payload, 0, descriptor.response_bytes);
@@ -439,7 +612,7 @@ private:
           static_cast<std::int32_t>(petps::RpcStatus::kOk);
       response->status->response_bytes =
           static_cast<std::uint32_t>(descriptor.response_bytes);
-      return;
+      return false;
     }
     if (FLAGS_rdma_rc_fake_get_mode == "index_only") {
       base::ConstArray<std::uint64_t> keys(
@@ -463,14 +636,14 @@ private:
       response->status->status = static_cast<std::int32_t>(
           ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
       response->status->response_bytes = 0;
-      return;
+      return false;
     }
     if (FLAGS_rdma_rc_fake_get_mode != "none" &&
         !FLAGS_rdma_rc_fake_get_mode.empty()) {
       response->status->status =
           static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
       response->status->response_bytes = 0;
-      return;
+      return false;
     }
 
     base::ConstArray<std::uint64_t> keys(
@@ -478,6 +651,22 @@ private:
     CachePS::FlatGetProfile get_profile;
     CachePS::FlatGetProfile* get_profile_ptr =
         FLAGS_rdma_rc_profile_interval_ms > 0 ? &get_profile : nullptr;
+    if ((descriptor.flags & petps::kRcFlagGetDirectSg) != 0) {
+      const bool direct_ok = HandleGetDirectSg(
+          descriptor, keys, response, thread_id, slot_in_qp, get_profile_ptr);
+      if (direct_ok) {
+        return true;
+      }
+      if (FLAGS_rdma_rc_profile_interval_ms > 0) {
+        profile_.get_direct_sg_fallback.fetch_add(1, std::memory_order_relaxed);
+      }
+      if ((descriptor.flags & petps::kRcFlagGetAllowFallbackCopy) == 0) {
+        response->status->status =
+            static_cast<std::int32_t>(petps::RpcStatus::kInvalidPayload);
+        response->status->response_bytes = 0;
+        return false;
+      }
+    }
     const bool ok = cache_ps_->GetParameterFlat(
         keys,
         reinterpret_cast<float*>(response->payload),
@@ -504,6 +693,7 @@ private:
         ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
     response->status->response_bytes =
         static_cast<std::uint32_t>(descriptor.response_bytes);
+    return false;
   }
 
   void HandlePut(const petps::RequestDescriptor& descriptor,
@@ -593,7 +783,7 @@ private:
   }
 
   void PollingThread(int thread_id) {
-    base::auto_bind_core();
+    BindServerCore(thread_id);
     LOG(INFO) << "component=rdma_server event=polling_thread_ready thread_id="
               << thread_id;
     MaybePublishServerReady();
@@ -742,11 +932,23 @@ private:
         return true;
       } else {
         const std::uint64_t handle_start_ns = profile_enabled ? NowNs() : 0;
-        HandleGet(*descriptor, payload, &response, thread_id);
+        const bool payload_written_direct =
+            HandleGet(*descriptor, payload, &response, thread_id, slot_in_qp);
         if (profile_enabled) {
           profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
           profile_.handle_get_ns.fetch_add(
               NowNs() - handle_start_ns, std::memory_order_relaxed);
+        }
+        if (payload_written_direct) {
+          CompleteResponseStatusOnlyForSlot(
+              slot,
+              client_id,
+              qp_index,
+              slot_in_qp,
+              response,
+              seq,
+              profile_enabled);
+          return true;
         }
       }
     } else if (descriptor->op ==

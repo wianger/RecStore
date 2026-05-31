@@ -26,6 +26,7 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - server RDMA polling threads (default = `1`; use client processes for RDMA client concurrency)
    - RDMA GET worker threads (default = `0`)
    - RDMA server coroutines per polling thread (default = `1`; treat values above `1` as scheduling experiments)
+   - RDMA NUMA and bind-core placement when running local RDMA capacity tests
    - runtime seconds (default = `5`)
    - repeat count (default = `1`)
    - execution backend (default = `local`)
@@ -98,6 +99,37 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --runtime-seconds <runtime_seconds> \
   --repeat <repeat> \
   --execution-backend local \
+  --output-dir <output_dir>
+```
+
+For local RDMA capacity on a multi-socket host, prefer RNIC-local same-socket placement with disjoint physical cores over socket-split placement. Socket-split is useful to prove CPU isolation, but it can understate the transport ceiling by adding cross-NUMA RNIC/PCIe/DMA cost. On the 2026-05-30 host, the clean default was server NUMA0/client NUMA0, server bind offset `0`, client bind offset `16`, client stride `2`, `client-processes-per-ip=6`, and `server-rdma-threads=16`.
+
+```bash
+python3 src/test/scripts/run_benchmark_ps.py \
+  --transports rdma \
+  --client-ips 127.0.0.1 \
+  --server-shard-ips 127.0.0.1 \
+  --client-processes-per-ip 6 \
+  --record-count 1000000 \
+  --value-size 512 \
+  --batch-keys 500 \
+  --client-threads-per-process 1 \
+  --client-load-threads-per-process 1 \
+  --runtime-seconds 5 \
+  --repeat 1 \
+  --execution-backend local \
+  --prefetch-depth 16 \
+  --rdma-rc-qps-per-client-per-shard 16 \
+  --rdma-rc-slots-per-qp 1 \
+  --server-rdma-threads 16 \
+  --rdma-rc-server-get-workers 0 \
+  --rdma-rc-server-coroutines-per-thread 1 \
+  --rdma-rc-profile-interval-ms 1000 \
+  --rdma-rc-server-numa-id 0 \
+  --rdma-rc-client-numa-id 0 \
+  --rdma-server-bind-core-offset 0 \
+  --rdma-client-bind-core-offset 16 \
+  --rdma-client-bind-core-stride 2 \
   --output-dir <output_dir>
 ```
 
@@ -214,6 +246,8 @@ Recommended first matrix:
 
 For RDMA scheduling experiments, keep `--rdma-rc-server-coroutines-per-thread=1` unless explicitly testing coroutine scanner behavior. Encode `t<T>`, `n<N>`, and `c<C>` in result directories. In the 2026-05-30 local `p8/N8/T16` repeat=3 run, `C1` averaged `14.45M keys/s` and `C4` averaged `12.17M keys/s`, so `C4` is not a performance default.
 
+GET direct-SG is now the default RDMA GET response path with internal fallback to staging-copy. Do not add old direct-SG enable/disable flags to benchmark commands. Do not use removed inner lookup parallelism flags as a tuning dimension; that experiment regressed throughput.
+
 For explicit cross-host or multi-shard placement, use `--server-plan` and `--client-plan`:
 
 ```bash
@@ -253,6 +287,8 @@ In the final Chinese response, include:
 4. Per-client detail when needed: transport, phase, client index, and M keys/s.
 5. Skip / failure rows: transport, status, message, and log paths.
 6. Warnings: non-empty `stderr.log`, teardown stack traces, allocator warnings, or timeout messages that did not change row status.
+
+For local RDMA reports, always record NUMA ids and bind-core offset/stride. A socket-split result should be labeled as a CPU-isolation diagnostic, not as the RNIC-local transport ceiling.
 
 Treat `summary.csv` as authoritative when any client exits nonzero. `run_benchmark_ps.py` still writes summaries on partial or total failure.
 

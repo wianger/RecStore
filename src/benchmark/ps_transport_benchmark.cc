@@ -1060,7 +1060,10 @@ void PrintTransactionResult(const char* phase,
 int main(int argc, char** argv) {
   folly::Init(&argc, &argv);
 
-  const std::string transport   = NormalizeBenchmarkTransport(FLAGS_transport);
+  const std::string transport = NormalizeBenchmarkTransport(FLAGS_transport);
+  if (transport == "RDMA") {
+    base::global_socket_id = FLAGS_rdma_rc_client_numa_id;
+  }
   const std::string report_mode = FLAGS_report_mode;
   CHECK(report_mode == "summary" || report_mode == "per_round" ||
         report_mode == "both")

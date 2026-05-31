@@ -47,6 +47,8 @@ public:
   }
 
   int64 DataBaseOffset() const { return 0; }
+  char* BackingData() const override { return data_; }
+  int64 BackingSize() const override { return memory_size_; }
 
   char* New(int memory_size) {
     r2::Allocator* alloc = R2AllocMaster.get_thread_allocator();

@@ -41,8 +41,7 @@ public:
       CHECK(base::file_util::Delete(filename, false));
       shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
           "DRAM", filename, memory_size + meta_data_memory_size_));
-      CHECK(shm_file_)
-          << filename << " " << memory_size;
+      CHECK(shm_file_) << filename << " " << memory_size;
     }
     Initialize();
     meta_data_block_ = (uint64_t*)shm_file_->Data();
@@ -298,15 +297,14 @@ public:
                     const std::vector<int>& slab_sizes)
       : allocated_slab_sizes_(slab_sizes.begin(), slab_sizes.end()) {
     bool file_exists = base::file_util::PathExists(filename);
-    shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
-        "DRAM", filename, memory_size));
+    shm_file_ =
+        ShmFile::New(ShmFile::ConfigForMedium("DRAM", filename, memory_size));
     if (!shm_file_) {
       file_exists = false;
       CHECK(base::file_util::Delete(filename, false));
-      shm_file_ = ShmFile::New(ShmFile::ConfigForMedium(
-          "DRAM", filename, memory_size));
-      CHECK(shm_file_)
-          << filename << " " << memory_size;
+      shm_file_ =
+          ShmFile::New(ShmFile::ConfigForMedium("DRAM", filename, memory_size));
+      CHECK(shm_file_) << filename << " " << memory_size;
     }
 
     memory_size -= memory_size % kChunkSize;
@@ -516,7 +514,8 @@ private:
   // different slab
 };
 
-// Factory wrapper for DramValueStore; matches PetKV PersistMemoryPool<false> slabs.
+// Factory wrapper for DramValueStore; matches PetKV PersistMemoryPool<false>
+// slabs.
 class PersistMemoryPoolMalloc : public PersistMemoryPool<false> {
 public:
   PersistMemoryPoolMalloc(const std::string& filename,
@@ -569,6 +568,8 @@ public:
   uint64 total_malloc() const { return total_malloc_; }
   bool Healthy() const { return total_used_ <= healthy_used_; }
   int64 DataBaseOffset() const { return data_ - shm_file_->Data(); }
+  char* BackingData() const override { return data_; }
+  int64 BackingSize() const override { return block_num_ * 8L; }
   char* GetMallocData(int64 offset) const {
     if (offset < 8 || (offset & 7) != 0 || offset > block_num_ * 8L)
       return NULL;

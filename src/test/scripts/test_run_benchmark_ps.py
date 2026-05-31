@@ -258,6 +258,27 @@ class TestRunBenchmarkPS(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     parse_args()
 
+    def test_parse_args_sets_local_rdma_bind_core_defaults(self):
+        argv = [
+            "run_benchmark_ps.py",
+            "--transports",
+            "rdma",
+            "--server-rdma-threads",
+            "16",
+            "--client-threads-per-process",
+            "1",
+            "--client-load-threads-per-process",
+            "1",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        self.assertEqual(args.rdma_server_bind_core_offset, 0)
+        self.assertEqual(args.rdma_rc_server_numa_id, 0)
+        self.assertEqual(args.rdma_rc_client_numa_id, 1)
+        self.assertEqual(args.rdma_client_bind_core_offset, 0)
+        self.assertEqual(args.rdma_client_bind_core_stride, 2)
+
     def test_build_rdma_runner_forwards_profile_interval(self):
         args = argparse.Namespace(
             server_rdma_threads=1,
@@ -272,8 +293,13 @@ class TestRunBenchmarkPS(unittest.TestCase):
             rdma_rc_server_coroutines_per_thread=4,
             rdma_rc_server_get_workers=2,
             rdma_rc_inline_bytes=64,
+            rdma_rc_client_numa_id=1,
+            rdma_rc_server_numa_id=0,
             rdma_rc_fake_get_mode="status_only",
             rdma_rc_skip_client_copy=True,
+            rdma_server_bind_core_offset=0,
+            rdma_client_bind_core_offset=4,
+            rdma_client_bind_core_stride=1,
         )
         runner = build_rdma_runner(
             args,
@@ -298,6 +324,11 @@ class TestRunBenchmarkPS(unittest.TestCase):
         )
         self.assertIn(
             "--rdma_rc_profile_interval_ms=250",
+            runner.build_client_cmd(["/tmp/client"], client_index=0),
+        )
+        self.assertIn("--numa_id=0", runner.build_server_cmd(0))
+        self.assertIn(
+            "--rdma_rc_client_numa_id=1",
             runner.build_client_cmd(["/tmp/client"], client_index=0),
         )
         self.assertIn("--rdma_rc_fake_get_mode=status_only", runner.build_server_cmd(0))

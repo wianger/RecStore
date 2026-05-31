@@ -16,11 +16,13 @@
 
 namespace petps {
 
-inline constexpr std::uint32_t kRcProtocolMagic   = 0x52435053;
-inline constexpr std::uint16_t kRcProtocolVersion = 1;
-inline constexpr std::size_t kTableNameBytes      = 64;
-inline constexpr std::uint32_t kRcSlotReady       = 1;
-inline constexpr std::uint32_t kRcSlotDone        = 2;
+inline constexpr std::uint32_t kRcProtocolMagic            = 0x52435053;
+inline constexpr std::uint16_t kRcProtocolVersion          = 1;
+inline constexpr std::size_t kTableNameBytes               = 64;
+inline constexpr std::uint32_t kRcSlotReady                = 1;
+inline constexpr std::uint32_t kRcSlotDone                 = 2;
+inline constexpr std::uint32_t kRcFlagGetDirectSg          = 1U << 0;
+inline constexpr std::uint32_t kRcFlagGetAllowFallbackCopy = 1U << 1;
 
 enum class RcOp : std::uint16_t {
   kGet       = 1,

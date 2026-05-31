@@ -246,6 +246,19 @@ def parse_client_numa_ids(value, client_count):
     return ids
 
 
+def local_numa_node_count():
+    sys_node_root = "/sys/devices/system/node"
+    if not os.path.exists(sys_node_root):
+        return 1
+    count = 0
+    for name in os.listdir(sys_node_root):
+        path = os.path.join(sys_node_root, name)
+        if name.startswith("node") and name[4:].isdigit() and os.path.isdir(path):
+            if os.path.exists(os.path.join(path, "cpulist")):
+                count += 1
+    return max(1, count)
+
+
 def write_runtime_config(args, source_config_path, runtime_dir):
     with open(source_config_path) as fh:
         config = json.load(fh)
@@ -331,7 +344,6 @@ def run_benchmark_clients(runner, args):
             row["client_index"] = 0
         return completed.returncode, rows
 
-    env = runner.build_env()
     processes = []
     stdout_buffers = {}
     stderr_buffers = {}
@@ -348,7 +360,7 @@ def run_benchmark_clients(runner, args):
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            env=env,
+            env=runner.build_client_env(client_index),
         )
         processes.append((client_index, process))
         stdout_buffers[client_index] = []
@@ -517,6 +529,9 @@ def main():
         dest="server_numa_id",
         type=int,
     )
+    parser.add_argument("--server-bind-core-offset", type=int)
+    parser.add_argument("--client-bind-core-offset", type=int)
+    parser.add_argument("--client-bind-core-stride", type=int)
     parser.add_argument(
         "--fake-get-mode",
         "--rdma-rc-fake-get-mode",
@@ -555,6 +570,14 @@ def main():
     if args.slots_per_qp is not None and args.slots_per_qp <= 0:
         raise ValueError("--slots-per-qp must be positive")
     client_numa_ids = parse_client_numa_ids(args.client_numa_ids, args.client_count)
+    if args.server_numa_id is None:
+        args.server_numa_id = 0
+    if (
+        args.client_numa_id is None
+        and args.client_numa_ids is None
+        and local_numa_node_count() > 1
+    ):
+        args.client_numa_id = 1
     if args.op == "async_stream" and args.qps_per_client_per_shard is not None:
         slots_per_qp = args.slots_per_qp if args.slots_per_qp is not None else 1
         capacity = args.qps_per_client_per_shard * slots_per_qp
@@ -563,6 +586,17 @@ def main():
                 "async_stream requires qps_per_client_per_shard * slots_per_qp "
                 ">= async_depth"
             )
+    if args.server_bind_core_offset is None:
+        args.server_bind_core_offset = 0
+    if args.client_bind_core_offset is None:
+        if args.client_numa_id != args.server_numa_id:
+            args.client_bind_core_offset = 0
+        else:
+            args.client_bind_core_offset = args.server_count * max(
+                1, args.thread_num + (args.server_get_workers or 0)
+            )
+    if args.client_bind_core_stride is None:
+        args.client_bind_core_stride = 1
 
     source_config_path = resolve_rdma_integration_config(
         args.server_count, args.config_path
@@ -604,6 +638,9 @@ def main():
             rdma_client_numa_id=args.client_numa_id,
             rdma_client_numa_ids=client_numa_ids,
             rdma_server_numa_id=args.server_numa_id,
+            rdma_server_bind_core_offset=args.server_bind_core_offset,
+            rdma_client_bind_core_offset=args.client_bind_core_offset,
+            rdma_client_bind_core_stride=args.client_bind_core_stride,
             rdma_fake_get_mode=args.fake_get_mode,
             rdma_skip_client_copy=args.skip_client_copy,
         )

@@ -22,5 +22,7 @@ inline void bind_core(int n) {
 }
 
 void auto_bind_core(void);
+void bind_core_by_index(int core_idx);
+void bind_core_with_env_offset(int core_idx);
 
 } // namespace base

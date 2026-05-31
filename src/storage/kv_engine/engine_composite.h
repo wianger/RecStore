@@ -323,6 +323,66 @@ public:
     return true;
   }
 
+  bool BatchGetDirectFixedRows(
+      base::ConstArray<uint64_t> keys,
+      int64_t num_rows,
+      int64_t embedding_dim,
+      unsigned tid,
+      std::vector<DirectFixedRow>* rows,
+      BatchGetFlatStats* stats = nullptr) override {
+    if (rows == nullptr || num_rows < 0 || embedding_dim <= 0 ||
+        keys.Size() != static_cast<size_t>(num_rows)) {
+      return false;
+    }
+    const size_t row_bytes = static_cast<size_t>(embedding_dim) * sizeof(float);
+    if (default_value_size_hint_ != row_bytes) {
+      return false;
+    }
+    thread_local std::vector<Value_t> handles;
+    handles.assign(keys.Size(), kValueHandleNone);
+    const auto index_lookup_start =
+        stats != nullptr ? std::chrono::steady_clock::now()
+                         : std::chrono::steady_clock::time_point{};
+    if (keys.Size() > 0) {
+      index_->BatchGet(keys, handles.data(), tid);
+    }
+    if (stats != nullptr) {
+      stats->index_lookup_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - index_lookup_start)
+              .count());
+    }
+
+    thread_local std::vector<ValueStore::DirectFixedRow> store_rows;
+    store_rows.resize(static_cast<size_t>(num_rows));
+    uint64_t missing_rows = 0;
+    if (!value_store_->GetDirectFixedRows(
+            handles.data(),
+            static_cast<size_t>(num_rows),
+            row_bytes,
+            store_rows.data(),
+            &missing_rows)) {
+      return false;
+    }
+    rows->resize(store_rows.size());
+    for (size_t i = 0; i < store_rows.size(); ++i) {
+      (*rows)[i] = DirectFixedRow{
+          store_rows[i].data, store_rows[i].size, store_rows[i].missing};
+    }
+    if (stats != nullptr) {
+      stats->missing_rows = missing_rows;
+    }
+    return true;
+  }
+
+  RDMABackingRegion GetRDMABackingRegion() const override {
+    if (!value_store_) {
+      return {};
+    }
+    return RDMABackingRegion{
+        value_store_->RDMABackingData(), value_store_->RDMABackingSize()};
+  }
+
   bool ApplySgdUpdateFlat(
       base::ConstArray<uint64_t> keys,
       const float* grads,

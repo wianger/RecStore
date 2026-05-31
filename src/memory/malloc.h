@@ -22,6 +22,8 @@ public:
   virtual int64 GetMallocOffset(const char* data) const                   = 0;
   virtual int GetMallocSize(const char* data) const                       = 0;
   virtual int64 DataBaseOffset() const { return 0; }
+  virtual char* BackingData() const { return nullptr; }
+  virtual int64 BackingSize() const { return 0; }
   virtual std::string GetInfo() const { return ""; }
   virtual ~MallocApi() {}
   virtual uint64_t total_malloc() const                = 0;
@@ -111,9 +113,8 @@ public:
   }
 
 private:
-  using RecyclerMap =
-      std::unordered_map<const ThreadSafeDelayedRecycle*,
-                         std::unique_ptr<DelayedRecycle>>;
+  using RecyclerMap = std::unordered_map<const ThreadSafeDelayedRecycle*,
+                                         std::unique_ptr<DelayedRecycle>>;
 
   static RecyclerMap& LocalRecyclers() {
     thread_local RecyclerMap recyclers;

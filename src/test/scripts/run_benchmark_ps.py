@@ -136,6 +136,18 @@ def normalize_host_list(value: str, field_name: str) -> list[str]:
     return hosts
 
 
+def local_numa_node_count() -> int:
+    node_root = Path("/sys/devices/system/node")
+    if not node_root.exists():
+        return 1
+    count = sum(
+        1
+        for path in node_root.glob("node[0-9]*")
+        if path.is_dir() and (path / "cpulist").exists()
+    )
+    return max(1, count)
+
+
 def parse_server_plan(value: str, transport: str) -> list[ServerPlan]:
     servers = []
     for server_index, item in enumerate(parse_csv_list(value)):
@@ -1177,8 +1189,13 @@ def build_rdma_runner(
         rdma_rc_server_coroutines_per_thread=args.rdma_rc_server_coroutines_per_thread,
         rdma_rc_server_get_workers=args.rdma_rc_server_get_workers,
         rdma_rc_inline_bytes=args.rdma_rc_inline_bytes,
+        rdma_rc_client_numa_id=args.rdma_rc_client_numa_id,
+        rdma_rc_server_numa_id=args.rdma_rc_server_numa_id,
         rdma_rc_fake_get_mode=args.rdma_rc_fake_get_mode,
         rdma_rc_skip_client_copy=args.rdma_rc_skip_client_copy,
+        rdma_server_bind_core_offset=args.rdma_server_bind_core_offset,
+        rdma_client_bind_core_offset=args.rdma_client_bind_core_offset,
+        rdma_client_bind_core_stride=args.rdma_client_bind_core_stride,
     )
 
 
@@ -1364,7 +1381,9 @@ def run_local_rdma_case(
                 benchmark_cmd=benchmark_cmd,
                 client_timeout=args.client_timeout,
                 client_log_dir=client_log_dir,
-                env_builder=lambda _client: runner.build_env(),
+                env_builder=lambda client: runner.build_client_env(
+                    client.client_index
+                ),
                 command_builder=lambda base_cmd, client: runner.build_client_cmd(
                     list(base_cmd), client_index=client.client_index
                 ),
@@ -1921,6 +1940,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rdma-rc-profile-interval-ms", type=int)
     parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
     parser.add_argument("--rdma-rc-server-get-workers", type=int)
+    parser.add_argument("--rdma-server-bind-core-offset", type=int)
+    parser.add_argument("--rdma-client-bind-core-offset", type=int)
+    parser.add_argument("--rdma-client-bind-core-stride", type=int)
+    parser.add_argument("--rdma-rc-client-numa-id", type=int)
+    parser.add_argument("--rdma-rc-server-numa-id", type=int)
     parser.add_argument("--rdma-rc-inline-bytes", type=int)
     parser.add_argument(
         "--rdma-rc-fake-get-mode",
@@ -1958,6 +1982,38 @@ def parse_args() -> argparse.Namespace:
                 f"prefetch_depth={prefetch_depth}, "
                 f"rdma_rc_qps_per_client_per_shard={qps_per_client_per_shard}, "
                 f"rdma_rc_slots_per_qp={slots_per_qp}"
+            )
+    if "RDMA" in transports and args.execution_backend == "local":
+        if args.rdma_rc_server_numa_id is None:
+            args.rdma_rc_server_numa_id = 0
+        if (
+            args.rdma_rc_client_numa_id is None
+            and local_numa_node_count() > 1
+        ):
+            args.rdma_rc_client_numa_id = 1
+        server_shards = (
+            len(parse_server_plan(args.server_plan, "RDMA"))
+            if args.server_plan
+            else len(normalize_host_list(args.server_shard_ips, "server_shard_ips"))
+        )
+        get_workers = args.rdma_rc_server_get_workers or 0
+        server_bind_core_stride = max(
+            1, args.server_rdma_threads + get_workers
+        )
+        if args.rdma_server_bind_core_offset is None:
+            args.rdma_server_bind_core_offset = 0
+        if args.rdma_client_bind_core_offset is None:
+            if args.rdma_rc_client_numa_id != args.rdma_rc_server_numa_id:
+                args.rdma_client_bind_core_offset = 0
+            else:
+                args.rdma_client_bind_core_offset = (
+                    server_shards * server_bind_core_stride
+                )
+        if args.rdma_client_bind_core_stride is None:
+            args.rdma_client_bind_core_stride = max(
+                args.client_threads_per_process
+                + args.client_load_threads_per_process,
+                1,
             )
     return args
 

@@ -6,8 +6,10 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include "base/array.h"
 #include "ps/rdma/raw_verbs_transport.h"
 #include "ps/rdma/rdma_protocol.h"
 
@@ -89,6 +91,7 @@ public:
   RcShardServerTransport& operator=(const RcShardServerTransport&) = delete;
 
   int TotalSlots() const;
+  void RegisterLocalMemoryRegion(void* base, std::size_t bytes);
   int SlotIndex(int client_id, int qp_index, int slot_in_qp) const;
   void DecodeSlotIndex(
       int slot_index, int* client_id, int* qp_index, int* slot_in_qp) const;
@@ -109,6 +112,19 @@ public:
                         int slot_in_qp,
                         const ResponseView& response,
                         std::uint64_t seq);
+  void WriteResponsePayloadSg(
+      int client_id,
+      int qp_index,
+      int slot_in_qp,
+      base::ConstArray<RawVerbsSge> sges,
+      std::uint64_t response_offset,
+      std::uint64_t bytes);
+  void CompleteResponseStatusOnly(
+      int client_id,
+      int qp_index,
+      int slot_in_qp,
+      const ResponseView& response,
+      std::uint64_t seq);
   const RcTransportConfig& config() const { return config_; }
 
 private:
