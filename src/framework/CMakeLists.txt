@@ -5,9 +5,21 @@ find_package(Python 3.10 COMPONENTS Interpreter Development REQUIRED)
 
 if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/gpu)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/pytorch)
 else()
-    message(STATUS "Skipping framework/pytorch because CUDA is disabled or nvcc not found")
+    message(STATUS "Skipping framework/gpu because CUDA is disabled or nvcc not found")
+endif()
+
+set(_recstore_libtorch_lib_dir "${PROJECT_SOURCE_DIR}/third_party/libtorch/libtorch/lib")
+set(_recstore_libtorch_requires_cuda OFF)
+if(EXISTS "${_recstore_libtorch_lib_dir}/libtorch_cuda.so" OR
+   EXISTS "${_recstore_libtorch_lib_dir}/libc10_cuda.so")
+    set(_recstore_libtorch_requires_cuda ON)
+endif()
+
+if(_recstore_libtorch_requires_cuda AND NOT (ENABLE_CUDA AND CMAKE_CUDA_COMPILER))
+    message(STATUS "Skipping framework/pytorch because CUDA libtorch is present but CUDA is disabled or nvcc not found")
+else()
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/pytorch)
 endif()
 
 if(RECSTORE_ENABLE_TENSORFLOW)
