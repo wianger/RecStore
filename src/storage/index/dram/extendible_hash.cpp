@@ -44,10 +44,8 @@ size_t Block::numElem(void) {
   return sum;
 }
 
-int Block::Insert(Key_t& key,
-                  Value_t value,
-                  size_t key_hash,
-                  Value_t* old_value) {
+int Block::Insert(
+    Key_t& key, Value_t value, size_t key_hash, Value_t* old_value) {
 #ifdef INPLACE
   if (sema == -1)
     return -2;
@@ -123,8 +121,8 @@ int Block::Insert(Key_t& key,
       if (old_value != nullptr) {
         *old_value = previous;
       }
-      ret        = i;
-      lock       = sema;
+      ret  = i;
+      lock = sema;
       while (!CAS(&sema, &lock, lock - 1)) {
         lock = sema;
       }
@@ -300,7 +298,7 @@ void Directory::LSBUpdate(
 
 Value_t ExtendibleHash::Insert(Key_t& key, Value_t value) {
   using namespace std;
-  auto key_hash = h(&key, sizeof(key));
+  auto key_hash     = h(&key, sizeof(key));
   Value_t old_value = kValueHandleNone;
 
 RETRY:
@@ -428,7 +426,8 @@ RETRY:
     }
     goto RETRY;
   } else if (ret == -2) {
-    // Block is splitting or directory pointers are stale; retry without recursion.
+    // Block is splitting or directory pointers are stale; retry without
+    // recursion.
     if (target->sema == -1) {
       std::this_thread::yield();
     }
@@ -476,13 +475,16 @@ bool ExtendibleHash::Delete(Key_t& key) {
   return success;
 }
 
-Value_t ExtendibleHash::Extract(Key_t& key) {
-  auto key_hash = h(&key, sizeof(key));
+size_t ExtendibleHash::DirectoryIndex(size_t key_hash) const {
 #ifdef LSB
-  auto x = (key_hash % dir.capacity);
+  return key_hash % dir.capacity;
 #else
-  auto x = (key_hash >> (8 * sizeof(key_hash) - global_depth));
+  return key_hash >> (8 * sizeof(key_hash) - global_depth);
 #endif
+}
+
+Value_t ExtendibleHash::ExtractWithHash(Key_t& key, size_t key_hash) {
+  auto x = DirectoryIndex(key_hash);
 
   auto dir_ = dir._[x];
 
@@ -513,6 +515,11 @@ Value_t ExtendibleHash::Extract(Key_t& key) {
   }
 #endif
   return NONE;
+}
+
+Value_t ExtendibleHash::Extract(Key_t& key) {
+  auto key_hash = h(&key, sizeof(key));
+  return ExtractWithHash(key, key_hash);
 }
 
 // Debugging function
@@ -572,14 +579,29 @@ Value_t ExtendibleHash::Put(Key_t key, Value_t pointer, unsigned tid) {
   return Insert(key, static_cast<Value_t>(pointer));
 }
 
+void ExtendibleHash::HintPrefetch(size_t key_hash) const {
+  const auto x = DirectoryIndex(key_hash);
+  __builtin_prefetch(dir._ + x, 0, 1);
+  Block* block = dir._[x];
+  if (block != nullptr) {
+    __builtin_prefetch(block, 0, 1);
+  }
+}
+
 void ExtendibleHash::BatchGet(
     base::ConstArray<Key_t> keys, Value_t* pointers, unsigned tid) {
   if (pointers == nullptr || keys.Size() == 0) {
     LOG(FATAL) << "Invalid pointers array or empty keys";
   }
+  constexpr size_t kPrefetchDistance = 4;
   for (size_t i = 0; i < keys.Size(); ++i) {
-    Key_t key = keys[i];
-    Get(key, pointers[i], tid);
+    Key_t key     = keys[static_cast<int>(i)];
+    auto key_hash = h(&key, sizeof(key));
+    if (i + kPrefetchDistance < static_cast<size_t>(keys.Size())) {
+      Key_t prefetch_key = keys[static_cast<int>(i + kPrefetchDistance)];
+      HintPrefetch(h(&prefetch_key, sizeof(prefetch_key)));
+    }
+    pointers[i] = ExtractWithHash(key, key_hash);
   }
 }
 

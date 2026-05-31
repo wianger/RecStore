@@ -18,6 +18,9 @@ DECLARE_int32(num_server_processes);
 DECLARE_int32(num_client_processes);
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
+DEFINE_string(rdma_get_response_mode,
+              "direct_sg",
+              "RDMA GET response mode: direct_sg or staging_copy");
 
 namespace petps {
 namespace {
@@ -34,9 +37,15 @@ std::size_t ComputeMaxGetKeysPerRpc() {
 }
 
 std::int32_t WaitStatus(const StatusWord* status, std::uint64_t seq) {
-  const auto start = std::chrono::steady_clock::now();
+  const auto start    = std::chrono::steady_clock::now();
+  int spin_iterations = 0;
   while (!StatusWordDone(*status, seq)) {
-    std::this_thread::yield();
+    if (spin_iterations < FLAGS_rdma_rc_wait_spin_iterations) {
+      ++spin_iterations;
+    } else {
+      spin_iterations = 0;
+      std::this_thread::yield();
+    }
     if (FLAGS_rdma_wait_timeout_ms > 0) {
       const auto elapsed_ms =
           std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -144,6 +153,51 @@ void* PetPSClient::GetReceiveBuffer(size_t size) {
   return receive_buffers_.back().data();
 }
 
+const float* PetPSClient::BorrowGetResultPayload(
+    int rpc_id,
+    std::size_t* key_count,
+    std::size_t* response_bytes,
+    std::int32_t* status_code) {
+  PendingRpc pending;
+  {
+    std::lock_guard<std::mutex> guard(mu_);
+    const auto it = pending_rpcs_.find(rpc_id);
+    if (it == pending_rpcs_.end()) {
+      return nullptr;
+    }
+    pending = it->second;
+  }
+
+  auto& slot                 = SlotAt(pending.qp_index, pending.slot_in_qp);
+  const bool profile_enabled = FLAGS_rdma_rc_profile_interval_ms > 0;
+  const std::uint64_t wait_start_ns = profile_enabled ? NowNs() : 0;
+  const std::int32_t rc_status      = WaitStatus(slot.view.status, pending.seq);
+  if (profile_enabled) {
+    profile_.wait_rpc_count.fetch_add(1, std::memory_order_relaxed);
+    profile_.wait_status_ns.fetch_add(
+        NowNs() - wait_start_ns, std::memory_order_relaxed);
+  }
+
+  const std::size_t actual_response_bytes = std::min<std::size_t>(
+      slot.view.status->response_bytes, pending.response_bytes);
+  if (key_count != nullptr) {
+    *key_count = pending.key_count;
+  }
+  if (response_bytes != nullptr) {
+    *response_bytes = actual_response_bytes;
+  }
+  if (status_code != nullptr) {
+    *status_code = rc_status;
+  }
+  if (pending.recv_buffer != nullptr) {
+    auto* user_status = FixedSlotStatusWord(
+        pending.recv_buffer, pending.key_count, FLAGS_value_size);
+    *user_status = rc_status;
+  }
+  MaybeReportProfile();
+  return reinterpret_cast<const float*>(slot.view.response_payload);
+}
+
 PetPSClient::SlotHandle PetPSClient::AcquireIdleSlot() {
   if (FLAGS_rdma_rc_profile_interval_ms > 0) {
     profile_.acquire_qp_count.fetch_add(1, std::memory_order_relaxed);
@@ -239,6 +293,12 @@ void PetPSClient::FillGetDescriptor(
   descriptor->payload_bytes =
       static_cast<std::uint32_t>(GetRequestBytes(key_count));
   descriptor->response_bytes = static_cast<std::uint32_t>(response_bytes);
+  if (FLAGS_rdma_get_response_mode == "direct_sg") {
+    descriptor->flags |= kRcFlagGetDirectSg | kRcFlagGetAllowFallbackCopy;
+  } else if (FLAGS_rdma_get_response_mode != "staging_copy") {
+    LOG(FATAL) << "unsupported --rdma_get_response_mode="
+               << FLAGS_rdma_get_response_mode;
+  }
 }
 
 void PetPSClient::FillPutDescriptor(

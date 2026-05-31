@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <boost/coroutine2/all.hpp>
+#include <cstring>
 #include <cstdint>
 #include <experimental/filesystem>
 #include <random>
@@ -47,13 +48,17 @@ public:
   using key_t = uint64_t;
 
   struct FlatGetProfile {
-    std::uint64_t batch_get_ns = 0;
-    std::uint64_t zero_fill_ns = 0;
-    std::uint64_t row_copy_ns  = 0;
-    std::uint64_t rows         = 0;
-    std::uint64_t value_bytes  = 0;
-    std::uint64_t missing_rows = 0;
+    std::uint64_t batch_get_ns    = 0;
+    std::uint64_t index_lookup_ns = 0;
+    std::uint64_t zero_fill_ns    = 0;
+    std::uint64_t row_copy_ns     = 0;
+    std::uint64_t rows            = 0;
+    std::uint64_t value_bytes     = 0;
+    std::uint64_t missing_rows    = 0;
   };
+
+  using DirectFixedRow    = BaseKV::DirectFixedRow;
+  using RDMABackingRegion = BaseKV::RDMABackingRegion;
 
   CachePS(json config) {
     LOG(INFO) << "cache ps config: " << config.dump(2);
@@ -248,7 +253,35 @@ public:
     }
 
     const auto batch_get_start = std::chrono::steady_clock::now();
+    BaseKV::BatchGetFlatStats flat_stats;
+    BaseKV::BatchGetFlatStats* flat_stats_ptr =
+        profile != nullptr ? &flat_stats : nullptr;
+    const bool flat_ok = base_kv_->BatchGetFlat(
+        keys, values, num_rows, embedding_dim, tid, flat_stats_ptr);
+    if (flat_ok) {
+      if (profile != nullptr) {
+        profile->batch_get_ns = static_cast<std::uint64_t>(
+            std::chrono::duration_cast< std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - batch_get_start)
+                .count());
+        profile->rows = static_cast<std::uint64_t>(num_rows);
+        profile->value_bytes =
+            static_cast<std::uint64_t>(num_rows) *
+            static_cast<std::uint64_t>(embedding_dim) * sizeof(float);
+        profile->zero_fill_ns    = flat_stats.zero_fill_ns;
+        profile->index_lookup_ns = flat_stats.index_lookup_ns;
+        profile->row_copy_ns     = flat_stats.row_copy_ns;
+        profile->missing_rows    = flat_stats.missing_rows;
+      }
+      recstore::ReportLocalShmStageMetric(
+          "cache_ps_get_batch_get_us",
+          recstore::LocalShmElapsedUs(batch_get_start));
+      recstore::ReportLocalShmStageMetric("cache_ps_get_copy_us", 0);
+      return true;
+    }
+
     std::vector<base::ConstArray<float>> value_slices;
+    value_slices.reserve(static_cast<std::size_t>(num_rows));
     base_kv_->BatchGet(keys, &value_slices, tid);
     if (profile != nullptr) {
       profile->batch_get_ns = static_cast<std::uint64_t>(
@@ -285,14 +318,14 @@ public:
     for (int64_t row = 0; row < num_rows; ++row) {
       const auto& slice = value_slices[static_cast<size_t>(row)];
       if (slice.Size() > 0) {
-        std::copy_n(slice.Data(),
-                    static_cast<int64_t>(slice.Size()),
-                    values + row * embedding_dim);
+        std::memcpy(values + row * embedding_dim,
+                    slice.Data(),
+                    static_cast<std::size_t>(embedding_dim) * sizeof(float));
       } else {
         const auto missing_zero_start = std::chrono::steady_clock::now();
-        std::fill_n(values + row * embedding_dim,
-                    static_cast<size_t>(embedding_dim),
-                    0.0f);
+        std::memset(values + row * embedding_dim,
+                    0,
+                    static_cast<std::size_t>(embedding_dim) * sizeof(float));
         if (profile != nullptr) {
           missing_zero_fill_ns += static_cast<std::uint64_t>(
               std::chrono::duration_cast< std::chrono::nanoseconds>(
@@ -312,6 +345,60 @@ public:
     recstore::ReportLocalShmStageMetric(
         "cache_ps_get_copy_us", recstore::LocalShmElapsedUs(row_copy_start));
     return true;
+  }
+
+  bool ProbeParameterIndex(base::ConstArray<uint64_t> keys,
+                           int tid,
+                           FlatGetProfile* profile = nullptr) {
+    const auto batch_get_start = std::chrono::steady_clock::now();
+    BaseKV::BatchGetFlatStats flat_stats;
+    BaseKV::BatchGetFlatStats* flat_stats_ptr =
+        profile != nullptr ? &flat_stats : nullptr;
+    const bool ok = base_kv_->BatchGetIndexOnly(keys, tid, flat_stats_ptr);
+    if (profile != nullptr) {
+      profile->batch_get_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - batch_get_start)
+              .count());
+      profile->rows         = static_cast<std::uint64_t>(keys.Size());
+      profile->value_bytes  = 0;
+      profile->missing_rows = flat_stats.missing_rows;
+    }
+    return ok;
+  }
+
+  bool GetParameterDirectFixedRows(
+      base::ConstArray<uint64_t> keys,
+      int64_t num_rows,
+      int64_t embedding_dim,
+      int tid,
+      std::vector<DirectFixedRow>* rows,
+      FlatGetProfile* profile = nullptr) {
+    const auto batch_get_start = std::chrono::steady_clock::now();
+    BaseKV::BatchGetFlatStats flat_stats;
+    BaseKV::BatchGetFlatStats* flat_stats_ptr =
+        profile != nullptr ? &flat_stats : nullptr;
+    const bool ok = base_kv_->BatchGetDirectFixedRows(
+        keys, num_rows, embedding_dim, tid, rows, flat_stats_ptr);
+    if (profile != nullptr) {
+      profile->batch_get_ns = static_cast<std::uint64_t>(
+          std::chrono::duration_cast< std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now() - batch_get_start)
+              .count());
+      profile->rows = static_cast<std::uint64_t>(num_rows);
+      profile->value_bytes =
+          static_cast<std::uint64_t>(num_rows) *
+          static_cast<std::uint64_t>(embedding_dim) * sizeof(float);
+      profile->zero_fill_ns    = flat_stats.zero_fill_ns;
+      profile->index_lookup_ns = flat_stats.index_lookup_ns;
+      profile->row_copy_ns     = 0;
+      profile->missing_rows    = flat_stats.missing_rows;
+    }
+    return ok;
+  }
+
+  RDMABackingRegion GetRDMABackingRegion() const {
+    return base_kv_->GetRDMABackingRegion();
   }
 
   bool GetParameterRun2Completion(

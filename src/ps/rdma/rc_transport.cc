@@ -38,6 +38,8 @@ struct RcTransportProfileCounters {
 
   std::atomic<std::uint64_t> complete_response_count{0};
   std::atomic<std::uint64_t> response_payload_write_count{0};
+  std::atomic<std::uint64_t> response_payload_sg_write_count{0};
+  std::atomic<std::uint64_t> response_payload_sg_wr_count{0};
   std::atomic<std::uint64_t> response_status_write_count{0};
   std::atomic<std::uint64_t> response_payload_bytes{0};
   std::atomic<std::uint64_t> complete_response_ns{0};
@@ -98,6 +100,10 @@ void MaybeReportTransportProfile(const RcTransportConfig& config,
       << (drain_submit_count == 0 ? 0 : drain_submit_ns / drain_submit_count)
       << " complete_count=" << complete_count << " response_payload_writes="
       << Exchange(&counters.response_payload_write_count)
+      << " response_payload_sg_writes="
+      << Exchange(&counters.response_payload_sg_write_count)
+      << " response_payload_sg_wrs="
+      << Exchange(&counters.response_payload_sg_wr_count)
       << " response_status_writes="
       << Exchange(&counters.response_status_write_count)
       << " response_payload_bytes="
@@ -661,6 +667,15 @@ int RcShardServerTransport::TotalSlots() const {
                           TotalClientSlotsPerShard(config_));
 }
 
+void RcShardServerTransport::RegisterLocalMemoryRegion(
+    void* base, std::size_t bytes) {
+  for (auto& lane : lanes_) {
+    if (lane.verbs) {
+      lane.verbs->RegisterMemoryRegion(base, bytes);
+    }
+  }
+}
+
 int RcShardServerTransport::SlotIndex(
     int client_id, int qp_index, int slot_in_qp) const {
   ValidateClientId(config_, client_id);
@@ -775,6 +790,96 @@ void RcShardServerTransport::CompleteResponse(
           response.status->response_bytes, std::memory_order_relaxed);
     }
   }
+
+  const std::uint64_t response_status_offset =
+      ClientResponseOffset(config_, slot_in_qp) + ResponseStatusOffset(config_);
+  lane.verbs->Write(
+      response.status,
+      GlobalAddress{
+          static_cast<std::uint16_t>(client_node_id),
+          response_status_offset,
+      },
+      sizeof(StatusWord),
+      MakeTrackedWrId(TrackedWrKind::kResponseStatus, response_slot),
+      true);
+  lane.response_completion_pending[static_cast<std::size_t>(response_slot)] = 1;
+  if (profile_enabled) {
+    auto& profile = TransportProfile();
+    profile.complete_response_count.fetch_add(1, std::memory_order_relaxed);
+    profile.response_status_write_count.fetch_add(1, std::memory_order_relaxed);
+    profile.complete_response_ns.fetch_add(
+        NowNs() - start_ns, std::memory_order_relaxed);
+    MaybeReportTransportProfile(config_, "server");
+  }
+}
+
+void RcShardServerTransport::WriteResponsePayloadSg(
+    int client_id,
+    int qp_index,
+    int slot_in_qp,
+    base::ConstArray<RawVerbsSge> sges,
+    std::uint64_t response_offset,
+    std::uint64_t bytes) {
+  ValidateClientId(config_, client_id);
+  ValidateSlotInQp(config_, slot_in_qp);
+  if (sges.Size() == 0 || bytes == 0) {
+    return;
+  }
+  Lane& lane               = LaneAt(qp_index);
+  const int client_node_id = FLAGS_num_server_processes + client_id;
+  lane.verbs->WriteSg(
+      sges,
+      GlobalAddress{
+          static_cast<std::uint16_t>(client_node_id),
+          ClientResponseOffset(config_, slot_in_qp) + response_offset,
+      },
+      /*wr_id=*/0,
+      false);
+  if (FLAGS_rdma_rc_profile_interval_ms > 0) {
+    auto& profile = TransportProfile();
+    profile.response_payload_sg_write_count.fetch_add(
+        1, std::memory_order_relaxed);
+    profile.response_payload_sg_wr_count.fetch_add(
+        1, std::memory_order_relaxed);
+    profile.response_payload_bytes.fetch_add(bytes, std::memory_order_relaxed);
+  }
+}
+
+void RcShardServerTransport::CompleteResponseStatusOnly(
+    int client_id,
+    int qp_index,
+    int slot_in_qp,
+    const ResponseView& response,
+    std::uint64_t seq) {
+  const bool profile_enabled   = FLAGS_rdma_rc_profile_interval_ms > 0;
+  const std::uint64_t start_ns = profile_enabled ? NowNs() : 0;
+  ValidateClientId(config_, client_id);
+  ValidateSlotInQp(config_, slot_in_qp);
+  Lane& lane              = LaneAt(qp_index);
+  const int response_slot = ResponseSlotOrdinal(config_, client_id, slot_in_qp);
+  const int client_node_id = FLAGS_num_server_processes + client_id;
+  auto& counters           = TransportProfile();
+  DrainTrackedPendingWrite(
+      lane.verbs.get(),
+      &lane.response_completion_pending,
+      &lane.response_completion_ready,
+      TrackedWrKind::kResponseStatus,
+      response_slot,
+      WriteContext(
+          config_,
+          client_id,
+          qp_index,
+          slot_in_qp,
+          seq - 1,
+          ClientResponseOffset(config_, slot_in_qp) +
+              ResponseStatusOffset(config_),
+          client_node_id,
+          "previous_response_status"),
+      profile_enabled,
+      &counters.drain_pending_response_count,
+      &counters.drain_pending_response_ns);
+  response.status->seq.store(seq, std::memory_order_release);
+  response.status->state.store(kRcSlotDone, std::memory_order_release);
 
   const std::uint64_t response_status_offset =
       ClientResponseOffset(config_, slot_in_qp) + ResponseStatusOffset(config_);

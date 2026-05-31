@@ -54,6 +54,8 @@ def main():
     parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument("--rdma-per-thread-response-limit-bytes", type=int)
     parser.add_argument("--rdma-client-receive-arena-bytes", type=int)
+    parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
+    parser.add_argument("--rdma-rc-server-get-workers", type=int)
     parser.add_argument("--validate-routing", action="store_true")
     parser.add_argument(
         "--show-runner-logs",
@@ -82,6 +84,10 @@ def main():
         rdma_control_plane_port=args.rdma_control_plane_port,
         rdma_per_thread_response_limit_bytes=args.rdma_per_thread_response_limit_bytes,
         rdma_client_receive_arena_bytes=args.rdma_client_receive_arena_bytes,
+        rdma_rc_server_coroutines_per_thread=(
+            args.rdma_rc_server_coroutines_per_thread
+        ),
+        rdma_rc_server_get_workers=args.rdma_rc_server_get_workers,
         validate_routing=args.validate_routing,
     )
 

@@ -85,6 +85,7 @@ def build_rdma_runner(args):
             args, "rdma_put_server_scratch_bytes", None
         ),
         rdma_wait_timeout_ms=getattr(args, "rdma_wait_timeout_ms", None),
+        rdma_server_get_workers=getattr(args, "rdma_rc_server_get_workers", None),
         validate_routing=getattr(args, "validate_routing", False),
     )
 
@@ -273,6 +274,7 @@ def main():
     parser.add_argument("--rdma-put-client-send-arena-bytes", type=int)
     parser.add_argument("--rdma-put-server-scratch-bytes", type=int)
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
+    parser.add_argument("--rdma-rc-server-get-workers", type=int)
     parser.add_argument(
         "--rdma-client-timeout-sec",
         type=int,

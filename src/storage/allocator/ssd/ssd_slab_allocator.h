@@ -228,10 +228,14 @@ public:
       size_t index      = 0;
       uint64_t page_off = 0;
     };
-    std::vector<IOBackend::IOEntry> io_entries;
-    std::vector<PendingWrite> pending;
-    io_entries.reserve(entries.size());
-    pending.reserve(entries.size());
+    struct PageGroup {
+      PageID_t start = 0;
+      uint64_t pages = 0;
+      char* buf      = nullptr;
+      std::vector<PendingWrite> pending;
+    };
+    std::vector<PageGroup> groups;
+    groups.reserve(entries.size());
     for (size_t i = 0; i < entries.size(); ++i) {
       const uint64_t handle = Alloc(entries[i].data_size);
       handles.push_back(handle);
@@ -247,24 +251,40 @@ public:
       const uint64_t page_off = byte_off % PAGE_SIZE;
       const uint64_t total    = page_off + slab.slot_size;
       const uint64_t pages    = (total + PAGE_SIZE - 1) / PAGE_SIZE;
-      char* buf               = backend_->AllocateBuffer(pages);
-      io_entries.push_back({start, buf, pages});
-      pending.push_back(PendingWrite{i, page_off});
+      auto it                 = std::find_if(
+          groups.begin(), groups.end(), [&](const PageGroup& group) {
+            return group.start == start && group.pages == pages;
+          });
+      if (it == groups.end()) {
+        PageGroup group;
+        group.start = start;
+        group.pages = pages;
+        group.buf   = backend_->AllocateBuffer(pages);
+        groups.push_back(std::move(group));
+        it = std::prev(groups.end());
+      }
+      it->pending.push_back(PendingWrite{i, page_off});
     }
-    if (!io_entries.empty()) {
+    if (!groups.empty()) {
+      std::vector<IOBackend::IOEntry> io_entries;
+      io_entries.reserve(groups.size());
+      for (auto& group : groups) {
+        io_entries.push_back({group.start, group.buf, group.pages});
+      }
       backend_->BatchReadPages(io_entries);
-      for (size_t i = 0; i < pending.size(); ++i) {
-        const auto& item = pending[i];
-        const auto& spec = entries[item.index];
-        char* buf        = io_entries[i].buffer;
-        const uint32_t n = static_cast<uint32_t>(spec.data_size);
-        std::memcpy(buf + item.page_off, &n, sizeof(n));
-        std::memcpy(
-            buf + item.page_off + kHeaderSize, spec.data, spec.data_size);
+      for (auto& group : groups) {
+        for (const auto& item : group.pending) {
+          const auto& spec = entries[item.index];
+          const uint32_t n = static_cast<uint32_t>(spec.data_size);
+          std::memcpy(group.buf + item.page_off, &n, sizeof(n));
+          std::memcpy(group.buf + item.page_off + kHeaderSize,
+                      spec.data,
+                      spec.data_size);
+        }
       }
       backend_->BatchWritePages(io_entries);
-      for (const auto& io : io_entries) {
-        backend_->FreeBuffer(io.buffer);
+      for (auto& group : groups) {
+        backend_->FreeBuffer(group.buf);
       }
     }
     return handles;

@@ -136,6 +136,18 @@ def normalize_host_list(value: str, field_name: str) -> list[str]:
     return hosts
 
 
+def local_numa_node_count() -> int:
+    node_root = Path("/sys/devices/system/node")
+    if not node_root.exists():
+        return 1
+    count = sum(
+        1
+        for path in node_root.glob("node[0-9]*")
+        if path.is_dir() and (path / "cpulist").exists()
+    )
+    return max(1, count)
+
+
 def parse_server_plan(value: str, transport: str) -> list[ServerPlan]:
     servers = []
     for server_index, item in enumerate(parse_csv_list(value)):
@@ -201,10 +213,9 @@ def parse_client_plan(value: str, transport: str) -> list[ClientPlan]:
 
 def build_topology_plan(
     transport: str,
-    server_hosts: list[str],
-    client_hosts: list[str],
-    server_count: int,
-    client_count: int,
+    server_shard_ips: list[str],
+    client_ips: list[str],
+    client_processes_per_ip: int,
     base_port: int,
     server_plan: str = "",
     client_plan: str = "",
@@ -221,19 +232,17 @@ def build_topology_plan(
         if not parsed_server_plan:
             parsed_server_plan = build_topology_plan(
                 transport,
-                server_hosts,
-                client_hosts,
-                server_count,
-                client_count,
+                server_shard_ips,
+                client_ips,
+                client_processes_per_ip,
                 base_port,
             ).server_plan
         if not parsed_client_plan:
             parsed_client_plan = build_topology_plan(
                 transport,
-                server_hosts,
-                client_hosts,
-                len(parsed_server_plan),
-                client_count,
+                [server.host for server in parsed_server_plan],
+                client_ips,
+                client_processes_per_ip,
                 base_port,
             ).client_plan
         return TopologyPlan(
@@ -242,22 +251,15 @@ def build_topology_plan(
             client_plan=parsed_client_plan,
         )
 
-    if server_count <= 0:
-        raise ValueError("server_count must be positive")
-    if client_count <= 0:
-        raise ValueError("client_count must be positive")
-    if len(server_hosts) not in (1, server_count):
-        raise ValueError(
-            "server_hosts length must be 1 or equal to server_count"
-        )
-    if len(client_hosts) not in (1, client_count):
-        raise ValueError(
-            "client_hosts length must be 1 or equal to client_count"
-        )
+    if not server_shard_ips:
+        raise ValueError("server_shard_ips must not be empty")
+    if not client_ips:
+        raise ValueError("client_ips must not be empty")
+    if client_processes_per_ip <= 0:
+        raise ValueError("client_processes_per_ip must be positive")
 
     server_plan = []
-    for server_index in range(server_count):
-        host = server_hosts[0] if len(server_hosts) == 1 else server_hosts[server_index]
+    for server_index, host in enumerate(server_shard_ips):
         server_plan.append(
             ServerPlan(
                 server_index=server_index,
@@ -269,15 +271,15 @@ def build_topology_plan(
         )
 
     client_plan = []
-    for client_index in range(client_count):
-        host = client_hosts[0] if len(client_hosts) == 1 else client_hosts[client_index]
-        client_plan.append(
-            ClientPlan(
-                client_index=client_index,
-                host=host,
-                transport=transport,
+    for host in client_ips:
+        for _ in range(client_processes_per_ip):
+            client_plan.append(
+                ClientPlan(
+                    client_index=len(client_plan),
+                    host=host,
+                    transport=transport,
+                )
             )
-        )
 
     return TopologyPlan(
         transport=transport,
@@ -376,7 +378,7 @@ def build_benchmark_cmd(
     config_path: str,
     record_count: int,
     runtime_seconds: int,
-    threads: int,
+    client_threads_per_process: int,
     load_threads: int,
     batch_keys: int,
     value_size: int,
@@ -385,8 +387,14 @@ def build_benchmark_cmd(
     read_ratio: int,
     mode: str,
     report_mode: str,
+    prefetch_depth: int = 0,
+    transaction_profile: bool = False,
+    rdma_direct_async_fetch: bool = False,
+    rdma_adapter_skip_prefetch_result_copy: bool = False,
+    rdma_get_response_mode: str = "direct_sg",
+    skip_load: bool = False,
 ) -> list[str]:
-    return [
+    cmd = [
         benchmark_binary,
         f"--transport={transport.lower()}",
         f"--host={topology.server_plan[0].host}",
@@ -397,7 +405,7 @@ def build_benchmark_cmd(
         f"--mode={mode}",
         f"--record_count={record_count}",
         f"--running_seconds={runtime_seconds}",
-        f"--thread_num={threads}",
+        f"--thread_num={client_threads_per_process}",
         f"--load_thread_num={load_threads}",
         f"--batch_keys={batch_keys}",
         f"--value_size={value_size}",
@@ -406,6 +414,19 @@ def build_benchmark_cmd(
         f"--read_ratio={read_ratio}",
         f"--report_mode={report_mode}",
     ]
+    if prefetch_depth > 0:
+        cmd.append(f"--prefetch_depth={prefetch_depth}")
+    if transaction_profile:
+        cmd.append("--transaction_profile=true")
+    if rdma_direct_async_fetch:
+        cmd.append("--rdma_direct_async_fetch=true")
+    if rdma_adapter_skip_prefetch_result_copy:
+        cmd.append("--rdma_adapter_skip_prefetch_result_copy=true")
+    if transport == "RDMA":
+        cmd.append(f"--rdma_get_response_mode={rdma_get_response_mode}")
+    if skip_load:
+        cmd.append("--skip_load=true")
+    return cmd
 
 
 def replace_config_path_arg(argv: list[str], config_path: str) -> list[str]:
@@ -519,6 +540,17 @@ def resolve_output_dir(value: str) -> Path:
     return default_output_dir()
 
 
+def resolve_rdma_get_response_mode(index_type: str, requested_mode: str) -> str:
+    mode = requested_mode.lower()
+    if mode == "auto":
+        return "staging_copy" if index_type == "DRAM_PET_HASH" else "direct_sg"
+    if mode not in {"direct_sg", "staging_copy"}:
+        raise ValueError(
+            "rdma_get_response_mode must be auto, direct_sg, or staging_copy"
+        )
+    return mode
+
+
 def prompt_value(label: str, default: str) -> str:
     value = input(f"{label} [{default}]: ").strip()
     return value if value else default
@@ -527,16 +559,23 @@ def prompt_value(label: str, default: str) -> str:
 def apply_interactive_prompts(args: argparse.Namespace) -> None:
     print("Benchmark PS interactive setup. Press Enter to keep defaults.")
     args.transports = prompt_value("transports", args.transports)
-    args.client_hosts = prompt_value("client hosts", args.client_hosts)
-    args.server_hosts = prompt_value("server hosts", args.server_hosts)
-    args.server_count = int(prompt_value("server count", str(args.server_count)))
-    args.client_count = int(prompt_value("client count", str(args.client_count)))
+    args.client_ips = prompt_value("client IPs", args.client_ips)
+    args.server_shard_ips = prompt_value("server shard IPs", args.server_shard_ips)
+    args.client_processes_per_ip = int(
+        prompt_value(
+            "client processes per IP", str(args.client_processes_per_ip)
+        )
+    )
     args.server_plan = prompt_value("server plan", args.server_plan)
     args.client_plan = prompt_value("client plan", args.client_plan)
     args.record_count = int(prompt_value("record count", str(args.record_count)))
     args.value_size = int(prompt_value("value size", str(args.value_size)))
     args.batch_keys = int(prompt_value("batch keys", str(args.batch_keys)))
-    args.threads = int(prompt_value("thread count", str(args.threads)))
+    args.client_threads_per_process = int(
+        prompt_value(
+            "client threads per process", str(args.client_threads_per_process)
+        )
+    )
     args.runtime_seconds = int(
         prompt_value("runtime seconds", str(args.runtime_seconds))
     )
@@ -794,7 +833,7 @@ def make_base_result_row(
     record_count: int,
     value_size: int,
     batch_keys: int,
-    threads: int,
+    client_threads_per_process: int,
     runtime_seconds: int,
     distribution: str,
     mode: str,
@@ -808,14 +847,14 @@ def make_base_result_row(
         "phase": phase,
         "client_index": client_index,
         "repeat_index": repeat_index,
-        "server_count": len(topology.server_plan),
-        "client_count": len(topology.client_plan),
-        "server_hosts": ",".join(server.host for server in topology.server_plan),
-        "client_hosts": ",".join(client.host for client in topology.client_plan),
+        "server_shards": len(topology.server_plan),
+        "client_processes": len(topology.client_plan),
+        "server_shard_ips": ",".join(server.host for server in topology.server_plan),
+        "client_ips": ",".join(sorted({client.host for client in topology.client_plan})),
         "record_count": record_count,
         "value_size": value_size,
         "batch_keys": batch_keys,
-        "threads": threads,
+        "client_threads_per_process": client_threads_per_process,
         "runtime_seconds": runtime_seconds,
         "distribution": distribution,
         "mode": mode,
@@ -838,7 +877,7 @@ def result_rows_from_client_output(
     record_count: int,
     value_size: int,
     batch_keys: int,
-    threads: int,
+    client_threads_per_process: int,
     runtime_seconds: int,
     distribution: str,
     mode: str,
@@ -860,7 +899,7 @@ def result_rows_from_client_output(
             record_count=record_count,
             value_size=value_size,
             batch_keys=batch_keys,
-            threads=threads,
+            client_threads_per_process=client_threads_per_process,
             runtime_seconds=runtime_seconds,
             distribution=distribution,
             mode=mode,
@@ -888,14 +927,14 @@ def write_summary_csv(rows: list[dict[str, str | int | float]], csv_path: Path) 
         "phase",
         "client_index",
         "repeat_index",
-        "server_count",
-        "client_count",
-        "server_hosts",
-        "client_hosts",
+        "server_shards",
+        "client_processes",
+        "server_shard_ips",
+        "client_ips",
         "record_count",
         "value_size",
         "batch_keys",
-        "threads",
+        "client_threads_per_process",
         "runtime_seconds",
         "distribution",
         "mode",
@@ -954,12 +993,17 @@ def write_summary_markdown(
         (
             "本次结果属于 PS/network 层。"
             f"transports={args.transports}，execution_backend={args.execution_backend}，"
-            f"client_hosts={args.client_hosts}，server_hosts={args.server_hosts}，"
+            f"client_ips={args.client_ips}，server_shard_ips={args.server_shard_ips}，"
             f"client_plan={args.client_plan or '-'}，server_plan={args.server_plan or '-'}，"
-            f"server_count={args.server_count}，client_count={args.client_count}，"
+            f"server_shards={len(args.server_shard_ips.split(','))}，"
+            f"client_processes_per_ip={args.client_processes_per_ip}，"
             f"record_count={args.record_count}，value_size={args.value_size}，"
-            f"batch_keys={args.batch_keys}，threads={args.threads}，"
-            f"load_threads={args.load_threads if args.load_threads > 0 else args.threads}，"
+            f"batch_keys={args.batch_keys}，"
+            f"client_threads_per_process={args.client_threads_per_process}，"
+            f"client_load_threads_per_process="
+            f"{args.client_load_threads_per_process if args.client_load_threads_per_process > 0 else args.client_threads_per_process}，"
+            f"server_worker_threads={args.server_worker_threads}，"
+            f"server_rdma_threads={args.server_rdma_threads}，"
             f"runtime_seconds={args.runtime_seconds}，repeat={args.repeat}，"
             f"distribution={args.distribution}，mode={args.mode}。"
         ),
@@ -1127,8 +1171,8 @@ def build_rdma_runner(
     *,
     config_path: str,
     server_binary: str,
-    server_count: int,
-    client_count: int,
+    server_shards: int,
+    client_processes: int,
     value_size: int,
     max_keys_per_request: int,
     rdma_namespace: str,
@@ -1138,9 +1182,9 @@ def build_rdma_runner(
     return PetPSClusterRunner(
         server_path=server_binary,
         config_path=config_path,
-        num_servers=server_count,
-        num_clients=client_count,
-        thread_num=args.rdma_thread_num,
+        num_servers=server_shards,
+        num_clients=client_processes,
+        thread_num=args.server_rdma_threads,
         value_size=value_size,
         max_kv_num_per_request=max_keys_per_request,
         timeout=args.cluster_timeout,
@@ -1155,8 +1199,17 @@ def build_rdma_runner(
         rdma_wait_timeout_ms=args.rdma_wait_timeout_ms,
         rdma_rc_qps_per_client_per_shard=args.rdma_rc_qps_per_client_per_shard,
         rdma_rc_slots_per_qp=args.rdma_rc_slots_per_qp,
+        rdma_rc_profile_interval_ms=args.rdma_rc_profile_interval_ms,
         rdma_rc_server_coroutines_per_thread=args.rdma_rc_server_coroutines_per_thread,
+        rdma_rc_server_get_workers=args.rdma_rc_server_get_workers,
         rdma_rc_inline_bytes=args.rdma_rc_inline_bytes,
+        rdma_rc_client_numa_id=args.rdma_rc_client_numa_id,
+        rdma_rc_server_numa_id=args.rdma_rc_server_numa_id,
+        rdma_rc_fake_get_mode=args.rdma_rc_fake_get_mode,
+        rdma_rc_skip_client_copy=args.rdma_rc_skip_client_copy,
+        rdma_server_bind_core_offset=args.rdma_server_bind_core_offset,
+        rdma_client_bind_core_offset=args.rdma_client_bind_core_offset,
+        rdma_client_bind_core_stride=args.rdma_client_bind_core_stride,
     )
 
 
@@ -1216,7 +1269,7 @@ def run_local_rpc_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1235,7 +1288,7 @@ def run_local_rpc_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1258,7 +1311,7 @@ def run_local_rpc_case(
                     record_count=args.record_count,
                     value_size=args.value_size,
                     batch_keys=args.batch_keys,
-                    threads=args.threads,
+                    client_threads_per_process=args.client_threads_per_process,
                     runtime_seconds=args.runtime_seconds,
                     distribution=args.distribution,
                     mode=args.mode,
@@ -1278,7 +1331,7 @@ def run_local_rpc_case(
                 record_count=args.record_count,
                 value_size=args.value_size,
                 batch_keys=args.batch_keys,
-                threads=args.threads,
+                client_threads_per_process=args.client_threads_per_process,
                 runtime_seconds=args.runtime_seconds,
                 distribution=args.distribution,
                 mode=args.mode,
@@ -1310,7 +1363,7 @@ def run_local_rdma_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1324,8 +1377,8 @@ def run_local_rdma_case(
         args,
         config_path=str(config_path),
         server_binary=str((REPO_ROOT / "build" / "bin" / "petps_server").resolve()),
-        server_count=len(topology.server_plan),
-        client_count=len(topology.client_plan),
+        server_shards=len(topology.server_plan),
+        client_processes=len(topology.client_plan),
         value_size=args.value_size,
         max_keys_per_request=max_keys_per_request,
         rdma_namespace=rdma_namespace,
@@ -1342,7 +1395,9 @@ def run_local_rdma_case(
                 benchmark_cmd=benchmark_cmd,
                 client_timeout=args.client_timeout,
                 client_log_dir=client_log_dir,
-                env_builder=lambda _client: runner.build_env(),
+                env_builder=lambda client: runner.build_client_env(
+                    client.client_index
+                ),
                 command_builder=lambda base_cmd, client: runner.build_client_cmd(
                     list(base_cmd), client_index=client.client_index
                 ),
@@ -1360,7 +1415,7 @@ def run_local_rdma_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1378,7 +1433,7 @@ def run_local_rdma_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1402,7 +1457,7 @@ def run_local_rdma_case(
                     record_count=args.record_count,
                     value_size=args.value_size,
                     batch_keys=args.batch_keys,
-                    threads=args.threads,
+                    client_threads_per_process=args.client_threads_per_process,
                     runtime_seconds=args.runtime_seconds,
                     distribution=args.distribution,
                     mode=args.mode,
@@ -1424,7 +1479,7 @@ def run_local_rdma_case(
                     record_count=args.record_count,
                     value_size=args.value_size,
                     batch_keys=args.batch_keys,
-                    threads=args.threads,
+                    client_threads_per_process=args.client_threads_per_process,
                     runtime_seconds=args.runtime_seconds,
                     distribution=args.distribution,
                     mode=args.mode,
@@ -1445,7 +1500,7 @@ def run_local_rdma_case(
                 record_count=args.record_count,
                 value_size=args.value_size,
                 batch_keys=args.batch_keys,
-                threads=args.threads,
+                client_threads_per_process=args.client_threads_per_process,
                 runtime_seconds=args.runtime_seconds,
                 distribution=args.distribution,
                 mode=args.mode,
@@ -1544,7 +1599,7 @@ def run_remote_case(
                         record_count=args.record_count,
                         value_size=args.value_size,
                         batch_keys=args.batch_keys,
-                        threads=args.threads,
+                        client_threads_per_process=args.client_threads_per_process,
                         runtime_seconds=args.runtime_seconds,
                         distribution=args.distribution,
                         mode=args.mode,
@@ -1562,7 +1617,7 @@ def run_remote_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1578,8 +1633,8 @@ def run_remote_case(
             args,
             config_path=remote_config_path,
             server_binary=remote_server_binary,
-            server_count=len(topology.server_plan),
-            client_count=len(topology.client_plan),
+            server_shards=len(topology.server_plan),
+            client_processes=len(topology.client_plan),
             value_size=args.value_size,
             max_keys_per_request=max_keys_per_request,
             rdma_namespace=rdma_namespace,
@@ -1647,8 +1702,8 @@ def run_remote_case(
                 args,
                 config_path=remote_config_path,
                 server_binary=remote_server_binary,
-                server_count=len(topology.server_plan),
-                client_count=len(topology.client_plan),
+                server_shards=len(topology.server_plan),
+                client_processes=len(topology.client_plan),
                 value_size=args.value_size,
                 max_keys_per_request=max_keys_per_request,
                 rdma_namespace=rdma_namespace,
@@ -1714,7 +1769,7 @@ def run_remote_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1734,7 +1789,7 @@ def run_remote_case(
             record_count=args.record_count,
             value_size=args.value_size,
             batch_keys=args.batch_keys,
-            threads=args.threads,
+            client_threads_per_process=args.client_threads_per_process,
             runtime_seconds=args.runtime_seconds,
             distribution=args.distribution,
             mode=args.mode,
@@ -1759,7 +1814,7 @@ def run_remote_case(
                         record_count=args.record_count,
                         value_size=args.value_size,
                         batch_keys=args.batch_keys,
-                        threads=args.threads,
+                        client_threads_per_process=args.client_threads_per_process,
                         runtime_seconds=args.runtime_seconds,
                         distribution=args.distribution,
                         mode=args.mode,
@@ -1779,7 +1834,7 @@ def run_remote_case(
                     record_count=args.record_count,
                     value_size=args.value_size,
                     batch_keys=args.batch_keys,
-                    threads=args.threads,
+                    client_threads_per_process=args.client_threads_per_process,
                     runtime_seconds=args.runtime_seconds,
                     distribution=args.distribution,
                     mode=args.mode,
@@ -1817,15 +1872,23 @@ def parse_args() -> argparse.Namespace:
         default=str((REPO_ROOT / "build" / "bin" / "ps_transport_benchmark").resolve()),
     )
     parser.add_argument("--transports", default="rdma,grpc,brpc")
-    parser.add_argument("--client-hosts", default="127.0.0.1")
-    parser.add_argument("--server-hosts", default="127.0.0.1")
+    parser.add_argument(
+        "--client-ips",
+        default="127.0.0.1",
+        help="Comma-separated client hosts. Each host starts client-processes-per-ip processes.",
+    )
+    parser.add_argument(
+        "--server-shard-ips",
+        default="127.0.0.1",
+        help="Comma-separated server hosts, one entry per shard. The list length is the shard count.",
+    )
     parser.add_argument(
         "--server-plan",
         default="",
         help=(
             "Explicit server topology as comma-separated host:port:shard or "
-            "server_index:host:port:shard entries. Overrides --server-hosts/"
-            "--server-count mapping when set."
+            "server_index:host:port:shard entries. Overrides "
+            "--server-shard-ips mapping when set."
         ),
     )
     parser.add_argument(
@@ -1833,17 +1896,16 @@ def parse_args() -> argparse.Namespace:
         default="",
         help=(
             "Explicit client topology as comma-separated host or "
-            "client_index:host entries. Overrides --client-hosts/"
-            "--client-count mapping when set."
+            "client_index:host entries. Overrides --client-ips/"
+            "--client-processes-per-ip mapping when set."
         ),
     )
-    parser.add_argument("--server-count", type=int, default=1)
-    parser.add_argument("--client-count", type=int, default=1)
+    parser.add_argument("--client-processes-per-ip", type=int, default=1)
     parser.add_argument("--record-count", type=int, default=1000000)
     parser.add_argument("--value-size", type=int, default=512)
     parser.add_argument("--batch-keys", type=int, default=1024)
-    parser.add_argument("--threads", type=int, default=16)
-    parser.add_argument("--load-threads", type=int, default=0)
+    parser.add_argument("--client-threads-per-process", type=int, default=16)
+    parser.add_argument("--client-load-threads-per-process", type=int, default=0)
     parser.add_argument("--runtime-seconds", type=int, default=5)
     parser.add_argument(
         "--distribution", choices=["uniform", "zipfian"], default="uniform"
@@ -1855,11 +1917,12 @@ def parse_args() -> argparse.Namespace:
         default="fetch",
     )
     parser.add_argument("--read-ratio", type=int, default=100)
+    parser.add_argument("--prefetch-depth", type=int, default=0)
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--output-dir", default="")
     parser.add_argument("--capacity", type=int, default=0)
     parser.add_argument("--max-keys-per-request", type=int, default=500)
-    parser.add_argument("--server-num-threads", type=int, default=32)
+    parser.add_argument("--server-worker-threads", type=int, default=32)
     parser.add_argument("--index-type", default="DRAM_EXTENDIBLE_HASH")
     parser.add_argument("--dram-allocator", default="PERSIST_LOOP_SLAB")
     parser.add_argument(
@@ -1881,15 +1944,40 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--client-timeout", type=int, default=120)
     parser.add_argument("--cluster-timeout", type=int, default=45)
     parser.add_argument("--show-runner-logs", action="store_true")
-    parser.add_argument("--rdma-thread-num", type=int, default=1)
+    parser.add_argument("--server-rdma-threads", type=int, default=1)
     parser.add_argument("--rdma-namespace", default="auto")
     parser.add_argument("--rdma-control-plane-host", default="")
     parser.add_argument("--rdma-control-plane-port", type=int)
     parser.add_argument("--rdma-wait-timeout-ms", type=int)
     parser.add_argument("--rdma-rc-qps-per-client-per-shard", type=int)
     parser.add_argument("--rdma-rc-slots-per-qp", type=int)
+    parser.add_argument("--rdma-rc-profile-interval-ms", type=int)
     parser.add_argument("--rdma-rc-server-coroutines-per-thread", type=int)
+    parser.add_argument("--rdma-rc-server-get-workers", type=int)
+    parser.add_argument("--rdma-server-bind-core-offset", type=int)
+    parser.add_argument("--rdma-client-bind-core-offset", type=int)
+    parser.add_argument("--rdma-client-bind-core-stride", type=int)
+    parser.add_argument("--rdma-rc-client-numa-id", type=int)
+    parser.add_argument("--rdma-rc-server-numa-id", type=int)
     parser.add_argument("--rdma-rc-inline-bytes", type=int)
+    parser.add_argument(
+        "--rdma-rc-fake-get-mode",
+        choices=["none", "status_only", "index_only", "payload_memset"],
+    )
+    parser.add_argument("--rdma-rc-skip-client-copy", action="store_true")
+    parser.add_argument("--transaction-profile", action="store_true")
+    parser.add_argument("--rdma-direct-async-fetch", action="store_true")
+    parser.add_argument("--rdma-adapter-skip-prefetch-result-copy", action="store_true")
+    parser.add_argument(
+        "--rdma-get-response-mode",
+        choices=["auto", "direct_sg", "staging_copy"],
+        default="auto",
+        help=(
+            "RDMA GET response path. auto uses staging_copy for "
+            "DRAM_PET_HASH and direct_sg otherwise."
+        ),
+    )
+    parser.add_argument("--skip-load", action="store_true")
     parser.add_argument(
         "--interactive",
         action="store_true",
@@ -1901,6 +1989,58 @@ def parse_args() -> argparse.Namespace:
     if args.interactive:
         apply_interactive_prompts(args)
         args.remote_container = args.remote_container or None
+    args.rdma_get_response_mode = resolve_rdma_get_response_mode(
+        args.index_type, args.rdma_get_response_mode
+    )
+    transports = normalize_transport_list(args.transports)
+    if "RDMA" in transports and args.mode == "fetch":
+        qps_per_client_per_shard = args.rdma_rc_qps_per_client_per_shard or 32
+        slots_per_qp = args.rdma_rc_slots_per_qp or 1
+        prefetch_depth = args.prefetch_depth or 16
+        if qps_per_client_per_shard <= 0:
+            parser.error("--rdma-rc-qps-per-client-per-shard must be positive")
+        if slots_per_qp <= 0:
+            parser.error("--rdma-rc-slots-per-qp must be positive")
+        slot_capacity = qps_per_client_per_shard * slots_per_qp
+        if prefetch_depth > slot_capacity:
+            parser.error(
+                "RDMA fetch prefetch depth exceeds RC slot capacity: "
+                f"prefetch_depth={prefetch_depth}, "
+                f"rdma_rc_qps_per_client_per_shard={qps_per_client_per_shard}, "
+                f"rdma_rc_slots_per_qp={slots_per_qp}"
+            )
+    if "RDMA" in transports and args.execution_backend == "local":
+        if args.rdma_rc_server_numa_id is None:
+            args.rdma_rc_server_numa_id = 0
+        if (
+            args.rdma_rc_client_numa_id is None
+            and local_numa_node_count() > 1
+        ):
+            args.rdma_rc_client_numa_id = 1
+        server_shards = (
+            len(parse_server_plan(args.server_plan, "RDMA"))
+            if args.server_plan
+            else len(normalize_host_list(args.server_shard_ips, "server_shard_ips"))
+        )
+        get_workers = args.rdma_rc_server_get_workers or 0
+        server_bind_core_stride = max(
+            1, args.server_rdma_threads + get_workers
+        )
+        if args.rdma_server_bind_core_offset is None:
+            args.rdma_server_bind_core_offset = 0
+        if args.rdma_client_bind_core_offset is None:
+            if args.rdma_rc_client_numa_id != args.rdma_rc_server_numa_id:
+                args.rdma_client_bind_core_offset = 0
+            else:
+                args.rdma_client_bind_core_offset = (
+                    server_shards * server_bind_core_stride
+                )
+        if args.rdma_client_bind_core_stride is None:
+            args.rdma_client_bind_core_stride = max(
+                args.client_threads_per_process
+                + args.client_load_threads_per_process,
+                1,
+            )
     return args
 
 
@@ -1909,8 +2049,10 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     transports = normalize_transport_list(args.transports)
-    server_hosts = normalize_host_list(args.server_hosts, "server_hosts")
-    client_hosts = normalize_host_list(args.client_hosts, "client_hosts")
+    server_shard_ips = normalize_host_list(
+        args.server_shard_ips, "server_shard_ips"
+    )
+    client_ips = normalize_host_list(args.client_ips, "client_ips")
     benchmark_binary = Path(args.benchmark_binary)
     if not benchmark_binary.is_absolute():
         benchmark_binary = (REPO_ROOT / benchmark_binary).resolve()
@@ -1918,7 +2060,11 @@ def main() -> int:
         raise FileNotFoundError(f"benchmark binary not found: {benchmark_binary}")
 
     capacity = args.capacity if args.capacity > 0 else args.record_count
-    load_threads = args.load_threads if args.load_threads > 0 else args.threads
+    load_threads = (
+        args.client_load_threads_per_process
+        if args.client_load_threads_per_process > 0
+        else args.client_threads_per_process
+    )
     git_metadata = get_git_metadata()
     run_config = {
         "benchmark_ps_runner_version": RUNNER_VERSION,
@@ -1938,14 +2084,13 @@ def main() -> int:
         base_port = resolve_base_port(
             transport,
             spec.base_port,
-            args.server_count,
+            len(server_shard_ips),
         )
         topology = build_topology_plan(
             transport,
-            server_hosts,
-            client_hosts,
-            args.server_count,
-            args.client_count,
+            server_shard_ips,
+            client_ips,
+            args.client_processes_per_ip,
             base_port,
             server_plan=args.server_plan,
             client_plan=args.client_plan,
@@ -1974,7 +2119,7 @@ def main() -> int:
                 capacity=capacity,
                 value_size=args.value_size,
                 max_keys_per_request=max(args.batch_keys, args.max_keys_per_request),
-                num_threads=args.server_num_threads,
+                num_threads=args.server_worker_threads,
                 index_type=args.index_type,
                 dram_allocator=args.dram_allocator,
                 data_root=case_data_root,
@@ -1989,7 +2134,7 @@ def main() -> int:
                 config_path=str(config_path),
                 record_count=args.record_count,
                 runtime_seconds=args.runtime_seconds,
-                threads=args.threads,
+                client_threads_per_process=args.client_threads_per_process,
                 load_threads=load_threads,
                 batch_keys=args.batch_keys,
                 value_size=args.value_size,
@@ -1998,6 +2143,14 @@ def main() -> int:
                 read_ratio=args.read_ratio,
                 mode=args.mode,
                 report_mode=args.report_mode,
+                prefetch_depth=args.prefetch_depth,
+                transaction_profile=args.transaction_profile,
+                rdma_direct_async_fetch=args.rdma_direct_async_fetch,
+                rdma_adapter_skip_prefetch_result_copy=(
+                    args.rdma_adapter_skip_prefetch_result_copy
+                ),
+                rdma_get_response_mode=args.rdma_get_response_mode,
+                skip_load=args.skip_load,
             )
 
             run_config["cases"].append(

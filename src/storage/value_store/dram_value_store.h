@@ -36,9 +36,8 @@ public:
       throw std::runtime_error("failed to create DramValueStore allocator");
     }
     allocator_->Initialize();
-    recycler_ =
-        std::make_unique<base::ThreadSafeDelayedRecycle>(allocator_.get(),
-                                                         kRecycleDelayUs);
+    recycler_ = std::make_unique<base::ThreadSafeDelayedRecycle>(
+        allocator_.get(), kRecycleDelayUs);
   }
 
   uint64_t Alloc(size_t size) override {
@@ -95,11 +94,76 @@ public:
     return allocator_->GetMallocData(DecodeOffset(handle));
   }
 
+  char* RDMABackingData() const override { return allocator_->BackingData(); }
+
+  size_t RDMABackingSize() const override {
+    return static_cast<size_t>(allocator_->BackingSize());
+  }
+
   size_t SlotCapacity(uint64_t handle) const override {
     if (handle == kValueHandleNone) {
       return 0;
     }
     return static_cast<size_t>(allocator_->GetMallocSize(DecodeOffset(handle)));
+  }
+
+  bool ReadFlatFixedRows(const uint64_t* handles,
+                         size_t num_rows,
+                         void* out_buf,
+                         size_t row_bytes,
+                         uint64_t* missing_rows) const override {
+    if (handles == nullptr || out_buf == nullptr || row_bytes == 0) {
+      return false;
+    }
+    uint64_t local_missing = 0;
+    char* dst              = static_cast<char*>(out_buf);
+    for (size_t row = 0; row < num_rows; ++row) {
+      char* row_dst = dst + row * row_bytes;
+      if (handles[row] == kValueHandleNone) {
+        std::memset(row_dst, 0, row_bytes);
+        ++local_missing;
+        continue;
+      }
+      const char* src = Ptr(handles[row]);
+      if (src == nullptr) {
+        return false;
+      }
+      std::memcpy(row_dst, src, row_bytes);
+    }
+    if (missing_rows != nullptr) {
+      *missing_rows = local_missing;
+    }
+    return true;
+  }
+
+  bool GetDirectFixedRows(const uint64_t* handles,
+                          size_t num_rows,
+                          size_t row_bytes,
+                          DirectFixedRow* rows,
+                          uint64_t* missing_rows) const override {
+    if (handles == nullptr || rows == nullptr || row_bytes == 0) {
+      return false;
+    }
+    uint64_t local_missing = 0;
+    for (size_t row = 0; row < num_rows; ++row) {
+      if (handles[row] == kValueHandleNone) {
+        rows[row] = DirectFixedRow{nullptr, row_bytes, true};
+        ++local_missing;
+        continue;
+      }
+      const char* src = Ptr(handles[row]);
+      if (src == nullptr) {
+        return false;
+      }
+      if (SlotCapacity(handles[row]) < row_bytes) {
+        return false;
+      }
+      rows[row] = DirectFixedRow{src, row_bytes, false};
+    }
+    if (missing_rows != nullptr) {
+      *missing_rows = local_missing;
+    }
+    return true;
   }
 
   std::string GetInfo() const override { return allocator_->GetInfo(); }

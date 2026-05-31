@@ -79,10 +79,12 @@ private:
   };
 
   struct PrefetchState {
-    float* buffer         = nullptr;
-    int rpc_id            = -1;
-    int64_t key_count     = 0;
-    int64_t embedding_dim = 0;
+    float* buffer          = nullptr;
+    std::size_t buffer_id  = 0;
+    int rpc_id             = -1;
+    int64_t key_count      = 0;
+    int64_t embedding_dim  = 0;
+    bool borrowed_response = false;
   };
 
   void EnsureClientInitialized();
@@ -92,6 +94,8 @@ private:
   int PartitionKey(uint64_t key) const;
   std::vector<ShardChunk> BuildChunks(base::ConstArray<uint64_t> keys) const;
   bool FinalizeBatchIfNeeded(BatchRequest* batch);
+  void
+  WaitShardRpcsCooperatively(const std::vector<PendingShardRpc>& shard_rpcs);
   int SubmitGetParameter(base::ConstArray<uint64_t> keys,
                          float* values,
                          bool isAsync,
@@ -99,6 +103,11 @@ private:
   bool QueryRPCFinished(int rpc_id);
   void WaitRPCFinish(int rpc_id);
   void RevokeRPCResource(int rpc_id);
+  float* AcquirePrefetchBuffer(std::size_t bytes, std::size_t* buffer_id);
+  void ReleasePrefetchBuffer(std::size_t buffer_id);
+  const float* BorrowPrefetchResult(const PrefetchState& state,
+                                    std::int32_t* status_code,
+                                    std::size_t* response_bytes);
   PrefetchState GetPrefetchState(uint64_t prefetch_id);
   void MarkPrefetchConsumed(uint64_t prefetch_id);
 
@@ -117,6 +126,9 @@ private:
   mutable std::mutex batches_mu_;
   std::unordered_map<std::uint64_t, BatchRequest> batches_;
   std::unordered_map<std::string, TableState> tables_;
+  std::vector<std::unique_ptr<char[]>> prefetch_buffers_;
+  std::vector<std::size_t> prefetch_buffer_capacities_;
+  std::vector<std::size_t> free_prefetch_buffer_ids_;
   std::unordered_map<uint64_t, PrefetchState> prefetches_;
   uint64_t next_prefetch_id_ = 1;
 };

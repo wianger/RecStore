@@ -19,6 +19,12 @@ public:
     size_t size;
   };
 
+  struct DirectFixedRow {
+    const char* data = nullptr;
+    size_t size      = 0;
+    bool missing     = false;
+  };
+
   virtual ~ValueStore() = default;
 
   virtual uint64_t Alloc(size_t size)                                  = 0;
@@ -28,6 +34,8 @@ public:
   virtual void Free(uint64_t handle)                                   = 0;
   virtual void Retire(uint64_t handle) { Free(handle); }
   virtual const char* DirectPtr(uint64_t handle) const { return nullptr; }
+  virtual char* RDMABackingData() const { return nullptr; }
+  virtual size_t RDMABackingSize() const { return 0; }
   virtual size_t SlotCapacity(uint64_t handle) const = 0;
   virtual void BatchWrite(const std::vector<uint64_t>& handles,
                           const std::vector<WriteSpec>& specs) {
@@ -56,6 +64,34 @@ public:
           handles[i], out_results[i].data.data(), out_results[i].data.size());
       out_results[i].data.resize(actual);
     }
+  }
+
+  virtual bool ReadFlatFixedRows(
+      const uint64_t* handles,
+      size_t num_rows,
+      void* out_buf,
+      size_t row_bytes,
+      uint64_t* missing_rows) const {
+    (void)handles;
+    (void)num_rows;
+    (void)out_buf;
+    (void)row_bytes;
+    (void)missing_rows;
+    return false;
+  }
+
+  virtual bool GetDirectFixedRows(
+      const uint64_t* handles,
+      size_t num_rows,
+      size_t row_bytes,
+      DirectFixedRow* rows,
+      uint64_t* missing_rows) const {
+    (void)handles;
+    (void)num_rows;
+    (void)row_bytes;
+    (void)rows;
+    (void)missing_rows;
+    return false;
   }
 
   virtual std::vector<uint64_t>

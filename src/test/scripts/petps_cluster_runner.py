@@ -54,6 +54,7 @@ class PetPSClusterRunner:
         rdma_rc_slots_per_qp=None,
         rdma_rc_profile_interval_ms=None,
         rdma_rc_server_coroutines_per_thread=None,
+        rdma_rc_server_get_workers=None,
         rdma_rc_inline_bytes=None,
         rdma_rc_client_numa_id=None,
         rdma_rc_server_numa_id=None,
@@ -64,10 +65,14 @@ class PetPSClusterRunner:
         rdma_wait_timeout_ms=None,
         rdma_profile_interval_ms=None,
         rdma_server_coroutines_per_thread=None,
+        rdma_server_get_workers=None,
         rdma_inline_bytes=None,
         rdma_client_numa_id=None,
         rdma_client_numa_ids=None,
         rdma_server_numa_id=None,
+        rdma_server_bind_core_offset=None,
+        rdma_client_bind_core_offset=None,
+        rdma_client_bind_core_stride=None,
         rdma_fake_get_mode=None,
         rdma_skip_client_copy=None,
         validate_routing=False,
@@ -132,6 +137,11 @@ class PetPSClusterRunner:
             rdma_server_coroutines_per_thread,
             rdma_rc_server_coroutines_per_thread,
         )
+        self.rdma_server_get_workers = self._coalesce_optional_values(
+            "rdma_server_get_workers",
+            rdma_server_get_workers,
+            rdma_rc_server_get_workers,
+        )
         self.rdma_inline_bytes = self._coalesce_optional_values(
             "rdma_inline_bytes",
             rdma_inline_bytes,
@@ -159,6 +169,14 @@ class PetPSClusterRunner:
             rdma_server_numa_id,
             rdma_rc_server_numa_id,
         )
+        self.rdma_server_bind_core_offset = rdma_server_bind_core_offset
+        self.rdma_client_bind_core_offset = rdma_client_bind_core_offset
+        self.rdma_client_bind_core_stride = rdma_client_bind_core_stride
+        if (
+            self.rdma_client_bind_core_stride is not None
+            and self.rdma_client_bind_core_stride < 0
+        ):
+            raise ValueError("rdma_client_bind_core_stride must be non-negative")
         self.rdma_fake_get_mode = self._coalesce_optional_values(
             "rdma_fake_get_mode",
             rdma_fake_get_mode,
@@ -175,6 +193,7 @@ class PetPSClusterRunner:
         self.rdma_rc_server_coroutines_per_thread = (
             self.rdma_server_coroutines_per_thread
         )
+        self.rdma_rc_server_get_workers = self.rdma_server_get_workers
         self.rdma_rc_inline_bytes = self.rdma_inline_bytes
         self.rdma_rc_client_numa_id = self.rdma_client_numa_id
         self.rdma_rc_client_numa_ids = self.rdma_client_numa_ids
@@ -218,11 +237,37 @@ class PetPSClusterRunner:
             detail += f" {extra}"
         print(f"[petps-status]{detail}")
 
-    def build_env(self):
+    def build_env(self, bind_core_offset=None):
         env = os.environ.copy()
         if self.validate_routing:
             env["RECSTORE_RDMA_VALIDATE_ROUTING"] = "1"
+        if bind_core_offset is not None:
+            env["RECSTORE_BIND_CORE_OFFSET"] = str(bind_core_offset)
         return env
+
+    def server_bind_core_stride(self):
+        get_workers = self.rdma_server_get_workers or 0
+        return max(1, self.thread_num + get_workers)
+
+    def build_server_env(self, global_id=0):
+        offset = self.rdma_server_bind_core_offset
+        if offset is not None:
+            offset += global_id * self.server_bind_core_stride()
+        return self.build_env(bind_core_offset=offset)
+
+    def client_bind_core_offset(self, client_index):
+        offset = self.rdma_client_bind_core_offset
+        if offset is None:
+            return None
+        stride = self.rdma_client_bind_core_stride
+        if stride is None:
+            stride = 1
+        return offset + client_index * stride
+
+    def build_client_env(self, client_index=0):
+        return self.build_env(
+            bind_core_offset=self.client_bind_core_offset(client_index)
+        )
 
     def build_server_cmd(self, global_id):
         cmd = [
@@ -281,10 +326,16 @@ class PetPSClusterRunner:
                 "--rdma_rc_server_coroutines_per_thread="
                 f"{self.rdma_server_coroutines_per_thread}"
             )
+        if self.rdma_server_get_workers is not None:
+            cmd.append(
+                "--rdma_rc_server_get_workers="
+                f"{self.rdma_server_get_workers}"
+            )
         if self.rdma_inline_bytes is not None:
             cmd.append(f"--rdma_rc_inline_bytes={self.rdma_inline_bytes}")
         if self.rdma_server_numa_id is not None:
             cmd.append(f"--rdma_rc_server_numa_id={self.rdma_server_numa_id}")
+            cmd.append(f"--numa_id={self.rdma_server_numa_id}")
         if self.rdma_fake_get_mode is not None:
             cmd.append(f"--rdma_rc_fake_get_mode={self.rdma_fake_get_mode}")
         return cmd
@@ -462,7 +513,7 @@ class PetPSClusterRunner:
         if not self.server_path.exists():
             raise FileNotFoundError(f"Server binary not found: {self.server_path}")
 
-        env = self.build_env()
+        env = self.build_server_env(0)
         if self.show_control_plane_logs:
             print(
                 "[petps-control-plane] config "
@@ -475,7 +526,7 @@ class PetPSClusterRunner:
         self._wait_for_control_plane_ready(shard0)
 
         for global_id in range(1, self.num_servers):
-            self._start_server_process(global_id, env)
+            self._start_server_process(global_id, self.build_server_env(global_id))
 
         if self.startup_delay > 0:
             time.sleep(self.startup_delay)
@@ -513,7 +564,7 @@ class PetPSClusterRunner:
 
     def run_client(self, argv, client_index=0, stream_output=True, timeout=None):
         cmd = self.build_client_cmd(argv, client_index=client_index)
-        env = self.build_env()
+        env = self.build_client_env(client_index)
         if self.show_control_plane_logs:
             print(
                 "[petps-control-plane] client "

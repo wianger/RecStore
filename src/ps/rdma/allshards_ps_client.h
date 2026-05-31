@@ -73,6 +73,8 @@ private:
   int PartitionKey(uint64_t key) const;
   std::vector<ShardChunk> BuildChunks(base::ConstArray<uint64_t> keys) const;
   bool FinalizeBatchIfNeeded(BatchRequest* batch);
+  void WaitShardRpcsCooperatively(
+      const std::vector<PendingShardRpc>& shard_rpcs) const;
 
   std::vector<BaseParameterClient*> clients_; // Shard-local clients.
   int num_shards_; // Number of logical shards in the distributed layout.

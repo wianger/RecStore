@@ -12,6 +12,8 @@
 
 namespace {
 
+constexpr uint64_t kTestSsdCapacityBytes = 64ULL * 1024ULL * 1024ULL;
+
 recstore::storage::HpsRecStoreBackendParams
 MakeParams(const std::string& path) {
   recstore::storage::HpsRecStoreBackendParams params;
@@ -130,7 +132,7 @@ TEST(HpsRecStoreBackendTest, SsdValueStoreInsertFetchAndMissCallback) {
 
   auto params               = MakeParams(path);
   params.value_store_type   = "SSD_VALUE_STORE";
-  params.ssd_capacity_bytes = 1024 * 1024;
+  params.ssd_capacity_bytes = kTestSsdCapacityBytes;
   params.ssd_value_file     = path + "/value_pages.db";
   params.ssd_io_backend     = "IOURING";
   params.ssd_queue_depth    = 64;
@@ -157,7 +159,7 @@ TEST(HpsRecStoreBackendTest, TieredValueStoreInsertFetchAndMissCallback) {
   auto params                = MakeParams(path);
   params.value_store_type    = "TIERED_VALUE_STORE";
   params.dram_capacity_bytes = sizeof(float) * 2;
-  params.ssd_capacity_bytes  = 1024 * 1024;
+  params.ssd_capacity_bytes  = kTestSsdCapacityBytes;
   params.ssd_value_file      = path + "/tiered_value_pages.db";
   params.ssd_io_backend      = "IOURING";
   params.ssd_queue_depth     = 64;

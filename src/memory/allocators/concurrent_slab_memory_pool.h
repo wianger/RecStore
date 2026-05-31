@@ -35,16 +35,17 @@ inline int& AllocWordHintTls() {
   return hint;
 }
 
-inline int TryAllocFromBitmap(uint64_t* words, int n_words, int start_word = 0) {
+inline int
+TryAllocFromBitmap(uint64_t* words, int n_words, int start_word = 0) {
   for (int w = 0; w < n_words; ++w) {
-    const int i = (start_word + w) % n_words;
+    const int i  = (start_word + w) % n_words;
     uint64_t old = words[i];
     while (true) {
       const uint64_t inv = ~old;
       if (!inv) {
         break;
       }
-      const uint64_t pos = static_cast<uint64_t>(__builtin_ctzll(inv));
+      const uint64_t pos     = static_cast<uint64_t>(__builtin_ctzll(inv));
       const uint64_t desired = old | (1ull << pos);
       if (__sync_bool_compare_and_swap(&words[i], old, desired)) {
         return i * 64 + static_cast<int>(pos);
@@ -56,10 +57,10 @@ inline int TryAllocFromBitmap(uint64_t* words, int n_words, int start_word = 0) 
 }
 
 inline bool TryFreeBitmapBit(uint64_t* words, int bit) {
-  const int i   = bit / 64;
-  const int pos = bit % 64;
+  const int i               = bit / 64;
+  const int pos             = bit % 64;
   const uint64_t clear_mask = ~(1ull << pos);
-  uint64_t old                = words[i];
+  uint64_t old              = words[i];
   while (true) {
     if ((old & (1ull << pos)) == 0) {
       return false;
@@ -129,10 +130,9 @@ class ConcurrentSlabMemoryPool : public MallocApi {
     char* Malloc() {
       CHECK(IsActivated());
       const int nr_entries = header_->nr_entries_;
-      uint64_t* words =
-          concurrent_slab_detail::BitmapWords(header_->bitmap_);
+      uint64_t* words   = concurrent_slab_detail::BitmapWords(header_->bitmap_);
       const int n_words = concurrent_slab_detail::BitmapNumWords(nr_entries);
-      int& word_hint = concurrent_slab_detail::AllocWordHintTls();
+      int& word_hint    = concurrent_slab_detail::AllocWordHintTls();
       const int entry_id = concurrent_slab_detail::TryAllocFromBitmap(
           words, n_words, n_words > 0 ? word_hint % n_words : 0);
       if (entry_id < 0) {
@@ -150,8 +150,7 @@ class ConcurrentSlabMemoryPool : public MallocApi {
       const bool was_full =
           allocated_entries_.load(std::memory_order_relaxed) >= nr_entries;
       const int entry_id = EntryId(memory_data);
-      uint64_t* words =
-          concurrent_slab_detail::BitmapWords(header_->bitmap_);
+      uint64_t* words = concurrent_slab_detail::BitmapWords(header_->bitmap_);
       CHECK(concurrent_slab_detail::TryFreeBitmapBit(words, entry_id))
           << "double free or corrupt pointer in chunk " << chunk_id_;
       allocated_entries_.fetch_sub(1, std::memory_order_relaxed);
@@ -195,9 +194,7 @@ class ConcurrentSlabMemoryPool : public MallocApi {
           (reinterpret_cast<char*>(memory_data) - data_) / SlabSize());
     }
 
-    char* Entry(int entry_id) const {
-      return data_ + entry_id * SlabSize();
-    }
+    char* Entry(int entry_id) const { return data_ + entry_id * SlabSize(); }
 
     struct ChunkHeader {
       int slab_size_  = 0;
@@ -205,8 +202,7 @@ class ConcurrentSlabMemoryPool : public MallocApi {
       base::BitMap bitmap_[0];
 
       size_t HeaderSize() const {
-        return sizeof(ChunkHeader) +
-               base::BitMap::MemorySize(nr_entries_);
+        return sizeof(ChunkHeader) + base::BitMap::MemorySize(nr_entries_);
       }
 
       static size_t HeaderSize(int nr_entries) {
@@ -247,8 +243,8 @@ public:
     if (base::file_util::PathExists(filename)) {
       CHECK(base::file_util::Delete(filename, false));
     }
-    shm_file_ = ShmFile::New(
-        ShmFile::ConfigForMedium("DRAM", filename, memory_size));
+    shm_file_ =
+        ShmFile::New(ShmFile::ConfigForMedium("DRAM", filename, memory_size));
     CHECK(shm_file_) << filename << " " << memory_size;
 
     const int64 aligned_size =
@@ -258,8 +254,8 @@ public:
 
     chunks_.reserve(static_cast<size_t>(nr_chunks_));
     for (int64 i = 0; i < nr_chunks_; ++i) {
-      auto* chunk =
-          new SlabChunk(shm_file_->Data() + i * kChunkSize, static_cast<uint64_t>(i));
+      auto* chunk = new SlabChunk(
+          shm_file_->Data() + i * kChunkSize, static_cast<uint64_t>(i));
       chunk->Initialize();
       chunks_.push_back(chunk);
       free_chunks_.push_back(chunk);
@@ -283,10 +279,9 @@ public:
     if (PERFECT_FIT_MOD) {
       return NewInternal(memory_size);
     }
-    auto iter =
-        allocated_slab_sizes_.lower_bound(kMetaDataSize + memory_size);
+    auto iter = allocated_slab_sizes_.lower_bound(kMetaDataSize + memory_size);
     CHECK(iter != allocated_slab_sizes_.end());
-    char* ptr  = NewInternal(*iter);
+    char* ptr                    = NewInternal(*iter);
     *reinterpret_cast<int*>(ptr) = memory_size;
     return ptr + kMetaDataSize;
   }
@@ -300,9 +295,9 @@ public:
     if (chunk_id < 0 || chunk_id >= nr_chunks_) {
       return false;
     }
-    SlabChunk* chunk = chunks_[static_cast<size_t>(chunk_id)];
-    const bool was_full = chunk->Free(memory_data);
-    const int slab_size = chunk->SlabSize();
+    SlabChunk* chunk     = chunks_[static_cast<size_t>(chunk_id)];
+    const bool was_full  = chunk->Free(memory_data);
+    const int slab_size  = chunk->SlabSize();
     ThreadLocalPool& tls = PoolTls();
     SlabChunk*& hot      = tls.hot_by_slab[slab_size];
     if (hot == nullptr && !chunk->Full()) {
@@ -352,13 +347,18 @@ public:
     total_malloc_.store(0, std::memory_order_relaxed);
   }
 
+  char* BackingData() const override { return shm_file_->Data(); }
+  int64 BackingSize() const override {
+    return nr_chunks_ * static_cast<int64>(kChunkSize);
+  }
+
   std::string GetInfo() const override {
     uint64_t malloced_bytes = 0;
     uint64_t malloced_chunk = 0;
     for (auto* each : chunks_) {
       if (each->IsActivated()) {
-        malloced_bytes +=
-            static_cast<uint64_t>(each->AllocatedEntryNumber()) * each->SlabSize();
+        malloced_bytes += static_cast<uint64_t>(each->AllocatedEntryNumber()) *
+                          each->SlabSize();
         malloced_chunk++;
       }
     }

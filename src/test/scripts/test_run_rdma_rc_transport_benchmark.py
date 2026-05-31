@@ -10,6 +10,7 @@ from run_rdma_rc_transport_benchmark import (  # noqa: E402
     _stream_process_output,
     build_benchmark_cmd,
     collect_summary_rows,
+    local_numa_node_count,
     parse_client_numa_ids,
 )
 
@@ -103,10 +104,14 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
         self.assertIn("--slots-per-qp", completed.stdout)
         self.assertIn("--profile-interval-ms", completed.stdout)
         self.assertIn("--server-coroutines-per-thread", completed.stdout)
+        self.assertIn("--server-get-workers", completed.stdout)
         self.assertIn("--inline-bytes", completed.stdout)
         self.assertIn("--client-numa-id", completed.stdout)
         self.assertIn("--client-numa-ids", completed.stdout)
         self.assertIn("--server-numa-id", completed.stdout)
+        self.assertIn("--client-bind-core-offset", completed.stdout)
+        self.assertIn("--client-bind-core-stride", completed.stdout)
+        self.assertIn("--server-bind-core-offset", completed.stdout)
         self.assertIn("--fake-get-mode", completed.stdout)
         self.assertIn("--skip-client-copy", completed.stdout)
         self.assertIn("--rdma-control-plane-host", completed.stdout)
@@ -116,6 +121,9 @@ class TestRunRDMARCTransportBenchmark(unittest.TestCase):
         self.assertEqual(parse_client_numa_ids("0,1", 2), [0, 1])
         with self.assertRaises(ValueError):
             parse_client_numa_ids("0,1", 3)
+
+    def test_local_numa_node_count_is_positive(self):
+        self.assertGreaterEqual(local_numa_node_count(), 1)
 
 
 if __name__ == "__main__":

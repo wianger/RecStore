@@ -30,6 +30,15 @@ DEFINE_int32(rdma_rc_server_coroutines_per_thread,
              1,
              "RC write server coroutine count per poll thread. Values greater "
              "than 1 enable cooperative slot scanning inside each poll thread");
+DEFINE_int32(rdma_rc_server_get_workers,
+             0,
+             "Experimental RC write server GET payload worker thread count. "
+             "0 keeps GET handling on the polling thread");
+DEFINE_int32(rdma_rc_wait_spin_iterations,
+             0,
+             "Client-side status polling spin iterations before yielding. "
+             "Higher values reduce scheduler handoff overhead for low-latency "
+             "RDMA completions at the cost of more CPU busy polling");
 DEFINE_int32(rdma_rc_inline_bytes,
              64,
              "Requested RC write inline-data threshold in bytes. Small RDMA "
@@ -55,8 +64,8 @@ DEFINE_string(rdma_control_plane_host,
               "Shard-0 RDMA control-plane TCP host");
 DEFINE_string(rdma_rc_fake_get_mode,
               "none",
-              "Benchmark-only fake GET mode: none, status_only, or "
-              "payload_memset");
+              "Benchmark-only fake GET mode: none, status_only, index_only, "
+              "or payload_memset");
 DEFINE_bool(rdma_rc_skip_client_copy,
             false,
             "Benchmark-only option to skip copying GET response payload from "

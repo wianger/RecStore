@@ -5,6 +5,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -27,6 +29,10 @@
 #include "ps/local_shm/local_shm_client.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
+#include "ps/rdma/rdma_common.h"
+#include "ps/rdma/rdma_protocol.h"
+#include "ps/rdma/rc_options.h"
+#include "ps/rdma/rdma_status.h"
 
 DEFINE_string(transport, "rdma", "rdma|grpc|brpc");
 DEFINE_string(host, "127.0.0.1", "server host");
@@ -54,6 +60,18 @@ DEFINE_int32(read_ratio, 100, "read percentage for mixed mode");
 DEFINE_uint64(seed, 0x9e3779b97f4a7c15ULL, "base random seed");
 DEFINE_bool(skip_load, false, "skip transactions preload phase");
 DEFINE_bool(load_only, false, "run transactions preload phase and exit");
+DEFINE_int32(prefetch_depth,
+             0,
+             "fetch-only prefetch pipeline depth for transactions; "
+             "0 uses the RDMA default depth");
+DEFINE_bool(transaction_profile,
+            false,
+            "print per-thread transaction timing breakdown");
+DEFINE_bool(rdma_direct_async_fetch,
+            false,
+            "RDMA fetch-only transactions use BaseParameterClient async GET "
+            "with preallocated output buffers, bypassing the PS prefetch "
+            "adapter state and result vector copy");
 DECLARE_int32(value_size);
 
 namespace {
@@ -109,6 +127,15 @@ const char* LocalOpcodeLabel(uint32_t opcode) {
     return "UNKNOWN";
   }
 }
+
+struct TransactionProfileStats {
+  uint64_t make_keys_ns = 0;
+  uint64_t submit_ns    = 0;
+  uint64_t consume_ns   = 0;
+  uint64_t wait_ns      = 0;
+  uint64_t copy_ns      = 0;
+  uint64_t iterations   = 0;
+};
 
 class FastRandom {
 public:
@@ -467,7 +494,94 @@ void PrintLocalShmTransportStatsByOpcode(
   }
 }
 
+bool PrefetchFlat(recstore::BasePSClient* client,
+                  const std::vector<uint64_t>& keys,
+                  uint64_t* prefetch_id) {
+  if (prefetch_id == nullptr) {
+    return false;
+  }
+  *prefetch_id = client->PrefetchParameter(base::ConstArray<uint64_t>(keys));
+  return *prefetch_id != 0;
+}
+
+bool ConsumePrefetchFlat(
+    recstore::BasePSClient* client,
+    uint64_t prefetch_id,
+    std::vector<float>* output,
+    int64_t* num_rows,
+    int dim) {
+  if (output == nullptr || num_rows == nullptr) {
+    return false;
+  }
+  return client->GetPrefetchResultFlat(prefetch_id, output, num_rows, dim);
+}
+
+int64_t NsSince(std::chrono::steady_clock::time_point start,
+                std::chrono::steady_clock::time_point end) {
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
+      .count();
+}
+
 using BenchmarkClient = std::unique_ptr<recstore::BasePSClient>;
+
+struct DirectRdmaClient {
+  std::vector<std::unique_ptr<petps::PetPSClient>> shard_clients;
+  std::unique_ptr<AllShardsParameterClientWrapper> multi_client;
+  BaseParameterClient* client = nullptr;
+};
+
+DirectRdmaClient
+CreateDirectRdmaClientFromConfig(const nlohmann::json& config) {
+  DirectRdmaClient direct;
+  const auto dist_cfg =
+      config.contains("distributed_client")
+          ? config["distributed_client"]
+          : nlohmann::json::object();
+  const auto client_cfg =
+      config.contains("client") ? config["client"] : nlohmann::json::object();
+  const int num_shards = dist_cfg.value("num_shards", FLAGS_num_shards);
+  const std::string hash_method =
+      dist_cfg.value("hash_method", std::string("city_hash"));
+  CHECK_GT(num_shards, 0);
+
+  if (num_shards == 1) {
+    direct.shard_clients.push_back(std::make_unique<petps::PetPSClient>(
+        client_cfg.value("host", FLAGS_host),
+        client_cfg.value("port", FLAGS_port),
+        client_cfg.value("shard", 0)));
+    direct.client = direct.shard_clients.front().get();
+    direct.client->InitThread();
+    return direct;
+  }
+
+  const auto servers_it = dist_cfg.find("servers");
+  CHECK(servers_it != dist_cfg.end() && servers_it->is_array() &&
+        !servers_it->empty())
+      << "RDMA direct async fetch requires distributed_client.servers for "
+         "multi-shard runs";
+
+  std::vector<BaseParameterClient*> raw_clients;
+  std::vector<int> shard_ids;
+  raw_clients.reserve(static_cast<std::size_t>(num_shards));
+  shard_ids.reserve(static_cast<std::size_t>(num_shards));
+  for (const auto& server : *servers_it) {
+    const int shard = server.value("shard", -1);
+    CHECK_GE(shard, 0)
+        << "RDMA direct async fetch requires explicit server shard ids";
+    direct.shard_clients.push_back(std::make_unique<petps::PetPSClient>(
+        server.value("host", std::string("127.0.0.1")),
+        server.value("port", 25000),
+        shard));
+    raw_clients.push_back(direct.shard_clients.back().get());
+    shard_ids.push_back(shard);
+  }
+  CHECK_EQ(static_cast<int>(raw_clients.size()), num_shards);
+  direct.multi_client = std::make_unique<AllShardsParameterClientWrapper>(
+      raw_clients, num_shards, hash_method, shard_ids);
+  direct.client = direct.multi_client.get();
+  direct.client->InitThread();
+  return direct;
+}
 
 PhaseStats LoadRecords(
     const std::string& transport,
@@ -618,6 +732,304 @@ PhaseStats RunTransactions(
   return total;
 }
 
+PhaseStats RunPrefetchFetchTransactions(
+    const std::string& transport,
+    int dim,
+    int prefetch_depth,
+    std::vector<BenchmarkClient>* reusable_clients = nullptr) {
+  CHECK_GT(prefetch_depth, 0);
+  CHECK_EQ(FLAGS_mode, "fetch")
+      << "--prefetch_depth currently supports fetch mode only";
+  if (reusable_clients != nullptr) {
+    CHECK_EQ(static_cast<int>(reusable_clients->size()), FLAGS_thread_num);
+  }
+
+  std::atomic<bool> start{false};
+  std::atomic<bool> stop{false};
+  std::vector<std::thread> threads;
+  std::vector<PhaseStats> stats(FLAGS_thread_num);
+  std::vector<TransactionProfileStats> profile_stats(FLAGS_thread_num);
+
+  struct PendingFetch {
+    uint64_t prefetch_id = 0;
+    std::vector<uint64_t> keys;
+  };
+
+  for (int tid = 0; tid < FLAGS_thread_num; ++tid) {
+    threads.emplace_back([&, tid]() {
+      base::auto_bind_core();
+      auto owned_client =
+          reusable_clients == nullptr
+              ? CreateBenchmarkClient(transport)
+              : nullptr;
+      recstore::BasePSClient* client =
+          reusable_clients == nullptr
+              ? owned_client.get()
+              : reusable_clients->at(static_cast<std::size_t>(tid)).get();
+      CHECK_EQ(client->InitEmbeddingTable(
+                   "benchmark",
+                   recstore::EmbeddingTableConfig{
+                       static_cast<uint64_t>(FLAGS_record_count),
+                       static_cast<uint64_t>(dim)}),
+               0);
+      KeyGenerator key_gen(
+          FLAGS_distribution,
+          static_cast<uint64_t>(FLAGS_record_count),
+          FLAGS_zipfian_alpha,
+          FLAGS_seed + static_cast<uint64_t>(tid));
+      std::deque<PendingFetch> pending;
+      std::vector<float> output;
+      int64_t num_rows = 0;
+      PhaseStats local;
+      TransactionProfileStats local_profile;
+
+      auto make_keys = [&]() {
+        const auto begin = std::chrono::steady_clock::now();
+        std::vector<uint64_t> keys(static_cast<size_t>(FLAGS_batch_keys));
+        for (auto& key : keys) {
+          key = key_gen.NextKey();
+        }
+        const auto end = std::chrono::steady_clock::now();
+        local_profile.make_keys_ns +=
+            static_cast<uint64_t>(NsSince(begin, end));
+        return keys;
+      };
+      auto submit_one = [&]() {
+        PendingFetch fetch;
+        fetch.keys              = make_keys();
+        const auto submit_begin = std::chrono::steady_clock::now();
+        CHECK(PrefetchFlat(client, fetch.keys, &fetch.prefetch_id))
+            << transport << " PrefetchParameter failed";
+        const auto submit_end = std::chrono::steady_clock::now();
+        local_profile.submit_ns +=
+            static_cast<uint64_t>(NsSince(submit_begin, submit_end));
+        pending.push_back(std::move(fetch));
+      };
+      auto consume_front = [&]() {
+        PendingFetch fetch = std::move(pending.front());
+        pending.pop_front();
+        const auto consume_begin = std::chrono::steady_clock::now();
+        CHECK(ConsumePrefetchFlat(
+            client, fetch.prefetch_id, &output, &num_rows, dim))
+            << transport << " GetPrefetchResultFlat failed";
+        const auto consume_end = std::chrono::steady_clock::now();
+        CHECK_EQ(num_rows, static_cast<int64_t>(fetch.keys.size()));
+        local_profile.consume_ns +=
+            static_cast<uint64_t>(NsSince(consume_begin, consume_end));
+        local_profile.wait_ns +=
+            static_cast<uint64_t>(NsSince(consume_begin, consume_end));
+        ++local_profile.iterations;
+        ++local.batches;
+        local.key_ops += fetch.keys.size();
+      };
+
+      while (!start.load(std::memory_order_acquire)) {
+      }
+      for (int i = 0; i < prefetch_depth; ++i) {
+        submit_one();
+      }
+      while (!stop.load(std::memory_order_relaxed)) {
+        consume_front();
+        submit_one();
+      }
+      while (!pending.empty()) {
+        consume_front();
+      }
+      stats[tid]         = local;
+      profile_stats[tid] = local_profile;
+    });
+  }
+
+  start.store(true, std::memory_order_release);
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_running_seconds));
+  stop.store(true, std::memory_order_relaxed);
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  PhaseStats total;
+  for (const auto& each : stats) {
+    total.batches += each.batches;
+    total.key_ops += each.key_ops;
+  }
+  if (FLAGS_transaction_profile) {
+    TransactionProfileStats total_profile;
+    for (const auto& each : profile_stats) {
+      total_profile.make_keys_ns += each.make_keys_ns;
+      total_profile.submit_ns += each.submit_ns;
+      total_profile.consume_ns += each.consume_ns;
+      total_profile.wait_ns += each.wait_ns;
+      total_profile.copy_ns += each.copy_ns;
+      total_profile.iterations += each.iterations;
+    }
+    const double denom =
+        total_profile.iterations == 0
+            ? 1.0
+            : static_cast<double>(total_profile.iterations);
+    std::cout << "PS_BENCHMARK_PROFILE phase=run transport=" << transport
+              << " mode=" << FLAGS_mode << " prefetch_depth=" << prefetch_depth
+              << " batches=" << total_profile.iterations << " make_keys_avg_ns="
+              << static_cast<double>(total_profile.make_keys_ns) / denom
+              << " submit_avg_ns="
+              << static_cast<double>(total_profile.submit_ns) / denom
+              << " consume_avg_ns="
+              << static_cast<double>(total_profile.consume_ns) / denom
+              << " wait_plus_result_avg_ns="
+              << static_cast<double>(total_profile.wait_ns) / denom
+              << std::endl;
+  }
+  return total;
+}
+
+PhaseStats RunRdmaDirectAsyncFetchTransactions(int dim, int prefetch_depth) {
+  CHECK_GT(prefetch_depth, 0);
+  CHECK_EQ(FLAGS_mode, "fetch")
+      << "--rdma_direct_async_fetch currently supports fetch mode only";
+  CHECK_EQ(FLAGS_thread_num, 1)
+      << "RDMA direct async fetch supports one worker thread per benchmark "
+         "process; scale with client processes";
+
+  const nlohmann::json config = LoadClientConfig("RDMA");
+  std::atomic<bool> start{false};
+  std::atomic<bool> stop{false};
+  std::vector<std::thread> threads;
+  std::vector<PhaseStats> stats(FLAGS_thread_num);
+  std::vector<TransactionProfileStats> profile_stats(FLAGS_thread_num);
+
+  struct DirectSlot {
+    int rpc_id = -1;
+    std::vector<uint64_t> keys;
+    std::vector<float> output;
+  };
+
+  for (int tid = 0; tid < FLAGS_thread_num; ++tid) {
+    threads.emplace_back([&, tid]() {
+      base::auto_bind_core();
+      DirectRdmaClient direct     = CreateDirectRdmaClientFromConfig(config);
+      BaseParameterClient* client = direct.client;
+      CHECK_NE(client, nullptr);
+      KeyGenerator key_gen(
+          FLAGS_distribution,
+          static_cast<uint64_t>(FLAGS_record_count),
+          FLAGS_zipfian_alpha,
+          FLAGS_seed + static_cast<uint64_t>(tid));
+
+      const std::size_t response_floats =
+          static_cast<std::size_t>(FLAGS_batch_keys) *
+              static_cast<std::size_t>(dim) +
+          1;
+      std::vector<DirectSlot> slots(static_cast<std::size_t>(prefetch_depth));
+      for (auto& slot : slots) {
+        slot.keys.resize(static_cast<std::size_t>(FLAGS_batch_keys));
+        slot.output.resize(response_floats);
+      }
+
+      PhaseStats local;
+      TransactionProfileStats local_profile;
+
+      auto fill_keys = [&](std::vector<uint64_t>* keys) {
+        const auto begin = std::chrono::steady_clock::now();
+        for (auto& key : *keys) {
+          key = key_gen.NextKey();
+        }
+        const auto end = std::chrono::steady_clock::now();
+        local_profile.make_keys_ns +=
+            static_cast<uint64_t>(NsSince(begin, end));
+      };
+
+      auto submit_slot = [&](DirectSlot* slot) {
+        fill_keys(&slot->keys);
+        const auto submit_begin = std::chrono::steady_clock::now();
+        slot->rpc_id            = client->GetParameter(
+            base::ConstArray<uint64_t>(slot->keys),
+            slot->output.data(),
+            true,
+            0);
+        const auto submit_end = std::chrono::steady_clock::now();
+        local_profile.submit_ns +=
+            static_cast<uint64_t>(NsSince(submit_begin, submit_end));
+      };
+
+      auto consume_slot = [&](DirectSlot* slot) {
+        const auto consume_begin = std::chrono::steady_clock::now();
+        client->WaitRPCFinish(slot->rpc_id);
+        const auto* status_word = petps::FixedSlotStatusWord(
+            slot->output.data(), slot->keys.size(), FLAGS_value_size);
+        CHECK_EQ(*status_word, static_cast<std::int32_t>(petps::RpcStatus::kOk))
+            << "RDMA direct async fetch failed with status=" << *status_word;
+        client->RevokeRPCResource(slot->rpc_id);
+        const auto consume_end = std::chrono::steady_clock::now();
+        local_profile.consume_ns +=
+            static_cast<uint64_t>(NsSince(consume_begin, consume_end));
+        local_profile.wait_ns +=
+            static_cast<uint64_t>(NsSince(consume_begin, consume_end));
+        ++local_profile.iterations;
+        ++local.batches;
+        local.key_ops += slot->keys.size();
+      };
+
+      while (!start.load(std::memory_order_acquire)) {
+      }
+      for (auto& slot : slots) {
+        submit_slot(&slot);
+      }
+      std::size_t next_slot = 0;
+      while (!stop.load(std::memory_order_relaxed)) {
+        DirectSlot& slot = slots[next_slot];
+        consume_slot(&slot);
+        submit_slot(&slot);
+        next_slot = (next_slot + 1) % slots.size();
+      }
+      for (auto& slot : slots) {
+        consume_slot(&slot);
+      }
+
+      stats[tid]         = local;
+      profile_stats[tid] = local_profile;
+    });
+  }
+
+  start.store(true, std::memory_order_release);
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_running_seconds));
+  stop.store(true, std::memory_order_relaxed);
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  PhaseStats total;
+  for (const auto& each : stats) {
+    total.batches += each.batches;
+    total.key_ops += each.key_ops;
+  }
+  if (FLAGS_transaction_profile) {
+    TransactionProfileStats total_profile;
+    for (const auto& each : profile_stats) {
+      total_profile.make_keys_ns += each.make_keys_ns;
+      total_profile.submit_ns += each.submit_ns;
+      total_profile.consume_ns += each.consume_ns;
+      total_profile.wait_ns += each.wait_ns;
+      total_profile.iterations += each.iterations;
+    }
+    const double denom =
+        total_profile.iterations == 0
+            ? 1.0
+            : static_cast<double>(total_profile.iterations);
+    std::cout
+        << "PS_BENCHMARK_PROFILE phase=run transport=RDMA"
+        << " mode=" << FLAGS_mode << " prefetch_depth=" << prefetch_depth
+        << " direct_async_fetch=1"
+        << " batches=" << total_profile.iterations << " make_keys_avg_ns="
+        << static_cast<double>(total_profile.make_keys_ns) / denom
+        << " submit_avg_ns="
+        << static_cast<double>(total_profile.submit_ns) / denom
+        << " consume_avg_ns="
+        << static_cast<double>(total_profile.consume_ns) / denom
+        << " wait_plus_result_avg_ns="
+        << static_cast<double>(total_profile.wait_ns) / denom << std::endl;
+  }
+  return total;
+}
+
 double SecondsSince(std::chrono::steady_clock::time_point start,
                     std::chrono::steady_clock::time_point end) {
   return std::chrono::duration_cast<std::chrono::duration<double>>(end - start)
@@ -648,7 +1060,10 @@ void PrintTransactionResult(const char* phase,
 int main(int argc, char** argv) {
   folly::Init(&argc, &argv);
 
-  const std::string transport   = NormalizeBenchmarkTransport(FLAGS_transport);
+  const std::string transport = NormalizeBenchmarkTransport(FLAGS_transport);
+  if (transport == "RDMA") {
+    base::global_socket_id = FLAGS_rdma_rc_client_numa_id;
+  }
   const std::string report_mode = FLAGS_report_mode;
   CHECK(report_mode == "summary" || report_mode == "per_round" ||
         report_mode == "both")
@@ -658,6 +1073,21 @@ int main(int argc, char** argv) {
   CHECK_EQ(FLAGS_value_size % static_cast<int>(sizeof(float)), 0)
       << "--value_size must be divisible by sizeof(float)";
   const int dim = FLAGS_value_size / sizeof(float);
+  CHECK_GE(FLAGS_prefetch_depth, 0) << "--prefetch_depth must be non-negative";
+  if (FLAGS_prefetch_depth > 0) {
+    CHECK_EQ(FLAGS_workload, "transactions")
+        << "--prefetch_depth is only valid for transactions workload";
+    CHECK_EQ(FLAGS_mode, "fetch")
+        << "--prefetch_depth currently supports fetch mode only";
+  }
+  if (FLAGS_rdma_direct_async_fetch) {
+    CHECK_EQ(FLAGS_workload, "transactions")
+        << "--rdma_direct_async_fetch is only valid for transactions workload";
+    CHECK_EQ(transport, "RDMA")
+        << "--rdma_direct_async_fetch is only valid for RDMA";
+    CHECK_EQ(FLAGS_mode, "fetch")
+        << "--rdma_direct_async_fetch currently supports fetch mode only";
+  }
 
   if (FLAGS_workload == "transactions") {
     CHECK_GT(FLAGS_record_count, 0);
@@ -701,16 +1131,48 @@ int main(int argc, char** argv) {
     if (FLAGS_load_only) {
       return 0;
     }
+    if (FLAGS_rdma_direct_async_fetch) {
+      reusable_clients.clear();
+    }
 
     LocalShmTransportStats run_transport_stats;
     LocalShmTransportStatsByOpcode run_transport_stats_by_opcode;
     const auto run_begin = std::chrono::steady_clock::now();
-    const PhaseStats run = RunTransactions(
-        transport,
-        dim,
-        reusable_clients.empty() ? nullptr : &reusable_clients,
-        &run_transport_stats,
-        &run_transport_stats_by_opcode);
+    const int effective_prefetch_depth =
+        FLAGS_prefetch_depth > 0
+            ? FLAGS_prefetch_depth
+            : (transport == "RDMA" && FLAGS_mode == "fetch" ? 16 : 0);
+    if (transport == "RDMA" && FLAGS_mode == "fetch" &&
+        effective_prefetch_depth > 0) {
+      CHECK_GT(FLAGS_rdma_rc_qps_per_client_per_shard, 0)
+          << "--rdma_rc_qps_per_client_per_shard must be positive";
+      CHECK_GT(FLAGS_rdma_rc_slots_per_qp, 0)
+          << "--rdma_rc_slots_per_qp must be positive";
+      const int slot_capacity =
+          FLAGS_rdma_rc_qps_per_client_per_shard * FLAGS_rdma_rc_slots_per_qp;
+      CHECK_LE(effective_prefetch_depth, slot_capacity)
+          << "RDMA fetch prefetch depth exceeds RC slot capacity; "
+          << "prefetch_depth=" << effective_prefetch_depth
+          << ", qps_per_client_per_shard="
+          << FLAGS_rdma_rc_qps_per_client_per_shard
+          << ", slots_per_qp=" << FLAGS_rdma_rc_slots_per_qp;
+    }
+    const PhaseStats run =
+        FLAGS_rdma_direct_async_fetch
+            ? RunRdmaDirectAsyncFetchTransactions(
+                  dim, std::max(1, effective_prefetch_depth))
+        : effective_prefetch_depth > 0
+            ? RunPrefetchFetchTransactions(
+                  transport,
+                  dim,
+                  effective_prefetch_depth,
+                  reusable_clients.empty() ? nullptr : &reusable_clients)
+            : RunTransactions(
+                  transport,
+                  dim,
+                  reusable_clients.empty() ? nullptr : &reusable_clients,
+                  &run_transport_stats,
+                  &run_transport_stats_by_opcode);
     const auto run_end = std::chrono::steady_clock::now();
     PrintTransactionResult(
         "run", transport, run, SecondsSince(run_begin, run_end));

@@ -36,6 +36,11 @@ public:
   std::size_t ResponseBufferBytes(std::size_t key_count) const;
 
   void* GetReceiveBuffer(size_t size) override;
+  const float* BorrowGetResultPayload(
+      int rpc_id,
+      std::size_t* key_count,
+      std::size_t* response_bytes,
+      std::int32_t* status_code);
   bool QueryRPCFinished(int rpc_id) override;
   void WaitRPCFinish(int rpc_id) override;
   void RevokeRPCResource(int rpc_id) override;

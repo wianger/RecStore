@@ -62,7 +62,8 @@ DEFINE_string(workload,
               "YCSB workload: a/b/c or workloada/workloadb/workloadc");
 DEFINE_string(distribution, "uniform", "key distribution: uniform/zipfian");
 DEFINE_double(zipfian_alpha, 0.9, "Zipfian alpha");
-DEFINE_string(read_mode, "exists", "read mode: exists/get");
+DEFINE_string(read_mode, "exists", "read mode: exists/get/batch_get_flat");
+DEFINE_int32(batch_keys, 500, "keys per BatchGetFlat operation");
 DEFINE_bool(load, true, "run load phase");
 DEFINE_bool(run, true, "run transaction phase");
 DEFINE_bool(print_util, false, "print KVEngine utilization after load");
@@ -295,9 +296,9 @@ BaseKVConfig BuildConfig() {
   if (ssd_index) {
     config.json_config_["index"]["path"] = FLAGS_ssd_path + "/index.db";
     config.json_config_["index"]["io"]   = {
-        {"type", FLAGS_ssd_io_backend},
-        {"queue_depth", FLAGS_ssd_queue_depth},
-        {"base_offset_bytes", 0}};
+          {"type", FLAGS_ssd_io_backend},
+          {"queue_depth", FLAGS_ssd_queue_depth},
+          {"base_offset_bytes", 0}};
   }
 
   uint64_t dram_capacity =
@@ -391,11 +392,21 @@ PhaseStats RunTransactions(
     int threads_num,
     uint64_t record_count,
     int seconds) {
-  const WorkloadMix mix = GetWorkloadMix(workload);
-  const bool use_exists = FLAGS_read_mode == "exists";
-  if (!use_exists && FLAGS_read_mode != "get") {
-    throw std::invalid_argument("read_mode must be exists or get");
+  const WorkloadMix mix         = GetWorkloadMix(workload);
+  const bool use_exists         = FLAGS_read_mode == "exists";
+  const bool use_batch_get_flat = FLAGS_read_mode == "batch_get_flat";
+  if (!use_exists && FLAGS_read_mode != "get" && !use_batch_get_flat) {
+    throw std::invalid_argument(
+        "read_mode must be exists, get, or batch_get_flat");
   }
+  if (FLAGS_batch_keys <= 0) {
+    throw std::invalid_argument("batch_keys must be positive");
+  }
+  if (use_batch_get_flat && FLAGS_value_size % sizeof(float) != 0) {
+    throw std::invalid_argument(
+        "batch_get_flat requires value_size to be a multiple of sizeof(float)");
+  }
+  const int embedding_dim = FLAGS_value_size / sizeof(float);
 
   std::atomic<bool> start{false};
   std::atomic<bool> stop{false};
@@ -412,14 +423,32 @@ PhaseStats RunTransactions(
           0x9e3779b97f4a7c15ULL + static_cast<uint64_t>(tid));
       std::string value(FLAGS_value_size, static_cast<char>('A' + (tid % 26)));
       std::string read_value;
+      std::vector<uint64_t> batch_keys(static_cast<size_t>(FLAGS_batch_keys));
+      std::vector<float> flat_values(static_cast<size_t>(FLAGS_batch_keys) *
+                                     static_cast<size_t>(embedding_dim));
       PhaseStats local;
       while (!start.load(std::memory_order_acquire)) {
       }
       while (!stop.load(std::memory_order_relaxed)) {
-        const uint64_t key = key_gen.NextKey();
         const bool do_read =
             static_cast<int>(key_gen.NextUint(100)) < mix.read_percent;
         if (do_read) {
+          if (use_batch_get_flat) {
+            for (int i = 0; i < FLAGS_batch_keys; ++i) {
+              batch_keys[static_cast<size_t>(i)] = key_gen.NextKey();
+            }
+            (void)kv->BatchGetFlat(
+                base::ConstArray<uint64_t>(
+                    batch_keys.data(), batch_keys.size()),
+                flat_values.data(),
+                FLAGS_batch_keys,
+                embedding_dim,
+                tid);
+            local.read_ops += static_cast<uint64_t>(FLAGS_batch_keys);
+            local.total_ops += static_cast<uint64_t>(FLAGS_batch_keys);
+            continue;
+          }
+          const uint64_t key = key_gen.NextKey();
           if (use_exists) {
             (void)kv->Exists(key, tid);
           } else {
@@ -427,6 +456,7 @@ PhaseStats RunTransactions(
           }
           ++local.read_ops;
         } else {
+          const uint64_t key = key_gen.NextKey();
           kv->Put(key, std::string_view(value.data(), value.size()), tid);
           ++local.update_ops;
         }

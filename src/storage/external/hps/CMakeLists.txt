@@ -30,6 +30,18 @@ if(NOT TARGET rocksdb-shared)
 endif()
 
 if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
+  if(NOT TARGET rdkafka)
+    cmake_policy(PUSH)
+    cmake_policy(SET CMP0077 NEW)
+    set(RDKAFKA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(RDKAFKA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(WITH_CURL OFF CACHE BOOL "" FORCE)
+    add_subdirectory(
+      ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/librdkafka
+      ${PROJECT_BINARY_DIR}/third_party/HugeCTR/librdkafka)
+    cmake_policy(POP)
+  endif()
+
   if(NOT TARGET redis++)
     function(recstore_add_hps_redis)
       cmake_policy(PUSH)

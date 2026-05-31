@@ -9,6 +9,7 @@
 
 #include <infiniband/verbs.h>
 
+#include "base/array.h"
 #include "ps/rdma/global_address.h"
 
 namespace petps {
@@ -177,6 +178,11 @@ struct RawVerbsCompletion {
   ibv_wc_opcode opcode   = IBV_WC_SEND;
 };
 
+struct RawVerbsSge {
+  const void* data  = nullptr;
+  std::size_t bytes = 0;
+};
+
 inline constexpr int kRawVerbsPollBatchSize = 16;
 
 class RawVerbsCompletionBatchCursor {
@@ -221,6 +227,7 @@ public:
   RawVerbsTransport& operator=(const RawVerbsTransport&) = delete;
 
   void RegisterThread();
+  void RegisterMemoryRegion(void* base, std::size_t bytes);
   void* AllocateRegistered(std::size_t bytes);
   std::uint64_t SaveAllocationState() const;
   void RestoreAllocationState(std::uint64_t checkpoint);
@@ -235,6 +242,10 @@ public:
              std::size_t bytes,
              std::uint64_t wr_id,
              bool signaled);
+  void WriteSg(base::ConstArray<RawVerbsSge> sges,
+               GlobalAddress remote,
+               std::uint64_t wr_id,
+               bool signaled);
   void WriteWithImm(const void* local,
                     GlobalAddress remote,
                     std::size_t bytes,
@@ -253,6 +264,7 @@ public:
 
 private:
   struct Impl;
+  ibv_mr* FindLocalMr(const void* ptr, std::size_t bytes) const;
   std::unique_ptr<Impl> impl_;
 };
 
