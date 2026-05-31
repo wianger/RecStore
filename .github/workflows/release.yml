@@ -157,7 +157,6 @@ jobs:
           set -euo pipefail
           bash ci/pack/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-ps_server.tar.gz" build/bin/ps_server
           bash ci/pack/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-recstore_ops.tar.gz" build/lib/lib_recstore_ops.so
-          bash ci/pack/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-ycsb.tar.gz" build/bin/ycsb
 
       - name: Pack third_party sources
         run: |
@@ -266,7 +265,6 @@ jobs:
           files: |
             build/recstore-${{ needs.prepare-release.outputs.version }}-linux-x86_64-ps_server.tar.gz
             build/recstore-${{ needs.prepare-release.outputs.version }}-linux-x86_64-recstore_ops.tar.gz
-            build/recstore-${{ needs.prepare-release.outputs.version }}-linux-x86_64-ycsb.tar.gz
             build/recstore-${{ needs.prepare-release.outputs.version }}-linux-x86_64-third_party.tar.gz
             binary/torch-${{ env.TORCH_VERSION }}*linux_x86_64.whl
 
