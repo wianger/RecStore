@@ -26,3 +26,20 @@ def test_release_workflow_builds_cpu_libtorch_ops_package() -> None:
     assert "cmake -DENABLE_CUDA=OFF" in workflow
     assert "bash ci/pack/pack_artifact.sh" in workflow
     assert "build/lib/lib_recstore_ops.so" in workflow
+
+
+def test_weekly_prerelease_can_be_manually_dispatched() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "workflow_dispatch:" in workflow
+    assert 'if [ "${GITHUB_EVENT_NAME}" = "push" ]; then' in workflow
+    assert "Weekly Pre-release" in workflow
+
+
+def test_weekly_release_notes_use_last_seven_days_from_head() -> None:
+    workflow = (REPO_ROOT / ".github/workflows/release.yml").read_text()
+
+    assert "release_notes_scope" in workflow
+    assert "git rev-list -n 1 --before='7 days ago' HEAD" in workflow
+    assert "RECENT_COMMITS=\"$(git rev-list --count \"${RELEASE_NOTES_SCOPE}\")\"" in workflow
+    assert "needs.prepare-release.outputs.release_notes_scope" in workflow

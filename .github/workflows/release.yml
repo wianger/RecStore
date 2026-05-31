@@ -6,6 +6,7 @@ on:
       - "v*"
   schedule:
     - cron: "0 15 * * 0"
+  workflow_dispatch:
 
 permissions:
   actions: read
@@ -20,6 +21,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       release_name: ${{ steps.meta.outputs.release_name }}
       prerelease: ${{ steps.meta.outputs.prerelease }}
+      release_notes_scope: ${{ steps.meta.outputs.release_notes_scope }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,15 +37,22 @@ jobs:
             RELEASE_NAME="${GITHUB_REF_NAME}"
             PRERELEASE="false"
             SHOULD_PUBLISH="true"
+            RELEASE_NOTES_SCOPE=""
           else
             WEEKLY_VERSION="weekly-$(date -u +%Y%m%d)"
             WEEKLY_NAME="Weekly Pre-release $(date -u +%Y-%m-%d)"
-            RECENT_COMMITS="$(git rev-list --count --since='7 days ago' HEAD)"
+            BASE_COMMIT="$(git rev-list -n 1 --before='7 days ago' HEAD || true)"
+            if [ -n "${BASE_COMMIT}" ]; then
+              RELEASE_NOTES_SCOPE="${BASE_COMMIT}..HEAD"
+            else
+              RELEASE_NOTES_SCOPE="HEAD"
+            fi
+            RECENT_COMMITS="$(git rev-list --count "${RELEASE_NOTES_SCOPE}")"
             VERSION="${WEEKLY_VERSION}"
             RELEASE_NAME="${WEEKLY_NAME}"
             PRERELEASE="true"
             SHOULD_PUBLISH="false"
-            if [ "${RECENT_COMMITS}" -gt 0 ]; then
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] || [ "${RECENT_COMMITS}" -gt 0 ]; then
               SHOULD_PUBLISH="true"
             fi
           fi
@@ -52,11 +61,13 @@ jobs:
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "release_name=${RELEASE_NAME}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${PRERELEASE}" >> "${GITHUB_OUTPUT}"
+          echo "release_notes_scope=${RELEASE_NOTES_SCOPE}" >> "${GITHUB_OUTPUT}"
           echo "Resolved release metadata:"
           echo "  should_publish=${SHOULD_PUBLISH}"
           echo "  version=${VERSION}"
           echo "  release_name=${RELEASE_NAME}"
           echo "  prerelease=${PRERELEASE}"
+          echo "  release_notes_scope=${RELEASE_NOTES_SCOPE:-<unreleased>}"
 
   build-and-release:
     name: Build, Verify, and Publish Release
@@ -235,7 +246,11 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           config: .github/cliff.toml
-          args: --verbose --unreleased --tag "${{ needs.prepare-release.outputs.version }}" --strip header
+          args: >-
+            --verbose
+            ${{ needs.prepare-release.outputs.release_notes_scope == '' && '--unreleased' || needs.prepare-release.outputs.release_notes_scope }}
+            --tag "${{ needs.prepare-release.outputs.version }}"
+            --strip header
         env:
           OUTPUT: build/release-notes.md
           GITHUB_REPO: ${{ github.repository }}
