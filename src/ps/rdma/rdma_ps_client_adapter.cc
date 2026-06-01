@@ -681,10 +681,8 @@ int RDMAPSClientAdapter::GetParameter(const base::ConstArray<uint64_t>& keys,
     }
     recv = static_cast<float*>(
         shard_clients_.front()->GetReceiveBuffer(response_bytes));
-    std::memset(recv, 0, response_bytes);
   } else {
     recv = static_cast<float*>(client_->GetReceiveBuffer(response_bytes));
-    std::memset(recv, 0, response_bytes);
   }
 
   const int rpc_id = SubmitGetParameter(keys, recv, false, 0);

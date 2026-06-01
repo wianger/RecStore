@@ -100,6 +100,10 @@ private:
   SlotHandle AcquireIdleSlot();
   SlotContext& SlotAt(int qp_index, int slot_in_qp);
   const SlotContext& SlotAt(int qp_index, int slot_in_qp) const;
+  void EnsureThreadInitializedLocked() const;
+  bool PendingRpcLocked(int rpc_id, PendingRpc* pending) const;
+  bool RequestPayloadFitsSlot(std::size_t payload_bytes) const;
+  float* AllocateStatusReceiveBufferLocked();
   void MaybeReportProfile();
   void FillGetDescriptor(RequestDescriptor* descriptor,
                          std::uint64_t seq,

@@ -49,6 +49,7 @@ DEFAULT_REMOTE_REPO = "/app/RecStore"
 DEFAULT_REMOTE_RUNTIME_ROOT = "/tmp/recstore_benchmark_ps"
 DEFAULT_LOCAL_DATA_ROOT = "/tmp/recstore_benchmark_ps_data"
 DEFAULT_RESULT_PREFIX = "benchmark_ps_"
+DEFAULT_RDMA_FETCH_QPS_PER_CLIENT_PER_SHARD = 16
 SUCCESS_STATUS = "success"
 SKIPPED_STATUS = "skipped"
 SLAB_ALLOCATOR_CHUNK_BYTES = 1 << 20
@@ -1192,6 +1193,7 @@ def build_rdma_runner(
         config_path=config_path,
         num_servers=server_shards,
         num_clients=client_processes,
+        logical_clients_per_process=args.client_threads_per_process,
         thread_num=args.server_rdma_threads,
         value_size=value_size,
         max_kv_num_per_request=max_keys_per_request,
@@ -2002,7 +2004,10 @@ def parse_args() -> argparse.Namespace:
     )
     transports = normalize_transport_list(args.transports)
     if "RDMA" in transports and args.mode == "fetch":
-        qps_per_client_per_shard = args.rdma_rc_qps_per_client_per_shard or 32
+        qps_per_client_per_shard = (
+            args.rdma_rc_qps_per_client_per_shard
+            or DEFAULT_RDMA_FETCH_QPS_PER_CLIENT_PER_SHARD
+        )
         slots_per_qp = args.rdma_rc_slots_per_qp or 1
         prefetch_depth = args.prefetch_depth or 16
         if qps_per_client_per_shard <= 0:
@@ -2017,6 +2022,8 @@ def parse_args() -> argparse.Namespace:
                 f"rdma_rc_qps_per_client_per_shard={qps_per_client_per_shard}, "
                 f"rdma_rc_slots_per_qp={slots_per_qp}"
             )
+        if args.rdma_rc_qps_per_client_per_shard is None:
+            args.rdma_rc_qps_per_client_per_shard = qps_per_client_per_shard
     if "RDMA" in transports and args.execution_backend == "local":
         if args.rdma_rc_server_numa_id is None:
             args.rdma_rc_server_numa_id = 0

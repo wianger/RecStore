@@ -455,7 +455,8 @@ ps_rdma_benchmark_report_0531.md
 | PS/network | `DRAM_EXTENDIBLE_HASH` | direct-SG | `19.37M keys/s` |
 | storage-only | `DRAM_PET_HASH` | `BatchGetFlat(500 random keys)` | `51.96M keys/s` |
 | PS/network | `DRAM_PET_HASH` | direct-SG | `14.93M keys/s` |
-| PS/network | `DRAM_PET_HASH` | staging-copy | `44.87M keys/s` |
+| PS/network | `DRAM_PET_HASH` | staging-copy, stable `qps=16` | `41.64M keys/s` avg, best `45.62M keys/s` |
+| PS/network | `DRAM_PET_HASH` | staging-copy, tuning `qps=20` | up to `46.69M keys/s` |
 
 这修正了 2026-05-30 的阶段性判断：`direct-SG` 不是所有 index 的默认最优路径。
 `DRAM_EXTENDIBLE_HASH` 的主要瓶颈已经是 index lookup；`DRAM_PET_HASH` 的 lookup
@@ -643,7 +644,8 @@ python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
 
 当前主线已经从“单纯追更高并发”调整为“按 KVEngine 和 value layout 选择正确的
 GET response path”。根目录 `ps_rdma_benchmark_report_0531.md` 记录从
-`~2M keys/s` 到 `~44.87M keys/s` 的完整阶段。
+`~2M keys/s` 到 `qps=16` repeat 平均 `~41.64M keys/s`、单轮最高
+`45.62M keys/s`，以及 `qps=20` tuning profile 最高 `~46.69M keys/s` 的完整阶段。
 
 ### 8.1 第一优先级：固化 PET staging-copy 主线
 
@@ -651,11 +653,18 @@ GET response path”。根目录 `ps_rdma_benchmark_report_0531.md` 记录从
 
 - `DRAM_PET_HASH`
 - `--rdma-get-response-mode auto`
+- `rdma_rc_qps_per_client_per_shard=16`
 - `batch_keys=500`
 - `value_size=512`
 
 后续优化应先保持这条路径可复现，再观察是否接近当前 RDMA transport/device 观测上限
 `~48.7M keys/s`。
+
+`rdma_rc_qps_per_client_per_shard=20` 可作为冲高 tuning profile 保留记录，但不作为
+默认参数。2026-06-01 的复测显示，`qps=20` 可以单轮冲到 `46.69M keys/s`，
+但 repeat 结果更常落在 `41-43M keys/s`。增加 client 进程数、用
+`slots_per_qp=2` 加深单 client outstanding、round-robin QP acquisition、client
+wait-spin 都是负结果，不应作为默认优化方向。
 
 ### 8.2 第二优先级：保留 EH direct-SG 回归
 

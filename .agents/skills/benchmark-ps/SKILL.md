@@ -249,7 +249,7 @@ Recommended first matrix:
 
 For historical RDMA scheduling experiments, keep `--rdma-rc-server-coroutines-per-thread=1` unless explicitly testing coroutine scanner behavior. Encode `t<T>`, `n<N>`, and `c<C>` in result directories. The `~9M -> ~14-15M keys/s` jump came from increasing GET workers by larger multiples of 4 and increasing server RDMA poll threads, not from sglist/direct-SG. In the 2026-05-30 local `p8/N8/T16` repeat=3 run, `C1` averaged `14.45M keys/s` and `C4` averaged `12.17M keys/s`, so `C4` is not a performance default.
 
-Do not assume direct-SG is the universal RDMA GET default. Use `--rdma-get-response-mode auto`: it resolves `DRAM_PET_HASH` to `staging_copy` and other index types to `direct_sg`. PET direct-SG is a diagnostic/regression case and was around `14.93M keys/s`; PET auto/staging-copy reached around `44.87M keys/s`. Do not add old direct-SG enable/disable flags to benchmark commands. Do not use removed inner lookup parallelism flags as a tuning dimension; that experiment regressed throughput.
+Do not assume direct-SG is the universal RDMA GET default. Use `--rdma-get-response-mode auto`: it resolves `DRAM_PET_HASH` to `staging_copy` and other index types to `direct_sg`. PET direct-SG is a diagnostic/regression case and was around `14.93M keys/s`; PET auto/staging-copy with stable `qps=16` averaged `41.64M keys/s` over repeat=5 and reached `45.62M keys/s` in the best repeat. `qps=20` reached up to `46.69M keys/s` in an unstable tuning run. Do not add old direct-SG enable/disable flags to benchmark commands. Do not use removed inner lookup parallelism flags as a tuning dimension; that experiment regressed throughput.
 
 For explicit cross-host or multi-shard placement, use `--server-plan` and `--client-plan`:
 
@@ -308,7 +308,8 @@ When replacing earlier exploratory reports, create one new root-level report wit
 - Check for non-empty stderr logs even when all rows are `success`; report request-path warnings separately from expected teardown output.
 - Do not claim tests pass unless the exact command completed successfully.
 - Keep generated project-facing report text in Chinese.
-- Treat `--prefetch-depth`, `--rdma-rc-fake-get-mode`, and `--rdma-rc-skip-client-copy` as diagnostic-only knobs. Report them as bottleneck attribution, not as ordinary throughput comparisons.
+- Treat `--prefetch-depth` as an RDMA fetch pipeline depth parameter, not a generic throughput knob. The current PET capacity baseline keeps it at `16`; smaller depths underfill the pipeline, while larger depths can add QP/slot/cache pressure. Treat `--rdma-rc-fake-get-mode` and `--rdma-rc-skip-client-copy` as diagnostic-only knobs.
+- Treat large `batch_keys` sweeps as capacity observations only. Do not present larger batch size as a framework-level optimization unless the user explicitly asks for request-size tuning.
 - Do not compare rows with different `client_threads_per_process` as a fair transport comparison. If rows differ, explain that the result is a mixed-concurrency capacity observation.
 - Do not interpret local multi-shard results where all shards run on `127.0.0.1` as distributed scaling. Label them as local multi-process stress results.
 - Separate PS/network conclusions from storage-only, RDMA RC transport-only, and PyTorch/model conclusions.
@@ -323,7 +324,7 @@ The current local environment has validated these paths after the latest benchma
 - RDMA local 2 clients: passed with `--client-threads-per-process 1 --client-processes-per-ip 2`.
 - RDMA local 2 shards x 2 clients: passed with `--client-threads-per-process 1 --server-shard-ips 127.0.0.1,127.0.0.1 --client-processes-per-ip 2`.
 - Fair local transport matrix with `batch_keys=500`, `value_size=512`, `client_threads_per_process=1`, `server_shards=1,2`, and `client_processes_per_ip=1,2,4,8` completed successfully.
-- Current optimized RDMA GET result: `DRAM_PET_HASH + --rdma-get-response-mode auto` resolves to staging-copy and reached about `44.87M keys/s`, near the observed RDMA transport/device ceiling of about `48.7M keys/s`.
+- Current optimized RDMA GET result: `DRAM_PET_HASH + --rdma-get-response-mode auto` resolves to staging-copy. With stable `qps=16`, the 2026-06-01 repeat=5 run averaged `41.64M keys/s` and reached `45.62M keys/s`; a `qps=20` tuning run reached up to `46.69M keys/s`, but repeat runs averaged closer to `41-43M keys/s`.
 
 Use these as bring-up baselines before increasing record count, runtime, or cross-host complexity.
 
@@ -334,7 +335,10 @@ Use these as bring-up baselines before increasing record count, runtime, or cros
 - RDMA transaction mode requires `--client-threads-per-process 1`; use `--client-processes-per-ip` for RDMA client concurrency. If the benchmark binary sees `--thread_num > 1`, it aborts by design.
 - `--prefetch-depth > 0` is valid only for `transactions` + `mode=fetch`. If depth exceeds the default QP pool, also increase `--rdma-rc-qps-per-client-per-shard`.
 - By default, RDMA `transactions/fetch` uses a depth-16 prefetch pipeline.
-- For current optimized RDMA GET runs, prefer `batch_keys=500`, `value_size=512`, `DRAM_PET_HASH`, `--rdma-get-response-mode auto`, `client-processes-per-ip=6`, `server-rdma-threads=16`, `rdma-rc-server-get-workers=0`, and same-socket disjoint core binding.
+- For current optimized RDMA GET capacity runs, prefer `batch_keys=500`, `value_size=512`, `DRAM_PET_HASH`, `--rdma-get-response-mode auto`, `--prefetch-depth=16`, `--rdma-rc-qps-per-client-per-shard=16`, `client-processes-per-ip=6`, `server-rdma-threads=16`, `rdma-rc-server-get-workers=0`, and same-socket disjoint core binding. Treat `qps=20` as a tuning profile, not the stable default.
+- As of `2026-05-31`, the `batch_keys=500` PET prefetch sweep measured about `24.69M/32.66M/39.29M/32.18M keys/s` at depths `8/12/16/24`; keep depth `16` as the default unless retesting a changed pipeline.
+- As of `2026-05-31`, software prefetching future value rows in `DramValueStore::ReadFlatFixedRows` was a negative result. The retained value-store micro-optimization is generic power-of-two shift row addressing, which preserves the fixed-size workload benefit without a 512B-only branch.
+- As of `2026-06-01`, increasing client process count, increasing `prefetch_depth` with `slots_per_qp=2`, round-robin QP acquisition, and client wait-spin all regressed throughput. Do not keep those as default optimization knobs.
 - Historical note: direct-SG/sglist improved the then-current EH path by only about `0.5M keys/s`; the later `~19M keys/s` EH result was mainly from CPU affinity, while EH prefetch/array-view style changes were only about `0.1M keys/s`.
 - In the 2026-05-29 local fair matrix, single-shard RDMA plateaued around `3.0 M keys/s`, while local two-shard RDMA was lower. Treat this as local PS/server scheduling behavior, not a NIC-limit conclusion.
 - Large single-shard RDMA preload can fail as `RC write RPC wait timeout` after server-side `KVEngine value allocation failed`; the runner should generate slab allocator capacity with headroom. If this recurs, inspect generated config capacity and server logs before treating it as a transport failure.

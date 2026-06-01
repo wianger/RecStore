@@ -271,6 +271,19 @@ class TestRunBenchmarkPS(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     parse_args()
 
+    def test_parse_args_sets_rdma_fetch_qp_default(self):
+        argv = [
+            "run_benchmark_ps.py",
+            "--transports",
+            "rdma",
+            "--mode",
+            "fetch",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        self.assertEqual(args.rdma_rc_qps_per_client_per_shard, 16)
+
     def test_parse_args_sets_local_rdma_bind_core_defaults(self):
         argv = [
             "run_benchmark_ps.py",

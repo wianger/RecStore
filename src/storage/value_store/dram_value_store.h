@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <glog/logging.h>
+
 #include "base/factory.h"
 #include "memory/malloc.h"
 #include "memory/memory_factory.h"
@@ -117,8 +119,11 @@ public:
     }
     uint64_t local_missing = 0;
     char* dst              = static_cast<char*>(out_buf);
+    DCHECK(IsPowerOfTwo(row_bytes))
+        << "DramValueStore flat row size must be a power of two";
+    const unsigned row_shift = Log2PowerOfTwo(row_bytes);
     for (size_t row = 0; row < num_rows; ++row) {
-      char* row_dst = dst + row * row_bytes;
+      char* row_dst = dst + (row << row_shift);
       if (handles[row] == kValueHandleNone) {
         std::memset(row_dst, 0, row_bytes);
         ++local_missing;
@@ -183,6 +188,15 @@ private:
       return nullptr;
     }
     return allocator_->GetMallocData(DecodeOffset(handle));
+  }
+
+  static bool IsPowerOfTwo(size_t value) {
+    return value != 0 && (value & (value - 1)) == 0;
+  }
+
+  static unsigned Log2PowerOfTwo(size_t value) {
+    return static_cast<unsigned>(
+        __builtin_ctzll(static_cast<unsigned long long>(value)));
   }
 
   std::unique_ptr<base::MallocApi> allocator_;

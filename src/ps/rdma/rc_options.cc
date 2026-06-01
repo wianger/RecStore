@@ -1,7 +1,7 @@
 #include "ps/rdma/rc_options.h"
 
 DEFINE_int32(rdma_rc_qps_per_client_per_shard,
-             32,
+             16,
              "RC write QPs per client per shard");
 DEFINE_int32(rdma_rc_slots_per_qp,
              1,

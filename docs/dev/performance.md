@@ -26,7 +26,7 @@ RDMA GET `batch_keys=500`，结论是：
 | storage-only | `DRAM_EXTENDIBLE_HASH BatchGetFlat` | `19.45M keys/s` |
 | PS/network | `DRAM_EXTENDIBLE_HASH + direct-SG` | `19.37M keys/s` |
 | storage-only | `DRAM_PET_HASH BatchGetFlat` | `51.96M keys/s` |
-| PS/network | `DRAM_PET_HASH + staging-copy` | `44.87M keys/s` |
+| PS/network | `DRAM_PET_HASH + staging-copy` | stable `~41.64M keys/s` avg, best `45.62M keys/s` |
 
 因此当前 RDMA GET 默认优化主线是
 `DRAM_PET_HASH + rdma-get-response-mode=auto`，而不是继续单纯增加 client、

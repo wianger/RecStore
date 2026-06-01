@@ -1,9 +1,9 @@
-# PS RDMA GET Benchmark 完整报告（2026-05-31）
+# PS RDMA GET Benchmark 完整报告（2026-05-31，2026-06-01 更新）
 
 本文整理 RecStore PS/network 层 RDMA GET 路径从 `~2M keys/s` 到
-`~44.87M keys/s` 的阶段性结果。本文只讨论 PS/network 和 storage-only benchmark，
-不讨论 PyTorch/model 端到端性能；所有数字均来自本地单机 `127.0.0.1` 验证，不能
-直接解释为跨机器扩展能力。
+稳定 `~40-42M keys/s`、单轮最高 `~45-46M keys/s` 的阶段性结果。本文只讨论
+PS/network 和 storage-only benchmark，不讨论 PyTorch/model 端到端性能；所有数字均
+来自本地单机 `127.0.0.1` 验证，不能直接解释为跨机器扩展能力。
 
 ## 1. 范围与结论
 
@@ -14,8 +14,9 @@
    `BatchGetFlat(500 random keys)` 的 storage-only 上限。
 2. `DRAM_PET_HASH` 的本地随机 batch lookup 能到 `~51.96M keys/s`，说明 storage
    层还有空间，但它和 direct-SG 的离散 row layout 适配不好。
-3. `DRAM_PET_HASH + staging-copy` 能跑到 `~44.87M keys/s`，已经接近当前 RDMA
-   transport/device 观测上限 `~48.7M keys/s`。
+3. `DRAM_PET_HASH + staging-copy` 在当前稳定默认参数下 repeat 平均约
+   `41.64M keys/s`，单轮可到 `45.62M keys/s`；历史 `qps=20` tuning profile
+   最高到 `46.69M keys/s`，但不够稳定，不能作为默认。
 
 当前固化策略：
 
@@ -64,14 +65,16 @@ client bind stride=2
 | case | repeat 结果 | 平均吞吐 |
 |---|---:|---:|
 | `DRAM_PET_HASH + auto/staging-copy` | `38.55 / 44.14 / 38.67M` | `40.45M keys/s` |
+| `DRAM_PET_HASH + auto/staging-copy`，2026-06-01 固化复测 | `41.14 / 40.66 / 42.26 / 38.52 / 45.62M` | `41.64M keys/s` |
 
-历史最佳 PET staging-copy 结果为 `~44.87M keys/s`。本轮复测 repeat 1 为
-`44.14M keys/s`，处在同一档位；repeat 0/2 偏低，说明下一阶段需要重点处理稳定性和
-repeat 间抖动。
+`qps=16` 是当前稳定默认。历史 PET staging-copy 单轮结果可到 `~44.87M keys/s`，
+2026-06-01 复测最高 `45.62M keys/s`；`qps=20` 曾冲到 `46.69M keys/s`，但 repeat
+更常落在 `41-43M keys/s`，因此只作为 tuning profile。
 
 结果路径：
 
 - `results/benchmark_ps_rdma_pet_auto_capacity_0531`
+- `results/rdma_ps_solidify_qps16_repeat5_0601004853`
 
 ## 3. 优化时间线
 
@@ -86,7 +89,7 @@ repeat 间抖动。
 | 绑核固化 | 固定 server/client RDMA 相关线程的 CPU affinity，减少调度漂移 | 绑核参数与 runner 固化 | EH 稳定到 `~19M keys/s` |
 | EH 小优化 | `ExtendibleHash::BatchGet` prefetch、array view、小对象复制减少 | `perf(rdma): prefetch extendible hash batch get` | 约 `+0.1M keys/s` |
 | storage-only 对齐 | 新增 `benchmark_kv_engine read_mode=batch_get_flat`，用 500 random keys 对齐 PS GET 形态 | 本轮诊断后固化 | EH `~19.45M`，PET `~51.96M` |
-| PET response path 绑定 | `run_benchmark_ps.py --rdma-get-response-mode=auto`：PET 自动走 staging-copy | 本轮固化 | PET `~44.87M keys/s` |
+| PET response path 绑定 | `run_benchmark_ps.py --rdma-get-response-mode=auto`：PET 自动走 staging-copy | 本轮固化 | PET 稳定 `~40-42M keys/s`，单轮最高 `45.62M keys/s` |
 
 这条时间线里最关键的修正是：sglist/direct-SG 不是从 `~14M` 到 `~19M` 的主要来源；
 `~19M` 主要来自绑核。sglist 只带来约 `+0.5M keys/s`，EH 小优化也只有约
@@ -152,7 +155,8 @@ rdma_rc_server_coroutines_per_thread=1
 | PS/network | `DRAM_EXTENDIBLE_HASH` | direct-SG | `19.37M keys/s` |
 | PS/network | `DRAM_PET_HASH` | index_only | `89.13M keys/s` |
 | PS/network | `DRAM_PET_HASH` | direct-SG | `14.93M keys/s` |
-| PS/network | `DRAM_PET_HASH` | staging-copy | `44.87M keys/s` |
+| PS/network | `DRAM_PET_HASH` | staging-copy, stable `qps=16` | `41.64M keys/s` avg，`45.62M keys/s` best |
+| PS/network | `DRAM_PET_HASH` | staging-copy, tuning `qps=20` | up to `46.69M keys/s` |
 | transport/device 观测上限 | 不涉及 | RDMA transport cap | `48.7M keys/s` |
 
 结果路径：
@@ -166,7 +170,8 @@ rdma_rc_server_coroutines_per_thread=1
 
 - `index_only=89.13M keys/s` 说明 PET index 本身不是主要瓶颈。
 - `PET + direct-SG=14.93M keys/s` 说明 direct-SG 对 PET 的离散 row refs 不友好。
-- `PET + staging-copy=44.87M keys/s` 说明连续 response buffer 更适合当前 PET layout。
+- `PET + staging-copy` 的稳定复测均值为 `41.64M keys/s`，单轮可到 `45.62M keys/s`，
+  说明连续 response buffer 更适合当前 PET layout。
 
 ## 5. direct-SG 结论修正
 
@@ -236,6 +241,40 @@ rdma_rc_server_coroutines_per_thread=1
 GET workers=0`。单纯增加 client 负载会让调度和 poll 压力恶化；降低 client 后即使
 增加 poll 线程也喂不满链路；把 PET staging-copy 的 GET payload 工作拆到额外 GET
 worker 会引入队列、同步和 completion 回流成本，吞吐明显下降。
+
+### 6.3 2026-06-01 固化复测
+
+固定当前默认参数后，又跑了一次 repeat=5：
+
+```text
+index=DRAM_PET_HASH
+response_mode=auto -> staging_copy
+record_count=1000000
+value_size=512
+batch_keys=500
+client_processes_per_ip=6
+server_rdma_threads=16
+rdma_rc_server_get_workers=0
+prefetch_depth=16
+rdma_rc_qps_per_client_per_shard=16
+rdma_rc_slots_per_qp=1
+same-socket NUMA/core binding
+```
+
+| repeat | aggregate M keys/s | per-client min/max M keys/s |
+|---:|---:|---:|
+| 0 | 41.135 | 6.851 / 6.860 |
+| 1 | 40.657 | 6.767 / 6.782 |
+| 2 | 42.260 | 7.041 / 7.047 |
+| 3 | 38.518 | 6.414 / 6.426 |
+| 4 | 45.619 | 7.599 / 7.607 |
+
+平均 `41.638M keys/s`，median `41.135M keys/s`。每轮内部 client 分布很均匀，
+说明当前抖动主要是 repeat 级别的环境/调度波动，而不是 client 间负载倾斜。
+
+结果路径：
+
+- `results/rdma_ps_solidify_qps16_repeat5_0601004853`
 
 ## 7. 固化接口
 
@@ -322,20 +361,20 @@ ps_transport_benchmark
    存储层上限。
 3. 保留 `direct_sg` 强制模式，作为 EH 与 SG path 回归测试。
 4. 为 direct-SG 增加 WR/SGE per request profile，避免只看总吞吐时误判。
-5. 把 `clients=6, server poll=16, GET workers=0` 作为当前推荐容量参数；新增实验参数
-   必须和该基线对比，并记录 repeat 间稳定性。
+5. 把 `clients=6, server poll=16, GET workers=0, prefetch=16, qps=16` 作为当前
+   推荐容量参数；新增实验参数必须和该基线对比，并记录 repeat 间稳定性。
 
 中期再考虑：
 
-1. 针对 PET staging-copy 做细节优化，重点提升性能和稳定性，而不是继续扩大线程数：
-   - 降低 repeat 间吞吐抖动；
-   - 优化 payload staging buffer 的填充和内存访问；
-   - 进一步拆分并统计 poller、server lookup/copy、RDMA completion、client wait 的耗时；
-   - 检查绑核、NUMA、本地控制面和 benchmark 启停过程对稳定性的影响。
-2. 优化 PET value row 连续性或 SG write batching。
-3. 根据 direct-SG 生成的 WR 数动态 fallback 到 staging-copy。
-4. 清理已经被 `auto` 覆盖的临时 benchmark 参数，减少 runner 参数面。
-5. 重新设计 shard scale-out benchmark，避免把 distributed fanout/merge 成本误认为
+1. 针对 PET staging-copy 做细节优化，重点提升性能和稳定性，而不是继续扩大线程数。
+2. 细化 profile：拆分 PET lookup、row copy、payload staging、completion/status 写回、
+   client wait/revoke，并记录 per-poller min/max。
+3. 优化 payload staging buffer 的填充、对齐和固定 row copy；软件 prefetch 已验证为负结果，
+   当前保留的是通用 power-of-two shift row addressing。
+4. 保留 direct-SG 回归与 WR/SGE profile，后续根据连续 row 比例或 WR 数决定是否动态 fallback。
+5. 固化 benchmark 启停、warmup/run 分段和 median/p90 报告，降低 repeat 间解释成本。
+6. 清理已经被 `auto` 覆盖的临时 benchmark 参数，减少 runner 参数面。
+7. 重新设计 shard scale-out benchmark，避免把 distributed fanout/merge 成本误认为
    server-side shard 扩展能力。
 
 ## 10. 已验证项
@@ -355,3 +394,11 @@ cmake --build build --target ps_transport_benchmark benchmark_kv_engine -j
 
 其中 PET auto smoke 的 `run_config.json` 显示 `rdma_get_response_mode=staging_copy`，
 `summary.csv` 正常产出成功行。
+
+2026-06-01 固化复测前后还验证：
+
+```bash
+cmake --build build --target ps_transport_benchmark petps_server -j
+python3 -m unittest src/test/scripts/test_run_benchmark_ps.py src/test/scripts/test_petps_cluster_runner.py
+ctest --test-dir build -R 'test_rdmaps_client_adapter|test_allshards_ps_client' -VV
+```
