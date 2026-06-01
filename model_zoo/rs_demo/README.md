@@ -120,10 +120,10 @@ python3 model_zoo/rs_demo/run_lookahead_gpu_cache_lanes.py \
 
 - 端到端训练：`step_total_ms`、`samples_per_sec`、`batches_per_sec`。
 - embedding 访问分解：`lookup_total_ms`、`embed_lookup_local_ms`、`prefetch_issue_ms`、`lookup_wait_ms`、`lookup_fallback_pull_ms`。
-- overlap：`prefetch_queue_residence_ms`、`prefetch_issue_to_consume_ms`、`prefetch_wait_share_of_lookup`。
+- dense/overlap：`dense_compute_ms`、`dense_fwd_ms`、`backward_ms`、`optimizer_ms`、`prefetch_queue_residence_ms`、`prefetch_issue_to_consume_ms`、`prefetch_wait_share_of_lookup`、`prefetch_network_wait_ms`、`prefetch_exposed_network_ms`、`prefetch_dense_cover_ratio`、`prefetch_issue_to_consume_cover_ratio`。
 - GPU cache：`lookup_gpu_cache_request_count`、`lookup_gpu_cache_hit_count`、`lookup_gpu_cache_miss_count`、`lookup_gpu_cache_hit_rate`、`lookup_gpu_cache_query_ms`、`lookup_gpu_cache_fill_ms`、`update_gpu_cache_invalidate_ms`。
-- prefetch-to-cache：`planned_gpu_cache_prefill_batches`、`planned_gpu_cache_prefill_ids`、`planned_gpu_cache_prefill_successes`、`planned_gpu_cache_prefill_fallbacks`、`planned_gpu_cache_prefill_wait_failures`、`planned_gpu_cache_prefill_result_size_mismatches`、`planned_gpu_cache_prefill_no_cuda`、`planned_gpu_cache_prefill_no_api`。
-- 数据规模：`batch_raw_ids`、`batch_unique_ids`、`batch_dedup_ratio`、`gpu_cache_capacity`、`prefetch_depth`。
+- prefetch-to-cache：`planned_gpu_cache_prefill_batches`、`planned_gpu_cache_prefill_wait_ms`、`planned_gpu_cache_prefill_ids`、`planned_gpu_cache_prefill_successes`、`planned_gpu_cache_prefill_fallbacks`、`planned_gpu_cache_prefill_wait_failures`、`planned_gpu_cache_prefill_result_size_mismatches`、`planned_gpu_cache_prefill_no_cuda`、`planned_gpu_cache_prefill_no_api`。
+- 数据规模与窗口足迹：`batch_raw_ids`、`batch_unique_ids`、`batch_dedup_ratio`、`gpu_cache_capacity`、`prefetch_depth`、`prefetch_window_live_ids`、`prefetch_window_live_bytes`、`prefetch_window_peak_live_ids`、`prefetch_window_peak_live_bytes`、`prefetch_window_live_cache_capacity_ratio`、`prefetch_window_peak_cache_capacity_ratio`。
 - 正确性相关：`gpu_cache_clear_count`、`update_gpu_cache_invalidate_ms`、`planned_gpu_cache_prefill_fallbacks`、`planned_gpu_cache_prefill_wait_failures`、`planned_gpu_cache_prefill_result_size_mismatches`。
 
 可信结果应同时满足：
@@ -133,6 +133,30 @@ python3 model_zoo/rs_demo/run_lookahead_gpu_cache_lanes.py \
 - prefetch only 相比 baseline 应主要体现 `lookup_wait_ms` 或 `prefetch_wait_share_of_lookup` 下降；如果没有下降，瓶颈可能在 issue 队列驻留不足、server 端 prefetch 实际延迟或 batch 准备无法覆盖 wait。
 - GPU cache only 如果 `lookup_gpu_cache_query_ms + lookup_gpu_cache_fill_ms` 高于节省的 backend lookup，则可能出现收益被 prefill/fill 开销抵消。
 - update 后应看到 `update_gpu_cache_invalidate_ms` 或 `gpu_cache_clear_count` 增长；后续 lookup miss/refresh 是正确性信号，不应为了 hit rate 破坏 read-after-write。
+
+根据 BagPipe/NestPipe 类工作，预取窗口实验不应只看 cache hit rate，还要判断通信是否被 dense 计算窗口隐藏。`dense_compute_ms = dense_fwd_ms + backward_ms + optimizer_ms`，`prefetch_network_wait_ms` 记录消费点暴露出的预取等待，包含普通 wait 路径的 `lookup_wait_ms` 和 prefill-to-cache 路径的 `planned_gpu_cache_prefill_wait_ms`；`prefetch_exposed_network_ms = max(0, prefetch_network_wait_ms - dense_compute_ms)`。如果增加 depth 只增加 `prefetch_window_peak_live_bytes`，但 `prefetch_exposed_network_ms` 和 `step_total_ms` 不下降，说明窗口已经过大或 cache/prefill 开销抵消收益。
+
+查找最佳预取窗口和 GPU cache 容量可运行：
+
+```bash
+python3 model_zoo/rs_demo/run_prefetch_window_sweep.py \
+  --depths 0,1,2,4,8 \
+  --gpu-cache-capacities 0,4096,8192,16384 \
+  --steps 30 \
+  --warmup-steps 3 \
+  --batch-size 512 \
+  --num-embeddings 20000 \
+  --embedding-dim 128 \
+  --output-root /tmp/recstore_prefetch_window_sweep
+```
+
+输出汇总：`<output_root>/prefetch_window_sweep_summary.csv`。推荐窗口必须同时满足：
+
+- `step_total_ms_mean` 在可比组合中最低或处于平台期。
+- `prefetch_dense_cover_ratio_mean` 接近 1，或 `prefetch_exposed_network_ms_mean` 明显低于小窗口。
+- `prefetch_window_peak_live_bytes_mean` 不超过 GPU cache 容量可接受范围，`prefetch_window_peak_cache_capacity_ratio_mean` 不长期大于 1。
+- `planned_gpu_cache_prefill_fallbacks_mean` 和 `planned_gpu_cache_prefill_result_size_mismatches_mean` 不主导。
+- update 后 cache invalidation/clear 指标正常，不能为了命中率牺牲 read-after-write。
 
 单机单进程 TorchRec UVM caching（embedding 主存放在 host/UVM，GPU 侧使用 TorchRec/FBGEMM cache）：
 

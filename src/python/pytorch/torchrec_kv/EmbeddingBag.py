@@ -238,6 +238,7 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
         self._perf_stats: Dict[str, float] = {
             "prefetch_issue_ms": 0.0,
             "planned_gpu_cache_prefill_ms": 0.0,
+            "planned_gpu_cache_prefill_wait_ms": 0.0,
             "planned_gpu_cache_prefill_batches": 0.0,
             "planned_gpu_cache_prefill_ids": 0.0,
             "planned_gpu_cache_prefill_successes": 0.0,
@@ -705,6 +706,7 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
                 device=compute_device,
             )
             t_wait_end = perf_counter()
+            self._perf_add("planned_gpu_cache_prefill_wait_ms", (t_wait_end - t_wait_start) * 1e3)
             self._prefetch_wait_latencies.append(t_wait_end - t_wait_start)
             issue_latency = t_wait_start - (self._fused_prefetch_issue_ts or t_wait_start)
             self._prefetch_issue_latencies.append(issue_latency)

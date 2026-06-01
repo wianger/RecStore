@@ -36,6 +36,7 @@ from ..runtime.hybrid_dlrm import (
     run_hybrid_backward,
     sync_device,
 )
+from ..runtime.prefetch import LookaheadPrefetcher
 from ..runtime.recstore_distributed import ShardedRecstoreClient
 from ..runtime.report import finalize_recstore_row, summarize_us, write_stage_csv
 from .base import BenchmarkRunner
@@ -122,100 +123,6 @@ def _finalize_step_timing(row: dict[str, Any], *, consume_start: float) -> None:
         visible_ms,
     )
     row["batches_per_sec"] = _safe_ratio(1000.0, visible_ms)
-
-
-class LookaheadPrefetcher:
-    """Issue fused prefetches ahead of consumption by a fixed batch depth."""
-
-    def __init__(self, embedding_module: Any, depth: int) -> None:
-        self._embedding_module = embedding_module
-        self._depth = max(0, int(depth))
-        self._pending: deque[tuple[int, int, float, Any, Any]] = deque()
-        self._ready: deque[tuple[int, int, float, Any, Any]] = deque()
-        self._stats: dict[str, float] = {}
-        self.reset_stats()
-
-    @property
-    def depth(self) -> int:
-        return self._depth
-
-    def reset_stats(self) -> None:
-        self._stats = {
-            "prefetch_depth": float(self._depth),
-            "prefetch_issued_batches": 0.0,
-            "prefetch_consumed_batches": 0.0,
-            "prefetch_pending_batches": float(len(self._pending)),
-            "prefetch_ready_batches": float(len(self._ready)),
-            "prefetch_total_ids": 0.0,
-            "prefetch_consumed_total_ids": 0.0,
-            "prefetch_issue_to_consume_ms": 0.0,
-        }
-
-    def enqueue(self, sparse_features: Any) -> None:
-        if self._depth <= 0:
-            return
-        result = self._embedding_module.issue_fused_prefetch(
-            sparse_features,
-            record_handle=False,
-        )
-        handle, num_ids, issue_ts, fused_ids_cpu, fused_inverse = result
-        self._pending.append(
-            (int(handle), int(num_ids), float(issue_ts), fused_ids_cpu, fused_inverse)
-        )
-        self._stats["prefetch_issued_batches"] += 1.0
-        self._stats["prefetch_total_ids"] += float(num_ids)
-        self._stats["prefetch_pending_batches"] = float(len(self._pending))
-        self._stats["prefetch_ready_batches"] = float(len(self._ready))
-
-    def advance(self) -> bool:
-        if self._depth <= 0 or len(self._pending) <= self._depth:
-            self._stats["prefetch_pending_batches"] = float(len(self._pending))
-            self._stats["prefetch_ready_batches"] = float(len(self._ready))
-            return False
-        self._ready.append(self._pending.popleft())
-        self._stats["prefetch_pending_batches"] = float(len(self._pending))
-        self._stats["prefetch_ready_batches"] = float(len(self._ready))
-        return True
-
-    def advance_all(self) -> int:
-        moved = 0
-        while self._pending:
-            self._ready.append(self._pending.popleft())
-            moved += 1
-        self._stats["prefetch_pending_batches"] = float(len(self._pending))
-        self._stats["prefetch_ready_batches"] = float(len(self._ready))
-        return moved
-
-    def attach_next(self) -> bool:
-        if self._depth <= 0 or not self._ready:
-            self._stats["prefetch_pending_batches"] = float(len(self._pending))
-            self._stats["prefetch_ready_batches"] = float(len(self._ready))
-            return False
-        handle, num_ids, issue_ts, fused_ids_cpu, fused_inverse = self._ready.popleft()
-        self._embedding_module.set_fused_prefetch_handle(
-            handle,
-            num_ids=num_ids,
-            issue_ts=issue_ts,
-            fused_ids_cpu=fused_ids_cpu,
-            fused_inverse=fused_inverse,
-        )
-        self._stats["prefetch_consumed_batches"] += 1.0
-        self._stats["prefetch_consumed_total_ids"] += float(num_ids)
-        self._stats["prefetch_issue_to_consume_ms"] += max(
-            0.0,
-            (time.perf_counter() - issue_ts) * 1e3,
-        )
-        self._stats["prefetch_pending_batches"] = float(len(self._pending))
-        self._stats["prefetch_ready_batches"] = float(len(self._ready))
-        return True
-
-    def consume_stats(self, *, reset: bool = True) -> dict[str, float]:
-        self._stats["prefetch_pending_batches"] = float(len(self._pending))
-        self._stats["prefetch_ready_batches"] = float(len(self._ready))
-        stats = dict(self._stats)
-        if reset:
-            self.reset_stats()
-        return stats
 
 
 @contextmanager
@@ -854,6 +761,7 @@ class RecStoreRunner(BenchmarkRunner):
                 depth=cfg.prefetch_depth
                 if cfg.read_before_update and cfg.read_mode == "prefetch"
                 else 0,
+                embedding_dim=cfg.embedding_dim,
             )
             prepared_batches: deque[
                 tuple[dict[str, Any], float, Any, Any, Any, Any]
@@ -1034,6 +942,31 @@ class RecStoreRunner(BenchmarkRunner):
 
                 _merge_consumed_perf_stats(row, _consume_perf_stats(embedding_module))
                 _merge_consumed_perf_stats(row, _consume_perf_stats(sparse_optimizer))
+                dense_compute_ms = (
+                    float(row.get("dense_fwd_ms", 0.0))
+                    + float(row.get("backward_ms", 0.0))
+                    + float(row.get("optimizer_ms", 0.0))
+                )
+                row["dense_compute_ms"] = dense_compute_ms
+                row.update(
+                    lookahead_prefetcher.consume_stats(
+                        reset=False,
+                        dense_compute_ms=dense_compute_ms,
+                        wait_ms=(
+                            float(row.get("lookup_wait_ms", 0.0))
+                            + float(row.get("planned_gpu_cache_prefill_wait_ms", 0.0))
+                        ),
+                    )
+                )
+                gpu_cache_capacity = float(row.get("gpu_cache_capacity", 0.0))
+                row["prefetch_window_live_cache_capacity_ratio"] = _safe_ratio(
+                    float(row.get("prefetch_window_live_ids", 0.0)),
+                    gpu_cache_capacity,
+                )
+                row["prefetch_window_peak_cache_capacity_ratio"] = _safe_ratio(
+                    float(row.get("prefetch_window_peak_live_ids", 0.0)),
+                    gpu_cache_capacity,
+                )
                 row["prefetch_wait_share_of_lookup"] = _safe_ratio(
                     float(row.get("lookup_wait_ms", 0.0)),
                     float(row.get("lookup_total_ms", row.get("embed_lookup_local_ms", 0.0))),
