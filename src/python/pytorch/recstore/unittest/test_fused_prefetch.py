@@ -65,6 +65,9 @@ class _FakeKVClient:
         self.prefill_calls = []
         self.local_lookup_calls = []
         self.use_prefill_values_for_local_lookup = False
+        self.allow_cpu_gpu_cache_prefill = True
+        self.fail_wait = False
+        self.truncate_wait_rows = False
 
     def init_data(self, name, shape, dtype, base_offset: int = 0):
         self._tensor_meta[name] = {
@@ -92,7 +95,11 @@ class _FakeKVClient:
         return int(self.ops.emb_prefetch(ids))
 
     def wait_and_get(self, handle: int, embedding_dim: int, device=torch.device("cpu")) -> torch.Tensor:
+        if self.fail_wait:
+            raise RuntimeError("injected wait failure")
         out = self.ops.emb_wait_result(handle, embedding_dim)
+        if self.truncate_wait_rows and out.size(0) > 0:
+            out = out[:-1].contiguous()
         if device.type == "cuda":
             out = out.to(device)
         return out
@@ -102,6 +109,10 @@ class _FakeKVClient:
 
     def is_shared_local_shm_table(self) -> bool:
         return False
+
+
+class _FakeKVClientWithoutPrefill(_FakeKVClient):
+    prefill_gpu_cache = None
 
 
 class TestFusedPrefetch(unittest.TestCase):
@@ -158,7 +169,6 @@ class TestFusedPrefetch(unittest.TestCase):
         stats = ebc.report_prefetch_stats(reset=True)
         self.assertGreaterEqual(stats.get("batches_prefetched", 0), 1)
 
-    @unittest.skipUnless(torch.cuda.is_available(), "CUDA is required for GPU cache prefill")
     def test_fused_prefetch_prefills_gpu_cache_before_local_lookup(self):
         configs = [
             dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
@@ -184,9 +194,6 @@ class TestFusedPrefetch(unittest.TestCase):
             fake.emb_write(keys, vals)
 
         features = self._build_features()
-        values = features._values.to("cuda")
-        lengths = features._lengths.to("cuda")
-        features = build_sparse_features(features.keys(), values, lengths)
         ebc.issue_fused_prefetch(features)
         out = ebc(features)
 
@@ -203,6 +210,142 @@ class TestFusedPrefetch(unittest.TestCase):
         perf = ebc.consume_perf_stats(reset=True)
         self.assertEqual(perf["planned_gpu_cache_prefill_batches"], 1.0)
         self.assertGreater(perf["planned_gpu_cache_prefill_ids"], 0.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_successes"], 1.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_fallbacks"], 0.0)
+        self.assertGreater(perf["lookup_total_ms"], 0.0)
+
+    def test_fused_prefetch_prefill_disabled_on_cpu_without_test_override(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClient(fake)
+        fake_client.allow_cpu_gpu_cache_prefill = False
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        for idx, cfg in enumerate(configs):
+            base_offset = (idx << 30)
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = torch.zeros((cfg["num_embeddings"], cfg["embedding_dim"]), dtype=torch.float32)
+            fake.emb_write(keys, vals)
+        ebc.enable_single_node_distributed_fast_path = True
+        ebc.single_node_distributed_mode = "single_node"
+        fake_client.is_shared_local_shm_table = lambda: True
+
+        features = self._build_features()
+        ebc.issue_fused_prefetch(features)
+        ebc(features)
+
+        self.assertEqual(fake_client.prefill_calls, [])
+        self.assertIsNone(ebc._fused_prefetch_handle)
+        self.assertEqual(ebc._fused_prefetch_slots, [])
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertEqual(perf["planned_gpu_cache_prefill_no_cuda"], 1.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_fallbacks"], 1.0)
+
+    def test_fused_prefetch_prefill_falls_back_without_prefill_api(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClientWithoutPrefill(fake)
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        ebc.enable_single_node_distributed_fast_path = True
+        ebc.single_node_distributed_mode = "single_node"
+        fake_client.is_shared_local_shm_table = lambda: True
+        for idx, cfg in enumerate(configs):
+            base_offset = idx << 30
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = torch.zeros((cfg["num_embeddings"], cfg["embedding_dim"]), dtype=torch.float32)
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        ebc.issue_fused_prefetch(features)
+        ebc(features)
+
+        self.assertIsNone(ebc._fused_prefetch_handle)
+        self.assertEqual(ebc._fused_prefetch_slots, [])
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertEqual(perf["planned_gpu_cache_prefill_no_api"], 1.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_fallbacks"], 1.0)
+
+    def test_fused_prefetch_prefill_falls_back_to_local_lookup_on_wait_failure(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClient(fake)
+        fake_client.fail_wait = True
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        ebc.enable_single_node_distributed_fast_path = True
+        ebc.single_node_distributed_mode = "single_node"
+        fake_client.is_shared_local_shm_table = lambda: True
+        for idx, cfg in enumerate(configs):
+            base_offset = (idx << 30)
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = torch.arange(cfg["num_embeddings"] * cfg["embedding_dim"], dtype=torch.float32).view(
+                cfg["num_embeddings"], cfg["embedding_dim"]
+            )
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        ebc.issue_fused_prefetch(features)
+        ebc(features)
+
+        self.assertEqual(len(fake_client.prefill_calls), 1)
+        self.assertEqual(len(fake_client.local_lookup_calls), 2)
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertEqual(perf["planned_gpu_cache_prefill_fallbacks"], 1.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_wait_failures"], 1.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_successes"], 1.0)
+
+    def test_fused_prefetch_prefill_records_size_mismatch_fallback(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClient(fake)
+        fake_client.truncate_wait_rows = True
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        ebc.enable_single_node_distributed_fast_path = True
+        ebc.single_node_distributed_mode = "single_node"
+        fake_client.is_shared_local_shm_table = lambda: True
+        for idx, cfg in enumerate(configs):
+            base_offset = (idx << 30)
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = torch.ones((cfg["num_embeddings"], cfg["embedding_dim"]), dtype=torch.float32)
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        ebc.issue_fused_prefetch(features)
+        ebc(features)
+
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertEqual(perf["planned_gpu_cache_prefill_result_size_mismatches"], 1.0)
+        self.assertEqual(perf["planned_gpu_cache_prefill_fallbacks"], 1.0)
 
 
 if __name__ == "__main__":

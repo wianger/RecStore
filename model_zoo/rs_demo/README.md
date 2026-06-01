@@ -15,6 +15,7 @@
 - 自动调用 `analyze_embupdate_stages.py` 导出 CSV
 - `read_before_update` 默认走 `emb_prefetch + emb_wait_result` 稳定读路径（避免同步读路径在部分环境下崩溃）
 - 可用 `--prefetch-depth` 控制 fused embedding lookahead 预取幅度；`0` 保持同 batch issue+wait 路径，`1+` 会提前发起未来 batch 的预取并在后续 batch 消费。
+- 当 `--prefetch-depth > 0` 与 `--enable-gpu-cache` 同时开启，RecStore 会在消费 batch 前等待对应 fused prefetch handle，并把返回 embedding 通过 `prefill_gpu_cache` 写入 GPU cache；随后本 batch 的 local lookup 可从 GPU cache 查询，后续 batch 也能通过 profile 观察 cache request/hit/miss。
 
 ## 2. 快速运行
 
@@ -92,7 +93,46 @@ done
 - `--prefetch-depth 1+` 如果实现有效，`prefetch_consumed_batches` 应从第 `depth` 个 batch 后变为 1，`lookup_wait_ms` 应随 depth 增大下降，直到平台期。
 - 同时开启 `--enable-gpu-cache --gpu-cache-capacity <rows>` 时，对比 `lookup_gpu_cache_*` 字段，判断 GPU cache 查询开销是否抵消了 lookahead 预取收益。
 
-GPU cache 与预取结合的推荐解释是：lookahead 负责把未来 batch 的 embedding 提前拉近，GPU cache 负责保留未来会复用的 embedding。当前实现还没有把预取结果直接异步填入 GPU cache；因此现阶段应把它作为组合实验观察项，而不是宣称 Bagpipe 式 oracle cache 已完成。
+GPU cache 与预取结合的推荐解释是：lookahead 负责把未来 batch 的 embedding 提前拉近，GPU cache 负责保留未来会复用的 embedding。当前实现是 BagPipe 思路的 RecStore 增量版本：不实现 oracle server、LRPP 或 TTL cache，但会复用 `prefetch_depth`、fused id、prefetch handle、GPU cache prefill/profile，在 batch 消费点把 lookahead prefetch 结果写入 GPU cache。若 CUDA、GPU cache prefill API 或 wait 结果不可用，会明确计入 fallback 字段并回到已有 local lookup/pull 路径。
+
+四种 lane 的 smoke/perf 对比可用：
+
+```bash
+python3 model_zoo/rs_demo/run_lookahead_gpu_cache_lanes.py \
+  --steps 20 \
+  --warmup-steps 2 \
+  --batch-size 512 \
+  --num-embeddings 20000 \
+  --gpu-cache-capacity 8192 \
+  --output-root /tmp/recstore_lookahead_gpu_cache_lanes
+```
+
+该脚本依次运行：
+
+- `baseline`：`--prefetch-depth 0`，不开 GPU cache。
+- `prefetch_only`：`--prefetch-depth 2`，不开 GPU cache。
+- `gpu_cache_only`：`--prefetch-depth 0 --enable-gpu-cache`。
+- `prefetch_gpu_cache`：`--prefetch-depth 2 --enable-gpu-cache`。
+
+输出汇总：`<output_root>/lookahead_gpu_cache_lane_summary.csv`。如已有外部 server，可追加 `--no-start-server --library-path <lib_recstore_ops.so>`。
+
+关键 CSV 字段：
+
+- 端到端训练：`step_total_ms`、`samples_per_sec`、`batches_per_sec`。
+- embedding 访问分解：`lookup_total_ms`、`embed_lookup_local_ms`、`prefetch_issue_ms`、`lookup_wait_ms`、`lookup_fallback_pull_ms`。
+- overlap：`prefetch_queue_residence_ms`、`prefetch_issue_to_consume_ms`、`prefetch_wait_share_of_lookup`。
+- GPU cache：`lookup_gpu_cache_request_count`、`lookup_gpu_cache_hit_count`、`lookup_gpu_cache_miss_count`、`lookup_gpu_cache_hit_rate`、`lookup_gpu_cache_query_ms`、`lookup_gpu_cache_fill_ms`、`update_gpu_cache_invalidate_ms`。
+- prefetch-to-cache：`planned_gpu_cache_prefill_batches`、`planned_gpu_cache_prefill_ids`、`planned_gpu_cache_prefill_successes`、`planned_gpu_cache_prefill_fallbacks`、`planned_gpu_cache_prefill_wait_failures`、`planned_gpu_cache_prefill_result_size_mismatches`、`planned_gpu_cache_prefill_no_cuda`、`planned_gpu_cache_prefill_no_api`。
+- 数据规模：`batch_raw_ids`、`batch_unique_ids`、`batch_dedup_ratio`、`gpu_cache_capacity`、`prefetch_depth`。
+- 正确性相关：`gpu_cache_clear_count`、`update_gpu_cache_invalidate_ms`、`planned_gpu_cache_prefill_fallbacks`、`planned_gpu_cache_prefill_wait_failures`、`planned_gpu_cache_prefill_result_size_mismatches`。
+
+可信结果应同时满足：
+
+- `prefetch_gpu_cache` lane 中 `planned_gpu_cache_prefill_successes > 0`，且 fallback/mismatch 不是主导。
+- `lookup_gpu_cache_request_count > 0`，`lookup_gpu_cache_hit_count` 或 `lookup_gpu_cache_hit_rate` 能随 batch 复用提升；若始终为 0，需要检查 cache capacity、lookup bypass、数据复用率和 CUDA fast path。
+- prefetch only 相比 baseline 应主要体现 `lookup_wait_ms` 或 `prefetch_wait_share_of_lookup` 下降；如果没有下降，瓶颈可能在 issue 队列驻留不足、server 端 prefetch 实际延迟或 batch 准备无法覆盖 wait。
+- GPU cache only 如果 `lookup_gpu_cache_query_ms + lookup_gpu_cache_fill_ms` 高于节省的 backend lookup，则可能出现收益被 prefill/fill 开销抵消。
+- update 后应看到 `update_gpu_cache_invalidate_ms` 或 `gpu_cache_clear_count` 增长；后续 lookup miss/refresh 是正确性信号，不应为了 hit rate 破坏 read-after-write。
 
 单机单进程 TorchRec UVM caching（embedding 主存放在 host/UVM，GPU 侧使用 TorchRec/FBGEMM cache）：
 

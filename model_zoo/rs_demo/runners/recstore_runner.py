@@ -24,6 +24,7 @@ from ..config import (
 from ..data.dlrm_source import (
     build_kjt_batch_from_dense_sparse_labels,
     build_train_dataloader,
+    convert_kjt_ids_to_fused_ids,
     get_default_cat_names,
     inject_project_paths,
 )
@@ -78,6 +79,49 @@ GPU_CACHE_PROFILE_KEYS = (
     "gpu_cache_request_count",
     "gpu_cache_miss_count",
 )
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float:
+    denominator = float(denominator)
+    if denominator == 0.0:
+        return 0.0
+    return float(numerator) / denominator
+
+
+def _add_sparse_id_stats(
+    row: dict[str, Any],
+    sparse_features: Any,
+    table_offsets: dict[str, int],
+    *,
+    cache_capacity: int,
+    prefetch_depth: int,
+) -> None:
+    if not hasattr(sparse_features, "keys"):
+        row["batch_raw_ids"] = 0
+        row["batch_unique_ids"] = 0
+        row["batch_dedup_ratio"] = 0.0
+        row["gpu_cache_capacity"] = int(cache_capacity)
+        row["prefetch_depth"] = int(prefetch_depth)
+        return
+    fused_ids = convert_kjt_ids_to_fused_ids(sparse_features, table_offsets)
+    raw_count = int(fused_ids.numel())
+    unique_count = int(torch.unique(fused_ids).numel()) if raw_count > 0 else 0
+    row["batch_raw_ids"] = raw_count
+    row["batch_unique_ids"] = unique_count
+    row["batch_dedup_ratio"] = _safe_ratio(raw_count - unique_count, raw_count)
+    row["gpu_cache_capacity"] = int(cache_capacity)
+    row["prefetch_depth"] = int(prefetch_depth)
+
+
+def _finalize_step_timing(row: dict[str, Any], *, consume_start: float) -> None:
+    visible_ms = (time.perf_counter() - consume_start) * 1e3
+    row["step_visible_ms"] = visible_ms
+    row["step_total_ms"] = visible_ms
+    row["samples_per_sec"] = _safe_ratio(
+        float(row.get("batch_size", 0.0)) * 1000.0,
+        visible_ms,
+    )
+    row["batches_per_sec"] = _safe_ratio(1000.0, visible_ms)
 
 
 class LookaheadPrefetcher:
@@ -247,6 +291,11 @@ def _merge_gpu_cache_profile(
     for key in GPU_CACHE_PROFILE_KEYS:
         value = profile.get(key, 0.0)
         row[f"{prefix}_{key}"] = float(value) if isinstance(value, (int, float)) else 0.0
+    request_count = float(row.get(f"{prefix}_gpu_cache_request_count", 0.0))
+    hit_count = float(row.get(f"{prefix}_gpu_cache_hit_count", 0.0))
+    row[f"{prefix}_gpu_cache_hit_rate"] = _safe_ratio(hit_count, request_count)
+    clear_count = getattr(kv_client, "get_gpu_cache_clear_count", None)
+    row["gpu_cache_clear_count"] = int(clear_count()) if callable(clear_count) else 0
 
 
 def _maybe_warmup_gpu_local_shm_fast_path(
@@ -724,6 +773,10 @@ class RecStoreRunner(BenchmarkRunner):
                 }
                 for feature_idx, feature_name in enumerate(default_cat_names)
             ]
+            table_offsets = {
+                cfg_item["feature_names"][0]: feature_idx << cfg.fuse_k
+                for feature_idx, cfg_item in enumerate(eb_configs)
+            }
 
             embedding_module = RecStoreEmbeddingBagCollection(
                 embedding_bag_configs=eb_configs,
@@ -844,6 +897,13 @@ class RecStoreRunner(BenchmarkRunner):
                     device=device,
                 )
                 row["input_pack_ms"] = (time.perf_counter() - input_pack_start) * 1e3
+                _add_sparse_id_stats(
+                    row,
+                    sparse_features,
+                    table_offsets,
+                    cache_capacity=cfg.gpu_cache_capacity if cfg.enable_gpu_cache else 0,
+                    prefetch_depth=cfg.prefetch_depth,
+                )
 
                 if cfg.read_before_update and cfg.read_mode == "prefetch":
                     lookahead_prefetcher.enqueue(sparse_features)
@@ -974,12 +1034,13 @@ class RecStoreRunner(BenchmarkRunner):
 
                 _merge_consumed_perf_stats(row, _consume_perf_stats(embedding_module))
                 _merge_consumed_perf_stats(row, _consume_perf_stats(sparse_optimizer))
+                row["prefetch_wait_share_of_lookup"] = _safe_ratio(
+                    float(row.get("lookup_wait_ms", 0.0)),
+                    float(row.get("lookup_total_ms", row.get("embed_lookup_local_ms", 0.0))),
+                )
                 if step >= cfg.warmup_steps:
                     update_lat_us.append(row["sparse_update_ms"] * 1e3)
-                row["step_visible_ms"] = (
-                    time.perf_counter() - consume_step_start
-                ) * 1e3
-                row["step_total_ms"] = (time.perf_counter() - step_start) * 1e3
+                _finalize_step_timing(row, consume_start=consume_step_start)
                 rows.append(finalize_recstore_row(row))
                 _barrier_for_step_alignment(
                     dist=dist,

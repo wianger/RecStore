@@ -9,8 +9,10 @@ import torch
 
 from model_zoo.rs_demo.runners.recstore_runner import (
     GPU_CACHE_PROFILE_KEYS,
+    _add_sparse_id_stats,
     _merge_gpu_cache_profile,
 )
+from model_zoo.rs_demo.data.dlrm_source import build_sparse_features
 from model_zoo.rs_demo.runtime.recstore_distributed import ShardedRecstoreClient
 from recstore_config_path import resolve_recstore_config_path
 from ..KVClient import RecStoreClient
@@ -89,6 +91,29 @@ class TestGpuCacheProfileMapping(unittest.TestCase):
         self.assertEqual(row["update_gpu_cache_invalidate_ms"], 6.0)
         self.assertEqual(row["update_gpu_cache_request_count"], 7.0)
         self.assertEqual(row["update_gpu_cache_miss_count"], 8.0)
+        self.assertEqual(row["update_gpu_cache_hit_rate"], 5.0 / 7.0)
+
+    def test_rs_demo_adds_sparse_id_scale_fields(self) -> None:
+        features = build_sparse_features(
+            ["f1", "f2"],
+            torch.tensor([1, 1, 2, 3, 3, 4], dtype=torch.int64),
+            torch.tensor([2, 1, 1, 2], dtype=torch.int32),
+        )
+        row = {}
+
+        _add_sparse_id_stats(
+            row,
+            features,
+            {"f1": 0, "f2": 1 << 30},
+            cache_capacity=1024,
+            prefetch_depth=2,
+        )
+
+        self.assertEqual(row["batch_raw_ids"], 6)
+        self.assertEqual(row["batch_unique_ids"], 4)
+        self.assertEqual(row["batch_dedup_ratio"], 2.0 / 6.0)
+        self.assertEqual(row["gpu_cache_capacity"], 1024)
+        self.assertEqual(row["prefetch_depth"], 2)
 
 
 class TestGpuTrainingCache(unittest.TestCase):

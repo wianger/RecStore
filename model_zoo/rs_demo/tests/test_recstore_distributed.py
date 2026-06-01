@@ -657,6 +657,32 @@ class TestShardedRecstoreClient(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             client.wait_and_get(handle, 4)
 
+    def test_shared_local_shm_prefetch_uses_ready_lookup_result_once(self) -> None:
+        runtime_dir = self._make_runtime_dir(
+            cache_ps_type="LOCAL_SHM",
+            cache_servers=[{"host": "127.0.0.1", "port": 20000, "shard": 0}],
+            distributed_servers=[{"host": "127.0.0.1", "port": 20000, "shard": 0}],
+            distributed_num_shards=1,
+        )
+        fake_client = _FakeClient()
+        fake_client.ops.backend = "local_shm"
+        client = ShardedRecstoreClient(fake_client, runtime_dir)
+        client.register_tensor_meta("table", shape=(16, 4), dtype=torch.float32)
+        client.activate_shard(0)
+        client.set_prefetch_table_name("table")
+
+        ids = torch.tensor([3, 1, 3], dtype=torch.int64)
+        handle = client.prefetch(ids)
+
+        self.assertGreater(handle, 0)
+        self.assertEqual(fake_client.prefetch_requests, {})
+        self.assertEqual(fake_client.ops.lookup_calls, [(None, [3, 1, 3], 4)])
+        result = client.wait_and_get(handle, 4)
+        expected = torch.arange(12, dtype=torch.float32).view(3, 4)
+        self.assertTrue(torch.allclose(result, expected))
+        with self.assertRaises(RuntimeError):
+            client.wait_and_get(handle, 4)
+
     def test_update_async_routes_updates_to_each_shard(self) -> None:
         runtime_dir = self._make_runtime_dir(hash_method="simple_mod", distributed_num_shards=2)
         fake_client = _FakeClient()

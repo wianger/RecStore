@@ -156,10 +156,14 @@ class ShardedRecstoreClient:
         self._prefetch_contexts: dict[int, tuple[int, list[tuple[int, torch.Tensor, Any]]]] = {}
         self._kv_prefetch_next_id = 1
         self._kv_prefetch_contexts: dict[int, tuple[int, list[tuple[int, torch.Tensor, Any]]]] = {}
+        self._kv_prefetch_ready_results: dict[int, torch.Tensor] = {}
         self._tensor_meta: Dict[str, Dict[str, Any]] = {}
         self._next_async_handle = 1
         self._pending_async_ops: Dict[int, tuple[str, torch.Tensor, torch.Tensor]] = {}
         self._gpu_cache_table_name: str | None = None
+        self._gpu_cache_enabled: bool = False
+        self._gpu_cache_clear_count = 0
+        self._prefetch_table_name: str | None = None
         self._native_distributed_backend = self._detect_native_distributed_backend()
 
     def register_tensor_meta(
@@ -424,7 +428,12 @@ class ShardedRecstoreClient:
                 "enable_gpu_cache requires a RecStore client or ops library exposing "
                 "enable_gpu_cache()."
         )
-        return bool(enable(int(capacity), int(embedding_dim)))
+        enabled = bool(enable(int(capacity), int(embedding_dim)))
+        self._gpu_cache_enabled = enabled
+        return enabled
+
+    def is_gpu_cache_enabled(self) -> bool:
+        return bool(self._gpu_cache_enabled)
 
     def set_gpu_cache_lookup_bypass_enabled(self, enabled: bool) -> None:
         setter = getattr(self._client, "set_gpu_cache_lookup_bypass_enabled", None)
@@ -480,6 +489,8 @@ class ShardedRecstoreClient:
         ids: torch.Tensor,
         values: torch.Tensor,
     ) -> None:
+        if not self._gpu_cache_enabled:
+            raise RuntimeError("prefill_gpu_cache requires GPU cache to be enabled")
         self._require_active_shard("prefill_gpu_cache")
         prefill = getattr(self._client, "prefill_gpu_cache", None)
         if callable(prefill):
@@ -512,6 +523,9 @@ class ShardedRecstoreClient:
             profile[key] = float(values[index]) if index < len(values) else 0.0
         return profile
 
+    def get_gpu_cache_clear_count(self) -> int:
+        return int(self._gpu_cache_clear_count)
+
     def _clear_gpu_cache_if_available(self) -> None:
         clear = getattr(self._client, "clear_gpu_cache", None)
         if not callable(clear):
@@ -519,6 +533,7 @@ class ShardedRecstoreClient:
             clear = getattr(ops, "clear_gpu_cache", None)
         if callable(clear):
             clear()
+            self._gpu_cache_clear_count += 1
         self._gpu_cache_table_name = None
 
     def _max_emb_write_rows(self, embedding_dim: int) -> int:
@@ -555,6 +570,11 @@ class ShardedRecstoreClient:
         if self._gpu_cache_table_name != name:
             self._clear_gpu_cache_if_available()
             self._gpu_cache_table_name = name
+
+    def set_prefetch_table_name(self, name: str) -> None:
+        if not isinstance(name, str) or not name:
+            raise ValueError("prefetch table name must be a non-empty string")
+        self._prefetch_table_name = name
 
     def is_shared_local_shm_table(self) -> bool:
         if self._cache_ps_type != "LOCAL_SHM":
@@ -708,6 +728,15 @@ class ShardedRecstoreClient:
         if normalized_ids.numel() == 0:
             self._kv_prefetch_contexts[req_id] = (0, [])
             return req_id
+        prefetch_table_name = self._prefetch_table_name or self._gpu_cache_table_name
+        if self.is_shared_local_shm_table() and prefetch_table_name is not None:
+            self._activate_shard(0)
+            self._kv_prefetch_ready_results[req_id] = self.local_lookup_flat(
+                prefetch_table_name,
+                normalized_ids,
+            )
+            self._kv_prefetch_contexts[req_id] = (int(normalized_ids.numel()), [])
+            return req_id
         shard_requests: list[tuple[int, torch.Tensor, Any]] = []
         for shard, index_tensor, shard_keys in self._group_ids_by_shard(normalized_ids):
             if self._can_issue_shard_prefetch_early():
@@ -734,6 +763,16 @@ class ShardedRecstoreClient:
         if context is None:
             raise RuntimeError(f"unknown prefetch_id: {prefetch_id}")
         total_rows, shard_requests = context
+        ready_result = self._kv_prefetch_ready_results.pop(int(prefetch_id), None)
+        if ready_result is not None:
+            out = ready_result
+            if out.size(1) != int(embedding_dim):
+                raise RuntimeError(
+                    f"prefetch result embedding dim {out.size(1)} does not match requested {embedding_dim}"
+                )
+            if device.type == "cuda" and out.device.type != "cuda":
+                out = out.to(device)
+            return out
         if total_rows == 0:
             return torch.empty((0, embedding_dim), dtype=torch.float32, device=device)
         out = torch.empty((total_rows, embedding_dim), dtype=torch.float32)
