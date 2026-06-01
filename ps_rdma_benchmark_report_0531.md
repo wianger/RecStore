@@ -258,7 +258,7 @@ worker 会引入队列、同步和 completion 回流成本，吞吐明显下降�
 推荐复现 PET 当前最优路径：
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --index-type DRAM_PET_HASH \
   --rdma-get-response-mode auto \
@@ -310,7 +310,7 @@ ps_transport_benchmark
 - `src/storage/index/dram/extendible_hash.cpp`
 - `src/storage/index/dram/pet_hash_index.h`
 - `src/storage/value_store/dram_value_store.h`
-- `src/test/scripts/run_benchmark_ps.py`
+- `tools/benchmarks/run_benchmark_ps.py`
 - `tools/benchmarks/run_ycsb_compare.py`
 
 ## 9. 后续方向

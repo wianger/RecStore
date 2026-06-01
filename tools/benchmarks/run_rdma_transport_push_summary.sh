@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BENCHMARK_BINARY="${ROOT_DIR}/build/bin/ps_transport_benchmark"
-RUNNER_SCRIPT="${ROOT_DIR}/src/test/scripts/run_rdma_transport_benchmarks.py"
+RUNNER_SCRIPT="${ROOT_DIR}/tools/benchmarks/run_rdma_transport_benchmarks.py"
 
 if [[ ! -x "${BENCHMARK_BINARY}" ]]; then
   echo "benchmark binary not found: ${BENCHMARK_BINARY}" >&2

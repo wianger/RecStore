@@ -162,6 +162,23 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--rdma_rc_client_numa_id=0", client0_cmd)
         self.assertIn("--rdma_rc_client_numa_id=1", client1_cmd)
 
+    def test_build_client_command_allows_benchmark_binary_without_put_v2_flags(self):
+        runner = PetPSClusterRunner(
+            rdma_put_protocol_version=2,
+            rdma_put_v2_transfer_mode="read",
+            rdma_put_v2_push_slot_bytes=262144,
+        )
+
+        cmd = runner.build_client_cmd(
+            ["./build/bin/ps_transport_benchmark"],
+            client_index=0,
+        )
+
+        rendered = " ".join(cmd)
+        self.assertNotIn("--rdma_put_protocol_version=", rendered)
+        self.assertNotIn("--rdma_put_v2_transfer_mode=", rendered)
+        self.assertNotIn("--rdma_put_v2_push_slot_bytes=", rendered)
+
     def test_build_commands_accept_legacy_rdma_aliases(self):
         runner = PetPSClusterRunner(
             rdma_rc_qps_per_client_per_shard=8,

@@ -21,6 +21,16 @@ def _to_text(value):
     return str(value)
 
 
+def _supports_put_v2_client_flags(argv):
+    if not argv:
+        return False
+    binary_name = os.path.basename(str(argv[0]))
+    return binary_name in {
+        "petps_integration_test",
+        "petps_multiclient_stress",
+    }
+
+
 class PetPSClusterRunner:
     def __init__(
         self,
@@ -357,36 +367,37 @@ class PetPSClusterRunner:
                 "--rdma_client_receive_arena_bytes="
                 f"{self.rdma_client_receive_arena_bytes}"
             )
-        if self.rdma_put_protocol_version is not None:
-            cmd.append(
-                "--rdma_put_protocol_version="
-                f"{self.rdma_put_protocol_version}"
-            )
-        if self.rdma_put_v2_transfer_mode is not None:
-            cmd.append(
-                "--rdma_put_v2_transfer_mode="
-                f"{self.rdma_put_v2_transfer_mode}"
-            )
-        if self.rdma_put_v2_push_slot_bytes is not None:
-            cmd.append(
-                "--rdma_put_v2_push_slot_bytes="
-                f"{self.rdma_put_v2_push_slot_bytes}"
-            )
-        if self.rdma_put_v2_push_slots_per_client is not None:
-            cmd.append(
-                "--rdma_put_v2_push_slots_per_client="
-                f"{self.rdma_put_v2_push_slots_per_client}"
-            )
-        if self.rdma_put_v2_push_region_offset is not None:
-            cmd.append(
-                "--rdma_put_v2_push_region_offset="
-                f"{self.rdma_put_v2_push_region_offset}"
-            )
-        if self.rdma_put_client_send_arena_bytes is not None:
-            cmd.append(
-                "--rdma_put_client_send_arena_bytes="
-                f"{self.rdma_put_client_send_arena_bytes}"
-            )
+        if _supports_put_v2_client_flags(argv):
+            if self.rdma_put_protocol_version is not None:
+                cmd.append(
+                    "--rdma_put_protocol_version="
+                    f"{self.rdma_put_protocol_version}"
+                )
+            if self.rdma_put_v2_transfer_mode is not None:
+                cmd.append(
+                    "--rdma_put_v2_transfer_mode="
+                    f"{self.rdma_put_v2_transfer_mode}"
+                )
+            if self.rdma_put_v2_push_slot_bytes is not None:
+                cmd.append(
+                    "--rdma_put_v2_push_slot_bytes="
+                    f"{self.rdma_put_v2_push_slot_bytes}"
+                )
+            if self.rdma_put_v2_push_slots_per_client is not None:
+                cmd.append(
+                    "--rdma_put_v2_push_slots_per_client="
+                    f"{self.rdma_put_v2_push_slots_per_client}"
+                )
+            if self.rdma_put_v2_push_region_offset is not None:
+                cmd.append(
+                    "--rdma_put_v2_push_region_offset="
+                    f"{self.rdma_put_v2_push_region_offset}"
+                )
+            if self.rdma_put_client_send_arena_bytes is not None:
+                cmd.append(
+                    "--rdma_put_client_send_arena_bytes="
+                    f"{self.rdma_put_client_send_arena_bytes}"
+                )
         if self.rdma_qps_per_client_per_shard is not None:
             cmd.append(
                 "--rdma_rc_qps_per_client_per_shard="

@@ -9,6 +9,25 @@ from model_zoo.rs_demo.config import RunConfig
 
 
 class TestBenchmarkTools(unittest.TestCase):
+    def test_benchmark_runner_modules_are_exposed_under_tools_package(self) -> None:
+        from tools.benchmarks import (
+            run_benchmark_ps,
+            run_hierkv_recstore_mixed_benchmark,
+            run_local_shm_mixed_benchmark,
+            run_local_shm_multi_process_benchmark,
+            run_ps_dram_transport_benchmark,
+            run_rdma_rc_transport_benchmark,
+            run_rdma_transport_benchmarks,
+        )
+
+        self.assertTrue(callable(run_benchmark_ps.parse_args))
+        self.assertTrue(callable(run_ps_dram_transport_benchmark.build_runtime_config))
+        self.assertTrue(callable(run_rdma_transport_benchmarks.build_benchmark_cmd))
+        self.assertTrue(callable(run_rdma_rc_transport_benchmark.build_benchmark_cmd))
+        self.assertTrue(callable(run_local_shm_mixed_benchmark.build_runtime_config))
+        self.assertTrue(callable(run_local_shm_multi_process_benchmark.build_worker_env))
+        self.assertTrue(callable(run_hierkv_recstore_mixed_benchmark.build_recstore_cmd))
+
     def test_validate_recstore_config_keeps_default_lane_behavior_when_fast_path_disabled(self) -> None:
         cfg = RunConfig(
             backend="recstore",
