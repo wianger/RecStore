@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-import re
 import subprocess
 import time
 from pathlib import Path
@@ -10,47 +9,12 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-SUMMARY_RE = re.compile(
-    r"system=(?P<system>\S+) "
-    r"transport=(?P<transport>\S+) "
-    r"phase=(?P<phase>\S+) "
-    r"summary "
-    r"rounds=(?P<rounds>\d+) "
-    r"iterations=(?P<iterations>\d+) "
-    r"batch_keys=(?P<batch_keys>\d+) "
-    r"num_embeddings=(?P<num_embeddings>\d+) "
-    r"elapsed_us_mean=(?P<mean>[0-9.eE+-]+) "
-    r"elapsed_us_p50=(?P<p50>[0-9.eE+-]+) "
-    r"elapsed_us_p95=(?P<p95>[0-9.eE+-]+) "
-    r"elapsed_us_p99=(?P<p99>[0-9.eE+-]+) "
-    r"ops_per_sec=(?P<ops>[0-9.eE+-]+) "
-    r"key_ops_per_sec=(?P<key_ops>[0-9.eE+-]+)"
-)
+from tools.benchmarks.paths import BRPC_PS_SERVER_BIN, RECSTORE_MIXED_BENCHMARK_BIN
+from tools.benchmarks.summary import collect_mixed_summary_rows
+
 
 def collect_summary_rows(text: str) -> list[dict[str, str | int | float]]:
-    rows = []
-    for line in text.splitlines():
-        m = SUMMARY_RE.search(line)
-        if m is None:
-            continue
-        rows.append(
-            {
-                "system": m.group("system"),
-                "transport": m.group("transport"),
-                "phase": m.group("phase"),
-                "rounds": int(m.group("rounds")),
-                "iterations": int(m.group("iterations")),
-                "batch_keys": int(m.group("batch_keys")),
-                "num_embeddings": int(m.group("num_embeddings")),
-                "mean": float(m.group("mean")),
-                "p50": float(m.group("p50")),
-                "p95": float(m.group("p95")),
-                "p99": float(m.group("p99")),
-                "ops": float(m.group("ops")),
-                "key_ops": float(m.group("key_ops")),
-            }
-        )
-    return rows
+    return collect_mixed_summary_rows(text)
 
 
 def print_summary_table(rows: list[dict[str, str | int | float]]) -> None:
@@ -236,7 +200,7 @@ def main() -> int:
     parser.add_argument("--repo-root", default="/app/RecStore")
     parser.add_argument(
         "--recstore-binary",
-        default="/app/RecStore/build/bin/recstore_mixed_benchmark",
+        default=str(RECSTORE_MIXED_BENCHMARK_BIN),
     )
     parser.add_argument(
         "--hierkv-binary",
@@ -244,7 +208,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--recstore-server-binary",
-        default="/app/RecStore/build/bin/brpc_ps_server",
+        default=str(BRPC_PS_SERVER_BIN),
     )
     parser.add_argument("--transport", default="brpc")
     parser.add_argument("--host", default="127.0.0.1")

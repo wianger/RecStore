@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import tempfile
@@ -12,22 +11,9 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-SUMMARY_RE = re.compile(
-    r"system=(?P<system>\S+) "
-    r"transport=(?P<transport>\S+) "
-    r"phase=(?P<phase>\S+) "
-    r"summary "
-    r"rounds=(?P<rounds>\d+) "
-    r"iterations=(?P<iterations>\d+) "
-    r"batch_keys=(?P<batch_keys>\d+) "
-    r"num_embeddings=(?P<num_embeddings>\d+) "
-    r"elapsed_us_mean=(?P<mean>[0-9.eE+-]+) "
-    r"elapsed_us_p50=(?P<p50>[0-9.eE+-]+) "
-    r"elapsed_us_p95=(?P<p95>[0-9.eE+-]+) "
-    r"elapsed_us_p99=(?P<p99>[0-9.eE+-]+) "
-    r"ops_per_sec=(?P<ops>[0-9.eE+-]+) "
-    r"key_ops_per_sec=(?P<key_ops>[0-9.eE+-]+)"
-)
+from tools.benchmarks.paths import LOCAL_SHM_PS_SERVER_BIN, RECSTORE_MIXED_BENCHMARK_BIN
+from tools.benchmarks.summary import collect_mixed_summary_rows
+
 
 DEFAULT_DRAM_DATA_ROOT = Path("/dev/shm")
 
@@ -121,29 +107,7 @@ def build_benchmark_cmd(
 
 
 def collect_summary_rows(text: str) -> list[dict[str, str | int | float]]:
-    rows = []
-    for line in text.splitlines():
-        match = SUMMARY_RE.search(line)
-        if match is None:
-            continue
-        rows.append(
-            {
-                "system": match.group("system"),
-                "transport": match.group("transport"),
-                "phase": match.group("phase"),
-                "rounds": int(match.group("rounds")),
-                "iterations": int(match.group("iterations")),
-                "batch_keys": int(match.group("batch_keys")),
-                "num_embeddings": int(match.group("num_embeddings")),
-                "mean": float(match.group("mean")),
-                "p50": float(match.group("p50")),
-                "p95": float(match.group("p95")),
-                "p99": float(match.group("p99")),
-                "ops": float(match.group("ops")),
-                "key_ops": float(match.group("key_ops")),
-            }
-        )
-    return rows
+    return collect_mixed_summary_rows(text)
 
 
 def print_summary_table(rows: list[dict[str, str | int | float]]) -> None:
@@ -230,11 +194,11 @@ def main() -> int:
     parser.add_argument("--repo-root", default="/app/RecStore")
     parser.add_argument(
         "--benchmark-binary",
-        default="/app/RecStore/build/bin/recstore_mixed_benchmark",
+        default=str(RECSTORE_MIXED_BENCHMARK_BIN),
     )
     parser.add_argument(
         "--server-binary",
-        default="/app/RecStore/build/bin/local_shm_ps_server",
+        default=str(LOCAL_SHM_PS_SERVER_BIN),
     )
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--rounds", type=int, default=3)

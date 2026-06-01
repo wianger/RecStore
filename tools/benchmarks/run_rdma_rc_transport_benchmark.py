@@ -14,6 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.benchmarks._legacy_scripts import ensure_legacy_test_script_path
+from tools.benchmarks.render import fmt_num, per_request_us, print_markdown_table
+from tools.benchmarks.summary import collect_ps_transport_summary_rows
 
 ensure_legacy_test_script_path()
 
@@ -29,22 +31,6 @@ from ps_test_config import (
 CONTROL_PLANE_NOISE_PATTERNS = (
     "[petps-control-plane]",
     "component=rdma_control_plane",
-)
-
-SUMMARY_RE = re.compile(
-    r"transport=(?P<transport>\S+) "
-    r"op=(?P<op>\S+) "
-    r"phase=(?P<phase>\S+) "
-    r"summary "
-    r"rounds=(?P<rounds>\d+) "
-    r"iterations=(?P<iterations>\d+) "
-    r"batch_keys=(?P<batch_keys>\d+) "
-    r"elapsed_us_mean=(?P<mean>[0-9.eE+-]+) "
-    r"elapsed_us_p50=(?P<p50>[0-9.eE+-]+) "
-    r"elapsed_us_p95=(?P<p95>[0-9.eE+-]+) "
-    r"elapsed_us_p99=(?P<p99>[0-9.eE+-]+) "
-    r"ops_per_sec=(?P<ops>[0-9.eE+-]+) "
-    r"key_ops_per_sec=(?P<key_ops>[0-9.eE+-]+)"
 )
 
 def is_runner_noise_line(line):
@@ -65,38 +51,11 @@ def print_filtered_output(text, show_runner_logs, quiet):
 
 
 def collect_summary_rows(text):
-    rows = []
-    for line in text.splitlines():
-        match = SUMMARY_RE.search(line)
-        if match is None or match.group("phase") != "measure":
-            continue
-        rows.append(
-            {
-                "transport": match.group("transport"),
-                "op": match.group("op"),
-                "rounds": int(match.group("rounds")),
-                "iterations": int(match.group("iterations")),
-                "batch_keys": int(match.group("batch_keys")),
-                "mean": float(match.group("mean")),
-                "p50": float(match.group("p50")),
-                "p95": float(match.group("p95")),
-                "p99": float(match.group("p99")),
-                "ops": float(match.group("ops")),
-                "key_ops": float(match.group("key_ops")),
-                "client_index": None,
-            }
-        )
+    rows = collect_ps_transport_summary_rows(text)
+    for row in rows:
+        row.pop("phase", None)
+        row["client_index"] = None
     return rows
-
-
-def _fmt_num(value):
-    return f"{value:,.2f}"
-
-
-def _per_request_us(row, field):
-    if row["iterations"] <= 0:
-        return 0.0
-    return row[field] / row["iterations"]
 
 
 def print_summary_table(rows):
@@ -117,9 +76,9 @@ def print_summary_table(rows):
         "p99_req_us",
         "key_ops/s",
     ]
-    table = [header]
+    rendered_rows = []
     for row in rows:
-        table.append(
+        rendered_rows.append(
             [
                 str(row.get("client_index", "")),
                 row["transport"],
@@ -127,26 +86,14 @@ def print_summary_table(rows):
                 str(row["rounds"]),
                 str(row["iterations"]),
                 str(row["batch_keys"]),
-                _fmt_num(_per_request_us(row, "mean")),
-                _fmt_num(_per_request_us(row, "p50")),
-                _fmt_num(_per_request_us(row, "p95")),
-                _fmt_num(_per_request_us(row, "p99")),
-                _fmt_num(row["key_ops"]),
+                fmt_num(per_request_us(row, "mean")),
+                fmt_num(per_request_us(row, "p50")),
+                fmt_num(per_request_us(row, "p95")),
+                fmt_num(per_request_us(row, "p99")),
+                fmt_num(row["key_ops"]),
             ]
         )
-    widths = [max(len(row[idx]) for row in table) for idx in range(len(header))]
-
-    def render(row):
-        return "| " + " | ".join(
-            row[idx].ljust(widths[idx]) for idx in range(len(row))
-        ) + " |"
-
-    sep = "|-" + "-|-".join("-" * width for width in widths) + "-|"
-    print("\n=== RDMA RC Benchmark Summary (measure phase) ===")
-    print(render(table[0]))
-    print(sep)
-    for row in table[1:]:
-        print(render(row))
+    print_markdown_table("RDMA RC Benchmark Summary (measure phase)", header, rendered_rows)
 
 
 def print_aggregate_table(rows):
@@ -167,35 +114,23 @@ def print_aggregate_table(rows):
         "agg_key_ops/s",
         "mean_req_us_avg",
     ]
-    table = [header]
+    rendered_rows = []
     for (transport, op, batch_keys), group in sorted(grouped.items()):
         agg_ops = sum(row["ops"] for row in group)
         agg_key_ops = sum(row["key_ops"] for row in group)
-        avg_req_us = sum(_per_request_us(row, "mean") for row in group) / len(group)
-        table.append(
+        avg_req_us = sum(per_request_us(row, "mean") for row in group) / len(group)
+        rendered_rows.append(
             [
                 transport,
                 op,
                 str(len(group)),
                 str(batch_keys),
-                _fmt_num(agg_ops),
-                _fmt_num(agg_key_ops),
-                _fmt_num(avg_req_us),
+                fmt_num(agg_ops),
+                fmt_num(agg_key_ops),
+                fmt_num(avg_req_us),
             ]
         )
-    widths = [max(len(row[idx]) for row in table) for idx in range(len(header))]
-
-    def render(row):
-        return "| " + " | ".join(
-            row[idx].ljust(widths[idx]) for idx in range(len(row))
-        ) + " |"
-
-    sep = "|-" + "-|-".join("-" * width for width in widths) + "-|"
-    print("\n=== RDMA RC Aggregate Summary (measure phase) ===")
-    print(render(table[0]))
-    print(sep)
-    for row in table[1:]:
-        print(render(row))
+    print_markdown_table("RDMA RC Aggregate Summary (measure phase)", header, rendered_rows)
 
 
 def build_benchmark_cmd(args):

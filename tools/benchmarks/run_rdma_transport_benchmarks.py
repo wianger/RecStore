@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from tools.benchmarks._legacy_scripts import ensure_legacy_test_script_path
+from tools.benchmarks.render import fmt_num, per_request_us, print_markdown_table
+from tools.benchmarks.summary import collect_ps_transport_summary_rows
 
 ensure_legacy_test_script_path()
 
@@ -28,22 +29,6 @@ CONTROL_PLANE_NOISE_PATTERNS = (
 )
 
 BENCHMARK_NOISE_PATTERNS = ("I open mlx5_0 :)",)
-
-SUMMARY_RE = re.compile(
-    r"transport=(?P<transport>\S+) "
-    r"op=(?P<op>\S+) "
-    r"phase=(?P<phase>\S+) "
-    r"summary "
-    r"rounds=(?P<rounds>\d+) "
-    r"iterations=(?P<iterations>\d+) "
-    r"batch_keys=(?P<batch_keys>\d+) "
-    r"elapsed_us_mean=(?P<mean>[0-9.eE+-]+) "
-    r"elapsed_us_p50=(?P<p50>[0-9.eE+-]+) "
-    r"elapsed_us_p95=(?P<p95>[0-9.eE+-]+) "
-    r"elapsed_us_p99=(?P<p99>[0-9.eE+-]+) "
-    r"ops_per_sec=(?P<ops>[0-9.eE+-]+) "
-    r"key_ops_per_sec=(?P<key_ops>[0-9.eE+-]+)"
-)
 
 
 def build_rdma_runner(args):
@@ -142,37 +127,10 @@ def build_benchmark_cmd(
 
 
 def collect_summary_rows(text):
-    rows = []
-    for line in text.splitlines():
-        match = SUMMARY_RE.search(line)
-        if match is None or match.group("phase") != "measure":
-            continue
-        rows.append(
-            {
-                "transport": match.group("transport"),
-                "op": match.group("op"),
-                "rounds": int(match.group("rounds")),
-                "iterations": int(match.group("iterations")),
-                "batch_keys": int(match.group("batch_keys")),
-                "mean": float(match.group("mean")),
-                "p50": float(match.group("p50")),
-                "p95": float(match.group("p95")),
-                "p99": float(match.group("p99")),
-                "ops": float(match.group("ops")),
-                "key_ops": float(match.group("key_ops")),
-            }
-        )
+    rows = collect_ps_transport_summary_rows(text)
+    for row in rows:
+        row.pop("phase", None)
     return rows
-
-
-def _fmt_num(value):
-    return f"{value:,.2f}"
-
-
-def _per_request_us(row, field):
-    if row["iterations"] <= 0:
-        return 0.0
-    return row[field] / row["iterations"]
 
 
 def print_summary_table(rows):
@@ -194,9 +152,9 @@ def print_summary_table(rows):
         "p95_req_us",
         "key_ops/s",
     ]
-    table = [header]
+    rendered_rows = []
     for row in rows:
-        table.append(
+        rendered_rows.append(
             [
                 row["transport"],
                 row.get("transport_mode", ""),
@@ -205,23 +163,13 @@ def print_summary_table(rows):
                 str(row["rounds"]),
                 str(row["iterations"]),
                 str(row["batch_keys"]),
-                _fmt_num(_per_request_us(row, "mean")),
-                _fmt_num(_per_request_us(row, "p50")),
-                _fmt_num(_per_request_us(row, "p95")),
-                _fmt_num(row["key_ops"]),
+                fmt_num(per_request_us(row, "mean")),
+                fmt_num(per_request_us(row, "p50")),
+                fmt_num(per_request_us(row, "p95")),
+                fmt_num(row["key_ops"]),
             ]
         )
-    widths = [max(len(r[i]) for r in table) for i in range(len(header))]
-
-    def render(r):
-        return "| " + " | ".join(r[i].ljust(widths[i]) for i in range(len(r))) + " |"
-
-    sep = "|-" + "-|-".join("-" * widths[i] for i in range(len(widths))) + "-|"
-    print("\n=== Benchmark Summary (measure phase) ===")
-    print(render(table[0]))
-    print(sep)
-    for row in table[1:]:
-        print(render(row))
+    print_markdown_table("Benchmark Summary (measure phase)", header, rendered_rows)
 
 
 def main():
