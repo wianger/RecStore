@@ -16,11 +16,11 @@ from model_zoo.rs_demo import config
 from model_zoo.rs_demo.config import RunConfig
 from model_zoo.rs_demo.runners import recstore_runner
 from model_zoo.rs_demo.runners.recstore_runner import (
-    LookaheadPrefetcher,
     RecStoreRunner,
     _build_train_dataloader_for_mode,
     _maybe_wrap_dense_module_for_dist,
 )
+from model_zoo.rs_demo.runtime.prefetch import LookaheadPrefetcher
 
 
 class _DummyDense(torch.nn.Module):
@@ -48,6 +48,7 @@ class _FakeShardedClient:
         self.enable_gpu_cache_result = True
         self.gpu_cache_lookup_bypass_enabled: bool | None = True
         self.gpu_cache_profile = {}
+        self.gpu_cache_clear_count = 0
         self.local_shm_warmup_calls = 0
         self._shared_local_shm_table = False
         self._last_prefetch_keys = torch.empty((0,), dtype=torch.int64)
@@ -73,6 +74,9 @@ class _FakeShardedClient:
 
     def get_last_gpu_cache_profile(self):
         return self.gpu_cache_profile
+
+    def get_gpu_cache_clear_count(self) -> int:
+        return int(self.gpu_cache_clear_count)
 
     def init_embedding_table(self, table_name: str, num_embeddings: int, embedding_dim: int) -> bool:
         self.init_embedding_table_calls += 1
@@ -259,7 +263,7 @@ class TestRecStoreRunner(unittest.TestCase):
 
     def test_lookahead_prefetcher_depth_zero_never_issues_prefetch(self) -> None:
         module = _FakePrefetchModule()
-        prefetcher = LookaheadPrefetcher(module, depth=0)
+        prefetcher = LookaheadPrefetcher(module, depth=0, embedding_dim=128)
 
         prefetcher.enqueue(_FakeSparseFeatures(3))
         prefetcher.attach_next()
@@ -273,7 +277,7 @@ class TestRecStoreRunner(unittest.TestCase):
 
     def test_lookahead_prefetcher_delays_consumption_by_depth(self) -> None:
         module = _FakePrefetchModule()
-        prefetcher = LookaheadPrefetcher(module, depth=2)
+        prefetcher = LookaheadPrefetcher(module, depth=2, embedding_dim=128)
 
         prefetcher.enqueue(_FakeSparseFeatures(3))
         self.assertFalse(prefetcher.attach_next())
@@ -295,6 +299,42 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual(stats["prefetch_total_ids"], 15)
         self.assertEqual(stats["prefetch_consumed_total_ids"], 3)
         self.assertGreater(stats["prefetch_issue_to_consume_ms"], 0)
+        self.assertEqual(stats["prefetch_window_live_ids"], 12)
+        self.assertEqual(stats["prefetch_window_live_bytes"], 12 * 128 * 4)
+        self.assertEqual(stats["prefetch_window_peak_live_ids"], 15)
+
+    def test_lookahead_prefetcher_reports_dense_overlap(self) -> None:
+        module = _FakePrefetchModule()
+        prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
+
+        prefetcher.enqueue(_FakeSparseFeatures(10))
+        prefetcher.enqueue(_FakeSparseFeatures(20))
+        self.assertTrue(prefetcher.advance())
+        self.assertTrue(prefetcher.attach_next())
+        stats = prefetcher.consume_stats(
+            reset=False,
+            dense_compute_ms=2.0,
+            wait_ms=5.0,
+        )
+
+        self.assertEqual(stats["prefetch_network_wait_ms"], 5.0)
+        self.assertEqual(stats["prefetch_dense_compute_ms"], 2.0)
+        self.assertEqual(stats["prefetch_exposed_network_ms"], 3.0)
+        self.assertEqual(stats["prefetch_dense_cover_ratio"], 0.4)
+
+    def test_finalize_step_timing_uses_visible_training_time(self) -> None:
+        row = {"batch_size": 64, "prefetch_queue_residence_ms": 50.0}
+        with mock.patch(
+            "model_zoo.rs_demo.runners.recstore_runner.time.perf_counter",
+            return_value=12.0,
+        ):
+            recstore_runner._finalize_step_timing(row, consume_start=10.0)
+
+        self.assertEqual(row["step_visible_ms"], 2000.0)
+        self.assertEqual(row["step_total_ms"], 2000.0)
+        self.assertEqual(row["samples_per_sec"], 32.0)
+        self.assertEqual(row["batches_per_sec"], 0.5)
+        self.assertEqual(row["prefetch_queue_residence_ms"], 50.0)
 
     def test_warmup_gpu_local_shm_fast_path_runs_only_for_shared_cuda_fast_path(self) -> None:
         cfg = RunConfig(
@@ -1074,7 +1114,9 @@ class TestRecStoreRunner(unittest.TestCase):
             "gpu_cache_fill_ms": 0.33,
             "gpu_cache_update_ms": 0.44,
             "gpu_cache_hit_count": 5,
+            "gpu_cache_request_count": 8,
         }
+        fake_client.gpu_cache_clear_count = 2
 
         recstore_runner._merge_gpu_cache_profile(row, fake_client, "lookup")
 
@@ -1083,6 +1125,8 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual(row["lookup_gpu_cache_fill_ms"], 0.33)
         self.assertEqual(row["lookup_gpu_cache_update_ms"], 0.44)
         self.assertEqual(row["lookup_gpu_cache_hit_count"], 5.0)
+        self.assertEqual(row["lookup_gpu_cache_hit_rate"], 5.0 / 8.0)
+        self.assertEqual(row["gpu_cache_clear_count"], 2)
 
     def test_local_worker_switches_client_backend_for_single_node_fast_path(self) -> None:
         cfg = RunConfig(

@@ -24,6 +24,10 @@ def _mean(rows: list[dict[str, str]], column: str) -> float | None:
     return sum(values) / len(values)
 
 
+def _mean_or_zero(rows: list[dict[str, str]], column: str) -> float:
+    return _mean(rows, column) or 0.0
+
+
 def _first_non_none(*values: float | None) -> float | None:
     for value in values:
         if value is not None:
@@ -218,9 +222,181 @@ def build_compare_rows(recstore_csv: Path, torchrec_main_csv: Path) -> list[dict
     return rows
 
 
+def build_exposed_gap_rows(
+    recstore_csv: Path,
+    torchrec_main_csv: Path,
+) -> list[dict[str, str | float]]:
+    """Build paper-style raw/exposed latency gap rows.
+
+    Raw time is the measured stage cost. Exposed time is the portion not hidden
+    by the measured overlap window. For RecStore prefetch, dense compute is the
+    overlap window. TorchRec HBM lookup has no explicit prefetch network wait in
+    this CSV layer, so its exposed prefetch network time is treated as zero.
+    """
+
+    rec_rows = _load_rows(recstore_csv)
+    tr_rows = _load_rows(torchrec_main_csv)
+    if not rec_rows:
+        raise ValueError(f"no rows found in recstore csv: {recstore_csv}")
+    if not tr_rows:
+        raise ValueError(f"no rows found in torchrec main csv: {torchrec_main_csv}")
+
+    rec_step = _mean_or_zero(rec_rows, "step_total_ms")
+    tr_step = _mean_or_zero(tr_rows, "step_total_ms")
+    rec_emb = _first_non_none(
+        _mean(rec_rows, "emb_stage_ms"),
+        _mean(rec_rows, "embed_lookup_local_ms"),
+    ) or 0.0
+    tr_emb = _first_non_none(
+        _mean(tr_rows, "emb_stage_ms"),
+        _mean(tr_rows, "embed_lookup_local_ms"),
+    ) or 0.0
+    rec_lookup = _first_non_none(
+        _mean(rec_rows, "lookup_total_ms"),
+        _mean(rec_rows, "embed_lookup_local_ms"),
+    ) or 0.0
+    tr_lookup = _mean_or_zero(tr_rows, "embed_lookup_local_ms")
+    rec_dense = _first_non_none(
+        _mean(rec_rows, "dense_compute_ms"),
+        sum(
+            _mean_or_zero(rec_rows, key)
+            for key in ("dense_fwd_ms", "backward_ms", "optimizer_ms")
+        ),
+    ) or 0.0
+    tr_dense = sum(
+        _mean_or_zero(tr_rows, key)
+        for key in ("dense_fwd_ms", "backward_ms", "optimizer_ms")
+    )
+    rec_prefetch_wait = _first_non_none(
+        _mean(rec_rows, "prefetch_network_wait_ms"),
+        (
+            _mean_or_zero(rec_rows, "lookup_wait_ms")
+            + _mean_or_zero(rec_rows, "planned_gpu_cache_prefill_wait_ms")
+        ),
+    ) or 0.0
+    rec_prefetch_exposed = max(0.0, rec_prefetch_wait - rec_dense)
+
+    metrics = [
+        (
+            "step_total",
+            rec_step,
+            rec_step,
+            tr_step,
+            tr_step,
+            "end-to-end visible training step",
+        ),
+        (
+            "embedding_stage",
+            rec_emb,
+            rec_emb,
+            tr_emb,
+            tr_emb,
+            "input pack + lookup + pool + output unpack",
+        ),
+        (
+            "embedding_lookup",
+            rec_lookup,
+            rec_lookup,
+            tr_lookup,
+            tr_lookup,
+            "RecStore lookup path versus TorchRec HBM lookup",
+        ),
+        (
+            "prefetch_network",
+            rec_prefetch_wait,
+            rec_prefetch_exposed,
+            0.0,
+            0.0,
+            "wait not hidden by dense compute window",
+        ),
+        (
+            "gpu_cache_query",
+            _mean_or_zero(rec_rows, "lookup_gpu_cache_query_ms"),
+            _mean_or_zero(rec_rows, "lookup_gpu_cache_query_ms"),
+            0.0,
+            0.0,
+            "RecStore GPU cache lookup overhead absent from TorchRec HBM lane",
+        ),
+        (
+            "gpu_cache_fill",
+            _mean_or_zero(rec_rows, "lookup_gpu_cache_fill_ms"),
+            _mean_or_zero(rec_rows, "lookup_gpu_cache_fill_ms"),
+            0.0,
+            0.0,
+            "cache miss fill overhead",
+        ),
+        (
+            "gpu_cache_prefill",
+            _mean_or_zero(rec_rows, "planned_gpu_cache_prefill_ms"),
+            _mean_or_zero(rec_rows, "planned_gpu_cache_prefill_ms"),
+            0.0,
+            0.0,
+            "lookahead result insertion into GPU cache",
+        ),
+        (
+            "sparse_update",
+            _mean_or_zero(rec_rows, "sparse_update_ms"),
+            _mean_or_zero(rec_rows, "sparse_update_ms"),
+            _mean_or_zero(tr_rows, "sparse_update_ms"),
+            _mean_or_zero(tr_rows, "sparse_update_ms"),
+            "sparse gradient replay/apply/flush path",
+        ),
+        (
+            "gpu_cache_invalidate",
+            _mean_or_zero(rec_rows, "update_gpu_cache_invalidate_ms"),
+            _mean_or_zero(rec_rows, "update_gpu_cache_invalidate_ms"),
+            0.0,
+            0.0,
+            "read-after-write cache invalidation cost",
+        ),
+        (
+            "dense_compute",
+            rec_dense,
+            rec_dense,
+            tr_dense,
+            tr_dense,
+            "dense forward + backward + dense optimizer",
+        ),
+    ]
+
+    rows: list[dict[str, str | float]] = []
+    for metric, rec_raw, rec_exposed, tr_raw, tr_exposed, note in metrics:
+        delta_raw = rec_raw - tr_raw
+        delta_exposed = rec_exposed - tr_exposed
+        bottleneck = "hidden"
+        if abs(delta_exposed) > 1e-12:
+            bottleneck = "exposed"
+        elif abs(delta_raw) > 1e-12:
+            bottleneck = "raw_only"
+        rows.append(
+            {
+                "metric": metric,
+                "recstore_raw_ms": rec_raw,
+                "recstore_exposed_ms": rec_exposed,
+                "torchrec_raw_ms": tr_raw,
+                "torchrec_exposed_ms": tr_exposed,
+                "delta_raw_ms": delta_raw,
+                "delta_exposed_ms": delta_exposed,
+                "bottleneck": bottleneck,
+                "note": note,
+            }
+        )
+    return rows
+
+
 def write_compare_csv(path: Path, rows: list[dict[str, str | float]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = ["metric", "recstore_ms", "torchrec_ms", "delta_ms", "delta_ratio"]
+    fieldnames = (
+        list(rows[0].keys())
+        if rows
+        else [
+            "metric",
+            "recstore_ms",
+            "torchrec_ms",
+            "delta_ms",
+            "delta_ratio",
+        ]
+    )
     with path.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
