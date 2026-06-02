@@ -158,6 +158,44 @@ python3 model_zoo/rs_demo/run_prefetch_window_sweep.py \
 - `planned_gpu_cache_prefill_fallbacks_mean` 和 `planned_gpu_cache_prefill_result_size_mismatches_mean` 不主导。
 - update 后 cache invalidation/clear 指标正常，不能为了命中率牺牲 read-after-write。
 
+## 4. RecStore vs TorchRec HBM 暴露时间分析
+
+论文式暴露时间不要只看 raw communication time。当前分析脚手架把 raw time 和 exposed time 分开：
+
+```text
+prefetch_network_exposed_ms = max(0, prefetch_network_wait_ms - dense_compute_ms)
+dense_compute_ms = dense_fwd_ms + backward_ms + optimizer_ms
+```
+
+生成 RecStore GPU-cache/prefetch lane 与 TorchRec HBM lane 的逐环节差距表：
+
+```bash
+python3 model_zoo/rs_demo/analyze_torchrec_gap.py \
+  --recstore-csv /tmp/recstore_exposed_gap_smoke/outputs/recstore-gap-prefetch-gpucache/recstore_main.csv \
+  --torchrec-csv /tmp/recstore_exposed_gap_smoke/outputs/torchrec-gap-hbm/torchrec_main.csv \
+  --output-csv /tmp/recstore_exposed_gap_smoke/exposed_gap.csv \
+  --output-md /tmp/recstore_exposed_gap_smoke/exposed_gap.md
+```
+
+输出列：
+
+- `recstore_raw_ms` / `torchrec_raw_ms`：该阶段直接测到的耗时。
+- `recstore_exposed_ms` / `torchrec_exposed_ms`：扣除 overlap 后仍暴露在 step 上的耗时。
+- `delta_raw_ms` / `delta_exposed_ms`：RecStore 相比 TorchRec HBM 的差值。
+- `bottleneck`：`exposed` 表示直接影响 step，`raw_only` 表示 raw wait 存在但被 dense overlap 覆盖，`hidden` 表示该层当前不是差距来源。
+
+重点判断：
+
+- 如果 `prefetch_network` 是 `raw_only` 且 `delta_exposed_ms=0`，说明预取网络等待已被 dense 计算隐藏，继续加深 lookahead 很可能只增加 GPU cache footprint。
+- 如果 `embedding_lookup` 仍比 TorchRec HBM 慢，而 `prefetch_network` 已隐藏，差距多半在 RecStore lookup 本地路径、GPU cache query、pooling 或 Python 包装。
+- 如果 `gpu_cache_query/gpu_cache_prefill/gpu_cache_invalidate` 为 0，同时 `planned_gpu_cache_prefill_successes` 也为 0，要先确认 CUDA/GPU cache API/fallback 信号，不能把 fallback lane 当成 GPU cache 性能。
+- 如果 `sparse_update` gap 主导，GPU cache 只能优化读路径，不能单独追平 TorchRec HBM 的整体 step。
+
+CSV 级 gap 表用于先定位大类瓶颈。若需要进一步看 kernel/API 时间线：
+
+- PyTorch profiler：在 TorchRec lane 加 `--torchrec-profiler`，查看 `torchrec_trace.csv` 和 TensorBoard trace，适合定位 PyTorch operator、shape、CPU/CUDA activity。
+- Nsight Systems：用 `nsys profile --trace=cuda,nvtx,osrt -o <report> <python command>` 包住相同命令，适合确认 CUDA kernel、memcpy、CPU runtime 与 NVTX 时间线是否重叠。
+
 单机单进程 TorchRec UVM caching（embedding 主存放在 host/UVM，GPU 侧使用 TorchRec/FBGEMM cache）：
 
 ```bash
