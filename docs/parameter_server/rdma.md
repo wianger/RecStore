@@ -15,7 +15,7 @@ cd /app/RecStore
 当前主路径已经完成两次硬切换：
 
 - RDMA 数据面不再依赖历史 Mayfly `RawMessage` 路径。
-- RDMA 控制面不再依赖 `memcached`，统一由 shard 0 `petps_server` 内置控制面承担。
+- RDMA 控制面不再依赖 `memcached`，统一由 shard 0 `petps_server` 内置 gRPC 控制面承担。
 
 RecStore 现在有两条 RDMA 入口：
 
@@ -56,7 +56,7 @@ Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 - 打开 RDMA 设备
 - 注册本地 MR
 - 创建 QP / CQ
-- 通过 shard 0 控制面交换 metadata
+- 通过 shard 0 gRPC 控制面交换 metadata
 - 轮询 RDMA write completion
 
 这条路径当前已经不再链接或包含 Mayfly 控制面代码；`GlobalAddress`、QP metadata exchange 和 ready 协调都在仓内自维护。

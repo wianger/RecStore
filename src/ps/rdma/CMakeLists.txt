@@ -12,7 +12,16 @@ add_library(wq_ps_client
     ${PROJECT_SOURCE_DIR}/src/ps/base/parameters.cpp
 )
 
-target_link_libraries(wq_ps_client PUBLIC base ps_common Folly::folly pthread rt ibverbs)
+target_link_libraries(wq_ps_client PUBLIC
+    base
+    ps_common
+    ps_proto
+    gRPC::grpc++
+    Folly::folly
+    pthread
+    rt
+    ibverbs
+)
 set(warp_wq_ps_client -Wl,--whole-archive wq_ps_client -Wl,--no-whole-archive CACHE INTERNAL "wq_ps_client")
 
 add_executable(petps_server
@@ -28,6 +37,9 @@ target_link_libraries(petps_server PUBLIC
     kv_engine
     sparse_tensor
     ps_common
+    ps_proto
+    gRPC::grpc++_reflection
+    gRPC::grpc++
     TBB::tbb
     Folly::folly
     boost_context

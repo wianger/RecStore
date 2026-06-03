@@ -609,17 +609,12 @@ def build_remote_exec_cmd(
 ) -> list[str]:
     repo_command = f"cd {shlex.quote(remote_repo)} && {shell_command}"
     if remote_container:
-        return [
-            "ssh",
-            host,
-            "docker",
-            "exec",
-            remote_container,
-            "bash",
-            "-lc",
-            repo_command,
-        ]
-    return ["ssh", host, "bash", "-lc", repo_command]
+        container_command = (
+            f"docker exec {shlex.quote(remote_container)} "
+            f"bash -lc {shlex.quote(repo_command)}"
+        )
+        return ["ssh", host, "bash", "-lc", shlex.quote(container_command)]
+    return ["ssh", host, "bash", "-lc", shlex.quote(repo_command)]
 
 
 def run_command(
@@ -671,7 +666,13 @@ def sync_file_to_remote(
         host_tmp_dir = f"/tmp/recstore_benchmark_ps_sync/{os.getpid()}"
         host_tmp_path = f"{host_tmp_dir}/{local_path.name}"
         run_command(
-            ["ssh", host, "bash", "-lc", f"mkdir -p {shlex.quote(host_tmp_dir)}"],
+            [
+                "ssh",
+                host,
+                "bash",
+                "-lc",
+                shlex.quote(f"mkdir -p {shlex.quote(host_tmp_dir)}"),
+            ],
             capture_output=True,
             check=True,
         )
@@ -681,18 +682,20 @@ def sync_file_to_remote(
             check=True,
         )
         remote_dir = os.path.dirname(remote_path)
-        run_command(
-            build_remote_exec_cmd(
-                host,
-                remote_repo,
-                None,
-                " && ".join(
-                    [
-                        f"docker exec {shlex.quote(remote_container)} mkdir -p {shlex.quote(remote_dir)}",
-                        f"docker cp {shlex.quote(host_tmp_path)} {shlex.quote(remote_container)}:{shlex.quote(remote_path)}",
-                    ]
+        host_copy_command = " && ".join(
+            [
+                (
+                    f"docker exec {shlex.quote(remote_container)} "
+                    f"mkdir -p {shlex.quote(remote_dir)}"
                 ),
-            ),
+                (
+                    f"docker cp {shlex.quote(host_tmp_path)} "
+                    f"{shlex.quote(remote_container)}:{shlex.quote(remote_path)}"
+                ),
+            ]
+        )
+        run_command(
+            ["ssh", host, "bash", "-lc", shlex.quote(host_copy_command)],
             capture_output=True,
             check=True,
         )
@@ -700,7 +703,13 @@ def sync_file_to_remote(
 
     remote_dir = os.path.dirname(remote_path)
     run_command(
-        ["ssh", host, "bash", "-lc", f"mkdir -p {shlex.quote(remote_dir)}"],
+        [
+            "ssh",
+            host,
+            "bash",
+            "-lc",
+            shlex.quote(f"mkdir -p {shlex.quote(remote_dir)}"),
+        ],
         capture_output=True,
         check=True,
     )
@@ -763,7 +772,13 @@ def ensure_remote_binary_state(
     if remote_container is None and shutil.which("rsync"):
         remote_dir = os.path.dirname(remote_binary_path)
         run_command(
-            ["ssh", host, "bash", "-lc", f"mkdir -p {shlex.quote(remote_dir)}"],
+            [
+                "ssh",
+                host,
+                "bash",
+                "-lc",
+                shlex.quote(f"mkdir -p {shlex.quote(remote_dir)}"),
+            ],
             capture_output=True,
             check=True,
         )
@@ -1533,7 +1548,10 @@ def build_remote_background_server_cmd(
     shell_command = " && ".join(
         [
             f"mkdir -p {shlex.quote(remote_log_dir)}",
-            f"nohup {quote_argv(argv)} > {shlex.quote(remote_log_path)} 2>&1 < /dev/null & echo $!",
+            (
+                f"(nohup {quote_argv(argv)} > {shlex.quote(remote_log_path)} "
+                "2>&1 < /dev/null & echo $!)"
+            ),
         ]
     )
     return build_remote_exec_cmd(host, remote_repo, remote_container, shell_command)

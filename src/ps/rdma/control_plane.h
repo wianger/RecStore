@@ -13,7 +13,13 @@
 
 #include "ps/rdma/raw_verbs_transport.h"
 
+namespace grpc {
+class Server;
+}
+
 namespace petps {
+
+class RdmaControlPlaneService;
 
 struct RdmaControlPlaneEndpoint {
   std::string host = "127.0.0.1";
@@ -53,6 +59,8 @@ public:
   void Stop();
 
 private:
+  friend class RdmaControlPlaneService;
+
   struct MetaKey {
     int publisher_node_id = 0;
     int publisher_lane    = 0;
@@ -71,18 +79,14 @@ private:
     std::size_t operator()(const MetaKey& key) const;
   };
 
-  void ListenLoop();
-  void HandleConnection(int fd);
-
   RdmaControlPlaneEndpoint endpoint_;
   std::mutex mu_;
   std::condition_variable cv_;
   std::unordered_map<MetaKey, RawVerbsNodeMeta, MetaKeyHash> metadata_;
   std::unordered_set<int> ready_servers_;
   std::atomic<bool> stop_requested_{false};
-  int listen_fd_ = -1;
-  std::thread accept_thread_;
-  std::vector<std::thread> handler_threads_;
+  std::unique_ptr<RdmaControlPlaneService> service_;
+  std::unique_ptr<grpc::Server> server_;
 };
 
 } // namespace petps

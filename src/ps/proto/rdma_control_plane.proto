@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package recstoreps.rdma;
+
+message PublishMetaRequest {
+  int32 publisher_node_id = 1;
+  int32 publisher_lane = 2;
+  int32 receiver_node_id = 3;
+  int32 receiver_lane = 4;
+  bytes meta = 5;
+}
+
+message PublishMetaResponse {
+}
+
+message GetMetaRequest {
+  int32 publisher_node_id = 1;
+  int32 publisher_lane = 2;
+  int32 receiver_node_id = 3;
+  int32 receiver_lane = 4;
+  int32 timeout_ms = 5;
+}
+
+message GetMetaResponse {
+  bytes meta = 1;
+}
+
+message PublishServerReadyRequest {
+  int32 server_id = 1;
+}
+
+message PublishServerReadyResponse {
+}
+
+message WaitServerRequest {
+  int32 server_id = 1;
+  int32 timeout_ms = 2;
+}
+
+message WaitServerResponse {
+}
+
+message WaitServerReadyRequest {
+  int32 num_servers = 1;
+  int32 timeout_ms = 2;
+}
+
+message WaitServerReadyResponse {
+}
+
+message ProbeRequest {
+}
+
+message ProbeResponse {
+}
+
+service RdmaControlPlane {
+  rpc PublishMeta(PublishMetaRequest) returns (PublishMetaResponse);
+  rpc GetMeta(GetMetaRequest) returns (GetMetaResponse);
+  rpc PublishServerReady(PublishServerReadyRequest)
+      returns (PublishServerReadyResponse);
+  rpc WaitServer(WaitServerRequest) returns (WaitServerResponse);
+  rpc WaitServerReady(WaitServerReadyRequest) returns (WaitServerReadyResponse);
+  rpc Probe(ProbeRequest) returns (ProbeResponse);
+}
