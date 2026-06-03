@@ -89,6 +89,9 @@ private:
     std::atomic<std::uint64_t> revoke_resource_ns{0};
     std::atomic<std::uint64_t> response_bytes_copied{0};
     std::atomic<std::uint64_t> pending_rpc_peak{0};
+    std::atomic<std::uint64_t> pending_rpc_samples{0};
+    std::atomic<std::uint64_t> pending_rpc_sum{0};
+    std::atomic<std::uint64_t> pending_rpc_last{0};
     std::atomic<std::uint64_t> next_report_ns{0};
   };
 

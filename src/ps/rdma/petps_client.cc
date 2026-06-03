@@ -278,13 +278,15 @@ void PetPSClient::MaybeReportProfile() {
     return;
   }
 
-  const std::uint64_t submit_count = Exchange(&profile_.submit_rpc_count);
-  const std::uint64_t wait_count   = Exchange(&profile_.wait_rpc_count);
-  const std::uint64_t revoke_count = Exchange(&profile_.revoke_rpc_count);
-  const std::uint64_t submit_ns    = Exchange(&profile_.submit_request_ns);
-  const std::uint64_t wait_ns      = Exchange(&profile_.wait_status_ns);
-  const std::uint64_t copy_ns      = Exchange(&profile_.copy_response_ns);
-  const std::uint64_t revoke_ns    = Exchange(&profile_.revoke_resource_ns);
+  const std::uint64_t submit_count    = Exchange(&profile_.submit_rpc_count);
+  const std::uint64_t wait_count      = Exchange(&profile_.wait_rpc_count);
+  const std::uint64_t revoke_count    = Exchange(&profile_.revoke_rpc_count);
+  const std::uint64_t submit_ns       = Exchange(&profile_.submit_request_ns);
+  const std::uint64_t wait_ns         = Exchange(&profile_.wait_status_ns);
+  const std::uint64_t copy_ns         = Exchange(&profile_.copy_response_ns);
+  const std::uint64_t revoke_ns       = Exchange(&profile_.revoke_resource_ns);
+  const std::uint64_t pending_samples = Exchange(&profile_.pending_rpc_samples);
+  const std::uint64_t pending_sum     = Exchange(&profile_.pending_rpc_sum);
   std::cout
       << "component=rdma_rc_client_profile"
       << " shard=" << shard_ << " client_id=" << client_id_
@@ -299,7 +301,10 @@ void PetPSClient::MaybeReportProfile() {
       << " copied_bytes=" << Exchange(&profile_.response_bytes_copied)
       << " revoke_avg_ns=" << (revoke_count == 0 ? 0 : revoke_ns / revoke_count)
       << " pending_rpc_peak=" << Exchange(&profile_.pending_rpc_peak)
-      << std::endl;
+      << " pending_rpc_avg="
+      << (pending_samples == 0 ? 0 : pending_sum / pending_samples)
+      << " pending_rpc_last="
+      << profile_.pending_rpc_last.load(std::memory_order_relaxed) << std::endl;
 }
 
 void PetPSClient::FillGetDescriptor(
@@ -414,6 +419,9 @@ int PetPSClient::SubmitRpcLocked(
       });
   if (profile_enabled) {
     const std::uint64_t pending_size = pending_rpcs_.size();
+    profile_.pending_rpc_samples.fetch_add(1, std::memory_order_relaxed);
+    profile_.pending_rpc_sum.fetch_add(pending_size, std::memory_order_relaxed);
+    profile_.pending_rpc_last.store(pending_size, std::memory_order_relaxed);
     std::uint64_t peak =
         profile_.pending_rpc_peak.load(std::memory_order_relaxed);
     while (pending_size > peak &&
@@ -562,6 +570,10 @@ void PetPSClient::RevokeRPCResource(int rpc_id) {
   slot.busy = false;
   pending_rpcs_.erase(it);
   if (profile_enabled) {
+    const std::uint64_t pending_size = pending_rpcs_.size();
+    profile_.pending_rpc_samples.fetch_add(1, std::memory_order_relaxed);
+    profile_.pending_rpc_sum.fetch_add(pending_size, std::memory_order_relaxed);
+    profile_.pending_rpc_last.store(pending_size, std::memory_order_relaxed);
     profile_.revoke_rpc_count.fetch_add(1, std::memory_order_relaxed);
     profile_.revoke_resource_ns.fetch_add(
         NowNs() - revoke_start_ns, std::memory_order_relaxed);
