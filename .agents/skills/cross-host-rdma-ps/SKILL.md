@@ -77,6 +77,14 @@ The ssh runner can select these binaries with:
 Use the default `build` directory only for debug bring-up or when comparing
 against historical Debug/O0 runs.
 
+With the p4/t3/q16/d16 layout, Release/O3 results on 2026-06-03 were:
+
+- cross-host, profile disabled: `45.523 M keys/s`
+- local same-host, profile disabled: `45.720 M keys/s`
+
+The local and cross-host Release lanes are effectively aligned; do not compare
+Release runs against older Debug/O0 baselines without labeling the build type.
+
 ## Canonical Cross-Host RDMA GET Run
 
 Use this for the current cross-host PET_HASH profile baseline. It starts 4 OS
@@ -236,6 +244,7 @@ For the current p4/t3/q16/slots1 layout:
 - total logical slots = `12 * 16 * 1 = 192`
 - expected Debug/O0 cross-host PET_HASH throughput: about `39.1 M keys/s`
 - expected Release/O3 cross-host PET_HASH throughput: about `45.2-45.5 M keys/s`
+- expected Release/O3 local PET_HASH throughput: about `45.7 M keys/s`
 
 If `pending_rpc_peak` reaches the configured outstanding limit but server
 `scan_hit_pct` remains low, focus on request slot state visibility, slot

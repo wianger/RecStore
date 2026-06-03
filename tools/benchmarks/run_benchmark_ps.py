@@ -1269,6 +1269,13 @@ def dump_petps_server_logs(runner: PetPSClusterRunner, server_log_dir: Path) -> 
     return paths
 
 
+def resolve_local_build_dir(args: argparse.Namespace) -> Path:
+    build_dir = Path(args.build_dir)
+    if not build_dir.is_absolute():
+        build_dir = REPO_ROOT / build_dir
+    return build_dir
+
+
 def run_local_rpc_case(
     args: argparse.Namespace,
     *,
@@ -1282,7 +1289,11 @@ def run_local_rpc_case(
     server_log_dir = client_log_dir / "server"
     runner = PSServerRunner(
         server_path=str(
-            (REPO_ROOT / "build" / "bin" / TRANSPORT_SPECS[transport].server_binary).resolve()
+            (
+                resolve_local_build_dir(args)
+                / "bin"
+                / TRANSPORT_SPECS[transport].server_binary
+            ).resolve()
         ),
         config_path=str(config_path),
         log_dir=str(server_log_dir),
@@ -1422,7 +1433,9 @@ def run_local_rdma_case(
     runner = build_rdma_runner(
         args,
         config_path=str(config_path),
-        server_binary=str((REPO_ROOT / "build" / "bin" / "petps_server").resolve()),
+        server_binary=str(
+            (resolve_local_build_dir(args) / "bin" / "petps_server").resolve()
+        ),
         server_shards=len(topology.server_plan),
         client_processes=len(topology.client_plan),
         value_size=args.value_size,

@@ -35,6 +35,9 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
 3. Build before any CTest-based validation, so stale binaries are not tested:
    - `cmake -S . -B build`
    - `cmake --build build --target ps_transport_benchmark ps_server petps_server -j`
+   - For throughput runs, prefer Release/O3:
+     `cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release`
+     and `cmake --build build_release --target ps_transport_benchmark petps_server -j`
 4. Validate the runner and related PS tests before benchmark runs:
    - `python3 -m unittest src/test/scripts/test_run_benchmark_ps.py`
    - `ctest -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_transport_benchmark|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`
@@ -105,21 +108,27 @@ python3 tools/benchmarks/run_benchmark_ps.py \
 
 For local optimized PS RDMA GET capacity on a multi-socket host, prefer RNIC-local same-socket placement with disjoint physical cores over socket-split placement. Socket-split is useful to prove CPU isolation, but it can understate the transport ceiling by adding cross-NUMA RNIC/PCIe/DMA cost. On the 2026-05-31 host, the clean default was server NUMA0/client NUMA0, server bind offset `0`, client bind offset `16`, client stride `2`, `client-processes-per-ip=6`, `server-rdma-threads=16`, `DRAM_PET_HASH`, and `--rdma-get-response-mode auto`.
 
+For current p4/t3/q16/d16 capacity checks, use `build_release` for both local
+client and local server binaries. On 2026-06-03, this reached
+`45.720 M keys/s` locally and `45.523 M keys/s` cross-host with profile
+disabled.
+
 ```bash
 python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
-  --client-processes-per-ip 6 \
+  --client-processes-per-ip 4 \
   --record-count 1000000 \
   --value-size 512 \
   --batch-keys 500 \
   --index-type DRAM_PET_HASH \
-  --client-threads-per-process 1 \
-  --client-load-threads-per-process 1 \
+  --client-threads-per-process 3 \
+  --client-load-threads-per-process 3 \
   --runtime-seconds 5 \
   --repeat 1 \
   --execution-backend local \
+  --build-dir build_release \
   --prefetch-depth 16 \
   --rdma-rc-qps-per-client-per-shard 16 \
   --rdma-rc-slots-per-qp 1 \
@@ -127,7 +136,7 @@ python3 tools/benchmarks/run_benchmark_ps.py \
   --rdma-rc-server-get-workers 0 \
   --rdma-rc-server-coroutines-per-thread 1 \
   --rdma-get-response-mode auto \
-  --rdma-rc-profile-interval-ms 1000 \
+  --rdma-rc-profile-interval-ms 0 \
   --rdma-rc-server-numa-id 0 \
   --rdma-rc-client-numa-id 0 \
   --rdma-server-bind-core-offset 0 \

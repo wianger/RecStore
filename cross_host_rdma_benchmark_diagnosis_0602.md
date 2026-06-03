@@ -5,7 +5,8 @@
 ## 摘要
 
 - 当前推荐跨机 baseline：`p4/t3/q16/d16`，12 logical clients，`get_workers=0`。
-- Debug clean 单次为 `39.384 M keys/s`；Release/O3 单次为 `45.238-45.523 M keys/s`。
+- Debug clean 单次为 `39.384 M keys/s`；跨机 Release/O3 单次为
+  `45.238-45.523 M keys/s`，本机 Release/O3 单次为 `45.720 M keys/s`。
 - 旧 16M 级低分主要来自 client 请求源密度不足；多 logical client 后已恢复。
 - server poll 低命中率和 SEND/SRQ 方向实验都没有单独解释吞吐下降。
 - round-robin acquire 无收益；额外 hot-path profile 字段会明显扰动结果。
@@ -95,6 +96,7 @@ node190 容器内有 3 个 verbs device：
 | 跨机 p4/t3/q16/depth16, runner SSH/endpoint split 修复后干净重跑 | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_runner_fix_only_0603` | 39.384 M keys/s |
 | 跨机 p4/t3/q16/depth16, Release/O3 + profile=1000ms | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_release_0603` | 45.238 M keys/s |
 | 跨机 p4/t3/q16/depth16, Release/O3 + profile=0 | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_release_noprofile_0603` | 45.523 M keys/s |
+| 本机 p4/t3/q16/depth16, Release/O3 + profile=0 | `results/benchmark_ps_local_rdma_p4t3_q16_d16_release_noprofile_0603` | 45.720 M keys/s |
 
 ## 稳定性结果
 
@@ -167,7 +169,7 @@ local 模式把 server/client 都放在 node190 上，CPU、cache、NUMA 或 RNI
 
 15. 当前最优跨机单次配置是 `p4/t3/q16/depth16`，最高达到 `39.087 M keys/s`。repeat3 后均值为 `34.750 M keys/s`，更适合作为当前稳定 baseline。对比 `p6/t2/q16` 的 `31.639 M keys/s` 和 `p8/t2/q16` 的 `31.270 M keys/s`，更少 OS process、每进程承载 3 个 logical client 的请求闭环更稳；`p3/t4/q16` 降到 `35.733 M keys/s`，`p4/t4/q16` 为 `38.861 M keys/s`，说明每进程 3 个 logical client 是当前更好的甜点。
 
-16. 本机同配置 `p4/t3/q16/depth16 repeat3` 的均值只有 `30.683 M keys/s`，低于跨机同配置的 `34.750 M keys/s`。因此后续不应把该 local 对照当成上限；它更像是同机资源竞争更重的 lane observation。
+16. 本机 Debug 同配置 `p4/t3/q16/depth16 repeat3` 的均值只有 `30.683 M keys/s`，低于跨机 Debug 同配置的 `34.750 M keys/s`。因此不应把旧 Debug local 对照当成上限；它更像是同机资源竞争更重的 lane observation。
 
 17. `send_doorbell` 最小实验把 request discovery 改成 completion-driven，消除了 blind scan 旧 seq，但跨机 full GET 仍约 `16.627 M keys/s`。因此 server request discovery 低命中率更像症状，不是单独根因；短期不建议继续优先投入完整 SRQ/SEND descriptor 协议。
 
@@ -176,9 +178,9 @@ local 模式把 server/client 都放在 node190 上，CPU、cache、NUMA 或 RNI
 配置会自动使用纯 endpoint IP，避免把 `user@host` 写进 RDMA 控制面导致解析失败。
 
 19. Release/O3 是目前最明确的硬性优化手段。当前历史 `build/` 为 Debug/O0，
-干净重跑为 `39.384 M keys/s`；同配置切到 `build_release` 后达到
-`45.238 M keys/s`，关闭周期性 RDMA profile 后为 `45.523 M keys/s`。因此
-主要收益来自编译优化，而不是关闭 profile。
+干净重跑为 `39.384 M keys/s`；同配置切到 `build_release` 后跨机达到
+`45.238-45.523 M keys/s`，本机达到 `45.720 M keys/s`。因此主要收益来自
+编译优化，而不是关闭 profile。
 
 20. client slot acquire round-robin 实验没有收益。同配置 round-robin acquire
 为 `38.403 M keys/s`，低于干净基线，因此已撤回，不应把从头线性扫描视为当前
@@ -244,10 +246,12 @@ cmake --build build_release --target ps_transport_benchmark petps_server -j
 --remote-build-dir build_release
 ```
 
-当前 Release/O3 单次高点为 `45.523 M keys/s`，结果目录为：
+当前 Release/O3 单次高点为 `45.523 M keys/s`（跨机）和
+`45.720 M keys/s`（本机）。结果目录为：
 
 ```text
 results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_release_noprofile_0603
+results/benchmark_ps_local_rdma_p4t3_q16_d16_release_noprofile_0603
 ```
 
 ## 文档状态
