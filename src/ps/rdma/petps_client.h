@@ -21,6 +21,8 @@ namespace petps {
 class PetPSClient : public BaseParameterClient {
 public:
   explicit PetPSClient(const std::string& host, int port, int shard);
+  PetPSClient(
+      const std::string& host, int port, int shard, int logical_client_id);
   ~PetPSClient() override;
 
   void Barrier(const std::string& ss, int k) override;
@@ -140,7 +142,8 @@ private:
       bool is_async);
 
   std::string namespace_token_; // Shared-memory namespace token.
-  int client_id_ = -1;          // Logical client id derived from global id.
+  int explicit_client_id_ = -1; // Optional logical client id override.
+  int client_id_          = -1; // Logical client id derived from global id.
   RcTransportConfig config_;    // Transport slot sizing and shard config.
   std::unique_ptr<RcShardClientTransport> transport_; // Slot transport owner.
   std::vector<QpContext> qps_; // One context per client-side QP lane.

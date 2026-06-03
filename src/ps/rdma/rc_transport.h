@@ -138,8 +138,8 @@ private:
     std::vector<std::uint8_t> response_completion_ready;
   };
 
-  Lane& LaneAt(int qp_index);
-  const Lane& LaneAt(int qp_index) const;
+  Lane& LaneAt(int client_id, int qp_index);
+  const Lane& LaneAt(int client_id, int qp_index) const;
 
   RcTransportConfig config_; // Transport sizing and namespace config.
   std::vector<Lane> lanes_;  // One verbs RC lane per qp_index.

@@ -278,6 +278,8 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
   const json client_cfg =
       config_.contains("client") ? config_["client"] : json::object();
   const json dist_cfg = ResolveFrameworkDistributedClientConfig(config_);
+  const int logical_client_id =
+      config_.value("rdma_logical_client_id", FLAGS_rdma_rc_client_id_base);
 
   num_shards_  = dist_cfg.value("num_shards", 1);
   hash_method_ = dist_cfg.value("hash_method", "city_hash");
@@ -308,7 +310,8 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
     shard_clients_.push_back(std::make_unique<petps::PetPSClient>(
         client_cfg.value("host", std::string("127.0.0.1")),
         client_cfg.value("port", 25000),
-        client_cfg.value("shard", 0)));
+        client_cfg.value("shard", 0),
+        logical_client_id));
     client_                   = shard_clients_.front().get();
     shard_to_client_index_[0] = 0;
   } else {
@@ -331,7 +334,8 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
       shard_clients_.push_back(std::make_unique<petps::PetPSClient>(
           server.value("host", std::string("127.0.0.1")),
           server.value("port", 25000),
-          shard));
+          shard,
+          logical_client_id));
       shard_to_client_index_[shard] =
           static_cast<int>(shard_clients_.size() - 1);
     }

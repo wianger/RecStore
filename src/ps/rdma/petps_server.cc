@@ -131,8 +131,11 @@ public:
             FLAGS_rdma_control_plane_timeout_ms,
         }) {
     petps::RcTransportConfig config;
-    config.shard_id                 = shard_id_;
-    config.num_clients              = FLAGS_num_client_processes;
+    config.shard_id = shard_id_;
+    config.num_clients =
+        FLAGS_rdma_rc_num_logical_clients >= 0
+            ? FLAGS_rdma_rc_num_logical_clients
+            : FLAGS_num_client_processes;
     config.qps_per_client_per_shard = FLAGS_rdma_rc_qps_per_client_per_shard;
     config.slots_per_qp             = FLAGS_rdma_rc_slots_per_qp;
     config.request_slot_bytes =

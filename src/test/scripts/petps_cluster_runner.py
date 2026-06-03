@@ -65,6 +65,7 @@ class PetPSClusterRunner:
         rdma_rc_profile_interval_ms=None,
         rdma_rc_server_coroutines_per_thread=None,
         rdma_rc_server_get_workers=None,
+        logical_clients_per_process=1,
         rdma_rc_inline_bytes=None,
         rdma_rc_client_numa_id=None,
         rdma_rc_server_numa_id=None,
@@ -97,6 +98,8 @@ class PetPSClusterRunner:
         self.num_servers = num_servers
         self.num_clients = num_clients
         self.thread_num = thread_num
+        self.logical_clients_per_process = max(1, logical_clients_per_process)
+        self.logical_num_clients = self.num_clients * self.logical_clients_per_process
         self.value_size = value_size
         self.max_kv_num_per_request = max_kv_num_per_request
         self.timeout = timeout
@@ -286,6 +289,7 @@ class PetPSClusterRunner:
             f"--global_id={global_id}",
             f"--num_server_processes={self.num_servers}",
             f"--num_client_processes={self.num_clients}",
+            f"--rdma_rc_num_logical_clients={self.logical_num_clients}",
             f"--thread_num={self.thread_num}",
             f"--value_size={self.value_size}",
             f"--max_kv_num_per_request={self.max_kv_num_per_request}",
@@ -352,10 +356,13 @@ class PetPSClusterRunner:
 
     def build_client_cmd(self, argv, client_index=0):
         client_global_id = self.num_servers + client_index
+        client_id_base = client_index * self.logical_clients_per_process
         cmd = list(argv) + [
             f"--global_id={client_global_id}",
             f"--num_server_processes={self.num_servers}",
             f"--num_client_processes={self.num_clients}",
+            f"--rdma_rc_num_logical_clients={self.logical_num_clients}",
+            f"--rdma_rc_client_id_base={client_id_base}",
             f"--value_size={self.value_size}",
             f"--max_kv_num_per_request={self.max_kv_num_per_request}",
             f"--rdma_rc_namespace={self.rdma_namespace}",

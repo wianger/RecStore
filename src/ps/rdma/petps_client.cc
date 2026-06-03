@@ -85,8 +85,13 @@ void FillBaseDescriptor(
 } // namespace
 
 PetPSClient::PetPSClient(const std::string& host, int port, int shard)
+    : PetPSClient(host, port, shard, -1) {}
+
+PetPSClient::PetPSClient(
+    const std::string& host, int port, int shard, int logical_client_id)
     : BaseParameterClient(host, port, shard),
-      namespace_token_(NamespaceToken()) {}
+      namespace_token_(NamespaceToken()),
+      explicit_client_id_(logical_client_id) {}
 
 PetPSClient::~PetPSClient() = default;
 
@@ -96,13 +101,25 @@ void PetPSClient::InitializeTransport() {
   if (transport_ != nullptr) {
     return;
   }
-  client_id_ = FLAGS_global_id - FLAGS_num_server_processes;
+  client_id_ =
+      explicit_client_id_ >= 0
+          ? explicit_client_id_
+          : (FLAGS_rdma_rc_client_id_base >= 0
+                 ? FLAGS_rdma_rc_client_id_base
+                 : FLAGS_global_id - FLAGS_num_server_processes);
   if (client_id_ < 0) {
-    throw std::runtime_error("invalid RC write client_id from global_id");
+    throw std::runtime_error("invalid RC write logical client_id");
+  }
+  const int logical_num_clients =
+      FLAGS_rdma_rc_num_logical_clients >= 0
+          ? FLAGS_rdma_rc_num_logical_clients
+          : FLAGS_num_client_processes;
+  if (client_id_ >= logical_num_clients) {
+    throw std::runtime_error("RC write logical client_id out of range");
   }
   config_.shard_id                 = shard_;
   config_.client_id                = client_id_;
-  config_.num_clients              = FLAGS_num_client_processes;
+  config_.num_clients              = logical_num_clients;
   config_.qps_per_client_per_shard = FLAGS_rdma_rc_qps_per_client_per_shard;
   config_.slots_per_qp             = FLAGS_rdma_rc_slots_per_qp;
   config_.request_slot_bytes =
