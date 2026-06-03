@@ -62,19 +62,22 @@ If residual benchmark processes exist, kill by exact PID when possible. Avoid
 
 ## Canonical Cross-Host RDMA GET Run
 
-Use this for the current six-client cross-host PET_HASH profile baseline:
+Use this for the current cross-host PET_HASH profile baseline. It starts 4 OS
+client processes on node191, with 3 logical RDMA clients per process, for 12
+logical clients total. This is the current best known cross-host layout from
+2026-06-03.
 
 ```bash
 python3 src/test/scripts/run_benchmark_ps.py \
   --transports rdma \
   --server-plan 0:xieminhui@10.0.2.190:25000:0 \
-  --client-plan 0:xieminhui@10.0.2.191,1:xieminhui@10.0.2.191,2:xieminhui@10.0.2.191,3:xieminhui@10.0.2.191,4:xieminhui@10.0.2.191,5:xieminhui@10.0.2.191 \
+  --client-plan 0:xieminhui@10.0.2.191,1:xieminhui@10.0.2.191,2:xieminhui@10.0.2.191,3:xieminhui@10.0.2.191 \
   --record-count 1000000 \
   --value-size 512 \
   --batch-keys 500 \
   --index-type DRAM_PET_HASH \
-  --client-threads-per-process 1 \
-  --client-load-threads-per-process 1 \
+  --client-threads-per-process 3 \
+  --client-load-threads-per-process 3 \
   --runtime-seconds 5 \
   --repeat 1 \
   --execution-backend ssh \
@@ -98,6 +101,14 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --output-dir results/<output_dir> \
   --show-runner-logs
 ```
+
+The older six-process single-logical-client baseline is useful only for
+regression comparison:
+
+- client plan: six node191 entries
+- `--client-threads-per-process 1`
+- `--client-load-threads-per-process 1`
+- expected cross-host PET_HASH throughput: about `16.5 M keys/s`
 
 ## Local Comparison Run
 
@@ -192,13 +203,20 @@ their scan. In the current RC design, clients publish requests with RDMA WRITE
 to server memory and the server has no receive completion event; it discovers
 requests by polling commit words.
 
-For the current layout with p6/q16/slots1:
+For the old p6/q16/slots1 layout:
 
 - total server slots = `num_clients * qps_per_client_per_shard * slots_per_qp`
-- current total slots = `6 * 16 * 1 = 96`
+- old total slots = `6 * 16 * 1 = 96`
 - 16 server poll threads scan assigned QP lanes
+
+For the current p4/t3/q16/slots1 layout:
+
+- OS client processes = `4`
+- logical clients per process = `3`
+- total logical clients = `12`
+- total logical slots = `12 * 16 * 1 = 192`
+- expected cross-host PET_HASH throughput: about `39.1 M keys/s`
 
 If `pending_rpc_peak` reaches the configured outstanding limit but server
 `scan_hit_pct` remains low, focus on request slot state visibility, slot
 reuse, wait/revoke timing, and poller scan strategy before tuning PET_HASH.
-
