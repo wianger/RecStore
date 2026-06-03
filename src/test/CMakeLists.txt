@@ -630,6 +630,8 @@ add_executable(test_rdma_control_plane
 )
 target_link_libraries(test_rdma_control_plane PUBLIC
     base
+    ps_proto
+    gRPC::grpc++
     gtest
     gtest_main
     pthread

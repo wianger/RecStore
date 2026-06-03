@@ -32,6 +32,7 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--global_id=1", cmd)
         self.assertIn("--num_server_processes=2", cmd)
         self.assertIn("--num_client_processes=1", cmd)
+        self.assertIn("--rdma_rc_num_logical_clients=1", cmd)
         self.assertIn("--thread_num=2", cmd)
         self.assertIn("--value_size=16", cmd)
         self.assertIn("--max_kv_num_per_request=64", cmd)
@@ -53,8 +54,30 @@ class TestPetPSClusterRunner(unittest.TestCase):
         self.assertIn("--global_id=2", cmd)
         self.assertIn("--num_server_processes=2", cmd)
         self.assertIn("--num_client_processes=1", cmd)
+        self.assertIn("--rdma_rc_client_id_base=0", cmd)
         self.assertIn("--rdma_rc_namespace=bench-ns", cmd)
         self.assertIn("--rdma_control_plane_port=25001", cmd)
+
+    def test_build_commands_use_logical_client_count_for_multi_thread_clients(self):
+        runner = PetPSClusterRunner(
+            num_servers=1,
+            num_clients=3,
+            logical_clients_per_process=4,
+            rdma_control_plane_port=25005,
+        )
+
+        server_cmd = runner.build_server_cmd(0)
+        client2_cmd = runner.build_client_cmd(
+            ["./build/bin/ps_transport_benchmark"],
+            client_index=2,
+        )
+
+        self.assertIn("--num_client_processes=3", server_cmd)
+        self.assertIn("--rdma_rc_num_logical_clients=12", server_cmd)
+        self.assertIn("--global_id=3", client2_cmd)
+        self.assertIn("--num_client_processes=3", client2_cmd)
+        self.assertIn("--rdma_rc_num_logical_clients=12", client2_cmd)
+        self.assertIn("--rdma_rc_client_id_base=8", client2_cmd)
 
     def test_build_env_includes_validate_routing_only(self):
         runner = PetPSClusterRunner(validate_routing=True)

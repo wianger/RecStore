@@ -13,6 +13,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -130,8 +131,11 @@ public:
             FLAGS_rdma_control_plane_timeout_ms,
         }) {
     petps::RcTransportConfig config;
-    config.shard_id                 = shard_id_;
-    config.num_clients              = FLAGS_num_client_processes;
+    config.shard_id = shard_id_;
+    config.num_clients =
+        FLAGS_rdma_rc_num_logical_clients >= 0
+            ? FLAGS_rdma_rc_num_logical_clients
+            : FLAGS_num_client_processes;
     config.qps_per_client_per_shard = FLAGS_rdma_rc_qps_per_client_per_shard;
     config.slots_per_qp             = FLAGS_rdma_rc_slots_per_qp;
     config.request_slot_bytes =
@@ -158,6 +162,11 @@ public:
     get_payload_worker_count_ = FLAGS_rdma_rc_server_get_workers;
     if (get_payload_worker_count_ < 0) {
       LOG(FATAL) << "--rdma_rc_server_get_workers must be non-negative";
+    }
+    poller_profiles_.reserve(
+        static_cast<std::size_t>(std::max(1, thread_count_)));
+    for (int i = 0; i < std::max(1, thread_count_); ++i) {
+      poller_profiles_.emplace_back(std::make_unique<PollerProfile>());
     }
     get_payload_completions_.resize(
         static_cast<std::size_t>(std::max(1, thread_count_)));
@@ -198,7 +207,12 @@ private:
     std::atomic<std::uint64_t> scan_rounds{0};
     std::atomic<std::uint64_t> scanned_slots{0};
     std::atomic<std::uint64_t> ready_slots{0};
+    std::atomic<std::uint64_t> not_ready_slots{0};
+    std::atomic<std::uint64_t> zero_seq_ready{0};
+    std::atomic<std::uint64_t> duplicate_seq_ready{0};
+    std::atomic<std::uint64_t> inflight_seq_ready{0};
     std::atomic<std::uint64_t> empty_scan_rounds{0};
+    std::atomic<std::uint64_t> max_ready_per_round{0};
     std::atomic<std::uint64_t> handled_get{0};
     std::atomic<std::uint64_t> handled_put{0};
     std::atomic<std::uint64_t> handled_update{0};
@@ -225,6 +239,26 @@ private:
     std::atomic<std::uint64_t> next_report_ns{0};
   };
 
+  struct PollerProfile {
+    std::atomic<std::uint64_t> scan_rounds{0};
+    std::atomic<std::uint64_t> scanned_slots{0};
+    std::atomic<std::uint64_t> ready_slots{0};
+    std::atomic<std::uint64_t> not_ready_slots{0};
+    std::atomic<std::uint64_t> duplicate_seq_ready{0};
+    std::atomic<std::uint64_t> inflight_seq_ready{0};
+    std::atomic<std::uint64_t> handled_get{0};
+    std::atomic<std::uint64_t> poll_loop_ns{0};
+  };
+
+  static void
+  UpdateMax(std::atomic<std::uint64_t>* value, std::uint64_t candidate) {
+    std::uint64_t current = value->load(std::memory_order_relaxed);
+    while (candidate > current &&
+           !value->compare_exchange_weak(
+               current, candidate, std::memory_order_relaxed)) {
+    }
+  }
+
   void MaybeReportProfile(int thread_id) {
     if (FLAGS_rdma_rc_profile_interval_ms <= 0 || thread_id != 0) {
       return;
@@ -245,11 +279,19 @@ private:
       return;
     }
 
-    const std::uint64_t scan_rounds   = Exchange(&profile_.scan_rounds);
-    const std::uint64_t scanned_slots = Exchange(&profile_.scanned_slots);
-    const std::uint64_t ready_slots   = Exchange(&profile_.ready_slots);
+    const std::uint64_t scan_rounds     = Exchange(&profile_.scan_rounds);
+    const std::uint64_t scanned_slots   = Exchange(&profile_.scanned_slots);
+    const std::uint64_t ready_slots     = Exchange(&profile_.ready_slots);
+    const std::uint64_t not_ready_slots = Exchange(&profile_.not_ready_slots);
+    const std::uint64_t zero_seq_ready  = Exchange(&profile_.zero_seq_ready);
+    const std::uint64_t duplicate_seq_ready =
+        Exchange(&profile_.duplicate_seq_ready);
+    const std::uint64_t inflight_seq_ready =
+        Exchange(&profile_.inflight_seq_ready);
     const std::uint64_t empty_scan_rounds =
         Exchange(&profile_.empty_scan_rounds);
+    const std::uint64_t max_ready_per_round =
+        Exchange(&profile_.max_ready_per_round);
     const std::uint64_t handled_get    = Exchange(&profile_.handled_get);
     const std::uint64_t handled_put    = Exchange(&profile_.handled_put);
     const std::uint64_t handled_update = Exchange(&profile_.handled_update);
@@ -273,15 +315,81 @@ private:
     const std::uint64_t complete_response_ns =
         Exchange(&profile_.complete_response_ns);
     const std::uint64_t poll_loop_ns = Exchange(&profile_.poll_loop_ns);
+    std::uint64_t poller_min_get   = std::numeric_limits<std::uint64_t>::max();
+    std::uint64_t poller_max_get   = 0;
+    int poller_min_get_thread      = -1;
+    int poller_max_get_thread      = -1;
+    std::uint64_t poller_total_get = 0;
+    std::uint64_t poller_active    = 0;
+    for (std::size_t i = 0; i < poller_profiles_.size(); ++i) {
+      auto& poller                           = *poller_profiles_[i];
+      const std::uint64_t poller_get         = Exchange(&poller.handled_get);
+      const std::uint64_t poller_scan_rounds = Exchange(&poller.scan_rounds);
+      const std::uint64_t poller_scanned_slots =
+          Exchange(&poller.scanned_slots);
+      const std::uint64_t poller_ready_slots = Exchange(&poller.ready_slots);
+      const std::uint64_t poller_not_ready_slots =
+          Exchange(&poller.not_ready_slots);
+      const std::uint64_t poller_duplicate_seq_ready =
+          Exchange(&poller.duplicate_seq_ready);
+      const std::uint64_t poller_inflight_seq_ready =
+          Exchange(&poller.inflight_seq_ready);
+      const std::uint64_t poller_poll_loop_ns = Exchange(&poller.poll_loop_ns);
+      if (poller_get > 0) {
+        ++poller_active;
+      }
+      poller_total_get += poller_get;
+      if (poller_get < poller_min_get) {
+        poller_min_get        = poller_get;
+        poller_min_get_thread = static_cast<int>(i);
+      }
+      if (poller_get > poller_max_get) {
+        poller_max_get        = poller_get;
+        poller_max_get_thread = static_cast<int>(i);
+      }
+      std::cout
+          << "component=rdma_rc_server_poller_profile"
+          << " shard=" << shard_id_ << " thread_id=" << i << " scan_rounds="
+          << poller_scan_rounds << " scanned_slots=" << poller_scanned_slots
+          << " ready_slots=" << poller_ready_slots << " scan_hit_pct="
+          << (poller_scanned_slots == 0
+                  ? 0.0
+                  : 100.0 * static_cast<double>(poller_ready_slots) /
+                        static_cast<double>(poller_scanned_slots))
+          << " not_ready_slots=" << poller_not_ready_slots
+          << " duplicate_seq_ready=" << poller_duplicate_seq_ready
+          << " inflight_seq_ready=" << poller_inflight_seq_ready
+          << " handled_get=" << poller_get << " poll_loop_avg_ns="
+          << (poller_scan_rounds == 0
+                  ? 0
+                  : poller_poll_loop_ns / poller_scan_rounds)
+          << std::endl;
+    }
+    if (poller_min_get == std::numeric_limits<std::uint64_t>::max()) {
+      poller_min_get = 0;
+    }
     std::cout
         << "component=rdma_rc_server_profile"
         << " shard=" << shard_id_ << " threads=" << thread_count_
         << " scan_rounds=" << scan_rounds << " scanned_slots=" << scanned_slots
-        << " ready_slots=" << ready_slots
+        << " ready_slots=" << ready_slots << " not_ready_slots="
+        << not_ready_slots << " zero_seq_ready=" << zero_seq_ready
+        << " duplicate_seq_ready=" << duplicate_seq_ready
+        << " inflight_seq_ready=" << inflight_seq_ready
         << " empty_scan_rounds=" << empty_scan_rounds << " scan_hit_pct="
         << (scanned_slots == 0 ? 0.0
                                : 100.0 * static_cast<double>(ready_slots) /
                                      static_cast<double>(scanned_slots))
+        << " ready_round_pct="
+        << (scan_rounds == 0
+                ? 0.0
+                : 100.0 * static_cast<double>(scan_rounds - empty_scan_rounds) /
+                      static_cast<double>(scan_rounds))
+        << " avg_ready_per_round="
+        << (scan_rounds == 0 ? 0.0
+                             : static_cast<double>(ready_slots) /
+                                   static_cast<double>(scan_rounds))
+        << " max_ready_per_round=" << max_ready_per_round
         << " handled_get=" << handled_get << " handled_put=" << handled_put
         << " handled_update=" << handled_update
         << " handled_init=" << handled_init
@@ -313,7 +421,12 @@ private:
         << " complete_response_avg_ns="
         << (complete_count == 0 ? 0 : complete_response_ns / complete_count)
         << " poll_loop_avg_ns="
-        << (scan_rounds == 0 ? 0 : poll_loop_ns / scan_rounds) << std::endl;
+        << (scan_rounds == 0 ? 0 : poll_loop_ns / scan_rounds)
+        << " poller_active=" << poller_active << " poller_total_get="
+        << poller_total_get << " poller_min_get=" << poller_min_get
+        << " poller_min_get_thread=" << poller_min_get_thread
+        << " poller_max_get=" << poller_max_get
+        << " poller_max_get_thread=" << poller_max_get_thread << std::endl;
   }
 
   bool GetPayloadOffloadEnabled() const {
@@ -372,6 +485,22 @@ private:
     std::lock_guard<std::mutex> guard(get_payload_mu_);
     get_payload_completions_.at(PollThreadIndex(completion.poll_thread_id))
         .push_back(completion);
+  }
+
+  void AccumulateFlatGetProfile(const CachePS::FlatGetProfile& get_profile) {
+    profile_.get_batch_get_ns.fetch_add(
+        get_profile.batch_get_ns, std::memory_order_relaxed);
+    profile_.get_index_lookup_ns.fetch_add(
+        get_profile.index_lookup_ns, std::memory_order_relaxed);
+    profile_.get_zero_fill_ns.fetch_add(
+        get_profile.zero_fill_ns, std::memory_order_relaxed);
+    profile_.get_row_copy_ns.fetch_add(
+        get_profile.row_copy_ns, std::memory_order_relaxed);
+    profile_.get_rows.fetch_add(get_profile.rows, std::memory_order_relaxed);
+    profile_.get_value_bytes.fetch_add(
+        get_profile.value_bytes, std::memory_order_relaxed);
+    profile_.get_missing_rows.fetch_add(
+        get_profile.missing_rows, std::memory_order_relaxed);
   }
 
   void GetPayloadWorkerLoop(int worker_id) {
@@ -576,20 +705,7 @@ private:
           NowNs() - direct_start_ns, std::memory_order_relaxed);
       profile_.get_direct_sg_wr.fetch_add(wr_count, std::memory_order_relaxed);
       if (get_profile != nullptr) {
-        profile_.get_batch_get_ns.fetch_add(
-            get_profile->batch_get_ns, std::memory_order_relaxed);
-        profile_.get_index_lookup_ns.fetch_add(
-            get_profile->index_lookup_ns, std::memory_order_relaxed);
-        profile_.get_zero_fill_ns.fetch_add(
-            get_profile->zero_fill_ns, std::memory_order_relaxed);
-        profile_.get_row_copy_ns.fetch_add(
-            get_profile->row_copy_ns, std::memory_order_relaxed);
-        profile_.get_rows.fetch_add(
-            get_profile->rows, std::memory_order_relaxed);
-        profile_.get_value_bytes.fetch_add(
-            get_profile->value_bytes, std::memory_order_relaxed);
-        profile_.get_missing_rows.fetch_add(
-            get_profile->missing_rows, std::memory_order_relaxed);
+        AccumulateFlatGetProfile(*get_profile);
       }
     }
     return true;
@@ -624,14 +740,7 @@ private:
       const bool ok =
           cache_ps_->ProbeParameterIndex(keys, thread_id, get_profile_ptr);
       if (get_profile_ptr != nullptr) {
-        profile_.get_batch_get_ns.fetch_add(
-            get_profile.batch_get_ns, std::memory_order_relaxed);
-        profile_.get_index_lookup_ns.fetch_add(
-            get_profile.index_lookup_ns, std::memory_order_relaxed);
-        profile_.get_rows.fetch_add(
-            get_profile.rows, std::memory_order_relaxed);
-        profile_.get_missing_rows.fetch_add(
-            get_profile.missing_rows, std::memory_order_relaxed);
+        AccumulateFlatGetProfile(get_profile);
       }
       response->status->status = static_cast<std::int32_t>(
           ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
@@ -675,19 +784,7 @@ private:
         thread_id,
         get_profile_ptr);
     if (get_profile_ptr != nullptr) {
-      profile_.get_batch_get_ns.fetch_add(
-          get_profile.batch_get_ns, std::memory_order_relaxed);
-      profile_.get_index_lookup_ns.fetch_add(
-          get_profile.index_lookup_ns, std::memory_order_relaxed);
-      profile_.get_zero_fill_ns.fetch_add(
-          get_profile.zero_fill_ns, std::memory_order_relaxed);
-      profile_.get_row_copy_ns.fetch_add(
-          get_profile.row_copy_ns, std::memory_order_relaxed);
-      profile_.get_rows.fetch_add(get_profile.rows, std::memory_order_relaxed);
-      profile_.get_value_bytes.fetch_add(
-          get_profile.value_bytes, std::memory_order_relaxed);
-      profile_.get_missing_rows.fetch_add(
-          get_profile.missing_rows, std::memory_order_relaxed);
+      AccumulateFlatGetProfile(get_profile);
     }
     response->status->status = static_cast<std::int32_t>(
         ok ? petps::RpcStatus::kOk : petps::RpcStatus::kValueSizeMismatch);
@@ -817,8 +914,17 @@ private:
         if (ready_slots == 0) {
           profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
         }
+        UpdateMax(&profile_.max_ready_per_round, ready_slots);
+        const std::uint64_t poll_loop_ns = NowNs() - poll_start_ns;
         profile_.poll_loop_ns.fetch_add(
-            NowNs() - poll_start_ns, std::memory_order_relaxed);
+            poll_loop_ns, std::memory_order_relaxed);
+        auto& poller =
+            *poller_profiles_.at(static_cast<std::size_t>(thread_id));
+        poller.scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        poller.scanned_slots.fetch_add(
+            scanned_slots, std::memory_order_relaxed);
+        poller.ready_slots.fetch_add(ready_slots, std::memory_order_relaxed);
+        poller.poll_loop_ns.fetch_add(poll_loop_ns, std::memory_order_relaxed);
         MaybeReportProfile(thread_id);
       }
       std::this_thread::yield();
@@ -832,14 +938,35 @@ private:
     transport_->DecodeSlotIndex(slot, &client_id, &qp_index, &slot_in_qp);
     auto* commit = transport_->RequestCommitAt(slot);
     if (commit->state.load(std::memory_order_acquire) != petps::kRcSlotReady) {
+      if (profile_enabled) {
+        profile_.not_ready_slots.fetch_add(1, std::memory_order_relaxed);
+        poller_profiles_.at(static_cast<std::size_t>(thread_id))
+            ->not_ready_slots.fetch_add(1, std::memory_order_relaxed);
+      }
       return false;
     }
     const std::uint64_t seq = commit->seq.load(std::memory_order_acquire);
-    if (seq == 0 || seq == last_seq_[static_cast<std::size_t>(slot)]) {
+    if (seq == 0) {
+      if (profile_enabled) {
+        profile_.zero_seq_ready.fetch_add(1, std::memory_order_relaxed);
+      }
+      return false;
+    }
+    if (seq == last_seq_[static_cast<std::size_t>(slot)]) {
+      if (profile_enabled) {
+        profile_.duplicate_seq_ready.fetch_add(1, std::memory_order_relaxed);
+        poller_profiles_.at(static_cast<std::size_t>(thread_id))
+            ->duplicate_seq_ready.fetch_add(1, std::memory_order_relaxed);
+      }
       return false;
     }
     if (GetPayloadOffloadEnabled() &&
         seq == inflight_seq_[static_cast<std::size_t>(slot)]) {
+      if (profile_enabled) {
+        profile_.inflight_seq_ready.fetch_add(1, std::memory_order_relaxed);
+        poller_profiles_.at(static_cast<std::size_t>(thread_id))
+            ->inflight_seq_ready.fetch_add(1, std::memory_order_relaxed);
+      }
       return false;
     }
     if (profile_enabled) {
@@ -938,6 +1065,8 @@ private:
           profile_.handled_get.fetch_add(1, std::memory_order_relaxed);
           profile_.handle_get_ns.fetch_add(
               NowNs() - handle_start_ns, std::memory_order_relaxed);
+          poller_profiles_.at(static_cast<std::size_t>(thread_id))
+              ->handled_get.fetch_add(1, std::memory_order_relaxed);
         }
         if (payload_written_direct) {
           CompleteResponseStatusOnlyForSlot(
@@ -1038,8 +1167,17 @@ private:
         if (ready_slots == 0) {
           profile_.empty_scan_rounds.fetch_add(1, std::memory_order_relaxed);
         }
+        UpdateMax(&profile_.max_ready_per_round, ready_slots);
+        const std::uint64_t poll_loop_ns = NowNs() - poll_start_ns;
         profile_.poll_loop_ns.fetch_add(
-            NowNs() - poll_start_ns, std::memory_order_relaxed);
+            poll_loop_ns, std::memory_order_relaxed);
+        auto& poller =
+            *poller_profiles_.at(static_cast<std::size_t>(thread_id));
+        poller.scan_rounds.fetch_add(1, std::memory_order_relaxed);
+        poller.scanned_slots.fetch_add(
+            scanned_slots, std::memory_order_relaxed);
+        poller.ready_slots.fetch_add(ready_slots, std::memory_order_relaxed);
+        poller.poll_loop_ns.fetch_add(poll_loop_ns, std::memory_order_relaxed);
       }
       sink();
     }
@@ -1075,6 +1213,7 @@ private:
   std::vector<std::thread> threads_;
   std::vector<std::uint64_t> last_seq_;
   std::vector<std::uint64_t> inflight_seq_;
+  std::vector<std::unique_ptr<PollerProfile>> poller_profiles_;
   int get_payload_worker_count_ = 0;
   std::vector<std::thread> get_payload_workers_;
   std::mutex get_payload_mu_;

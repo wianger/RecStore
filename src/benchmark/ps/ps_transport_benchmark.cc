@@ -72,6 +72,11 @@ DEFINE_bool(rdma_direct_async_fetch,
             "RDMA fetch-only transactions use BaseParameterClient async GET "
             "with preallocated output buffers, bypassing the PS prefetch "
             "adapter state and result vector copy");
+DEFINE_int32(rdma_logical_client_id,
+             -1,
+             "Benchmark-only logical RDMA client id override for this process");
+DECLARE_int32(global_id);
+DECLARE_int32(num_server_processes);
 DECLARE_int32(value_size);
 
 namespace {
@@ -363,14 +368,27 @@ void PrintSummary(
 }
 
 nlohmann::json LoadClientConfig(const std::string& transport) {
+  auto attach_logical_client_id = [](nlohmann::json* config) {
+    if (FLAGS_rdma_logical_client_id >= 0) {
+      (*config)["rdma_logical_client_id"] = FLAGS_rdma_logical_client_id;
+    }
+  };
   if (!FLAGS_config_path.empty()) {
     std::ifstream in(FLAGS_config_path);
     CHECK(in.good()) << "failed to open --config_path=" << FLAGS_config_path;
     nlohmann::json config;
     in >> config;
+    if (NormalizeBenchmarkTransport(transport) == "RDMA") {
+      attach_logical_client_id(&config);
+    }
     return config;
   }
-  return BuildRpcBenchmarkConfig(transport, FLAGS_host, FLAGS_port);
+  nlohmann::json config =
+      BuildRpcBenchmarkConfig(transport, FLAGS_host, FLAGS_port);
+  if (NormalizeBenchmarkTransport(transport) == "RDMA") {
+    attach_logical_client_id(&config);
+  }
+  return config;
 }
 
 std::unique_ptr<recstore::BasePSClient>
@@ -1098,15 +1116,17 @@ int main(int argc, char** argv) {
         FLAGS_load_thread_num > 0 ? FLAGS_load_thread_num : FLAGS_thread_num;
     std::vector<BenchmarkClient> reusable_clients;
     if (transport == "RDMA") {
-      CHECK_EQ(FLAGS_thread_num, 1)
-          << "RDMA transactions support one worker thread per benchmark "
-             "process; use --client-count for RDMA client concurrency";
       CHECK_EQ(load_threads, FLAGS_thread_num)
           << "RDMA transactions must reuse the same client for load and run";
       reusable_clients.reserve(static_cast<std::size_t>(FLAGS_thread_num));
       for (int tid = 0; tid < FLAGS_thread_num; ++tid) {
+        FLAGS_rdma_logical_client_id =
+            FLAGS_rdma_rc_client_id_base >= 0
+                ? FLAGS_rdma_rc_client_id_base + tid
+                : FLAGS_global_id - FLAGS_num_server_processes + tid;
         reusable_clients.push_back(CreateBenchmarkClient(transport));
       }
+      FLAGS_rdma_logical_client_id = -1;
     }
     if (!FLAGS_skip_load) {
       LocalShmTransportStats load_transport_stats;

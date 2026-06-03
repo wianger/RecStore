@@ -49,6 +49,7 @@ DEFAULT_REMOTE_REPO = "/app/RecStore"
 DEFAULT_REMOTE_RUNTIME_ROOT = "/tmp/recstore_benchmark_ps"
 DEFAULT_LOCAL_DATA_ROOT = "/tmp/recstore_benchmark_ps_data"
 DEFAULT_RESULT_PREFIX = "benchmark_ps_"
+DEFAULT_RDMA_FETCH_QPS_PER_CLIENT_PER_SHARD = 16
 SUCCESS_STATUS = "success"
 SKIPPED_STATUS = "skipped"
 SLAB_ALLOCATOR_CHUNK_BYTES = 1 << 20
@@ -72,6 +73,7 @@ class TransportSpec:
 class ServerPlan:
     server_index: int
     host: str
+    ssh_host: str
     shard: int
     transport: str
     port: int
@@ -81,6 +83,7 @@ class ServerPlan:
 class ClientPlan:
     client_index: int
     host: str
+    ssh_host: str
     transport: str
 
 
@@ -144,6 +147,15 @@ def normalize_host_list(value: str, field_name: str) -> list[str]:
     return hosts
 
 
+def split_ssh_endpoint_host(host: str) -> tuple[str, str]:
+    if "@" not in host:
+        return host, host
+    user, endpoint = host.rsplit("@", 1)
+    if not user or not endpoint:
+        raise ValueError(f"invalid ssh endpoint host: {host}")
+    return endpoint, host
+
+
 def local_numa_node_count() -> int:
     node_root = Path("/sys/devices/system/node")
     if not node_root.exists():
@@ -173,10 +185,12 @@ def parse_server_plan(value: str, transport: str) -> list[ServerPlan]:
             parsed_server_index = int(parsed_server_index_raw)
         if not host:
             raise ValueError("server_plan host must not be empty")
+        endpoint_host, ssh_host = split_ssh_endpoint_host(host)
         servers.append(
             ServerPlan(
                 server_index=parsed_server_index,
-                host=host,
+                host=endpoint_host,
+                ssh_host=ssh_host,
                 shard=int(shard),
                 transport=transport,
                 port=int(port),
@@ -205,10 +219,12 @@ def parse_client_plan(value: str, transport: str) -> list[ClientPlan]:
             raise ValueError("client_plan entries must be host or client_index:host")
         if not host:
             raise ValueError("client_plan host must not be empty")
+        endpoint_host, ssh_host = split_ssh_endpoint_host(host)
         clients.append(
             ClientPlan(
                 client_index=parsed_client_index,
-                host=host,
+                host=endpoint_host,
+                ssh_host=ssh_host,
                 transport=transport,
             )
         )
@@ -268,10 +284,12 @@ def build_topology_plan(
 
     server_plan = []
     for server_index, host in enumerate(server_shard_ips):
+        endpoint_host, ssh_host = split_ssh_endpoint_host(host)
         server_plan.append(
             ServerPlan(
                 server_index=server_index,
-                host=host,
+                host=endpoint_host,
+                ssh_host=ssh_host,
                 shard=server_index,
                 transport=transport,
                 port=base_port + server_index,
@@ -280,11 +298,13 @@ def build_topology_plan(
 
     client_plan = []
     for host in client_ips:
+        endpoint_host, ssh_host = split_ssh_endpoint_host(host)
         for _ in range(client_processes_per_ip):
             client_plan.append(
                 ClientPlan(
                     client_index=len(client_plan),
-                    host=host,
+                    host=endpoint_host,
+                    ssh_host=ssh_host,
                     transport=transport,
                 )
             )
@@ -608,17 +628,12 @@ def build_remote_exec_cmd(
 ) -> list[str]:
     repo_command = f"cd {shlex.quote(remote_repo)} && {shell_command}"
     if remote_container:
-        return [
-            "ssh",
-            host,
-            "docker",
-            "exec",
-            remote_container,
-            "bash",
-            "-lc",
-            repo_command,
-        ]
-    return ["ssh", host, "bash", "-lc", repo_command]
+        container_command = (
+            f"docker exec {shlex.quote(remote_container)} "
+            f"bash -lc {shlex.quote(repo_command)}"
+        )
+        return ["ssh", host, "bash", "-lc", shlex.quote(container_command)]
+    return ["ssh", host, "bash", "-lc", shlex.quote(repo_command)]
 
 
 def run_command(
@@ -670,7 +685,13 @@ def sync_file_to_remote(
         host_tmp_dir = f"/tmp/recstore_benchmark_ps_sync/{os.getpid()}"
         host_tmp_path = f"{host_tmp_dir}/{local_path.name}"
         run_command(
-            ["ssh", host, "bash", "-lc", f"mkdir -p {shlex.quote(host_tmp_dir)}"],
+            [
+                "ssh",
+                host,
+                "bash",
+                "-lc",
+                shlex.quote(f"mkdir -p {shlex.quote(host_tmp_dir)}"),
+            ],
             capture_output=True,
             check=True,
         )
@@ -680,18 +701,20 @@ def sync_file_to_remote(
             check=True,
         )
         remote_dir = os.path.dirname(remote_path)
-        run_command(
-            build_remote_exec_cmd(
-                host,
-                remote_repo,
-                None,
-                " && ".join(
-                    [
-                        f"docker exec {shlex.quote(remote_container)} mkdir -p {shlex.quote(remote_dir)}",
-                        f"docker cp {shlex.quote(host_tmp_path)} {shlex.quote(remote_container)}:{shlex.quote(remote_path)}",
-                    ]
+        host_copy_command = " && ".join(
+            [
+                (
+                    f"docker exec {shlex.quote(remote_container)} "
+                    f"mkdir -p {shlex.quote(remote_dir)}"
                 ),
-            ),
+                (
+                    f"docker cp {shlex.quote(host_tmp_path)} "
+                    f"{shlex.quote(remote_container)}:{shlex.quote(remote_path)}"
+                ),
+            ]
+        )
+        run_command(
+            ["ssh", host, "bash", "-lc", shlex.quote(host_copy_command)],
             capture_output=True,
             check=True,
         )
@@ -699,7 +722,13 @@ def sync_file_to_remote(
 
     remote_dir = os.path.dirname(remote_path)
     run_command(
-        ["ssh", host, "bash", "-lc", f"mkdir -p {shlex.quote(remote_dir)}"],
+        [
+            "ssh",
+            host,
+            "bash",
+            "-lc",
+            shlex.quote(f"mkdir -p {shlex.quote(remote_dir)}"),
+        ],
         capture_output=True,
         check=True,
     )
@@ -762,7 +791,13 @@ def ensure_remote_binary_state(
     if remote_container is None and shutil.which("rsync"):
         remote_dir = os.path.dirname(remote_binary_path)
         run_command(
-            ["ssh", host, "bash", "-lc", f"mkdir -p {shlex.quote(remote_dir)}"],
+            [
+                "ssh",
+                host,
+                "bash",
+                "-lc",
+                shlex.quote(f"mkdir -p {shlex.quote(remote_dir)}"),
+            ],
             capture_output=True,
             check=True,
         )
@@ -1093,7 +1128,7 @@ def build_client_process_specs(
         specs.append(
             ClientProcessSpec(
                 client_index=client.client_index,
-                host=client.host,
+                host=client.ssh_host,
                 cmd=command_builder(benchmark_cmd, client),
                 cwd=cwd,
                 env=env_builder(client),
@@ -1192,6 +1227,9 @@ def build_rdma_runner(
         config_path=config_path,
         num_servers=server_shards,
         num_clients=client_processes,
+        logical_clients_per_process=getattr(
+            args, "client_threads_per_process", 1
+        ),
         thread_num=args.server_rdma_threads,
         value_size=value_size,
         max_kv_num_per_request=max_keys_per_request,
@@ -1231,6 +1269,13 @@ def dump_petps_server_logs(runner: PetPSClusterRunner, server_log_dir: Path) -> 
     return paths
 
 
+def resolve_local_build_dir(args: argparse.Namespace) -> Path:
+    build_dir = Path(args.build_dir)
+    if not build_dir.is_absolute():
+        build_dir = REPO_ROOT / build_dir
+    return build_dir
+
+
 def run_local_rpc_case(
     args: argparse.Namespace,
     *,
@@ -1244,7 +1289,11 @@ def run_local_rpc_case(
     server_log_dir = client_log_dir / "server"
     runner = PSServerRunner(
         server_path=str(
-            (REPO_ROOT / "build" / "bin" / TRANSPORT_SPECS[transport].server_binary).resolve()
+            (
+                resolve_local_build_dir(args)
+                / "bin"
+                / TRANSPORT_SPECS[transport].server_binary
+            ).resolve()
         ),
         config_path=str(config_path),
         log_dir=str(server_log_dir),
@@ -1384,7 +1433,9 @@ def run_local_rdma_case(
     runner = build_rdma_runner(
         args,
         config_path=str(config_path),
-        server_binary=str((REPO_ROOT / "build" / "bin" / "petps_server").resolve()),
+        server_binary=str(
+            (resolve_local_build_dir(args) / "bin" / "petps_server").resolve()
+        ),
         server_shards=len(topology.server_plan),
         client_processes=len(topology.client_plan),
         value_size=args.value_size,
@@ -1529,7 +1580,10 @@ def build_remote_background_server_cmd(
     shell_command = " && ".join(
         [
             f"mkdir -p {shlex.quote(remote_log_dir)}",
-            f"nohup {quote_argv(argv)} > {shlex.quote(remote_log_path)} 2>&1 < /dev/null & echo $!",
+            (
+                f"(nohup {quote_argv(argv)} > {shlex.quote(remote_log_path)} "
+                "2>&1 < /dev/null & echo $!)"
+            ),
         ]
     )
     return build_remote_exec_cmd(host, remote_repo, remote_container, shell_command)
@@ -1555,18 +1609,26 @@ def run_remote_case(
     remote_server_log_dir = f"{remote_run_root}/logs/server"
     remote_client_log_dir = f"{remote_run_root}/logs/client"
     unique_hosts = sorted(
-        {server.host for server in topology.server_plan}
-        | {client.host for client in topology.client_plan}
+        {server.ssh_host for server in topology.server_plan}
+        | {client.ssh_host for client in topology.client_plan}
     )
 
     for host in unique_hosts:
         ensure_remote_path(host, remote_run_root, args.remote_repo, args.remote_container)
 
     spec = TRANSPORT_SPECS[transport]
-    local_server_binary = REPO_ROOT / "build" / "bin" / spec.server_binary
-    local_benchmark_binary = REPO_ROOT / "build" / "bin" / "ps_transport_benchmark"
-    remote_server_binary = f"{args.remote_repo}/build/bin/{spec.server_binary}"
-    remote_benchmark_binary = f"{args.remote_repo}/build/bin/ps_transport_benchmark"
+    local_build_dir = Path(args.build_dir)
+    if not local_build_dir.is_absolute():
+        local_build_dir = REPO_ROOT / local_build_dir
+    remote_build_dir = args.remote_build_dir.strip("/")
+    local_server_binary = local_build_dir / "bin" / spec.server_binary
+    local_benchmark_binary = local_build_dir / "bin" / "ps_transport_benchmark"
+    remote_server_binary = (
+        f"{args.remote_repo}/{remote_build_dir}/bin/{spec.server_binary}"
+    )
+    remote_benchmark_binary = (
+        f"{args.remote_repo}/{remote_build_dir}/bin/ps_transport_benchmark"
+    )
 
     try:
         for host in unique_hosts:
@@ -1655,7 +1717,7 @@ def run_remote_case(
                 (
                     server,
                     build_remote_background_server_cmd(
-                        server.host,
+                        server.ssh_host,
                         args.remote_repo,
                         args.remote_container,
                         rdma_builder.build_server_cmd(server.server_index),
@@ -1671,7 +1733,7 @@ def run_remote_case(
                 (
                     server,
                     build_remote_background_server_cmd(
-                        server.host,
+                        server.ssh_host,
                         args.remote_repo,
                         args.remote_container,
                         build_rpc_server_cmd(
@@ -1728,7 +1790,7 @@ def run_remote_case(
                 / f"repeat_{repeat_index}",
                 env_builder=lambda _client: None,
                 command_builder=lambda base_cmd, client: build_remote_exec_cmd(
-                    client.host,
+                    client.ssh_host,
                     args.remote_repo,
                     args.remote_container,
                     quote_argv(
@@ -1758,7 +1820,7 @@ def run_remote_case(
                 / f"repeat_{repeat_index}",
                 env_builder=lambda _client: None,
                 command_builder=lambda base_cmd, client: build_remote_exec_cmd(
-                    client.host,
+                    client.ssh_host,
                     args.remote_repo,
                     args.remote_container,
                     quote_argv(base_cmd),
@@ -1852,14 +1914,14 @@ def run_remote_case(
     finally:
         for server, pid, remote_log_path in remote_processes:
             stop_cmd = build_remote_exec_cmd(
-                server.host,
+                server.ssh_host,
                 args.remote_repo,
                 args.remote_container,
                 f"kill {shlex.quote(pid)} >/dev/null 2>&1 || true",
             )
             run_command(stop_cmd, capture_output=True, check=False)
             fetch_remote_text_file(
-                server.host,
+                server.ssh_host,
                 remote_log_path,
                 local_server_log_dir / f"server_{server.server_index}.log",
                 args.remote_repo,
@@ -1875,9 +1937,14 @@ def parse_args() -> argparse.Namespace:
             "Run PS/network benchmark across rdma, grpc, and brpc transports."
         )
     )
+    parser.add_argument("--benchmark-binary", default="")
     parser.add_argument(
-        "--benchmark-binary",
-        default=str((REPO_ROOT / "build" / "bin" / "ps_transport_benchmark").resolve()),
+        "--build-dir",
+        default="build",
+        help=(
+            "Local build directory used for ssh backend binary state checks. "
+            "Defaults to build."
+        ),
     )
     parser.add_argument("--transports", default="rdma,grpc,brpc")
     parser.add_argument(
@@ -1945,6 +2012,14 @@ def parse_args() -> argparse.Namespace:
         "--remote-sync", choices=["check", "rsync", "none"], default="check"
     )
     parser.add_argument("--remote-repo", default=DEFAULT_REMOTE_REPO)
+    parser.add_argument(
+        "--remote-build-dir",
+        default="build",
+        help=(
+            "Build directory under --remote-repo used by ssh backend. "
+            "Defaults to build."
+        ),
+    )
     parser.add_argument("--remote-container", default="")
     parser.add_argument("--remote-runtime-root", default=DEFAULT_REMOTE_RUNTIME_ROOT)
     parser.add_argument("--local-data-root", default=DEFAULT_LOCAL_DATA_ROOT)
@@ -2002,7 +2077,10 @@ def parse_args() -> argparse.Namespace:
     )
     transports = normalize_transport_list(args.transports)
     if "RDMA" in transports and args.mode == "fetch":
-        qps_per_client_per_shard = args.rdma_rc_qps_per_client_per_shard or 32
+        qps_per_client_per_shard = (
+            args.rdma_rc_qps_per_client_per_shard
+            or DEFAULT_RDMA_FETCH_QPS_PER_CLIENT_PER_SHARD
+        )
         slots_per_qp = args.rdma_rc_slots_per_qp or 1
         prefetch_depth = args.prefetch_depth or 16
         if qps_per_client_per_shard <= 0:
@@ -2017,6 +2095,8 @@ def parse_args() -> argparse.Namespace:
                 f"rdma_rc_qps_per_client_per_shard={qps_per_client_per_shard}, "
                 f"rdma_rc_slots_per_qp={slots_per_qp}"
             )
+        if args.rdma_rc_qps_per_client_per_shard is None:
+            args.rdma_rc_qps_per_client_per_shard = qps_per_client_per_shard
     if "RDMA" in transports and args.execution_backend == "local":
         if args.rdma_rc_server_numa_id is None:
             args.rdma_rc_server_numa_id = 0
@@ -2061,7 +2141,10 @@ def main() -> int:
         args.server_shard_ips, "server_shard_ips"
     )
     client_ips = normalize_host_list(args.client_ips, "client_ips")
-    benchmark_binary = Path(args.benchmark_binary)
+    benchmark_binary = Path(
+        args.benchmark_binary
+        or (Path(args.build_dir) / "bin" / "ps_transport_benchmark")
+    )
     if not benchmark_binary.is_absolute():
         benchmark_binary = (REPO_ROOT / benchmark_binary).resolve()
     if not benchmark_binary.exists():

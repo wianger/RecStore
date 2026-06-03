@@ -1,7 +1,7 @@
 #include "ps/rdma/rc_options.h"
 
 DEFINE_int32(rdma_rc_qps_per_client_per_shard,
-             32,
+             16,
              "RC write QPs per client per shard");
 DEFINE_int32(rdma_rc_slots_per_qp,
              1,
@@ -34,6 +34,14 @@ DEFINE_int32(rdma_rc_server_get_workers,
              0,
              "Experimental RC write server GET payload worker thread count. "
              "0 keeps GET handling on the polling thread");
+DEFINE_int32(rdma_rc_client_id_base,
+             -1,
+             "Logical RC write client id base for this OS process. A negative "
+             "value derives the id from global_id for backward compatibility");
+DEFINE_int32(rdma_rc_num_logical_clients,
+             -1,
+             "Total logical RC write clients used by the slot protocol. A "
+             "negative value uses num_client_processes for compatibility");
 DEFINE_int32(rdma_rc_wait_spin_iterations,
              0,
              "Client-side status polling spin iterations before yielding. "

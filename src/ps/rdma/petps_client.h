@@ -21,6 +21,8 @@ namespace petps {
 class PetPSClient : public BaseParameterClient {
 public:
   explicit PetPSClient(const std::string& host, int port, int shard);
+  PetPSClient(
+      const std::string& host, int port, int shard, int logical_client_id);
   ~PetPSClient() override;
 
   void Barrier(const std::string& ss, int k) override;
@@ -89,6 +91,9 @@ private:
     std::atomic<std::uint64_t> revoke_resource_ns{0};
     std::atomic<std::uint64_t> response_bytes_copied{0};
     std::atomic<std::uint64_t> pending_rpc_peak{0};
+    std::atomic<std::uint64_t> pending_rpc_samples{0};
+    std::atomic<std::uint64_t> pending_rpc_sum{0};
+    std::atomic<std::uint64_t> pending_rpc_last{0};
     std::atomic<std::uint64_t> next_report_ns{0};
   };
 
@@ -100,6 +105,10 @@ private:
   SlotHandle AcquireIdleSlot();
   SlotContext& SlotAt(int qp_index, int slot_in_qp);
   const SlotContext& SlotAt(int qp_index, int slot_in_qp) const;
+  void EnsureThreadInitializedLocked() const;
+  bool PendingRpcLocked(int rpc_id, PendingRpc* pending) const;
+  bool RequestPayloadFitsSlot(std::size_t payload_bytes) const;
+  float* AllocateStatusReceiveBufferLocked();
   void MaybeReportProfile();
   void FillGetDescriptor(RequestDescriptor* descriptor,
                          std::uint64_t seq,
@@ -133,7 +142,8 @@ private:
       bool is_async);
 
   std::string namespace_token_; // Shared-memory namespace token.
-  int client_id_ = -1;          // Logical client id derived from global id.
+  int explicit_client_id_ = -1; // Optional logical client id override.
+  int client_id_          = -1; // Logical client id derived from global id.
   RcTransportConfig config_;    // Transport slot sizing and shard config.
   std::unique_ptr<RcShardClientTransport> transport_; // Slot transport owner.
   std::vector<QpContext> qps_; // One context per client-side QP lane.

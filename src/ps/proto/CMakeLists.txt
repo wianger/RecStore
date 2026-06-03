@@ -1,5 +1,6 @@
 set(PROTOS
     ${CMAKE_CURRENT_SOURCE_DIR}/ps.proto
+    ${CMAKE_CURRENT_SOURCE_DIR}/rdma_control_plane.proto
 )
 
 set(PROTOS_BRPC
@@ -22,3 +23,4 @@ message(STATUS "ps_brpc_src is ${PROTO_BRPC_SRCS}")
 add_library(ps_proto ${PROTO_SRCS} ${GRPC_SRCS} ${PROTO_BRPC_SRCS})
 
 target_include_directories(ps_proto PUBLIC .  PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(ps_proto PUBLIC gRPC::grpc++ protobuf::libprotobuf)

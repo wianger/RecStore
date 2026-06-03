@@ -1,6 +1,6 @@
 # RDMA 模块运行手册
 
-更新时间：2026-05-31
+更新时间：2026-06-03
 
 本文档整理当前 RecStore RDMA 主路径的边界、参数、验证入口、已知限制和下一步路线图。默认工作目录为仓库根目录：
 
@@ -15,7 +15,7 @@ cd /app/RecStore
 当前主路径已经完成两次硬切换：
 
 - RDMA 数据面不再依赖历史 Mayfly `RawMessage` 路径。
-- RDMA 控制面不再依赖 `memcached`，统一由 shard 0 `petps_server` 内置控制面承担。
+- RDMA 控制面不再依赖 `memcached`，统一由 shard 0 `petps_server` 内置 gRPC 控制面承担。
 
 RecStore 现在有两条 RDMA 入口：
 
@@ -56,7 +56,7 @@ Op-layer RDMA 目前不是 gRPC/bRPC 的完整替代：
 - 打开 RDMA 设备
 - 注册本地 MR
 - 创建 QP / CQ
-- 通过 shard 0 控制面交换 metadata
+- 通过 shard 0 gRPC 控制面交换 metadata
 - 轮询 RDMA write completion
 
 这条路径当前已经不再链接或包含 Mayfly 控制面代码；`GlobalAddress`、QP metadata exchange 和 ready 协调都在仓内自维护。
@@ -96,6 +96,19 @@ cmake --build ./build --target \
   test_allshards_ps_client \
   -j
 ```
+
+吞吐测试优先使用 Release/O3 构建：
+
+```bash
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake --build build_release --target ps_transport_benchmark petps_server -j
+```
+
+ssh runner 通过 `--build-dir build_release` 和 `--remote-build-dir build_release`
+选择 Release 二进制；local runner 的 client 和 server 也会跟随 `--build-dir`。
+Debug/O0 适合调试，不适合作为吞吐上限；2026-06-03 的 p4/t3/q16/d16 测试中，
+跨机 Release/O3 为 `45.238-45.523 M keys/s`，本机 Release/O3 为
+`45.720 M keys/s`。
 
 如果刚改过 `src/ps/rdma/*`、`src/test/scripts/*rdma*` 或 op-layer 相关代码，先重编对应目标再判断行为。旧的 `petps_server`、`ps_transport_benchmark`、`rdma_rc_transport_benchmark` 或 `recstore_torch_ops` 二进制很容易造成“源码已改但测试仍卡住”的假象。
 
@@ -145,6 +158,8 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 | `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`index_only`、`payload_memset` |
 | `--skip-client-copy` | 是否跳过 client 端 GET payload 拷贝 | 只用于 benchmark 排查，不适合作为默认配置 |
 | `--rdma-get-response-mode` | RDMA GET response payload 路径 | `auto`、`direct_sg`、`staging_copy`；generic PS runner 参数 |
+| `--build-dir` | ssh runner 的本地构建目录 | 默认 `build`；Release 压测设为 `build_release` |
+| `--remote-build-dir` | ssh runner 的远端构建目录 | 默认 `build`；Release 压测设为 `build_release` |
 
 ### 4.1 重要解读
 
@@ -455,7 +470,8 @@ ps_rdma_benchmark_report_0531.md
 | PS/network | `DRAM_EXTENDIBLE_HASH` | direct-SG | `19.37M keys/s` |
 | storage-only | `DRAM_PET_HASH` | `BatchGetFlat(500 random keys)` | `51.96M keys/s` |
 | PS/network | `DRAM_PET_HASH` | direct-SG | `14.93M keys/s` |
-| PS/network | `DRAM_PET_HASH` | staging-copy | `44.87M keys/s` |
+| PS/network | `DRAM_PET_HASH` | staging-copy, stable `qps=16` | `41.64M keys/s` avg, best `45.62M keys/s` |
+| PS/network | `DRAM_PET_HASH` | staging-copy, tuning `qps=20` | up to `46.69M keys/s` |
 
 这修正了 2026-05-30 的阶段性判断：`direct-SG` 不是所有 index 的默认最优路径。
 `DRAM_EXTENDIBLE_HASH` 的主要瓶颈已经是 index lookup；`DRAM_PET_HASH` 的 lookup
@@ -643,7 +659,8 @@ python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
 
 当前主线已经从“单纯追更高并发”调整为“按 KVEngine 和 value layout 选择正确的
 GET response path”。根目录 `ps_rdma_benchmark_report_0531.md` 记录从
-`~2M keys/s` 到 `~44.87M keys/s` 的完整阶段。
+`~2M keys/s` 到 `qps=16` repeat 平均 `~41.64M keys/s`、单轮最高
+`45.62M keys/s`，以及 `qps=20` tuning profile 最高 `~46.69M keys/s` 的完整阶段。
 
 ### 8.1 第一优先级：固化 PET staging-copy 主线
 
@@ -651,11 +668,18 @@ GET response path”。根目录 `ps_rdma_benchmark_report_0531.md` 记录从
 
 - `DRAM_PET_HASH`
 - `--rdma-get-response-mode auto`
+- `rdma_rc_qps_per_client_per_shard=16`
 - `batch_keys=500`
 - `value_size=512`
 
 后续优化应先保持这条路径可复现，再观察是否接近当前 RDMA transport/device 观测上限
 `~48.7M keys/s`。
+
+`rdma_rc_qps_per_client_per_shard=20` 可作为冲高 tuning profile 保留记录，但不作为
+默认参数。2026-06-01 的复测显示，`qps=20` 可以单轮冲到 `46.69M keys/s`，
+但 repeat 结果更常落在 `41-43M keys/s`。增加 client 进程数、用
+`slots_per_qp=2` 加深单 client outstanding、round-robin QP acquisition、client
+wait-spin 都是负结果，不应作为默认优化方向。
 
 ### 8.2 第二优先级：保留 EH direct-SG 回归
 

@@ -1,228 +1,216 @@
 #include "ps/rdma/control_plane.h"
 
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <grpcpp/grpcpp.h>
 
-#include <cerrno>
 #include <chrono>
 #include <cstring>
-#include <sstream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
-#include "base/json.h"
+#include "rdma_control_plane.grpc.pb.h"
 
 namespace petps {
 namespace {
 
-std::string HexEncode(const void* data, std::size_t size) {
-  static constexpr char kHex[] = "0123456789abcdef";
-  const auto* bytes            = static_cast<const std::uint8_t*>(data);
-  std::string out;
-  out.resize(size * 2);
-  for (std::size_t i = 0; i < size; ++i) {
-    out[i * 2]     = kHex[(bytes[i] >> 4) & 0x0f];
-    out[i * 2 + 1] = kHex[bytes[i] & 0x0f];
-  }
-  return out;
-}
-
-int HexValue(char ch) {
-  if (ch >= '0' && ch <= '9') {
-    return ch - '0';
-  }
-  if (ch >= 'a' && ch <= 'f') {
-    return 10 + (ch - 'a');
-  }
-  if (ch >= 'A' && ch <= 'F') {
-    return 10 + (ch - 'A');
-  }
-  return -1;
-}
-
-RawVerbsNodeMeta DecodeMetaHex(const std::string& hex) {
-  if (hex.size() != sizeof(RawVerbsNodeMeta) * 2) {
-    throw std::runtime_error("invalid RawVerbsNodeMeta hex size");
-  }
-  RawVerbsNodeMeta meta{};
-  auto* bytes = reinterpret_cast<std::uint8_t*>(&meta);
-  for (std::size_t i = 0; i < sizeof(RawVerbsNodeMeta); ++i) {
-    const int high = HexValue(hex[i * 2]);
-    const int low  = HexValue(hex[i * 2 + 1]);
-    if (high < 0 || low < 0) {
-      throw std::runtime_error("invalid RawVerbsNodeMeta hex character");
-    }
-    bytes[i] = static_cast<std::uint8_t>((high << 4) | low);
-  }
-  return meta;
-}
-
-std::string EncodeMetaHex(const RawVerbsNodeMeta& meta) {
-  return HexEncode(&meta, sizeof(meta));
-}
+using recstoreps::rdma::GetMetaRequest;
+using recstoreps::rdma::GetMetaResponse;
+using recstoreps::rdma::ProbeRequest;
+using recstoreps::rdma::ProbeResponse;
+using recstoreps::rdma::PublishMetaRequest;
+using recstoreps::rdma::PublishMetaResponse;
+using recstoreps::rdma::PublishServerReadyRequest;
+using recstoreps::rdma::PublishServerReadyResponse;
+using recstoreps::rdma::RdmaControlPlane;
+using recstoreps::rdma::WaitServerReadyRequest;
+using recstoreps::rdma::WaitServerReadyResponse;
+using recstoreps::rdma::WaitServerRequest;
+using recstoreps::rdma::WaitServerResponse;
 
 std::string EndpointString(const RdmaControlPlaneEndpoint& endpoint) {
   return endpoint.host + ":" + std::to_string(endpoint.port);
 }
 
-void CloseFd(int* fd) {
-  if (fd != nullptr && *fd >= 0) {
-    close(*fd);
-    *fd = -1;
-  }
+std::chrono::system_clock::time_point DeadlineFromNow(int timeout_ms) {
+  return std::chrono::system_clock::now() +
+         std::chrono::milliseconds(timeout_ms);
 }
 
-void SetSocketTimeouts(int fd, int timeout_ms) {
-  if (timeout_ms <= 0) {
+std::string GrpcStatusText(const grpc::Status& status) {
+  if (status.error_message().empty()) {
+    return status.error_code() == grpc::StatusCode::OK
+             ? std::string("OK")
+             : std::to_string(status.error_code());
+  }
+  return status.error_message();
+}
+
+void ThrowIfNotOk(const grpc::Status& status, const std::string& operation) {
+  if (status.ok()) {
     return;
   }
-  struct timeval timeout;
-  timeout.tv_sec  = timeout_ms / 1000;
-  timeout.tv_usec = (timeout_ms % 1000) * 1000;
-  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
-  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+  throw std::runtime_error(
+      "control-plane " + operation + " failed: " + GrpcStatusText(status));
 }
 
-void WriteAll(int fd, const std::string& data) {
-  std::size_t offset = 0;
-  while (offset < data.size()) {
-    const ssize_t written =
-        send(fd, data.data() + offset, data.size() - offset, 0);
-    if (written < 0) {
-      throw std::runtime_error(
-          "control-plane send failed: " + std::string(std::strerror(errno)));
-    }
-    if (written == 0) {
-      throw std::runtime_error("control-plane send returned zero");
-    }
-    offset += static_cast<std::size_t>(written);
-  }
+std::string EncodeMetaBytes(const RawVerbsNodeMeta& meta) {
+  return std::string(reinterpret_cast<const char*>(&meta), sizeof(meta));
 }
 
-std::string ReadLine(int fd) {
-  std::string line;
-  char ch = '\0';
-  while (true) {
-    const ssize_t rc = recv(fd, &ch, 1, 0);
-    if (rc < 0) {
-      throw std::runtime_error(
-          "control-plane recv failed: " + std::string(std::strerror(errno)));
-    }
-    if (rc == 0) {
-      break;
-    }
-    if (ch == '\n') {
-      break;
-    }
-    line.push_back(ch);
+RawVerbsNodeMeta DecodeMetaBytes(const std::string& payload) {
+  if (payload.size() != sizeof(RawVerbsNodeMeta)) {
+    throw std::runtime_error("invalid RawVerbsNodeMeta payload size: " +
+                             std::to_string(payload.size()));
   }
-  return line;
+  RawVerbsNodeMeta meta{};
+  std::memcpy(&meta, payload.data(), sizeof(meta));
+  return meta;
 }
 
-json ReadJsonLine(int fd) {
-  const std::string line = ReadLine(fd);
-  if (line.empty()) {
-    throw std::runtime_error("control-plane received empty request");
-  }
-  return json::parse(line);
+grpc::Status MakeDeadlineExceeded(const std::string& message) {
+  return grpc::Status(grpc::StatusCode::DEADLINE_EXCEEDED, message);
 }
 
-void WriteJsonLine(int fd, const json& payload) {
-  WriteAll(fd, payload.dump() + "\n");
-}
-
-int ConnectToEndpoint(const RdmaControlPlaneEndpoint& endpoint) {
-  struct addrinfo hints {};
-  hints.ai_family         = AF_UNSPEC;
-  hints.ai_socktype       = SOCK_STREAM;
-  struct addrinfo* result = nullptr;
-  const std::string port  = std::to_string(endpoint.port);
-  const int rc =
-      getaddrinfo(endpoint.host.c_str(), port.c_str(), &hints, &result);
-  if (rc != 0) {
-    throw std::runtime_error(
-        "control-plane getaddrinfo failed for " + EndpointString(endpoint) +
-        ": " + gai_strerror(rc));
-  }
-
-  int fd = -1;
-  for (struct addrinfo* addr = result; addr != nullptr; addr = addr->ai_next) {
-    fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-    if (fd < 0) {
-      continue;
-    }
-    SetSocketTimeouts(fd, endpoint.timeout_ms);
-    if (connect(fd, addr->ai_addr, addr->ai_addrlen) == 0) {
-      break;
-    }
-    CloseFd(&fd);
-  }
-  freeaddrinfo(result);
-
-  if (fd < 0) {
-    throw std::runtime_error(
-        "control-plane connect failed for " + EndpointString(endpoint));
-  }
-  return fd;
-}
-
-int BindAndListen(const RdmaControlPlaneEndpoint& endpoint) {
-  struct addrinfo hints {};
-  hints.ai_family         = AF_UNSPEC;
-  hints.ai_socktype       = SOCK_STREAM;
-  hints.ai_flags          = AI_PASSIVE;
-  struct addrinfo* result = nullptr;
-  const std::string port  = std::to_string(endpoint.port);
-  const int rc =
-      getaddrinfo(endpoint.host.c_str(), port.c_str(), &hints, &result);
-  if (rc != 0) {
-    throw std::runtime_error(
-        "control-plane getaddrinfo failed for " + EndpointString(endpoint) +
-        ": " + gai_strerror(rc));
-  }
-
-  int fd = -1;
-  for (struct addrinfo* addr = result; addr != nullptr; addr = addr->ai_next) {
-    fd = socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
-    if (fd < 0) {
-      continue;
-    }
-    int reuse = 1;
-    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-    if (bind(fd, addr->ai_addr, addr->ai_addrlen) == 0 &&
-        listen(fd, 128) == 0) {
-      break;
-    }
-    CloseFd(&fd);
-  }
-  freeaddrinfo(result);
-
-  if (fd < 0) {
-    throw std::runtime_error(
-        "control-plane bind/listen failed for " + EndpointString(endpoint));
-  }
-  return fd;
-}
-
-json MakeError(const std::string& error) {
-  return json{{"ok", false}, {"error", error}};
-}
-
-json MakeOk() { return json{{"ok", true}}; }
-
-void WakeListener(const RdmaControlPlaneEndpoint& endpoint) {
-  try {
-    const int fd = ConnectToEndpoint(endpoint);
-    close(fd);
-  } catch (...) {
-  }
+grpc::Status MakeUnavailable(const std::string& message) {
+  return grpc::Status(grpc::StatusCode::UNAVAILABLE, message);
 }
 
 } // namespace
+
+class RdmaControlPlaneService final : public RdmaControlPlane::Service {
+public:
+  explicit RdmaControlPlaneService(RdmaControlPlaneServer* owner)
+      : owner_(owner) {}
+
+  grpc::Status PublishMeta(grpc::ServerContext*,
+                           const PublishMetaRequest* request,
+                           PublishMetaResponse*) override {
+    if (request->meta().size() != sizeof(RawVerbsNodeMeta)) {
+      return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
+                          "invalid RawVerbsNodeMeta payload size: " +
+                              std::to_string(request->meta().size()));
+    }
+    const RdmaControlPlaneServer::MetaKey key{
+        request->publisher_node_id(),
+        request->publisher_lane(),
+        request->receiver_node_id(),
+        request->receiver_lane(),
+    };
+    const RawVerbsNodeMeta meta = DecodeMetaBytes(request->meta());
+    {
+      std::lock_guard<std::mutex> guard(owner_->mu_);
+      owner_->metadata_[key] = meta;
+    }
+    owner_->cv_.notify_all();
+    return grpc::Status::OK;
+  }
+
+  grpc::Status GetMeta(grpc::ServerContext*,
+                       const GetMetaRequest* request,
+                       GetMetaResponse* response) override {
+    const RdmaControlPlaneServer::MetaKey key{
+        request->publisher_node_id(),
+        request->publisher_lane(),
+        request->receiver_node_id(),
+        request->receiver_lane(),
+    };
+    const int timeout_ms =
+        request->timeout_ms() > 0
+            ? request->timeout_ms()
+            : owner_->endpoint_.timeout_ms;
+    std::unique_lock<std::mutex> lock(owner_->mu_);
+    const bool ready =
+        owner_->cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
+          return owner_->stop_requested_.load(std::memory_order_relaxed) ||
+                 owner_->metadata_.find(key) != owner_->metadata_.end();
+        });
+    if (!ready) {
+      return MakeDeadlineExceeded(
+          "get_meta timeout key=" + std::to_string(key.publisher_node_id) +
+          ":" + std::to_string(key.publisher_lane) + "->" +
+          std::to_string(key.receiver_node_id) + ":" +
+          std::to_string(key.receiver_lane));
+    }
+    if (owner_->stop_requested_.load(std::memory_order_relaxed)) {
+      return MakeUnavailable("control-plane stopping");
+    }
+    response->set_meta(EncodeMetaBytes(owner_->metadata_.at(key)));
+    return grpc::Status::OK;
+  }
+
+  grpc::Status PublishServerReady(grpc::ServerContext*,
+                                  const PublishServerReadyRequest* request,
+                                  PublishServerReadyResponse*) override {
+    {
+      std::lock_guard<std::mutex> guard(owner_->mu_);
+      owner_->ready_servers_.insert(request->server_id());
+    }
+    owner_->cv_.notify_all();
+    return grpc::Status::OK;
+  }
+
+  grpc::Status WaitServer(grpc::ServerContext*,
+                          const WaitServerRequest* request,
+                          WaitServerResponse*) override {
+    const int timeout_ms =
+        request->timeout_ms() > 0
+            ? request->timeout_ms()
+            : owner_->endpoint_.timeout_ms;
+    std::unique_lock<std::mutex> lock(owner_->mu_);
+    const bool ready =
+        owner_->cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
+          return owner_->stop_requested_.load(std::memory_order_relaxed) ||
+                 owner_->ready_servers_.find(request->server_id()) !=
+                     owner_->ready_servers_.end();
+        });
+    if (!ready) {
+      return MakeDeadlineExceeded("wait_server timeout server_id=" +
+                                  std::to_string(request->server_id()));
+    }
+    if (owner_->stop_requested_.load(std::memory_order_relaxed)) {
+      return MakeUnavailable("control-plane stopping");
+    }
+    return grpc::Status::OK;
+  }
+
+  grpc::Status WaitServerReady(grpc::ServerContext*,
+                               const WaitServerReadyRequest* request,
+                               WaitServerReadyResponse*) override {
+    const int timeout_ms =
+        request->timeout_ms() > 0
+            ? request->timeout_ms()
+            : owner_->endpoint_.timeout_ms;
+    std::unique_lock<std::mutex> lock(owner_->mu_);
+    const bool ready =
+        owner_->cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
+          return owner_->stop_requested_.load(std::memory_order_relaxed) ||
+                 static_cast<int>(owner_->ready_servers_.size()) >=
+                     request->num_servers();
+        });
+    if (!ready) {
+      return MakeDeadlineExceeded(
+          "wait_server_ready timeout ready=" +
+          std::to_string(owner_->ready_servers_.size()) + "/" +
+          std::to_string(request->num_servers()));
+    }
+    if (owner_->stop_requested_.load(std::memory_order_relaxed)) {
+      return MakeUnavailable("control-plane stopping");
+    }
+    return grpc::Status::OK;
+  }
+
+  grpc::Status
+  Probe(grpc::ServerContext*, const ProbeRequest*, ProbeResponse*) override {
+    if (owner_->stop_requested_.load(std::memory_order_relaxed)) {
+      return MakeUnavailable("control-plane stopping");
+    }
+    return grpc::Status::OK;
+  }
+
+private:
+  RdmaControlPlaneServer* owner_;
+};
 
 RdmaControlPlaneClient::RdmaControlPlaneClient(
     RdmaControlPlaneEndpoint endpoint)
@@ -234,27 +222,21 @@ void RdmaControlPlaneClient::PublishMeta(
     int receiver_node_id,
     int receiver_lane,
     const RawVerbsNodeMeta& meta) const {
-  const json request = {
-      {"type", "publish_meta"},
-      {"publisher_node_id", publisher_node_id},
-      {"publisher_lane", publisher_lane},
-      {"receiver_node_id", receiver_node_id},
-      {"receiver_lane", receiver_lane},
-      {"meta_hex", EncodeMetaHex(meta)},
-  };
-  const int fd = ConnectToEndpoint(endpoint_);
-  try {
-    WriteJsonLine(fd, request);
-    const json response = ReadJsonLine(fd);
-    if (!response.value("ok", false)) {
-      throw std::runtime_error(
-          response.value("error", std::string("publish_meta failed")));
-    }
-  } catch (...) {
-    close(fd);
-    throw;
-  }
-  close(fd);
+  auto channel = grpc::CreateChannel(
+      EndpointString(endpoint_), grpc::InsecureChannelCredentials());
+  auto stub = RdmaControlPlane::NewStub(channel);
+
+  PublishMetaRequest request;
+  request.set_publisher_node_id(publisher_node_id);
+  request.set_publisher_lane(publisher_lane);
+  request.set_receiver_node_id(receiver_node_id);
+  request.set_receiver_lane(receiver_lane);
+  request.set_meta(EncodeMetaBytes(meta));
+
+  PublishMetaResponse response;
+  grpc::ClientContext context;
+  context.set_deadline(DeadlineFromNow(endpoint_.timeout_ms));
+  ThrowIfNotOk(stub->PublishMeta(&context, request, &response), "publish_meta");
 }
 
 RawVerbsNodeMeta RdmaControlPlaneClient::GetMeta(
@@ -263,93 +245,75 @@ RawVerbsNodeMeta RdmaControlPlaneClient::GetMeta(
     int receiver_node_id,
     int receiver_lane,
     int timeout_ms) const {
-  const json request = {
-      {"type", "get_meta"},
-      {"publisher_node_id", publisher_node_id},
-      {"publisher_lane", publisher_lane},
-      {"receiver_node_id", receiver_node_id},
-      {"receiver_lane", receiver_lane},
-      {"timeout_ms", timeout_ms > 0 ? timeout_ms : endpoint_.timeout_ms},
-  };
-  const int fd = ConnectToEndpoint(endpoint_);
-  RawVerbsNodeMeta meta{};
-  try {
-    WriteJsonLine(fd, request);
-    const json response = ReadJsonLine(fd);
-    if (!response.value("ok", false)) {
-      throw std::runtime_error(
-          response.value("error", std::string("get_meta failed")));
-    }
-    meta = DecodeMetaHex(response.at("meta_hex").get<std::string>());
-  } catch (...) {
-    close(fd);
-    throw;
-  }
-  close(fd);
-  return meta;
+  const int effective_timeout_ms =
+      timeout_ms > 0 ? timeout_ms : endpoint_.timeout_ms;
+  auto channel = grpc::CreateChannel(
+      EndpointString(endpoint_), grpc::InsecureChannelCredentials());
+  auto stub = RdmaControlPlane::NewStub(channel);
+
+  GetMetaRequest request;
+  request.set_publisher_node_id(publisher_node_id);
+  request.set_publisher_lane(publisher_lane);
+  request.set_receiver_node_id(receiver_node_id);
+  request.set_receiver_lane(receiver_lane);
+  request.set_timeout_ms(effective_timeout_ms);
+
+  GetMetaResponse response;
+  grpc::ClientContext context;
+  context.set_deadline(DeadlineFromNow(effective_timeout_ms));
+  ThrowIfNotOk(stub->GetMeta(&context, request, &response), "get_meta");
+  return DecodeMetaBytes(response.meta());
 }
 
 void RdmaControlPlaneClient::PublishServerReady(int server_id) const {
-  const json request = {
-      {"type", "server_ready"},
-      {"server_id", server_id},
-  };
-  const int fd = ConnectToEndpoint(endpoint_);
-  try {
-    WriteJsonLine(fd, request);
-    const json response = ReadJsonLine(fd);
-    if (!response.value("ok", false)) {
-      throw std::runtime_error(
-          response.value("error", std::string("server_ready failed")));
-    }
-  } catch (...) {
-    close(fd);
-    throw;
-  }
-  close(fd);
+  auto channel = grpc::CreateChannel(
+      EndpointString(endpoint_), grpc::InsecureChannelCredentials());
+  auto stub = RdmaControlPlane::NewStub(channel);
+
+  PublishServerReadyRequest request;
+  request.set_server_id(server_id);
+
+  PublishServerReadyResponse response;
+  grpc::ClientContext context;
+  context.set_deadline(DeadlineFromNow(endpoint_.timeout_ms));
+  ThrowIfNotOk(stub->PublishServerReady(&context, request, &response),
+               "server_ready");
 }
 
 void RdmaControlPlaneClient::WaitServer(int server_id, int timeout_ms) const {
-  const json request = {
-      {"type", "wait_server"},
-      {"server_id", server_id},
-      {"timeout_ms", timeout_ms > 0 ? timeout_ms : endpoint_.timeout_ms},
-  };
-  const int fd = ConnectToEndpoint(endpoint_);
-  try {
-    WriteJsonLine(fd, request);
-    const json response = ReadJsonLine(fd);
-    if (!response.value("ok", false)) {
-      throw std::runtime_error(
-          response.value("error", std::string("wait_server failed")));
-    }
-  } catch (...) {
-    close(fd);
-    throw;
-  }
-  close(fd);
+  const int effective_timeout_ms =
+      timeout_ms > 0 ? timeout_ms : endpoint_.timeout_ms;
+  auto channel = grpc::CreateChannel(
+      EndpointString(endpoint_), grpc::InsecureChannelCredentials());
+  auto stub = RdmaControlPlane::NewStub(channel);
+
+  WaitServerRequest request;
+  request.set_server_id(server_id);
+  request.set_timeout_ms(effective_timeout_ms);
+
+  WaitServerResponse response;
+  grpc::ClientContext context;
+  context.set_deadline(DeadlineFromNow(effective_timeout_ms));
+  ThrowIfNotOk(stub->WaitServer(&context, request, &response), "wait_server");
 }
 
 void RdmaControlPlaneClient::WaitServerReady(int num_servers,
                                              int timeout_ms) const {
-  const json request = {
-      {"type", "wait_server_ready"},
-      {"num_servers", num_servers},
-      {"timeout_ms", timeout_ms > 0 ? timeout_ms : endpoint_.timeout_ms},
-  };
-  const int fd = ConnectToEndpoint(endpoint_);
-  try {
-    WriteJsonLine(fd, request);
-    const json response = ReadJsonLine(fd);
-    if (!response.value("ok", false)) {
-      throw std::runtime_error(
-          response.value("error", std::string("wait_server_ready failed")));
-    }
-  } catch (...) {
-    close(fd);
-    throw;
-  }
-  close(fd);
+  const int effective_timeout_ms =
+      timeout_ms > 0 ? timeout_ms : endpoint_.timeout_ms;
+  auto channel = grpc::CreateChannel(
+      EndpointString(endpoint_), grpc::InsecureChannelCredentials());
+  auto stub = RdmaControlPlane::NewStub(channel);
+
+  WaitServerReadyRequest request;
+  request.set_num_servers(num_servers);
+  request.set_timeout_ms(effective_timeout_ms);
+
+  WaitServerReadyResponse response;
+  grpc::ClientContext context;
+  context.set_deadline(DeadlineFromNow(effective_timeout_ms));
+  ThrowIfNotOk(stub->WaitServerReady(&context, request, &response),
+               "wait_server_ready");
 }
 
 RdmaControlPlaneServer::RdmaControlPlaneServer(
@@ -368,155 +332,34 @@ RdmaControlPlaneServer::MetaKeyHash::operator()(const MetaKey& key) const {
 }
 
 void RdmaControlPlaneServer::Start() {
-  if (accept_thread_.joinable()) {
+  if (server_ != nullptr) {
     return;
   }
   stop_requested_.store(false, std::memory_order_relaxed);
-  listen_fd_     = BindAndListen(endpoint_);
-  accept_thread_ = std::thread(&RdmaControlPlaneServer::ListenLoop, this);
+  service_ = std::make_unique<RdmaControlPlaneService>(this);
+  grpc::ServerBuilder builder;
+  builder.AddListeningPort(
+      EndpointString(endpoint_), grpc::InsecureServerCredentials());
+  builder.RegisterService(service_.get());
+  server_ = builder.BuildAndStart();
+  if (server_ == nullptr) {
+    throw std::runtime_error("control-plane gRPC server failed to listen on " +
+                             EndpointString(endpoint_));
+  }
 }
 
 void RdmaControlPlaneServer::Stop() {
+  if (server_ == nullptr) {
+    return;
+  }
   stop_requested_.store(true, std::memory_order_relaxed);
   {
     std::lock_guard<std::mutex> guard(mu_);
     cv_.notify_all();
   }
-  WakeListener(endpoint_);
-  CloseFd(&listen_fd_);
-  if (accept_thread_.joinable()) {
-    accept_thread_.join();
-  }
-  for (auto& thread : handler_threads_) {
-    if (thread.joinable()) {
-      thread.join();
-    }
-  }
-  handler_threads_.clear();
-}
-
-void RdmaControlPlaneServer::ListenLoop() {
-  while (!stop_requested_.load(std::memory_order_relaxed)) {
-    int fd = accept(listen_fd_, nullptr, nullptr);
-    if (fd < 0) {
-      if (stop_requested_.load(std::memory_order_relaxed)) {
-        return;
-      }
-      continue;
-    }
-    SetSocketTimeouts(fd, endpoint_.timeout_ms);
-    handler_threads_.emplace_back(
-        &RdmaControlPlaneServer::HandleConnection, this, fd);
-  }
-}
-
-void RdmaControlPlaneServer::HandleConnection(int fd) {
-  try {
-    const json request     = ReadJsonLine(fd);
-    const std::string type = request.value("type", std::string());
-    if (type == "publish_meta") {
-      const MetaKey key{
-          request.at("publisher_node_id").get<int>(),
-          request.at("publisher_lane").get<int>(),
-          request.at("receiver_node_id").get<int>(),
-          request.at("receiver_lane").get<int>(),
-      };
-      const RawVerbsNodeMeta meta =
-          DecodeMetaHex(request.at("meta_hex").get<std::string>());
-      {
-        std::lock_guard<std::mutex> guard(mu_);
-        metadata_[key] = meta;
-      }
-      cv_.notify_all();
-      WriteJsonLine(fd, MakeOk());
-    } else if (type == "get_meta") {
-      const MetaKey key{
-          request.at("publisher_node_id").get<int>(),
-          request.at("publisher_lane").get<int>(),
-          request.at("receiver_node_id").get<int>(),
-          request.at("receiver_lane").get<int>(),
-      };
-      const int timeout_ms = request.value("timeout_ms", endpoint_.timeout_ms);
-      std::unique_lock<std::mutex> lock(mu_);
-      const bool ready =
-          cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
-            return stop_requested_.load(std::memory_order_relaxed) ||
-                   metadata_.find(key) != metadata_.end();
-          });
-      if (!ready) {
-        WriteJsonLine(
-            fd,
-            MakeError("get_meta timeout key=" +
-                      std::to_string(key.publisher_node_id) + ":" +
-                      std::to_string(key.publisher_lane) + "->" +
-                      std::to_string(key.receiver_node_id) + ":" +
-                      std::to_string(key.receiver_lane)));
-      } else if (stop_requested_.load(std::memory_order_relaxed)) {
-        WriteJsonLine(fd, MakeError("control-plane stopping"));
-      } else {
-        const RawVerbsNodeMeta meta = metadata_.at(key);
-        WriteJsonLine(
-            fd, json{{"ok", true}, {"meta_hex", EncodeMetaHex(meta)}});
-      }
-    } else if (type == "server_ready") {
-      {
-        std::lock_guard<std::mutex> guard(mu_);
-        ready_servers_.insert(request.at("server_id").get<int>());
-      }
-      cv_.notify_all();
-      WriteJsonLine(fd, MakeOk());
-    } else if (type == "wait_server") {
-      const int server_id  = request.at("server_id").get<int>();
-      const int timeout_ms = request.value("timeout_ms", endpoint_.timeout_ms);
-      std::unique_lock<std::mutex> lock(mu_);
-      const bool ready =
-          cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
-            return stop_requested_.load(std::memory_order_relaxed) ||
-                   ready_servers_.find(server_id) != ready_servers_.end();
-          });
-      if (!ready) {
-        WriteJsonLine(fd,
-                      MakeError("wait_server timeout server_id=" +
-                                std::to_string(server_id)));
-      } else if (stop_requested_.load(std::memory_order_relaxed)) {
-        WriteJsonLine(fd, MakeError("control-plane stopping"));
-      } else {
-        WriteJsonLine(fd, MakeOk());
-      }
-    } else if (type == "wait_server_ready") {
-      const int num_servers = request.at("num_servers").get<int>();
-      const int timeout_ms  = request.value("timeout_ms", endpoint_.timeout_ms);
-      std::unique_lock<std::mutex> lock(mu_);
-      const bool ready =
-          cv_.wait_for(lock, std::chrono::milliseconds(timeout_ms), [&] {
-            return stop_requested_.load(std::memory_order_relaxed) ||
-                   static_cast<int>(ready_servers_.size()) >= num_servers;
-          });
-      if (!ready) {
-        WriteJsonLine(fd,
-                      MakeError("wait_server_ready timeout ready=" +
-                                std::to_string(ready_servers_.size()) + "/" +
-                                std::to_string(num_servers)));
-      } else if (stop_requested_.load(std::memory_order_relaxed)) {
-        WriteJsonLine(fd, MakeError("control-plane stopping"));
-      } else {
-        WriteJsonLine(fd, MakeOk());
-      }
-    } else if (type == "shutdown") {
-      WriteJsonLine(fd, MakeOk());
-      stop_requested_.store(true, std::memory_order_relaxed);
-      cv_.notify_all();
-      CloseFd(&listen_fd_);
-    } else {
-      WriteJsonLine(fd, MakeError("unknown request type: " + type));
-    }
-  } catch (const std::exception& e) {
-    try {
-      WriteJsonLine(fd, MakeError(e.what()));
-    } catch (...) {
-    }
-  }
-  close(fd);
+  server_->Shutdown();
+  server_.reset();
+  service_.reset();
 }
 
 } // namespace petps

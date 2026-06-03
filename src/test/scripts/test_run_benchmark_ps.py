@@ -52,6 +52,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
         )
         self.assertEqual(len(topology.server_plan), 2)
         self.assertEqual(topology.server_plan[1].host, "server-b")
+        self.assertEqual(topology.server_plan[1].ssh_host, "server-b")
         self.assertEqual(topology.server_plan[1].shard, 1)
         self.assertEqual(topology.server_plan[1].port, 15001)
         self.assertEqual(len(topology.client_plan), 4)
@@ -79,6 +80,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
         )
         self.assertEqual([server.server_index for server in servers], [0, 1])
         self.assertEqual(servers[0].host, "server-a")
+        self.assertEqual(servers[0].ssh_host, "server-a")
         self.assertEqual(servers[0].port, 25000)
         self.assertEqual(servers[0].shard, 3)
         self.assertEqual(servers[1].shard, 8)
@@ -87,6 +89,22 @@ class TestRunBenchmarkPS(unittest.TestCase):
         clients = parse_client_plan("1:client-b,0:client-a,2:client-a", "GRPC")
         self.assertEqual([client.client_index for client in clients], [0, 1, 2])
         self.assertEqual(clients[2].host, "client-a")
+        self.assertEqual(clients[2].ssh_host, "client-a")
+
+    def test_explicit_plans_split_ssh_target_from_endpoint_host(self):
+        topology = build_topology_plan(
+            "RDMA",
+            server_shard_ips=["ignored"],
+            client_ips=["ignored"],
+            client_processes_per_ip=1,
+            base_port=25000,
+            server_plan="0:xieminhui@10.0.2.190:25000:0",
+            client_plan="0:xieminhui@10.0.2.191",
+        )
+        self.assertEqual(topology.server_plan[0].host, "10.0.2.190")
+        self.assertEqual(topology.server_plan[0].ssh_host, "xieminhui@10.0.2.190")
+        self.assertEqual(topology.client_plan[0].host, "10.0.2.191")
+        self.assertEqual(topology.client_plan[0].ssh_host, "xieminhui@10.0.2.191")
 
     def test_build_topology_plan_uses_explicit_server_and_client_plan(self):
         topology = build_topology_plan(
@@ -271,6 +289,33 @@ class TestRunBenchmarkPS(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     parse_args()
 
+    def test_parse_args_sets_rdma_fetch_qp_default(self):
+        argv = [
+            "run_benchmark_ps.py",
+            "--transports",
+            "rdma",
+            "--mode",
+            "fetch",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        self.assertEqual(args.rdma_rc_qps_per_client_per_shard, 16)
+
+    def test_parse_args_accepts_build_dirs(self):
+        argv = [
+            "run_benchmark_ps.py",
+            "--build-dir",
+            "build_release",
+            "--remote-build-dir",
+            "build_release",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        self.assertEqual(args.build_dir, "build_release")
+        self.assertEqual(args.remote_build_dir, "build_release")
+
     def test_parse_args_sets_local_rdma_bind_core_defaults(self):
         argv = [
             "run_benchmark_ps.py",
@@ -387,9 +432,19 @@ class TestRunBenchmarkPS(unittest.TestCase):
             remote_container="recstore-dev",
             shell_command="echo ready",
         )
-        self.assertEqual(cmd[:4], ["ssh", "worker-a", "docker", "exec"])
-        self.assertIn("recstore-dev", cmd)
-        self.assertIn("cd /app/RecStore && echo ready", cmd)
+        self.assertEqual(cmd[:4], ["ssh", "worker-a", "bash", "-lc"])
+        self.assertIn("docker exec recstore-dev bash -lc", cmd[-1])
+        self.assertIn("cd /app/RecStore && echo ready", cmd[-1])
+
+    def test_build_remote_exec_cmd_quotes_remote_shell_command(self):
+        cmd = build_remote_exec_cmd(
+            host="worker-a",
+            remote_repo="/app/RecStore",
+            remote_container=None,
+            shell_command="mkdir -p /tmp/recstore sync",
+        )
+        self.assertEqual(cmd[:4], ["ssh", "worker-a", "bash", "-lc"])
+        self.assertEqual(cmd[-1], "'cd /app/RecStore && mkdir -p /tmp/recstore sync'")
 
     def test_replace_config_path_arg_rewrites_existing_flag(self):
         cmd = replace_config_path_arg(
