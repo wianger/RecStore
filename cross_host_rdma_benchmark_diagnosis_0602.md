@@ -17,7 +17,7 @@
 
 主要 benchmark 约束：
 
-- 使用 `$benchmark-ps` 工作流，即 `src/test/scripts/run_benchmark_ps.py`
+- 使用 `$benchmark-ps` 工作流，即 `tools/benchmarks/run_benchmark_ps.py`
 - transport：`rdma`
 - index：`DRAM_PET_HASH`
 - value size：`512`
@@ -226,7 +226,7 @@ results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_repeat3_0603
 跨机默认 p6/q16 profile：
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --server-plan 0:xieminhui@10.0.2.190:25000:0 \
   --client-plan 0:xieminhui@10.0.2.191,1:xieminhui@10.0.2.191,2:xieminhui@10.0.2.191,3:xieminhui@10.0.2.191,4:xieminhui@10.0.2.191,5:xieminhui@10.0.2.191 \

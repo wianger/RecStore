@@ -1193,7 +1193,9 @@ def build_rdma_runner(
         config_path=config_path,
         num_servers=server_shards,
         num_clients=client_processes,
-        logical_clients_per_process=args.client_threads_per_process,
+        logical_clients_per_process=getattr(
+            args, "client_threads_per_process", 1
+        ),
         thread_num=args.server_rdma_threads,
         value_size=value_size,
         max_kv_num_per_request=max_keys_per_request,

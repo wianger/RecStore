@@ -400,9 +400,9 @@ class TestRunBenchmarkPS(unittest.TestCase):
             remote_container="recstore-dev",
             shell_command="echo ready",
         )
-        self.assertEqual(cmd[:4], ["ssh", "worker-a", "bash", "-lc"])
-        self.assertIn("docker exec recstore-dev bash -lc", cmd[-1])
-        self.assertIn("'cd /app/RecStore && echo ready'", cmd[-1])
+        self.assertEqual(cmd[:4], ["ssh", "worker-a", "docker", "exec"])
+        self.assertIn("recstore-dev", cmd)
+        self.assertIn("cd /app/RecStore && echo ready", cmd[-1])
 
     def test_replace_config_path_arg_rewrites_existing_flag(self):
         cmd = replace_config_path_arg(

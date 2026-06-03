@@ -6,7 +6,7 @@ description: Run and diagnose RecStore cross-host PS RDMA benchmarks from one co
 # Cross-Host RDMA PS
 
 Use this skill from the RecStore repo root when running PS/network RDMA
-benchmarks across two machines via `src/test/scripts/run_benchmark_ps.py`.
+benchmarks across two machines via `tools/benchmarks/run_benchmark_ps.py`.
 
 ## Fixed Context
 
@@ -68,7 +68,7 @@ logical clients total. This is the current best known cross-host layout from
 2026-06-03.
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --server-plan 0:xieminhui@10.0.2.190:25000:0 \
   --client-plan 0:xieminhui@10.0.2.191,1:xieminhui@10.0.2.191,2:xieminhui@10.0.2.191,3:xieminhui@10.0.2.191 \
@@ -115,7 +115,7 @@ regression comparison:
 Use this to compare against same-host RDMA capacity:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
