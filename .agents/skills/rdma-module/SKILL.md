@@ -14,9 +14,9 @@ Use this skill from a RecStore checkout. The current RDMA module is the Paramete
 - `src/test/test_rdmaps_client_adapter.cpp`
 - `src/test/test_raw_verbs_allocator.cpp`
 - `src/test/ps/rdma/petps_integration_test.cpp`
-- `src/test/scripts/run_benchmark_ps.py`
-- `src/test/scripts/run_rdma_transport_benchmarks.py`
-- `src/test/scripts/run_rdma_rc_transport_benchmark.py`
+- `tools/benchmarks/run_benchmark_ps.py`
+- `tools/benchmarks/run_rdma_transport_benchmarks.py`
+- `tools/benchmarks/run_rdma_rc_transport_benchmark.py`
 - `docs/parameter_server/rdma.md`
 
 Do not treat third-party RDMA code under `third_party/` as the RecStore RDMA module unless the task explicitly asks for it.
@@ -33,7 +33,7 @@ Do not treat third-party RDMA code under `third_party/` as the RecStore RDMA mod
    - protocol/layout: `rdma_protocol.h`, `rc_transport.*`, `raw_verbs_transport.*`
    - PetPS client/server semantics: `petps_client.*`, `petps_server.cc`, `allshards_ps_client.*`
    - generic PS adapter: `rdma_ps_client_adapter.*`
-   - benchmark/runtime flags: `rc_options.*`, `src/test/scripts/run_rdma_*.py`
+  - benchmark/runtime flags: `rc_options.*`, `tools/benchmarks/run_rdma_*.py`
 5. Build the narrowest relevant targets before CTest so stale binaries are not tested.
 6. Run correctness tests before benchmark tests.
 7. If running benchmarks, save the command, parameters, raw logs, and parsed summary in a result directory.
@@ -92,7 +92,7 @@ cmake --build build --target ps_transport_benchmark rdma_rc_transport_benchmark 
 Generic PS benchmark RDMA single-client transactions smoke:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -114,7 +114,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
 Generic PS RDMA fetch pipeline diagnosis:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -144,7 +144,7 @@ Generic PS RDMA `transactions/fetch` uses a depth-16 prefetch/result pipeline by
 For local upper-bound RC transport runs, prefer keeping server and clients on the RNIC-local socket while assigning disjoint physical cores. On the 2026-05-30 2-socket test host, the clean socket0-disjoint baseline is `server-numa-id=0`, `client-numa-id=0`, server core offset `0`, client core offset `16`, client stride `2`, `client-count=6`, and `thread-num=16`. This reached about `48.69M keys/s` (`24.93GB/s` at 512B). Do not use socket-split results as the transport ceiling unless the goal is specifically to isolate cross-socket CPU interference.
 
 ```bash
-python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
   --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
   --server-count 1 \
   --client-count 6 \
@@ -174,7 +174,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 Single-client RDMA transport benchmark, current PUT-v2 read mode:
 
 ```bash
-python3 src/test/scripts/run_rdma_transport_benchmarks.py \
+python3 tools/benchmarks/run_rdma_transport_benchmarks.py \
   --benchmark-binary ./build/bin/ps_transport_benchmark \
   --iterations 300 \
   --batch-keys 500 \
@@ -206,7 +206,7 @@ tools/benchmarks/run_rdma_rc_transport_benchmark.sh
 When testing low-load limits, prefer explicit parameters over wrapper defaults:
 
 ```bash
-python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
   --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
   --server-count 1 \
   --client-count 1 \

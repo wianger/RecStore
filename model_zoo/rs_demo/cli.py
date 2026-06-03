@@ -29,7 +29,9 @@ from .runtime.server import (
     choose_available_ports,
     make_runtime_dir,
     resolve_default_ports,
+    start_rdma_server_cluster,
     start_server,
+    stop_rdma_server_cluster,
     stop_server,
     wait_server_ready,
 )
@@ -150,26 +152,61 @@ def main(argv: list[str] | None = None) -> int:
             cfg.recstore_runtime_dir = str(runtime_dir)
 
     proc = None
+    rdma_cluster = None
     previous_recstore_config = os.environ.get("RECSTORE_CONFIG")
     recstore_config_was_set = "RECSTORE_CONFIG" in os.environ
+    rdma_env_keys = [
+        "RECSTORE_RDMA_RC_NAMESPACE",
+        "RECSTORE_RDMA_CONTROL_PLANE_HOST",
+        "RECSTORE_RDMA_CONTROL_PLANE_PORT",
+        "RECSTORE_RDMA_WAIT_TIMEOUT_MS",
+        "RECSTORE_RDMA_RC_QPS_PER_CLIENT_PER_SHARD",
+        "RECSTORE_RDMA_RC_SLOTS_PER_QP",
+        "RECSTORE_RDMA_RC_SERVER_COROUTINES_PER_THREAD",
+        "RECSTORE_RDMA_RC_SERVER_GET_WORKERS",
+    ]
+    previous_rdma_env = {key: os.environ.get(key) for key in rdma_env_keys}
     try:
         if cfg.backend == "recstore":
             os.environ["RECSTORE_CONFIG"] = str(runtime_cfg_path)
         if server_needed:
             print(f"[rs_demo] starting server ({effective_ps_type}) with {runtime_cfg_path}")
-            proc = start_server(repo_root, runtime_cfg_path, Path(cfg.server_log))
-            if not wait_server_ready(
-                proc=proc,
-                host=cfg.server_host,
-                port0=cfg.server_port0,
-                port1=cfg.server_port1,
-                timeout_s=cfg.server_wait_seconds,
-                ps_type=effective_ps_type,
-            ):
-                raise RuntimeError(
-                    f"server failed to become ready: {cfg.server_host}:{cfg.server_port0},{cfg.server_port1}; "
-                    f"log={cfg.server_log}"
+            if effective_ps_type == "RDMA":
+                rdma_cluster = start_rdma_server_cluster(
+                    repo_root,
+                    runtime_cfg_path,
+                    Path(cfg.server_log),
+                    thread_num=1,
+                    value_size=int(cfg.embedding_dim) * 4,
+                    max_kv_num_per_request=max(1, int(cfg.batch_size) * 26),
+                    timeout_s=cfg.server_wait_seconds,
                 )
+                os.environ["RECSTORE_RDMA_RC_NAMESPACE"] = str(rdma_cluster.rdma_namespace)
+                os.environ["RECSTORE_RDMA_CONTROL_PLANE_HOST"] = str(
+                    rdma_cluster.rdma_control_plane_host
+                )
+                os.environ["RECSTORE_RDMA_CONTROL_PLANE_PORT"] = str(
+                    rdma_cluster.rdma_control_plane_port
+                )
+                os.environ["RECSTORE_RDMA_WAIT_TIMEOUT_MS"] = "20000"
+                os.environ["RECSTORE_RDMA_RC_QPS_PER_CLIENT_PER_SHARD"] = "32"
+                os.environ["RECSTORE_RDMA_RC_SLOTS_PER_QP"] = "1"
+                os.environ["RECSTORE_RDMA_RC_SERVER_COROUTINES_PER_THREAD"] = "1"
+                os.environ["RECSTORE_RDMA_RC_SERVER_GET_WORKERS"] = "0"
+            else:
+                proc = start_server(repo_root, runtime_cfg_path, Path(cfg.server_log))
+                if not wait_server_ready(
+                    proc=proc,
+                    host=cfg.server_host,
+                    port0=cfg.server_port0,
+                    port1=cfg.server_port1,
+                    timeout_s=cfg.server_wait_seconds,
+                    ps_type=effective_ps_type,
+                ):
+                    raise RuntimeError(
+                        f"server failed to become ready: {cfg.server_host}:{cfg.server_port0},{cfg.server_port1}; "
+                        f"log={cfg.server_log}"
+                    )
             print("[rs_demo] server is ready")
 
         runner = build_runner(cfg, runtime_dir)
@@ -242,11 +279,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[rs_demo] server log: {cfg.server_log}")
         return 0
     finally:
-        stop_server(proc)
+        stop_rdma_server_cluster(rdma_cluster)
+        if proc is not None:
+            stop_server(proc)
         if recstore_config_was_set:
             os.environ["RECSTORE_CONFIG"] = previous_recstore_config or ""
         else:
             os.environ.pop("RECSTORE_CONFIG", None)
+        for key, value in previous_rdma_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 if __name__ == "__main__":

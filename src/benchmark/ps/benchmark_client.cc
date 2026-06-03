@@ -3,7 +3,7 @@
 #include "base/factory.h"
 #include "base/timer.h"
 #include "base/zipf.h"
-#include "benchmark/benchmark_client_common.h"
+#include "benchmark/ps/benchmark_client_common.h"
 #include "ps/base/Postoffice.h"
 #include "ps/rdma/base_client.h"
 

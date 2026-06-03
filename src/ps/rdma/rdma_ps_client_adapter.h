@@ -85,12 +85,15 @@ private:
     int64_t key_count      = 0;
     int64_t embedding_dim  = 0;
     bool borrowed_response = false;
+    bool batch_response    = false;
   };
 
   void EnsureClientInitialized();
   void EnsureThreadInitialized();
   void EnsureTableReady(const std::string& table_name, int64_t embedding_dim);
   int64_t DefaultEmbeddingDimOrThrow() const;
+  std::size_t MaxGetKeysPerRpc() const;
+  std::size_t MaxInFlightGetRpcs() const;
   int PartitionKey(uint64_t key) const;
   std::vector<ShardChunk> BuildChunks(base::ConstArray<uint64_t> keys) const;
   bool FinalizeBatchIfNeeded(BatchRequest* batch);
@@ -122,9 +125,9 @@ private:
   int num_shards_              = 1;
   std::string hash_method_     = "city_hash";
   std::unordered_map<int, int> shard_to_client_index_;
-  std::uint64_t batch_rpc_id_acc_ = 1;
+  int batch_rpc_id_acc_ = -1;
   mutable std::mutex batches_mu_;
-  std::unordered_map<std::uint64_t, BatchRequest> batches_;
+  std::unordered_map<int, BatchRequest> batches_;
   std::unordered_map<std::string, TableState> tables_;
   std::vector<std::unique_ptr<char[]>> prefetch_buffers_;
   std::vector<std::size_t> prefetch_buffer_capacities_;

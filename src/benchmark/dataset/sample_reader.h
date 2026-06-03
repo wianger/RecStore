@@ -1,7 +1,7 @@
 #pragma once
 #include "base/array.h"
 #include "base/zipf.h"
-#include "parse_dataset.h"
+#include "benchmark/dataset/parse_dataset.h"
 
 class SampleReader {
 public:

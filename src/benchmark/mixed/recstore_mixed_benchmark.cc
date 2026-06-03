@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "base/array.h"
-#include "benchmark/ps_transport_benchmark_config.h"
+#include "benchmark/ps/ps_transport_benchmark_config.h"
 #include "framework/common/ps_client_config_adapter.h"
 #include "ps/client_factory.h"
 #include "ps/brpc/brpc_ps_client.h"

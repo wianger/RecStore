@@ -112,6 +112,19 @@ class TestTorchRecConfig(unittest.TestCase):
         )
         self.assertEqual(cfg.torchrec_memory_mode, "uvm_caching")
 
+    def test_recstore_ps_type_accepts_rdma(self) -> None:
+        cfg = parse_config(
+            [
+                "--backend",
+                "recstore",
+                "--ps-type",
+                "RDMA",
+            ]
+        )
+
+        self.assertEqual(cfg.ps_type, "RDMA")
+        validate_recstore_config(cfg)
+
     def test_hps_torch_backend_parses_paths(self) -> None:
         cfg = parse_config(
             [
@@ -676,6 +689,90 @@ class TestTorchRecConfig(unittest.TestCase):
 
             self.assertEqual(rc, 0)
             self.assertEqual(captured_env["RECSTORE_CONFIG"], str(generated_config))
+
+    def test_cli_recstore_rdma_uses_petps_server_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            base_cfg = {
+                "client": {"host": "127.0.0.1", "port": 15123, "shard": 0},
+                "cache_ps": {"servers": []},
+                "distributed_client": {"servers": []},
+            }
+            config_path = repo_root / "recstore_config.json"
+            config_path.write_text(json.dumps(base_cfg), encoding="utf-8")
+            runtime_dir = repo_root / "runtime-generated"
+            runtime_dir.mkdir()
+            runtime_config = runtime_dir / "recstore_config.json"
+            runtime_config.write_text(json.dumps(base_cfg), encoding="utf-8")
+            captured = {}
+
+            class _FakeRunner:
+                def run(self, repo_root, cfg):
+                    captured["RECSTORE_CONFIG"] = os.environ.get("RECSTORE_CONFIG")
+                    captured["RECSTORE_RDMA_RC_NAMESPACE"] = os.environ.get(
+                        "RECSTORE_RDMA_RC_NAMESPACE"
+                    )
+                    captured["RECSTORE_RDMA_CONTROL_PLANE_PORT"] = os.environ.get(
+                        "RECSTORE_RDMA_CONTROL_PLANE_PORT"
+                    )
+                    Path(cfg.recstore_main_csv).parent.mkdir(parents=True, exist_ok=True)
+                    Path(cfg.recstore_main_csv).write_text(
+                        "step_total_ms,input_pack_ms,embed_lookup_local_ms,embed_pool_local_ms,output_unpack_ms,dense_fwd_ms,backward_ms,optimizer_ms,sparse_update_ms,emb_stage_ms\n"
+                        "1.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,1.0\n",
+                        encoding="utf-8",
+                    )
+                    return {"backend": "recstore", "rows": []}
+
+            fake_rdma_cluster = type(
+                "FakeRdmaCluster",
+                (),
+                {
+                    "rdma_namespace": "test-rdma-ns",
+                    "rdma_control_plane_host": "127.0.0.1",
+                    "rdma_control_plane_port": 32123,
+                },
+            )()
+
+            with mock.patch.object(
+                cli, "resolve_recstore_config_path", return_value=config_path
+            ), mock.patch.object(
+                cli, "repo_root_from_this_file", return_value=repo_root
+            ), mock.patch.object(
+                cli, "make_runtime_dir", return_value=(runtime_dir, runtime_config)
+            ), mock.patch.object(
+                cli, "build_runner", return_value=_FakeRunner()
+            ), mock.patch.object(
+                cli, "start_server", side_effect=AssertionError("ps_server path must not be used")
+            ), mock.patch.object(
+                cli, "start_rdma_server_cluster", return_value=fake_rdma_cluster
+            ) as start_rdma, mock.patch.object(
+                cli, "stop_server", side_effect=AssertionError("ps_server stop must not be used")
+            ), mock.patch.object(
+                cli, "stop_rdma_server_cluster"
+            ) as stop_rdma, mock.patch.object(
+                cli, "analyze_embupdate", return_value="ok"
+            ):
+                rc = cli.main(
+                    [
+                        "--backend",
+                        "recstore",
+                        "--ps-type",
+                        "RDMA",
+                        "--steps",
+                        "1",
+                        "--output-root",
+                        str(repo_root),
+                        "--run-id",
+                        "recstore-rdma",
+                    ]
+                )
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(captured["RECSTORE_CONFIG"], str(runtime_config))
+            self.assertEqual(captured["RECSTORE_RDMA_RC_NAMESPACE"], "test-rdma-ns")
+            self.assertEqual(captured["RECSTORE_RDMA_CONTROL_PLANE_PORT"], "32123")
+            self.assertEqual(start_rdma.call_count, 1)
+            self.assertEqual(stop_rdma.call_count, 1)
 
 
 if __name__ == "__main__":

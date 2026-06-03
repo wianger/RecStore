@@ -11,7 +11,7 @@
 #include "ps/rdma/petps_client.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/base_client.h"
-#include "sample_reader.h"
+#include "benchmark/dataset/sample_reader.h"
 
 DEFINE_bool(thread_cut_off, false, "thread cut off");
 DEFINE_int32(benchmark_seconds, 120, "benchmark seconds");

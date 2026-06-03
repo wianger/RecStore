@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "base/array.h"
-#include "benchmark/rdma_rc_transport_benchmark_values.h"
+#include "benchmark/ps/rdma_rc_transport_benchmark_values.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
 #include "ps/rdma/rdma_protocol.h"

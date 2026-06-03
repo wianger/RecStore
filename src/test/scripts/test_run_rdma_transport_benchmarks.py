@@ -90,6 +90,24 @@ class TestRunRDMATransportBenchmarks(unittest.TestCase):
         self.assertIn("--warmup_rounds=5", cmd)
         self.assertIn("--batch_keys=500", cmd)
 
+    def test_build_benchmark_cmd_does_not_forward_server_only_rdma_flags(self):
+        cmd = build_benchmark_cmd(
+            benchmark_binary="./build/bin/ps_transport_benchmark",
+            transport="rdma",
+            iterations=20,
+            rounds=50,
+            warmup_rounds=5,
+            report_mode="summary",
+            batch_keys=500,
+            host=None,
+            port=None,
+            num_shards=1,
+        )
+
+        rendered = " ".join(cmd)
+        self.assertNotIn("rdma_put_protocol_version", rendered)
+        self.assertNotIn("rdma_put_v2_transfer_mode", rendered)
+
     def test_filters_common_rdma_noise_lines(self):
         self.assertTrue(is_benchmark_noise_line("I open mlx5_0 :)"))
         self.assertFalse(is_benchmark_noise_line("transport=RDMA phase=measure"))

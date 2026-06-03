@@ -2,7 +2,7 @@
 #include "base/glob.h"
 #include "folly/GLog.h"
 #include "folly/system/MemoryMapping.h"
-#include "parse_dataset.h"
+#include "benchmark/dataset/parse_dataset.h"
 
 #include <string>
 #include <unordered_map>

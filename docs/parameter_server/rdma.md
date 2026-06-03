@@ -245,8 +245,8 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 
 | 目标 | Runner | 适用场景 |
 |------|--------|----------|
-| `ps_transport_benchmark` | `src/test/scripts/run_rdma_transport_benchmarks.py` | 通用 PS transport 对比入口，可跑 RDMA / gRPC / bRPC；RDMA 模式主要用于验证 PUT-v2 `read` 和 `push` 两条路径。 |
-| `rdma_rc_transport_benchmark` | `src/test/scripts/run_rdma_rc_transport_benchmark.py` | RDMA RC 专项压测入口，支持 `client-count`、`async_stream`、QP 池、server coroutine、fake get、skip client copy 等 RC 诊断参数。 |
+| `ps_transport_benchmark` | `tools/benchmarks/run_rdma_transport_benchmarks.py` | 通用 PS transport 对比入口，可跑 RDMA / gRPC / bRPC；RDMA 模式主要用于验证 PUT-v2 `read` 和 `push` 两条路径。 |
+| `rdma_rc_transport_benchmark` | `tools/benchmarks/run_rdma_rc_transport_benchmark.py` | RDMA RC 专项压测入口，支持 `client-count`、`async_stream`、QP 池、server coroutine、fake get、skip client copy 等 RC 诊断参数。 |
 
 选择规则：
 
@@ -259,7 +259,7 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 建议先跑 PetPS RC-write correctness 基线，再做 benchmark：
 
 ```bash
-python3 src/test/scripts/run_rdma_transport_benchmarks.py \
+python3 tools/benchmarks/run_rdma_transport_benchmarks.py \
   --benchmark-binary ./build/bin/ps_transport_benchmark \
   --iterations 300 \
   --batch-keys 500 \
@@ -280,7 +280,7 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 
 如果你想在不继续增加 QP 数的情况下抬高 `async_stream` 深度，可以优先调 `--slots-per-qp`，再看 `qps-per-client-per-shard` 是否还需要一起放大。
 
-`transactions/fetch` 路径使用 `src/test/scripts/run_benchmark_ps.py`。这个 runner 的拓扑参数采用显式命名：
+`transactions/fetch` 路径使用 `tools/benchmarks/run_benchmark_ps.py`。这个 runner 的拓扑参数采用显式命名：
 
 - `--server-shard-ips`：每个 shard 对应一个 server IP，列表长度就是 shard 数。
 - `--client-ips`：要 ssh / 本地启动 client 的 IP 列表。
@@ -295,7 +295,7 @@ summary 表中的 `put_v2` 列用于确认 PUT-v2 payload transfer mode；`read`
 本地单 shard、4 client 进程的 RDMA fetch profile 示例：
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --benchmark-binary ./build/bin/ps_transport_benchmark \
   --transports rdma \
   --server-shard-ips 127.0.0.1 \
@@ -340,7 +340,7 @@ get_meta timeout key=2:0->0:0
 如果要复现当前 GET worker / poller 调度实验，建议显式写出 `T/N/C` 三个维度，并把它们编码进结果目录名：
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -465,7 +465,7 @@ ps_rdma_benchmark_report_0531.md
 推荐默认：
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --index-type DRAM_PET_HASH \
   --rdma-get-response-mode auto \
@@ -491,7 +491,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
 
 ```bash
 export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
-python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
   --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
   --server-count 1 \
   --client-count 1 \
@@ -514,7 +514,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 
 ```bash
 export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
-python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
   --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
   --server-count 1 \
   --client-count 1 \
@@ -537,7 +537,7 @@ python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
 
 ```bash
 export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
-python3 src/test/scripts/run_rdma_rc_transport_benchmark.py \
+python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
   --benchmark-binary ./build/bin/rdma_rc_transport_benchmark \
   --server-count 1 \
   --client-count 2 \

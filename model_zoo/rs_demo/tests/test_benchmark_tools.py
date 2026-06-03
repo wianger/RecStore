@@ -9,6 +9,65 @@ from model_zoo.rs_demo.config import RunConfig
 
 
 class TestBenchmarkTools(unittest.TestCase):
+    def test_shared_ps_summary_parser_keeps_measure_rows_only(self) -> None:
+        from tools.benchmarks.summary import collect_ps_transport_summary_rows
+
+        sample = (
+            "transport=RDMA op=put phase=warmup summary rounds=1 iterations=2 "
+            "batch_keys=4 elapsed_us_mean=232 elapsed_us_p50=232 "
+            "elapsed_us_p95=232 elapsed_us_p99=232 ops_per_sec=8620.69 "
+            "key_ops_per_sec=34482.8\n"
+            "transport=RDMA op=get phase=measure summary rounds=1 iterations=2 "
+            "batch_keys=4 elapsed_us_mean=13 elapsed_us_p50=13 "
+            "elapsed_us_p95=13 elapsed_us_p99=13 ops_per_sec=153846 "
+            "key_ops_per_sec=615385\n"
+        )
+
+        rows = collect_ps_transport_summary_rows(sample)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["transport"], "RDMA")
+        self.assertEqual(rows[0]["op"], "get")
+        self.assertEqual(rows[0]["phase"], "measure")
+
+    def test_shared_mixed_summary_parser_keeps_all_phases(self) -> None:
+        from tools.benchmarks.summary import collect_mixed_summary_rows
+
+        sample = (
+            "system=RecStore transport=LOCAL_SHM phase=init summary rounds=1 "
+            "iterations=1 batch_keys=0 num_embeddings=64 elapsed_us_mean=300 "
+            "elapsed_us_p50=300 elapsed_us_p95=300 elapsed_us_p99=300 "
+            "ops_per_sec=50 key_ops_per_sec=50\n"
+            "system=RecStore transport=LOCAL_SHM phase=measure summary rounds=1 "
+            "iterations=5 batch_keys=8 num_embeddings=64 elapsed_us_mean=100 "
+            "elapsed_us_p50=90 elapsed_us_p95=120 elapsed_us_p99=130 "
+            "ops_per_sec=200 key_ops_per_sec=1600\n"
+        )
+
+        rows = collect_mixed_summary_rows(sample)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["phase"], "init")
+        self.assertEqual(rows[1]["phase"], "measure")
+        self.assertEqual(rows[1]["num_embeddings"], 64)
+
+    def test_benchmark_runner_modules_are_exposed_under_tools_package(self) -> None:
+        from tools.benchmarks import (
+            run_benchmark_ps,
+            run_hierkv_recstore_mixed_benchmark,
+            run_local_shm_mixed_benchmark,
+            run_local_shm_multi_process_benchmark,
+            run_ps_dram_transport_benchmark,
+            run_rdma_rc_transport_benchmark,
+            run_rdma_transport_benchmarks,
+        )
+
+        self.assertTrue(callable(run_benchmark_ps.parse_args))
+        self.assertTrue(callable(run_ps_dram_transport_benchmark.build_runtime_config))
+        self.assertTrue(callable(run_rdma_transport_benchmarks.build_benchmark_cmd))
+        self.assertTrue(callable(run_rdma_rc_transport_benchmark.build_benchmark_cmd))
+        self.assertTrue(callable(run_local_shm_mixed_benchmark.build_runtime_config))
+        self.assertTrue(callable(run_local_shm_multi_process_benchmark.build_worker_env))
+        self.assertTrue(callable(run_hierkv_recstore_mixed_benchmark.build_recstore_cmd))
+
     def test_validate_recstore_config_keeps_default_lane_behavior_when_fast_path_disabled(self) -> None:
         cfg = RunConfig(
             backend="recstore",

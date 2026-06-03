@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "benchmark/ps_transport_benchmark_config.h"
+#include "benchmark/ps/ps_transport_benchmark_config.h"
 
 TEST(PSTransportBenchmarkConfigTest, RejectsUnknownTransport) {
   EXPECT_THROW(

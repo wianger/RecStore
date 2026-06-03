@@ -1,6 +1,6 @@
 ---
 name: benchmark-ps
-description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and BRPC, including optimized RDMA GET where DRAM_PET_HASH uses auto/staging-copy response mode. Use when Codex needs explicit client/server hosts, record count, value size, topology, and response mode, then execute src/test/scripts/run_benchmark_ps.py and generate summary.csv plus Chinese summary.md.
+description: Run RecStore PS/network transport benchmarks across RDMA, GRPC, and BRPC, including optimized RDMA GET where DRAM_PET_HASH uses auto/staging-copy response mode. Use when Codex needs explicit client/server hosts, record count, value size, topology, and response mode, then execute tools/benchmarks/run_benchmark_ps.py and generate summary.csv plus Chinese summary.md.
 ---
 
 # Benchmark PS
@@ -47,7 +47,7 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - run `rdma` separately with `--client-threads-per-process 1 --client-load-threads-per-process 1`
    - do not run `rdma,grpc,brpc` in one command unless the chosen thread settings are valid for every selected transport
 7. For fair transport comparisons, align `--client-threads-per-process` and `--client-load-threads-per-process` across all compared transports. If the run intentionally uses different thread counts, label it as a mixed-concurrency capacity check, not a fair transport comparison.
-8. Run `src/test/scripts/run_benchmark_ps.py` with the selected topology.
+8. Run `tools/benchmarks/run_benchmark_ps.py` with the selected topology.
 9. Save generated configs, logs, `summary.csv`, and `summary.md` under the chosen output directory.
 10. Report the result in Chinese and explicitly separate success, skip, and failure rows.
 
@@ -65,7 +65,7 @@ ctest -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_
 For a local RDMA smoke run, prefer this stable baseline:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -87,7 +87,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
 For local RDMA concurrency, scale with `--client-processes-per-ip`; keep `--client-threads-per-process 1` for RDMA transactions:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1,127.0.0.1 \
@@ -106,7 +106,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
 For local optimized PS RDMA GET capacity on a multi-socket host, prefer RNIC-local same-socket placement with disjoint physical cores over socket-split placement. Socket-split is useful to prove CPU isolation, but it can understate the transport ceiling by adding cross-NUMA RNIC/PCIe/DMA cost. On the 2026-05-31 host, the clean default was server NUMA0/client NUMA0, server bind offset `0`, client bind offset `16`, client stride `2`, `client-processes-per-ip=6`, `server-rdma-threads=16`, `DRAM_PET_HASH`, and `--rdma-get-response-mode auto`.
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -139,7 +139,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
 For RDMA bottleneck diagnosis, keep fake/status-only rows separate from default benchmark rows and label them as diagnostic. Use profile/fake knobs to separate synchronous request scheduling, server GET payload work, and client copy:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1,127.0.0.1 \
@@ -158,7 +158,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --rdma-rc-server-coroutines-per-thread <coroutines_per_thread> \
   --output-dir <output_dir>/rdma_profile
 
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1,127.0.0.1 \
@@ -185,7 +185,7 @@ Generic PS RDMA `transactions/fetch` uses the prefetch/result pipeline by defaul
 For a mixed local reliability matrix, run RPC and RDMA as separate commands because their safe thread settings differ:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports grpc,brpc \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -200,7 +200,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
   --execution-backend local \
   --output-dir <output_dir>/rpc
 
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips 127.0.0.1 \
@@ -219,7 +219,7 @@ python3 src/test/scripts/run_benchmark_ps.py \
 For a fair local transport matrix, keep per-process client threads aligned. Use multiple output directories under one matrix root:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports grpc,brpc,rdma \
   --client-ips 127.0.0.1 \
   --server-shard-ips <comma_separated_shard_ips> \
@@ -254,7 +254,7 @@ Do not assume direct-SG is the universal RDMA GET default. Use `--rdma-get-respo
 For explicit cross-host or multi-shard placement, use `--server-plan` and `--client-plan`:
 
 ```bash
-python3 src/test/scripts/run_benchmark_ps.py \
+python3 tools/benchmarks/run_benchmark_ps.py \
   --transports <transports> \
   --server-plan 0:server-a:25000:0,1:server-b:25001:3 \
   --client-plan 0:client-a,1:client-a \

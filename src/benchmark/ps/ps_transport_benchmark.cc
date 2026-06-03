@@ -19,7 +19,7 @@
 
 #include "base/array.h"
 #include "base/bind_core.h"
-#include "benchmark/ps_transport_benchmark_config.h"
+#include "benchmark/ps/ps_transport_benchmark_config.h"
 #include "framework/common/ps_client_config_adapter.h"
 #include "ps/base/base_client.h"
 #include "ps/client_factory.h"
