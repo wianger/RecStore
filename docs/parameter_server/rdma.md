@@ -1,6 +1,6 @@
 # RDMA 模块运行手册
 
-更新时间：2026-05-31
+更新时间：2026-06-03
 
 本文档整理当前 RecStore RDMA 主路径的边界、参数、验证入口、已知限制和下一步路线图。默认工作目录为仓库根目录：
 
@@ -97,6 +97,18 @@ cmake --build ./build --target \
   -j
 ```
 
+吞吐测试优先使用 Release/O3 构建：
+
+```bash
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake --build build_release --target ps_transport_benchmark petps_server -j
+```
+
+跨机 ssh runner 通过 `--build-dir build_release` 和
+`--remote-build-dir build_release` 选择 Release 二进制。Debug/O0 适合调试，
+不适合作为吞吐上限；2026-06-03 的 p4/t3/q16/d16 跨机测试中，Debug clean
+为 `39.384 M keys/s`，Release/O3 为 `45.238-45.523 M keys/s`。
+
 如果刚改过 `src/ps/rdma/*`、`src/test/scripts/*rdma*` 或 op-layer 相关代码，先重编对应目标再判断行为。旧的 `petps_server`、`ps_transport_benchmark`、`rdma_rc_transport_benchmark` 或 `recstore_torch_ops` 二进制很容易造成“源码已改但测试仍卡住”的假象。
 
 如果 `petps_server` 启动时报下面的动态库错误：
@@ -145,6 +157,8 @@ export LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}
 | `--fake-get-mode` | benchmark-only fake GET 行为 | `none`、`status_only`、`index_only`、`payload_memset` |
 | `--skip-client-copy` | 是否跳过 client 端 GET payload 拷贝 | 只用于 benchmark 排查，不适合作为默认配置 |
 | `--rdma-get-response-mode` | RDMA GET response payload 路径 | `auto`、`direct_sg`、`staging_copy`；generic PS runner 参数 |
+| `--build-dir` | ssh runner 的本地构建目录 | 默认 `build`；Release 压测设为 `build_release` |
+| `--remote-build-dir` | ssh runner 的远端构建目录 | 默认 `build`；Release 压测设为 `build_release` |
 
 ### 4.1 重要解读
 

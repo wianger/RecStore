@@ -2,6 +2,14 @@
 
 日期：2026-06-02
 
+## 摘要
+
+- 当前推荐跨机 baseline：`p4/t3/q16/d16`，12 logical clients，`get_workers=0`。
+- Debug clean 单次为 `39.384 M keys/s`；Release/O3 单次为 `45.238-45.523 M keys/s`。
+- 旧 16M 级低分主要来自 client 请求源密度不足；多 logical client 后已恢复。
+- server poll 低命中率和 SEND/SRQ 方向实验都没有单独解释吞吐下降。
+- round-robin acquire 无收益；额外 hot-path profile 字段会明显扰动结果。
+
 ## 背景
 
 本次诊断目标是解释 RecStore PS/network 层跨机 RDMA benchmark 为什么明显低于本机 RDMA benchmark。
@@ -84,6 +92,9 @@ node190 容器内有 3 个 verbs device：
 | 跨机 p4/t3/q16/depth16 repeat3, 多 logical client | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_repeat3_0603` | mean 34.750 M keys/s |
 | 本机 p4/t3/q16/depth16 repeat3, 多 logical client | `results/benchmark_ps_local_rdma_p4t3_q16_d16_repeat3_0603` | mean 30.683 M keys/s |
 | 跨机 send_doorbell request discovery 实验 | `results/rdma_ps_cross_send_p6_t16_q16_d16_0603` | 16.627 M keys/s |
+| 跨机 p4/t3/q16/depth16, runner SSH/endpoint split 修复后干净重跑 | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_runner_fix_only_0603` | 39.384 M keys/s |
+| 跨机 p4/t3/q16/depth16, Release/O3 + profile=1000ms | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_release_0603` | 45.238 M keys/s |
+| 跨机 p4/t3/q16/depth16, Release/O3 + profile=0 | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_release_noprofile_0603` | 45.523 M keys/s |
 
 ## 稳定性结果
 
@@ -106,6 +117,7 @@ local 模式把 server/client 都放在 node190 上，CPU、cache、NUMA 或 RNI
 |-|-:|-:|-:|-|
 | 跨机 repeat3 | 约 3.3-3.6 us | 约 121-153 us | 约 203-242 us | submit 稳定，波动主要来自 wait/status 和 server GET |
 | 本机 repeat3 | 约 4.7-5.8 us | 约 132-170 us | 约 222-277 us | submit 和 server GET 都比跨机更慢 |
+| 跨机 Release/O3 | 约 2.4-2.9 us | 约 108-115 us | 约 89-99 us | 编译优化显著压缩 client submit/revoke 和 server GET 固定开销 |
 
 ## Profile 对比
 
@@ -159,6 +171,19 @@ local 模式把 server/client 都放在 node190 上，CPU、cache、NUMA 或 RNI
 
 17. `send_doorbell` 最小实验把 request discovery 改成 completion-driven，消除了 blind scan 旧 seq，但跨机 full GET 仍约 `16.627 M keys/s`。因此 server request discovery 低命中率更像症状，不是单独根因；短期不建议继续优先投入完整 SRQ/SEND descriptor 协议。
 
+18. runner 已经区分 SSH target 和 RecStore/RDMA endpoint host。`server-plan` /
+`client-plan` 可以写 `xieminhui@10.0.2.xxx` 供 SSH 使用，但生成的 RecStore
+配置会自动使用纯 endpoint IP，避免把 `user@host` 写进 RDMA 控制面导致解析失败。
+
+19. Release/O3 是目前最明确的硬性优化手段。当前历史 `build/` 为 Debug/O0，
+干净重跑为 `39.384 M keys/s`；同配置切到 `build_release` 后达到
+`45.238 M keys/s`，关闭周期性 RDMA profile 后为 `45.523 M keys/s`。因此
+主要收益来自编译优化，而不是关闭 profile。
+
+20. client slot acquire round-robin 实验没有收益。同配置 round-robin acquire
+为 `38.403 M keys/s`，低于干净基线，因此已撤回，不应把从头线性扫描视为当前
+主要瓶颈。
+
 ## 当前最可能的瓶颈方向
 
 旧实现中的主要问题在跨机 RDMA request/status 闭环、slot 复用节奏和 server poller 的有效新请求密度，而不是 PET_HASH 查询本身，也不是旧 `READY` 状态未清除本身。修复多 logical `PetPSClient` 后，跨机吞吐已经恢复到接近本机水平，因此当前更准确的判断是：client 请求源密度和 OS process / logical client 的组织方式是关键调优面。
@@ -204,6 +229,26 @@ results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_repeat3_0603
 ```
 
 当前稳定吞吐应记为约 `35 M keys/s`；单次 `39.087 M keys/s` 可作为已观察到的高点，但不应作为 repeat baseline。
+
+如果目标是测当前上限，应使用 Release/O3 构建：
+
+```bash
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake --build build_release --target ps_transport_benchmark petps_server -j
+```
+
+并在 ssh runner 中加入：
+
+```text
+--build-dir build_release
+--remote-build-dir build_release
+```
+
+当前 Release/O3 单次高点为 `45.523 M keys/s`，结果目录为：
+
+```text
+results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_release_noprofile_0603
+```
 
 ## 文档状态
 

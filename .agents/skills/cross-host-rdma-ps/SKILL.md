@@ -60,6 +60,23 @@ ssh xieminhui@10.0.2.191 "docker exec recstore bash -lc 'pgrep -af \"petps_serve
 If residual benchmark processes exist, kill by exact PID when possible. Avoid
 `pkill -f` if it matches the current shell command.
 
+For throughput runs, prefer Release/O3 binaries:
+
+```bash
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake --build build_release --target ps_transport_benchmark petps_server -j
+```
+
+The ssh runner can select these binaries with:
+
+```text
+--build-dir build_release
+--remote-build-dir build_release
+```
+
+Use the default `build` directory only for debug bring-up or when comparing
+against historical Debug/O0 runs.
+
 ## Canonical Cross-Host RDMA GET Run
 
 Use this for the current cross-host PET_HASH profile baseline. It starts 4 OS
@@ -83,6 +100,8 @@ python3 tools/benchmarks/run_benchmark_ps.py \
   --execution-backend ssh \
   --remote-sync check \
   --remote-repo /app/RecStore \
+  --build-dir build_release \
+  --remote-build-dir build_release \
   --remote-container recstore \
   --prefetch-depth 16 \
   --rdma-rc-qps-per-client-per-shard 16 \
@@ -215,7 +234,8 @@ For the current p4/t3/q16/slots1 layout:
 - logical clients per process = `3`
 - total logical clients = `12`
 - total logical slots = `12 * 16 * 1 = 192`
-- expected cross-host PET_HASH throughput: about `39.1 M keys/s`
+- expected Debug/O0 cross-host PET_HASH throughput: about `39.1 M keys/s`
+- expected Release/O3 cross-host PET_HASH throughput: about `45.2-45.5 M keys/s`
 
 If `pending_rpc_peak` reaches the configured outstanding limit but server
 `scan_hit_pct` remains low, focus on request slot state visibility, slot
