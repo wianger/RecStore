@@ -43,6 +43,39 @@ bool AdapterProfileEnabled() {
   return value != nullptr && std::string(value) != "0";
 }
 
+void SetIntFlagFromEnv(const char* env_name, int32_t* flag_value) {
+  const char* value = std::getenv(env_name);
+  if (value == nullptr || *value == '\0') {
+    return;
+  }
+  char* end         = nullptr;
+  const long parsed = std::strtol(value, &end, 10);
+  if (end != value && *end == '\0') {
+    *flag_value = static_cast<int32_t>(parsed);
+  }
+}
+
+void ApplyRdmaFlagsFromEnv() {
+  if (const char* value = std::getenv("RECSTORE_RDMA_RC_NAMESPACE")) {
+    FLAGS_rdma_rc_namespace = value;
+  }
+  if (const char* value = std::getenv("RECSTORE_RDMA_CONTROL_PLANE_HOST")) {
+    FLAGS_rdma_control_plane_host = value;
+  }
+  SetIntFlagFromEnv(
+      "RECSTORE_RDMA_CONTROL_PLANE_PORT", &FLAGS_rdma_control_plane_port);
+  SetIntFlagFromEnv(
+      "RECSTORE_RDMA_WAIT_TIMEOUT_MS", &FLAGS_rdma_wait_timeout_ms);
+  SetIntFlagFromEnv("RECSTORE_RDMA_RC_QPS_PER_CLIENT_PER_SHARD",
+                    &FLAGS_rdma_rc_qps_per_client_per_shard);
+  SetIntFlagFromEnv(
+      "RECSTORE_RDMA_RC_SLOTS_PER_QP", &FLAGS_rdma_rc_slots_per_qp);
+  SetIntFlagFromEnv("RECSTORE_RDMA_RC_SERVER_COROUTINES_PER_THREAD",
+                    &FLAGS_rdma_rc_server_coroutines_per_thread);
+  SetIntFlagFromEnv(
+      "RECSTORE_RDMA_RC_SERVER_GET_WORKERS", &FLAGS_rdma_rc_server_get_workers);
+}
+
 std::int64_t NsSince(std::chrono::steady_clock::time_point start,
                      std::chrono::steady_clock::time_point end) {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
@@ -213,11 +246,10 @@ void RDMAPSClientAdapter::WaitShardRpcsCooperatively(
 void InitializeRdmaProcessRuntime() {
   static std::once_flag init_once;
   std::call_once(init_once, []() {
-    std::vector<std::string> argv_strings = ReadProcessArgv();
-    if (argv_strings.empty()) {
-      argv_strings.emplace_back("recstore_rdma_client");
-    }
-
+    // Python entrypoints pass application CLI flags that are not gflags.
+    // Passing them to folly::init makes gflags abort before the RDMA client can
+    // start.
+    std::vector<std::string> argv_strings = {"recstore_rdma_client"};
     std::vector<char*> argv_storage;
     argv_storage.reserve(argv_strings.size() + 1);
     for (auto& arg : argv_strings) {
@@ -228,6 +260,7 @@ void InitializeRdmaProcessRuntime() {
     int argc    = static_cast<int>(argv_strings.size());
     char** argv = argv_storage.data();
     folly::init(&argc, &argv);
+    ApplyRdmaFlagsFromEnv();
   });
 }
 
@@ -349,6 +382,33 @@ int64_t RDMAPSClientAdapter::DefaultEmbeddingDimOrThrow() const {
   return static_cast<int64_t>(tables_.begin()->second.config.embedding_dim);
 }
 
+std::size_t RDMAPSClientAdapter::MaxGetKeysPerRpc() const {
+  const std::size_t response_limited = petps::GetKeysPerRpcByResponseBudget(
+      static_cast<std::size_t>(FLAGS_value_size),
+      static_cast<std::size_t>(FLAGS_rdma_rc_mtu_bytes),
+      static_cast<std::size_t>(FLAGS_rdma_rc_target_response_mtu));
+  const std::size_t request_limited =
+      petps::PutPayloadBudget(
+          static_cast<std::size_t>(FLAGS_rdma_rc_request_slot_bytes)) /
+      sizeof(std::uint64_t);
+  std::size_t limit = static_cast<std::size_t>(FLAGS_max_kv_num_per_request);
+  if (response_limited > 0) {
+    limit = std::min(limit, response_limited);
+  }
+  if (request_limited > 0) {
+    limit = std::min(limit, request_limited);
+  }
+  return std::max<std::size_t>(limit, 1);
+}
+
+std::size_t RDMAPSClientAdapter::MaxInFlightGetRpcs() const {
+  const std::size_t qps = static_cast<std::size_t>(
+      std::max(FLAGS_rdma_rc_qps_per_client_per_shard, 1));
+  const std::size_t slots =
+      static_cast<std::size_t>(std::max(FLAGS_rdma_rc_slots_per_qp, 1));
+  return std::max<std::size_t>(qps * slots, 1);
+}
+
 RDMAPSClientAdapter::PrefetchState
 RDMAPSClientAdapter::GetPrefetchState(uint64_t prefetch_id) {
   std::lock_guard<std::mutex> guard(state_mu_);
@@ -371,7 +431,7 @@ void RDMAPSClientAdapter::MarkPrefetchConsumed(uint64_t prefetch_id) {
 }
 
 bool RDMAPSClientAdapter::QueryRPCFinished(int rpc_id) {
-  if (num_shards_ <= 1) {
+  if (rpc_id >= 0 && num_shards_ <= 1) {
     return client_ != nullptr ? client_->QueryRPCFinished(rpc_id) : true;
   }
 
@@ -390,7 +450,7 @@ bool RDMAPSClientAdapter::QueryRPCFinished(int rpc_id) {
 }
 
 void RDMAPSClientAdapter::WaitRPCFinish(int rpc_id) {
-  if (num_shards_ <= 1) {
+  if (rpc_id >= 0 && num_shards_ <= 1) {
     if (client_ != nullptr) {
       client_->WaitRPCFinish(rpc_id);
     }
@@ -419,7 +479,7 @@ void RDMAPSClientAdapter::WaitRPCFinish(int rpc_id) {
 }
 
 void RDMAPSClientAdapter::RevokeRPCResource(int rpc_id) {
-  if (num_shards_ <= 1) {
+  if (rpc_id >= 0 && num_shards_ <= 1) {
     if (client_ != nullptr) {
       client_->RevokeRPCResource(rpc_id);
     }
@@ -502,13 +562,6 @@ int RDMAPSClientAdapter::SubmitGetParameter(
     return 0;
   }
 
-  if (num_shards_ <= 1) {
-    if (client_ == nullptr) {
-      return -1;
-    }
-    return client_->GetParameter(keys, values, isAsync, async_req_id);
-  }
-
   BatchRequest batch;
   batch.user_buffer     = values;
   batch.total_key_count = keys.Size();
@@ -516,41 +569,100 @@ int RDMAPSClientAdapter::SubmitGetParameter(
       petps::FixedSlotStatusWord(values, keys.Size(), FLAGS_value_size);
   *batch_status_word = static_cast<std::int32_t>(petps::RpcStatus::kPending);
 
-  for (const auto& chunk : BuildChunks(keys)) {
-    BaseParameterClient* client = shard_clients_[chunk.client_index].get();
-    void* recv                  = client->GetReceiveBuffer(
-        chunk.keys.size() * static_cast<std::size_t>(FLAGS_value_size) +
-        sizeof(std::int32_t));
-    const int rpc_id = client->GetParameter(
-        base::ConstArray<uint64_t>(chunk.keys),
-        static_cast<float*>(recv),
-        isAsync,
-        async_req_id);
-    batch.shard_rpcs.push_back(PendingShardRpc{
-        chunk.shard_id,
-        chunk.client_index,
-        rpc_id,
-        chunk.positions,
-        recv,
-        chunk.keys.size(),
-    });
+  if (num_shards_ <= 1) {
+    if (client_ == nullptr) {
+      return -1;
+    }
+    const std::size_t max_keys_per_rpc = MaxGetKeysPerRpc();
+    const std::size_t max_in_flight    = MaxInFlightGetRpcs();
+    const std::size_t total_keys       = keys.Size();
+    if (total_keys <= max_keys_per_rpc) {
+      return client_->GetParameter(keys, values, isAsync, async_req_id);
+    }
+    std::vector<PendingShardRpc> window;
+    window.reserve(max_in_flight);
+    auto drain_and_release_window = [this, &window, &batch]() {
+      // Large model batches can split into more GET RPCs than the RC slot pool.
+      // Keep submission bounded by waiting and freeing each window before
+      // acquiring more slots.
+      for (const auto& pending : window) {
+        client_->WaitRPCFinish(pending.rpc_id);
+      }
+      for (const auto& pending : window) {
+        batch.shard_rpcs.push_back(pending);
+        client_->RevokeRPCResource(pending.rpc_id);
+      }
+      window.clear();
+    };
+    for (std::size_t offset = 0; offset < total_keys;
+         offset += max_keys_per_rpc) {
+      const std::size_t end = std::min(offset + max_keys_per_rpc, total_keys);
+      std::vector<uint64_t> key_slice;
+      key_slice.reserve(end - offset);
+      std::vector<std::size_t> positions;
+      positions.reserve(end - offset);
+      for (std::size_t i = offset; i < end; ++i) {
+        key_slice.push_back(keys[i]);
+        positions.push_back(i);
+      }
+      void* recv = client_->GetReceiveBuffer(
+          key_slice.size() * static_cast<std::size_t>(FLAGS_value_size) +
+          sizeof(std::int32_t));
+      const int rpc_id = client_->GetParameter(
+          base::ConstArray<uint64_t>(key_slice),
+          static_cast<float*>(recv),
+          isAsync,
+          async_req_id);
+      window.push_back(PendingShardRpc{
+          0,
+          0,
+          rpc_id,
+          std::move(positions),
+          recv,
+          key_slice.size(),
+      });
+      if (window.size() >= max_in_flight) {
+        drain_and_release_window();
+      }
+    }
+    if (!window.empty()) {
+      drain_and_release_window();
+    }
+  } else {
+    for (const auto& chunk : BuildChunks(keys)) {
+      BaseParameterClient* client = shard_clients_[chunk.client_index].get();
+      void* recv                  = client->GetReceiveBuffer(
+          chunk.keys.size() * static_cast<std::size_t>(FLAGS_value_size) +
+          sizeof(std::int32_t));
+      const int rpc_id = client->GetParameter(
+          base::ConstArray<uint64_t>(chunk.keys),
+          static_cast<float*>(recv),
+          isAsync,
+          async_req_id);
+      batch.shard_rpcs.push_back(PendingShardRpc{
+          chunk.shard_id,
+          chunk.client_index,
+          rpc_id,
+          chunk.positions,
+          recv,
+          chunk.keys.size(),
+      });
+    }
   }
 
-  std::uint64_t batch_id = 0;
+  int batch_id = 0;
   {
     std::lock_guard<std::mutex> guard(batches_mu_);
-    batch_id = batch_rpc_id_acc_++;
-    if (batch_id >
-        static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
-      throw std::runtime_error(
-          "rdma batch rpc id overflow int range: " + std::to_string(batch_id));
+    batch_id = batch_rpc_id_acc_--;
+    if (batch_id >= 0) {
+      throw std::runtime_error("rdma batch rpc id exhausted negative range");
     }
     batches_[batch_id] = std::move(batch);
   }
   if (!isAsync) {
-    WaitRPCFinish(static_cast<int>(batch_id));
+    WaitRPCFinish(batch_id);
   }
-  return static_cast<int>(batch_id);
+  return batch_id;
 }
 
 int RDMAPSClientAdapter::GetParameter(const base::ConstArray<uint64_t>& keys,
@@ -787,10 +899,12 @@ RDMAPSClientAdapter::PrefetchParameter(const base::ConstArray<uint64_t>& keys) {
   const int64_t embedding_dim = DefaultEmbeddingDimOrThrow();
   const std::size_t response_bytes =
       petps::FixedSlotResponseBytes(keys.Size(), FLAGS_value_size);
-  std::size_t buffer_id                   = 0;
-  const bool borrow_single_shard_response = num_shards_ <= 1;
-  float* buffer     = AcquirePrefetchBuffer(response_bytes, &buffer_id);
-  auto* status_word = petps::FixedSlotStatusWord(
+  std::size_t buffer_id = 0;
+  const bool borrow_single_shard_response =
+      num_shards_ <= 1 && keys.Size() <= MaxGetKeysPerRpc();
+  const bool batch_response = !borrow_single_shard_response;
+  float* buffer             = AcquirePrefetchBuffer(response_bytes, &buffer_id);
+  auto* status_word         = petps::FixedSlotStatusWord(
       buffer, static_cast<std::size_t>(keys.Size()), FLAGS_value_size);
   *status_word = static_cast<std::int32_t>(petps::RpcStatus::kPending);
 
@@ -813,6 +927,7 @@ RDMAPSClientAdapter::PrefetchParameter(const base::ConstArray<uint64_t>& keys) {
           static_cast<int64_t>(keys.Size()),
           embedding_dim,
           borrow_single_shard_response,
+          batch_response,
       });
   return prefetch_id;
 }

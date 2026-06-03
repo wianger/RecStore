@@ -300,7 +300,7 @@ def build_runtime_config(
     cfg["client"]["shard"] = 0
 
     cfg.setdefault("distributed_client", {})
-    if cfg["cache_ps"]["ps_type"] == "LOCAL_SHM":
+    if cfg["cache_ps"]["ps_type"] in {"LOCAL_SHM", "RDMA"}:
         servers = [{"host": host, "port": port0, "shard": 0}]
     else:
         servers = [
@@ -387,6 +387,72 @@ def start_server(repo_root: Path, cfg_path: Path, log_path: Path) -> subprocess.
     return proc
 
 
+def start_rdma_server_cluster(
+    repo_root: Path,
+    cfg_path: Path,
+    log_path: Path,
+    *,
+    thread_num: int = 1,
+    value_size: int = 512,
+    max_kv_num_per_request: int = 512,
+    timeout_s: float = 60.0,
+):
+    scripts_dir = repo_root / "src/test/scripts"
+    import_path = str(scripts_dir)
+    import sys
+
+    if import_path not in sys.path:
+        sys.path.insert(0, import_path)
+    from petps_cluster_runner import PetPSClusterRunner  # type: ignore
+
+    with cfg_path.open("r", encoding="utf-8") as f:
+        runtime_cfg = json.load(f)
+    distributed_cfg = runtime_cfg.get("distributed_client", {})
+    cache_ps_cfg = runtime_cfg.get("cache_ps", {})
+    server_count = int(
+        distributed_cfg.get("num_shards")
+        or cache_ps_cfg.get("num_shards")
+        or len(distributed_cfg.get("servers", []))
+        or len(cache_ps_cfg.get("servers", []))
+        or 1
+    )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    runner = PetPSClusterRunner(
+        server_path=str(repo_root / "build/bin/petps_server"),
+        config_path=str(cfg_path),
+        num_servers=server_count,
+        num_clients=1,
+        thread_num=int(thread_num),
+        value_size=int(value_size),
+        max_kv_num_per_request=int(max_kv_num_per_request),
+        timeout=max(1, int(timeout_s)),
+        log_dir=str(log_path.parent),
+        verbose=True,
+        show_status_logs=True,
+        show_control_plane_logs=True,
+        rdma_namespace=f"rs-demo-{cfg_path.parent.name}",
+        rdma_wait_timeout_ms=20000,
+        rdma_qps_per_client_per_shard=32,
+        rdma_slots_per_qp=1,
+        rdma_server_coroutines_per_thread=1,
+        rdma_server_get_workers=0,
+        rdma_profile_interval_ms=1000,
+    )
+    with log_path.open("w", encoding="utf-8") as f:
+        f.write(
+            "petps_server cluster\n"
+            f"config_path={cfg_path}\n"
+            f"server_count={server_count}\n"
+            f"value_size={value_size}\n"
+            f"max_kv_num_per_request={max_kv_num_per_request}\n"
+            f"rdma_namespace={runner.rdma_namespace}\n"
+            f"rdma_control_plane={runner.rdma_control_plane_host}:{runner.rdma_control_plane_port}\n"
+        )
+    runner._rs_demo_log_path = log_path  # type: ignore[attr-defined]
+    runner.start()
+    return runner
+
+
 def stop_server(proc: subprocess.Popen | None) -> None:
     if proc is None:
         return
@@ -403,6 +469,28 @@ def stop_server(proc: subprocess.Popen | None) -> None:
     log_f = getattr(proc, "_rs_demo_log_file", None)
     if log_f is not None:
         log_f.close()
+
+
+def stop_rdma_server_cluster(runner) -> None:
+    if runner is None:
+        return
+    log_path = getattr(runner, "_rs_demo_log_path", None)
+    process_logs = {
+        global_id: list(lines)
+        for global_id, lines in getattr(runner, "process_logs", {}).items()
+    }
+    try:
+        runner.stop()
+    finally:
+        if log_path is not None:
+            with Path(log_path).open("a", encoding="utf-8") as f:
+                f.write("\npetps_server captured output\n")
+                if not process_logs:
+                    f.write("(no captured petps_server output)\n")
+                for global_id, lines in sorted(process_logs.items()):
+                    f.write(f"\n[petps_server:{global_id}]\n")
+                    for line in lines:
+                        f.write(f"{line}\n")
 
 
 def make_runtime_dir(

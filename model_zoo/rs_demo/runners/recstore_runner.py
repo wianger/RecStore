@@ -697,6 +697,8 @@ class RecStoreRunner(BenchmarkRunner):
                 _append_worker_debug(cfg, rank, f"worker_fingerprint {fingerprint}")
             raw_client = RecstoreClient(library_path=str(library_path))
             client = ShardedRecstoreClient(raw_client, self.runtime_dir)
+            if cfg.ps_type.upper() == "RDMA":
+                client.set_ps_backend("rdma")
             if cfg.enable_single_node_distributed_fast_path:
                 client.set_ps_backend(cfg.single_node_ps_backend)
                 client.activate_shard(rank)

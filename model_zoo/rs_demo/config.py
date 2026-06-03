@@ -227,7 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--ps-type",
         type=str,
         default="BRPC",
-        choices=["BRPC", "GRPC", "LOCAL_SHM"],
+        choices=["BRPC", "GRPC", "LOCAL_SHM", "RDMA"],
     )
     parser.add_argument(
         "--recstore-index-type",
