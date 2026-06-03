@@ -81,6 +81,31 @@ node190 容器内有 3 个 verbs device：
 | 跨机 p4/t3/q16/depth16, 多 logical client | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_0603` | 39.087 M keys/s |
 | 跨机 p3/t4/q16/depth16, 多 logical client | `results/benchmark_ps_cross_host_rdma_p3t4_q16_d16_0603` | 35.733 M keys/s |
 | 跨机 p4/t4/q16/depth16, 多 logical client | `results/benchmark_ps_cross_host_rdma_p4t4_q16_d16_0603` | 38.861 M keys/s |
+| 跨机 p4/t3/q16/depth16 repeat3, 多 logical client | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_repeat3_0603` | mean 34.750 M keys/s |
+| 本机 p4/t3/q16/depth16 repeat3, 多 logical client | `results/benchmark_ps_local_rdma_p4t3_q16_d16_repeat3_0603` | mean 30.683 M keys/s |
+| 跨机 send_doorbell request discovery 实验 | `results/rdma_ps_cross_send_p6_t16_q16_d16_0603` | 16.627 M keys/s |
+
+## 稳定性结果
+
+`p4/t3/q16/depth16` 是当前最有价值的跨机 baseline，但单次
+`39.087 M keys/s` 更像偏高峰值。repeat3 后更可信的稳定吞吐约为
+`35 M keys/s`。
+
+| 环境 | 结果目录 | repeat totals | mean | stdev | cv |
+|-|-|-|-:|-:|-:|
+| 跨机 node190/node191 | `results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_repeat3_0603` | 37.130 / 32.024 / 35.096 M keys/s | 34.750 M keys/s | 2.099 | 6.04% |
+| 本机 local | `results/benchmark_ps_local_rdma_p4t3_q16_d16_repeat3_0603` | 28.061 / 30.457 / 33.531 M keys/s | 30.683 M keys/s | 2.239 | 7.30% |
+
+本机同配置低于跨机同配置，因此它不是一个更干净的上限对照。更可能的解释是
+local 模式把 server/client 都放在 node190 上，CPU、cache、NUMA 或 RNIC
+资源竞争更重；跨机模式把 client CPU 压力放到 node191，反而更接近实际部署。
+
+稳定性 profile 对比：
+
+| 环境 | client submit_avg_ns | client wait_status_avg_ns | server handle_get_avg_ns | 说明 |
+|-|-:|-:|-:|-|
+| 跨机 repeat3 | 约 3.3-3.6 us | 约 121-153 us | 约 203-242 us | submit 稳定，波动主要来自 wait/status 和 server GET |
+| 本机 repeat3 | 约 4.7-5.8 us | 约 132-170 us | 约 222-277 us | submit 和 server GET 都比跨机更慢 |
 
 ## Profile 对比
 
@@ -128,7 +153,11 @@ node190 容器内有 3 个 verbs device：
 
 14. 继续增大 q/depth 并不稳定。`p6/t2/q18` 降到 `22.638 M keys/s`，`p6/t2/q20` 为 `25.311 M keys/s`；这些配置的 lane 数不能被 16 个 server poll thread 均匀分配，profile 中 poller work distribution 明显不均，说明简单加深度会被扫描面和映射不均反噬。
 
-15. 当前最优跨机配置是 `p4/t3/q16/depth16`，达到 `39.087 M keys/s`，已经接近本机 `41.534 M keys/s` 的基线。对比 `p6/t2/q16` 的 `31.639 M keys/s` 和 `p8/t2/q16` 的 `31.270 M keys/s`，更少 OS process、每进程承载 3 个 logical client 的请求闭环更稳；`p3/t4/q16` 降到 `35.733 M keys/s`，`p4/t4/q16` 为 `38.861 M keys/s`，说明每进程 3 个 logical client 是当前更好的甜点。
+15. 当前最优跨机单次配置是 `p4/t3/q16/depth16`，最高达到 `39.087 M keys/s`。repeat3 后均值为 `34.750 M keys/s`，更适合作为当前稳定 baseline。对比 `p6/t2/q16` 的 `31.639 M keys/s` 和 `p8/t2/q16` 的 `31.270 M keys/s`，更少 OS process、每进程承载 3 个 logical client 的请求闭环更稳；`p3/t4/q16` 降到 `35.733 M keys/s`，`p4/t4/q16` 为 `38.861 M keys/s`，说明每进程 3 个 logical client 是当前更好的甜点。
+
+16. 本机同配置 `p4/t3/q16/depth16 repeat3` 的均值只有 `30.683 M keys/s`，低于跨机同配置的 `34.750 M keys/s`。因此后续不应把该 local 对照当成上限；它更像是同机资源竞争更重的 lane observation。
+
+17. `send_doorbell` 最小实验把 request discovery 改成 completion-driven，消除了 blind scan 旧 seq，但跨机 full GET 仍约 `16.627 M keys/s`。因此 server request discovery 低命中率更像症状，不是单独根因；短期不建议继续优先投入完整 SRQ/SEND descriptor 协议。
 
 ## 当前最可能的瓶颈方向
 
@@ -171,8 +200,26 @@ rdma_rc_server_get_workers = 0
 该配置对应结果目录：
 
 ```text
-results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_0603
+results/benchmark_ps_cross_host_rdma_p4t3_q16_d16_repeat3_0603
 ```
+
+当前稳定吞吐应记为约 `35 M keys/s`；单次 `39.087 M keys/s` 可作为已观察到的高点，但不应作为 repeat baseline。
+
+## 文档状态
+
+当前保留的主要资料：
+
+- `cross_host_rdma_benchmark_diagnosis_0602.md`：本文件，作为跨机 RDMA PS 诊断和结论的主记录。
+- `.agents/skills/cross-host-rdma-ps/SKILL.md`：当前跨机 benchmark 执行方式和推荐 baseline。
+- `ps_rdma_benchmark_report_0531.md`：较早的本机 RDMA benchmark 历史记录。
+
+已删除的临时计划/草稿文档，其结论已合并到本文件：
+
+- `rdma_multi_pet_client_plan.md`
+- `rdma_protocol_redesign_plan.md`
+- `rdma_send_doorbell_experiment_report_0603.md`
+- `rdma_slot_ring_protocol_plan.md`
+- `todo.md`
 
 ## 复现命令示例
 
