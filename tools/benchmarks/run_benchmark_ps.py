@@ -1200,13 +1200,23 @@ def run_client_process_group(
     return results
 
 
-def build_rpc_server_cmd(server_binary: str, config_path: str, shard: int) -> list[str]:
-    return [
+def build_rpc_server_cmd(
+    server_binary: str,
+    transport: str,
+    config_path: str,
+    shard: int,
+    port: int,
+) -> list[str]:
+    cmd = [
         server_binary,
         f"--config_path={config_path}",
+        f"--brpc_config_path={config_path}",
         f"--grpc_local_shard_id={shard}",
         f"--local_shard_id={shard}",
     ]
+    if transport == "BRPC":
+        cmd.append(f"--brpc_server_port={port}")
+    return cmd
 
 
 def build_rdma_runner(
@@ -1737,7 +1747,11 @@ def run_remote_case(
                         args.remote_repo,
                         args.remote_container,
                         build_rpc_server_cmd(
-                            remote_server_binary, remote_config_path, server.shard
+                            remote_server_binary,
+                            transport,
+                            remote_config_path,
+                            server.shard,
+                            server.port,
                         ),
                         remote_log_path,
                     ),

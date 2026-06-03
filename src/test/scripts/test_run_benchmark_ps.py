@@ -15,6 +15,7 @@ from run_benchmark_ps import (  # noqa: E402
     build_benchmark_cmd,
     build_rdma_runner,
     build_remote_exec_cmd,
+    build_rpc_server_cmd,
     build_runtime_config,
     build_topology_plan,
     collect_ps_result_rows,
@@ -273,6 +274,31 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--prefetch_depth=4", cmd)
         self.assertIn("--rdma_adapter_skip_prefetch_result_copy=true", cmd)
         self.assertIn("--rdma_get_response_mode=staging_copy", cmd)
+
+    def test_build_rpc_server_cmd_passes_brpc_config_and_port(self):
+        cmd = build_rpc_server_cmd(
+            "/tmp/ps_server",
+            "BRPC",
+            "/tmp/config.json",
+            shard=3,
+            port=25000,
+        )
+        self.assertIn("--config_path=/tmp/config.json", cmd)
+        self.assertIn("--brpc_config_path=/tmp/config.json", cmd)
+        self.assertIn("--local_shard_id=3", cmd)
+        self.assertIn("--brpc_server_port=25000", cmd)
+
+    def test_build_rpc_server_cmd_leaves_grpc_single_shard_default_port(self):
+        cmd = build_rpc_server_cmd(
+            "/tmp/ps_server",
+            "GRPC",
+            "/tmp/config.json",
+            shard=0,
+            port=25000,
+        )
+        self.assertIn("--config_path=/tmp/config.json", cmd)
+        self.assertIn("--grpc_local_shard_id=0", cmd)
+        self.assertNotIn("--brpc_server_port=25000", cmd)
 
     def test_parse_args_rejects_rdma_prefetch_depth_above_slot_capacity(self):
         argv = [
