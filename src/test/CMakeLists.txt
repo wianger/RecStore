@@ -382,7 +382,7 @@ add_test(NAME test_op_runtime_support COMMAND test_op_runtime_support)
 add_executable(test_op test_op.cpp)
 target_sources(test_op PRIVATE
     ${PROJECT_SOURCE_DIR}/src/framework/op.cc
-    ${PROJECT_SOURCE_DIR}/src/framework/op_local_shm.cc
+    ${PROJECT_SOURCE_DIR}/src/framework/common/local_shm_kv_client_op.cc
     ${PROJECT_SOURCE_DIR}/src/framework/common/hierkv_local_runtime.cc
     ${PROJECT_SOURCE_DIR}/src/framework/common/local_shm_op_component.cc
     ${PROJECT_SOURCE_DIR}/src/framework/common/op_runtime_support.cc
@@ -530,7 +530,7 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER AND
         ${PROJECT_SOURCE_DIR}/src/framework/hugectr/op_hugectr.cc
         ${PROJECT_SOURCE_DIR}/src/framework/hugectr/hierkv_backend.cc
         ${PROJECT_SOURCE_DIR}/src/framework/op.cc
-        ${PROJECT_SOURCE_DIR}/src/framework/op_local_shm.cc
+        ${PROJECT_SOURCE_DIR}/src/framework/common/local_shm_kv_client_op.cc
         ${PROJECT_SOURCE_DIR}/src/framework/common/hierkv_local_runtime.cc
         ${PROJECT_SOURCE_DIR}/src/framework/common/local_shm_op_component.cc
         ${PROJECT_SOURCE_DIR}/src/framework/common/op_runtime_support.cc

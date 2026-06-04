@@ -35,7 +35,7 @@ set(TENSORFLOW_LIBRARIES
 add_library(recstore_tf_ops SHARED
     op_tensorflow.cc
     ../op.cc
-    ../op_local_shm.cc
+    ../common/local_shm_kv_client_op.cc
     ../common/hierkv_local_runtime.cc
     ../common/op_runtime_support.cc
     ../common/local_shm_op_component.cc
