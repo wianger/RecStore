@@ -9,7 +9,7 @@ from pathlib import Path
 
 class TestBenchmarkE2E(unittest.TestCase):
     def test_parse_specs_and_infer_topology(self) -> None:
-        from tools.benchmarks.run_benchmark_e2e import (
+        from tools.benchmarks.e2e.custom import (
             BenchmarkConfig,
             infer_client_deployment,
             infer_ps_deployment,
@@ -32,7 +32,7 @@ class TestBenchmarkE2E(unittest.TestCase):
         self.assertEqual(infer_ps_deployment(cfg.servers), "single-ps")
 
     def test_runtime_config_uses_requested_transport_and_shards(self) -> None:
-        from tools.benchmarks.run_benchmark_e2e import (
+        from tools.benchmarks.e2e.custom import (
             BenchmarkConfig,
             ClientSpec,
             ServerSpec,
@@ -63,7 +63,7 @@ class TestBenchmarkE2E(unittest.TestCase):
         )
 
     def test_build_client_command_has_transport_and_no_rdma(self) -> None:
-        from tools.benchmarks.run_benchmark_e2e import (
+        from tools.benchmarks.e2e.custom import (
             BenchmarkConfig,
             ClientSpec,
             ServerSpec,
@@ -94,7 +94,7 @@ class TestBenchmarkE2E(unittest.TestCase):
         self.assertIn("10.0.2.190", cmd)
 
     def test_build_torchrec_command_uses_same_workload(self) -> None:
-        from tools.benchmarks.run_benchmark_e2e import (
+        from tools.benchmarks.e2e.custom import (
             BenchmarkConfig,
             ClientSpec,
             ServerSpec,
@@ -129,7 +129,7 @@ class TestBenchmarkE2E(unittest.TestCase):
         self.assertNotIn("--ps-type", cmd)
 
     def test_collect_summary_and_render_chinese_report(self) -> None:
-        from tools.benchmarks.run_benchmark_e2e import (
+        from tools.benchmarks.e2e.custom import (
             BenchmarkConfig,
             ClientSpec,
             ServerSpec,
@@ -203,7 +203,7 @@ class TestBenchmarkE2E(unittest.TestCase):
         self.assertIn("## E2E 延迟分解", report)
 
     def test_dry_run_writes_configs_commands_and_report(self) -> None:
-        from tools.benchmarks.run_benchmark_e2e import main
+        from tools.benchmarks.e2e.custom import main
 
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "e2e"
@@ -236,6 +236,12 @@ class TestBenchmarkE2E(unittest.TestCase):
         self.assertEqual(brpc_cfg["cache_ps"]["ps_type"], "BRPC")
         self.assertEqual(grpc_cfg["cache_ps"]["ps_type"], "GRPC")
         self.assertIn("--backend torchrec", commands)
+
+    def test_top_level_package_only_exposes_new_e2e_entrypoint(self) -> None:
+        import tools.benchmarks as benchmarks
+
+        self.assertTrue(hasattr(benchmarks, "run_bench_e2e"))
+        self.assertFalse(hasattr(benchmarks, "run_benchmark_e2e"))
 
 
 if __name__ == "__main__":
