@@ -39,13 +39,13 @@ graph TD
 {
   "engine_type": "KVEngineComposite",
   "capacity": 1000000,
-  "index": { "type": "DRAM_EXTENDIBLE_HASH" },
+  "index": { "type": "DRAM_PET_HASH" },
   "value": {
     "type": "DRAM_VALUE_STORE",
     "default_value_size_hint": 512,
-    "path": "/dev/shm/recstore_data/value",
+    "path": "/dev/shm/recstore_kv/value",
     "dram_allocator": {
-      "type": "PERSIST_LOOP_SLAB",
+      "type": "CONCURRENT_SLAB_MEMORY_POOL",
       "capacity_bytes": 512000000
     }
   }
@@ -140,7 +140,7 @@ SSD 索引创建 `IOBackend` 前的配置映射：
 
 ## DRAM Allocator（`value.dram_allocator.type`）
 
-`Factory<MallocApi, const std::string&, int64, const std::string&>`；`DramValueStore` 默认类型 **`R2_SLAB`**。
+`Factory<MallocApi, const std::string&, int64, const std::string&>`。仓库默认配置使用 **`CONCURRENT_SLAB_MEMORY_POOL`**；若省略 `dram_allocator.type`，`DramValueStore` 在代码中会回退到 **`R2_SLAB`**。
 
 | `type` | 实现 | 别名 |
 |--------|------|------|
@@ -168,18 +168,19 @@ SSD 索引创建 `IOBackend` 前的配置映射：
 
 ## 配置样例
 
-**DRAM + DRAM**
+**DRAM + DRAM（仓库默认组合）**
 
 ```json
 {
+  "engine_type": "KVEngineComposite",
   "capacity": 1000000,
-  "index": { "type": "DRAM_EXTENDIBLE_HASH" },
+  "index": { "type": "DRAM_PET_HASH" },
   "value": {
     "type": "DRAM_VALUE_STORE",
     "default_value_size_hint": 512,
-    "path": "/dev/shm/recstore_data/value",
+    "path": "/dev/shm/recstore_kv/value",
     "dram_allocator": {
-      "type": "PERSIST_LOOP_SLAB",
+      "type": "CONCURRENT_SLAB_MEMORY_POOL",
       "capacity_bytes": 512000000
     }
   }
