@@ -1074,6 +1074,22 @@ TEST_P(KVEngineExternalEngineTest, BatchGet) {
   }
 }
 
+TEST_P(KVEngineExternalEngineTest, BatchGetFlatUnsupported) {
+  std::vector<uint64_t> keys = {1, 2};
+  for (uint64_t key : keys) {
+    kv_engine_->Put(
+        key, CreateFixedLengthValue("flat_" + std::to_string(key)), 0);
+  }
+
+  std::vector<float> flat_values(keys.size() * 32);
+  EXPECT_FALSE(kv_engine_->BatchGetFlat(
+      base::ConstArray<uint64_t>(keys.data(), keys.size()),
+      flat_values.data(),
+      static_cast<int64_t>(keys.size()),
+      32,
+      0));
+}
+
 TEST_P(KVEngineExternalEngineTest, BulkLoadThenGetAndBatchGet) {
   const int num_keys = 50;
   std::vector<uint64_t> keys(num_keys);
