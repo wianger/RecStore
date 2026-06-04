@@ -11,7 +11,7 @@ RECSTORE_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 if RECSTORE_PATH not in sys.path:
     sys.path.insert(0, RECSTORE_PATH)
 
-from recstore_config_path import find_recstore_config_path
+from tools.config.recstore_config_path import find_recstore_config_path
 
 def get_env_config() -> Dict[str, Any]:
     """Retrieves environment configuration including device count, storage type, etc."""

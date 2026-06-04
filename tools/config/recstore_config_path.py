@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 
-DEFAULT_RECSTORE_CONFIG_PATH = Path(__file__).resolve().parent / "recstore_config.json"
+DEFAULT_RECSTORE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "recstore_config.json"
 RECSTORE_CONFIG_FILENAME = "recstore_config.json"
 
 

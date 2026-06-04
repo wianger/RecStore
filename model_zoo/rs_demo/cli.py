@@ -35,7 +35,7 @@ from .runtime.server import (
     stop_server,
     wait_server_ready,
 )
-from recstore_config_path import resolve_recstore_config_path
+from tools.config.recstore_config_path import resolve_recstore_config_path
 
 
 def repo_root_from_this_file() -> Path:

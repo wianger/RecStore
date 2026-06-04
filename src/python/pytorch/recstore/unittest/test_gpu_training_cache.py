@@ -14,7 +14,7 @@ from model_zoo.rs_demo.runners.recstore_runner import (
 )
 from model_zoo.rs_demo.data.dlrm_source import build_sparse_features
 from model_zoo.rs_demo.runtime.recstore_distributed import ShardedRecstoreClient
-from recstore_config_path import resolve_recstore_config_path
+from tools.config.recstore_config_path import resolve_recstore_config_path
 from ..KVClient import RecStoreClient
 
 
