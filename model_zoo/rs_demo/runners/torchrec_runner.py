@@ -255,6 +255,14 @@ def _is_fair_remote_mode(cfg: RunConfig, world_size: int) -> bool:
     return cfg.torchrec_dist_mode == "fair_remote" and world_size > 1
 
 
+def _sync_for_timing(torch, device, cfg: RunConfig, boundary: str) -> None:
+    mode = cfg.torchrec_timing_sync_mode
+    if mode == "stage":
+        sync_device(torch, device)
+    elif mode == "step" and boundary == "step":
+        sync_device(torch, device)
+
+
 def _build_uvm_caching_constraints(
     table_names: list[str],
     parameter_constraints_cls,
@@ -522,9 +530,11 @@ def _run_single_or_dist_worker(
                 "dist_mode": "multi_node" if cfg.nnodes > 1 else "single_node",
                 "torchrec_dist_mode": cfg.torchrec_dist_mode,
                 "torchrec_memory_mode": cfg.torchrec_memory_mode,
+                "torchrec_timing_sync_mode": cfg.torchrec_timing_sync_mode,
                 "torchrec_role": "trainer" if is_trainer_rank else "embedding_worker",
                 "torchrec_is_trainer": _bool_int(is_trainer_rank),
             }
+            _sync_for_timing(torch, device, cfg, "step")
             step_start = time.perf_counter()
 
             with stage_timer(row, "batch_prepare_ms"):
@@ -544,15 +554,15 @@ def _run_single_or_dist_worker(
                     labels_batch,
                 )
                 sparse_features = sparse_features.to(device)
-                sync_device(torch, device)
+                _sync_for_timing(torch, device, cfg, "stage")
             _append_worker_debug(cfg, rank, f"after_input_pack step={step}")
 
             _append_worker_debug(cfg, rank, f"before_embedding step={step}")
             collective_start = time.perf_counter()
             with stage_timer(row, "embed_lookup_local_ms"):
-                sync_device(torch, device)
+                _sync_for_timing(torch, device, cfg, "stage")
                 embeddings = embedding_module(sparse_features)
-                sync_device(torch, device)
+                _sync_for_timing(torch, device, cfg, "stage")
             collective_elapsed_ms = (time.perf_counter() - collective_start) * 1e3
             _append_worker_debug(cfg, rank, f"after_embedding step={step}")
 
@@ -563,7 +573,7 @@ def _run_single_or_dist_worker(
                     feature_names=DEFAULT_CAT_NAMES,
                     torch=torch,
                 )
-                sync_device(torch, device)
+                _sync_for_timing(torch, device, cfg, "stage")
             _append_worker_debug(cfg, rank, f"after_pool step={step}")
 
             if use_dist:
@@ -588,10 +598,10 @@ def _run_single_or_dist_worker(
             if is_trainer_rank:
                 _append_worker_debug(cfg, rank, f"before_dense_fwd step={step}")
                 with stage_timer(row, "dense_fwd_ms"):
-                    sync_device(torch, device)
+                    _sync_for_timing(torch, device, cfg, "stage")
                     logits = dense_module(dense_features, embedded_sparse)
                     loss = criterion(logits, labels)
-                    sync_device(torch, device)
+                    _sync_for_timing(torch, device, cfg, "stage")
                 _append_worker_debug(cfg, rank, f"after_dense_fwd step={step}")
 
                 _append_worker_debug(cfg, rank, f"before_backward step={step}")
@@ -607,10 +617,10 @@ def _run_single_or_dist_worker(
 
                 _append_worker_debug(cfg, rank, f"before_optimizer step={step}")
                 with stage_timer(row, "optimizer_ms"):
-                    sync_device(torch, device)
+                    _sync_for_timing(torch, device, cfg, "stage")
                     dense_optimizer.step()
                     dense_optimizer.zero_grad(set_to_none=True)
-                    sync_device(torch, device)
+                    _sync_for_timing(torch, device, cfg, "stage")
                 _append_worker_debug(cfg, rank, f"after_optimizer step={step}")
             else:
                 row["dense_fwd_ms"] = 0.0
@@ -622,7 +632,7 @@ def _run_single_or_dist_worker(
 
             with stage_timer(row, "sparse_update_ms"):
                 _append_worker_debug(cfg, rank, f"before_sparse_update step={step}")
-                sync_device(torch, device)
+                _sync_for_timing(torch, device, cfg, "stage")
                 if fair_remote_mode and use_dist:
                     dist.broadcast(
                         embedded_sparse_grad,
@@ -633,12 +643,13 @@ def _run_single_or_dist_worker(
                 )
                 sparse_optimizer.step()
                 sparse_optimizer.zero_grad(set_to_none=True)
-                sync_device(torch, device)
+                _sync_for_timing(torch, device, cfg, "stage")
                 _append_worker_debug(cfg, rank, f"after_sparse_update step={step}")
 
             if profiler is not None:
                 profiler.step()
 
+            _sync_for_timing(torch, device, cfg, "step")
             row["step_total_ms"] = (time.perf_counter() - step_start) * 1e3
             rows.append(finalize_torchrec_row(row))
             _append_worker_debug(cfg, rank, f"before_step_barrier step={step}")
@@ -743,6 +754,8 @@ class TorchRecRunner(BenchmarkRunner):
             str(cfg.torchrec_dist_mode),
             "--torchrec-memory-mode",
             str(cfg.torchrec_memory_mode),
+            "--torchrec-timing-sync-mode",
+            str(cfg.torchrec_timing_sync_mode),
             "--no-start-server",
         ]
         if cfg.num_embeddings_per_feature:
