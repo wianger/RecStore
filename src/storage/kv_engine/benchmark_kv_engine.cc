@@ -6,7 +6,9 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <exception>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -412,57 +414,75 @@ PhaseStats RunTransactions(
   std::atomic<bool> stop{false};
   std::vector<std::thread> threads;
   std::vector<PhaseStats> stats(threads_num);
+  std::exception_ptr first_exception;
+  std::mutex exception_mu;
 
   for (int tid = 0; tid < threads_num; ++tid) {
     threads.emplace_back([&, tid]() {
-      base::auto_bind_core();
-      KeyGenerator key_gen(
-          distribution,
-          record_count,
-          FLAGS_zipfian_alpha,
-          0x9e3779b97f4a7c15ULL + static_cast<uint64_t>(tid));
-      std::string value(FLAGS_value_size, static_cast<char>('A' + (tid % 26)));
-      std::string read_value;
-      std::vector<uint64_t> batch_keys(static_cast<size_t>(FLAGS_batch_keys));
-      std::vector<float> flat_values(static_cast<size_t>(FLAGS_batch_keys) *
-                                     static_cast<size_t>(embedding_dim));
-      PhaseStats local;
-      while (!start.load(std::memory_order_acquire)) {
-      }
-      while (!stop.load(std::memory_order_relaxed)) {
-        const bool do_read =
-            static_cast<int>(key_gen.NextUint(100)) < mix.read_percent;
-        if (do_read) {
-          if (use_batch_get_flat) {
-            for (int i = 0; i < FLAGS_batch_keys; ++i) {
-              batch_keys[static_cast<size_t>(i)] = key_gen.NextKey();
-            }
-            (void)kv->BatchGetFlat(
-                base::ConstArray<uint64_t>(
-                    batch_keys.data(), batch_keys.size()),
-                flat_values.data(),
-                FLAGS_batch_keys,
-                embedding_dim,
-                tid);
-            local.read_ops += static_cast<uint64_t>(FLAGS_batch_keys);
-            local.total_ops += static_cast<uint64_t>(FLAGS_batch_keys);
-            continue;
-          }
-          const uint64_t key = key_gen.NextKey();
-          if (use_exists) {
-            (void)kv->Exists(key, tid);
-          } else {
-            kv->Get(key, read_value, tid);
-          }
-          ++local.read_ops;
-        } else {
-          const uint64_t key = key_gen.NextKey();
-          kv->Put(key, std::string_view(value.data(), value.size()), tid);
-          ++local.update_ops;
+      try {
+        base::auto_bind_core();
+        KeyGenerator key_gen(
+            distribution,
+            record_count,
+            FLAGS_zipfian_alpha,
+            0x9e3779b97f4a7c15ULL + static_cast<uint64_t>(tid));
+        std::string value(
+            FLAGS_value_size, static_cast<char>('A' + (tid % 26)));
+        std::string read_value;
+        std::vector<uint64_t> batch_keys(static_cast<size_t>(FLAGS_batch_keys));
+        std::vector<float> flat_values(static_cast<size_t>(FLAGS_batch_keys) *
+                                       static_cast<size_t>(embedding_dim));
+        PhaseStats local;
+        while (!start.load(std::memory_order_acquire)) {
         }
-        ++local.total_ops;
+        while (!stop.load(std::memory_order_relaxed)) {
+          const bool do_read =
+              static_cast<int>(key_gen.NextUint(100)) < mix.read_percent;
+          if (do_read) {
+            if (use_batch_get_flat) {
+              for (int i = 0; i < FLAGS_batch_keys; ++i) {
+                batch_keys[static_cast<size_t>(i)] = key_gen.NextKey();
+              }
+              const bool ok = kv->BatchGetFlat(
+                  base::ConstArray<uint64_t>(
+                      batch_keys.data(), batch_keys.size()),
+                  flat_values.data(),
+                  FLAGS_batch_keys,
+                  embedding_dim,
+                  tid);
+              if (!ok) {
+                throw std::runtime_error(
+                    "read_mode=batch_get_flat is unsupported by this KV "
+                    "engine");
+              }
+              local.read_ops += static_cast<uint64_t>(FLAGS_batch_keys);
+              local.total_ops += static_cast<uint64_t>(FLAGS_batch_keys);
+              continue;
+            }
+            const uint64_t key = key_gen.NextKey();
+            if (use_exists) {
+              (void)kv->Exists(key, tid);
+            } else {
+              kv->Get(key, read_value, tid);
+            }
+            ++local.read_ops;
+          } else {
+            const uint64_t key = key_gen.NextKey();
+            kv->Put(key, std::string_view(value.data(), value.size()), tid);
+            ++local.update_ops;
+          }
+          ++local.total_ops;
+        }
+        stats[tid] = local;
+      } catch (...) {
+        {
+          std::lock_guard<std::mutex> lock(exception_mu);
+          if (!first_exception) {
+            first_exception = std::current_exception();
+          }
+        }
+        stop.store(true, std::memory_order_relaxed);
       }
-      stats[tid] = local;
     });
   }
 
@@ -471,6 +491,9 @@ PhaseStats RunTransactions(
   stop.store(true, std::memory_order_relaxed);
   for (auto& thread : threads) {
     thread.join();
+  }
+  if (first_exception) {
+    std::rethrow_exception(first_exception);
   }
 
   PhaseStats total;
@@ -490,7 +513,7 @@ double SecondsSince(std::chrono::steady_clock::time_point start,
 
 } // namespace
 
-int main(int argc, char* argv[]) {
+int RunBenchmark(int argc, char* argv[]) {
   ForceLinkIOBackends();
   base::Init(&argc, &argv);
 
@@ -605,4 +628,13 @@ int main(int argc, char* argv[]) {
 
   LOG(INFO) << "gracefully exit";
   return 0;
+}
+
+int main(int argc, char* argv[]) {
+  try {
+    return RunBenchmark(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "ERROR benchmark_kv_engine: %s\n", e.what());
+    return 1;
+  }
 }

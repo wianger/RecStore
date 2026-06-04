@@ -59,6 +59,25 @@ TEST(FasterKVBackendTest, InsertCanOverwriteExistingFixedWidthValue) {
   EXPECT_EQ(std::string("new0"), std::string(out.data(), out.size()));
 }
 
+TEST(FasterKVBackendTest, SsdDefaultHlogUsesMinimumMemoryWindow) {
+  using recstore::storage::fasterkv::FasterKVStorage;
+  constexpr uint64_t capacity                 = 10'000'000;
+  constexpr size_t value_size                 = 128;
+  constexpr uint64_t min_effective_hlog_bytes = 256ULL << 20;
+
+  recstore::storage::fasterkv::FasterKVBackendOptions memory_options;
+  memory_options.storage = FasterKVStorage::kMemory;
+  EXPECT_GT(recstore::storage::fasterkv::ResolveHlogMemoryBytesForOptions(
+                capacity, value_size, memory_options),
+            min_effective_hlog_bytes);
+
+  recstore::storage::fasterkv::FasterKVBackendOptions ssd_options;
+  ssd_options.storage = FasterKVStorage::kSsd;
+  EXPECT_EQ(recstore::storage::fasterkv::ResolveHlogMemoryBytesForOptions(
+                capacity, value_size, ssd_options),
+            min_effective_hlog_bytes);
+}
+
 TEST(FasterKVBackendTest, SsdBackendStoresValuesThroughFileSystemDisk) {
   recstore::storage::fasterkv::FasterKVBackendOptions options;
   options.storage  = recstore::storage::fasterkv::FasterKVStorage::kSsd;

@@ -21,6 +21,11 @@ struct FasterKVBackendOptions {
   uint64_t read_cache_bytes  = 0;
 };
 
+uint64_t ResolveHlogMemoryBytesForOptions(
+    uint64_t capacity,
+    size_t value_size,
+    const FasterKVBackendOptions& options);
+
 class FasterKVBackend {
 public:
   using MissCallback = std::function<void(size_t)>;

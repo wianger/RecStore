@@ -307,15 +307,31 @@ uint64_t ResolveLogSize(uint64_t capacity,
                         size_t value_size,
                         const FasterKVBackendOptions& options) {
   uint64_t log_size =
-      options.hlog_memory_bytes == 0
-          ? ComputeLogSize(capacity, value_size)
-          : options.hlog_memory_bytes;
+      ResolveHlogMemoryBytesForOptions(capacity, value_size, options);
+  return NextPowerOfTwo(log_size);
+}
+
+} // namespace
+
+uint64_t ResolveHlogMemoryBytesForOptions(
+    uint64_t capacity,
+    size_t value_size,
+    const FasterKVBackendOptions& options) {
   constexpr uint64_t kPageSize = 32ULL << 20;
+  const uint64_t min_log_size  = kPageSize * 6;
+  uint64_t log_size            = options.hlog_memory_bytes;
+  if (log_size == 0) {
+    log_size = options.storage == FasterKVStorage::kSsd
+                 ? min_log_size
+                 : ComputeLogSize(capacity, value_size);
+  }
   if (log_size < kPageSize * 6) {
-    log_size = kPageSize * 6;
+    log_size = min_log_size;
   }
   return NextPowerOfTwo(log_size);
 }
+
+namespace {
 
 uint64_t ResolveReadCacheSize(uint64_t read_cache_bytes) {
   constexpr uint64_t kPageSize = 32ULL << 20;
