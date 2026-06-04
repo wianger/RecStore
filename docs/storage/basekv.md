@@ -64,14 +64,15 @@ base_kv_.reset(base::Factory<BaseKV, const BaseKVConfig&>::NewInstance(
 
 ```json
 {
+  "engine_type": "KVEngineComposite",
   "capacity": 1000000,
-  "index": { "type": "DRAM_EXTENDIBLE_HASH" },
+  "index": { "type": "DRAM_PET_HASH" },
   "value": {
     "type": "DRAM_VALUE_STORE",
     "default_value_size_hint": 512,
-    "path": "/dev/shm/recstore_data/value",
+    "path": "/dev/shm/recstore_kv/value",
     "dram_allocator": {
-      "type": "PERSIST_LOOP_SLAB",
+      "type": "CONCURRENT_SLAB_MEMORY_POOL",
       "capacity_bytes": 512000000
     }
   }

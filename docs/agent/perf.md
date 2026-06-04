@@ -41,11 +41,14 @@ update scheduling, backward, and Python runner overhead.
 
 ## 3. Default Matrix
 
-Default DRAM backends:
+Default DRAM backend (matches root `recstore_config.json`):
+
+- `KVEngineComposite` + `DRAM_PET_HASH` + `DRAM_VALUE_STORE` + `CONCURRENT_SLAB_MEMORY_POOL`
+
+Additional DRAM comparison lanes:
 
 - `DRAM_UNORDERED_MAP + DRAM_VALUE_STORE`
 - `DRAM_EXTENDIBLE_HASH + DRAM_VALUE_STORE`
-- `DRAM_PET_HASH + DRAM_VALUE_STORE`
 - third-party backends only at integrated layers
 
 Baseline parameters:

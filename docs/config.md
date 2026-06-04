@@ -70,6 +70,15 @@ RecStore 配置采用 JSON 格式，位于根目录。当前仓库默认包含�
 - `value.type` 取值：`DRAM_VALUE_STORE` / `SSD_VALUE_STORE` / `TIERED_VALUE_STORE`
 - 旧字段 `path`、`index.io.file_path`、`value.ssd_allocator.io.file_path` 会被拒绝
 
+仓库根目录 `recstore_config.json`（可由 [recstore_config_generator.py](../recstore_config_generator.py) 生成）的**默认 KV 组合**为：
+
+| 字段 | 默认值 |
+|------|--------|
+| `engine_type` | `KVEngineComposite`（可省略） |
+| `index.type` | `DRAM_PET_HASH` |
+| `value.type` | `DRAM_VALUE_STORE` |
+| `value.dram_allocator.type` | `CONCURRENT_SLAB_MEMORY_POOL` |
+
 引擎推导实现位置：[src/storage/kv_engine/engine_selector.h](../src/storage/kv_engine/engine_selector.h)
 
 ## 2. distributed_client 配置
@@ -164,14 +173,15 @@ RecStore 配置采用 JSON 格式，位于根目录。当前仓库默认包含�
                 }
             ],
             "base_kv_config": {
+                "engine_type": "KVEngineComposite",
                 "capacity": 40000000,
-                "index": {"type": "DRAM_EXTENDIBLE_HASH"},
+                "index": {"type": "DRAM_PET_HASH"},
                 "value": {
                     "type": "DRAM_VALUE_STORE",
                     "default_value_size_hint": 512,
-                    "path": "",
+                    "path": "/dev/shm/recstore_kv/value",
                     "dram_allocator": {
-                        "type": "PERSIST_LOOP_SLAB",
+                        "type": "CONCURRENT_SLAB_MEMORY_POOL",
                         "capacity_bytes": 20480000000
                     }
                 }

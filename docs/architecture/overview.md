@@ -57,7 +57,7 @@ graph TD
 
 - **核心逻辑 (CachePS)**: [CachePS](src/ps/base/cache_ps_impl.h) 是存储层的入口，负责处理来自 RPC Server 的请求。
 - **引擎抽象 (BaseKV)**: [BaseKV](src/storage/kv_engine/base_kv.h) 定义了统一的操作接口。
-- **组合引擎**: [KVEngineComposite](src/storage/kv_engine/engine_composite.h) 通过 `index.type` + `value.type` 组合 DRAM 索引与 DRAM/SSD/Tiered 值存储。
+- **组合引擎**: [KVEngineComposite](src/storage/kv_engine/engine_composite.h) 通过 `index.type` + `value.type` 组合 DRAM 索引与 DRAM/SSD/Tiered 值存储；仓库默认组合为 `DRAM_PET_HASH` + `DRAM_VALUE_STORE` + `CONCURRENT_SLAB_MEMORY_POOL`。
 - **内存管理**: 提供 [PersistSimpleMalloc](src/memory/persist_simple_malloc.h) 等组件，实现对持久化内存的直接管理。
 
 ---
