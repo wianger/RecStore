@@ -407,6 +407,9 @@ raw results 保存在：
 results/benchmark_ps_matrix_0529
 ```
 
+这组历史矩阵仅作为本页内的早期基线快照保留；新的吞吐结论以本页后续
+`DRAM_PET_HASH + auto/staging_copy` 路径和 `benchmark-ps` 执行手册为准。
+
 总吞吐矩阵如下，单位为 `M keys/s`：
 
 | server_shards | client_processes | client_threads_per_process | GRPC | BRPC | RDMA |
@@ -646,9 +649,10 @@ python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
 ## 8. 当前路线图
 
 当前主线已经从“单纯追更高并发”调整为“按 KVEngine 和 value layout 选择正确的
-GET response path”。阶段数据覆盖了从 `~2M keys/s` 到 `qps=16` repeat 平均
+GET response path”。早期阶段从 `~2M keys/s` 提升到 `qps=16` repeat 平均
 `~41.64M keys/s`、单轮最高 `45.62M keys/s`，以及 `qps=20` tuning profile
-最高 `~46.69M keys/s` 的优化过程。
+最高 `~46.69M keys/s`；这些数字只作为历史性能基线，新的 benchmark 复现方式以
+本页和 `.agents/skills/benchmark-ps/SKILL.md` 为准。
 
 ### 8.1 第一优先级：固化 PET staging-copy 主线
 

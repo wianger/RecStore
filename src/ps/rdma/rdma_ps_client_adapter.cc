@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <boost/coroutine2/all.hpp>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -144,14 +143,15 @@ RDMAPSClientAdapter::BuildChunks(base::ConstArray<uint64_t> keys) const {
   }
 
   std::vector<ShardChunk> chunks;
+  const std::size_t max_keys_per_rpc = MaxGetKeysPerRpc();
   for (int shard = 0; shard < num_shards_; ++shard) {
     const int client_index = shard_to_client_index_.at(shard);
     for (std::size_t offset = 0;
          offset < shard_keys[static_cast<std::size_t>(shard)].size();
-         offset += static_cast<std::size_t>(FLAGS_max_kv_num_per_request)) {
-      const std::size_t end = std::min(
-          offset + static_cast<std::size_t>(FLAGS_max_kv_num_per_request),
-          shard_keys[static_cast<std::size_t>(shard)].size());
+         offset += max_keys_per_rpc) {
+      const std::size_t end =
+          std::min(offset + max_keys_per_rpc,
+                   shard_keys[static_cast<std::size_t>(shard)].size());
       ShardChunk chunk;
       chunk.shard_id     = shard;
       chunk.client_index = client_index;
@@ -210,34 +210,26 @@ bool RDMAPSClientAdapter::FinalizeBatchIfNeeded(BatchRequest* batch) {
 
 void RDMAPSClientAdapter::WaitShardRpcsCooperatively(
     const std::vector<PendingShardRpc>& shard_rpcs) {
-  using Coroutine = boost::coroutines2::coroutine<void>;
-  std::vector<std::unique_ptr<Coroutine::pull_type>> waiters;
-  waiters.reserve(shard_rpcs.size());
-  for (const auto& pending : shard_rpcs) {
-    waiters.emplace_back(std::make_unique<Coroutine::pull_type>(
-        [this, pending](Coroutine::push_type& sink) {
-          auto& client =
-              shard_clients_[static_cast<std::size_t>(pending.client_index)];
-          while (!client->QueryRPCFinished(pending.rpc_id)) {
-            sink();
-          }
-          client->WaitRPCFinish(pending.rpc_id);
-        }));
-  }
-
-  while (!waiters.empty()) {
-    for (auto it = waiters.begin(); it != waiters.end();) {
-      auto& waiter = *it;
-      if (*waiter) {
-        (*waiter)();
+  std::vector<bool> finished(shard_rpcs.size(), false);
+  std::size_t remaining = shard_rpcs.size();
+  while (remaining > 0) {
+    bool made_progress = false;
+    for (std::size_t i = 0; i < shard_rpcs.size(); ++i) {
+      if (finished[i]) {
+        continue;
       }
-      if (!*waiter) {
-        it = waiters.erase(it);
-      } else {
-        ++it;
+      const auto& pending = shard_rpcs[i];
+      auto& client =
+          shard_clients_[static_cast<std::size_t>(pending.client_index)];
+      if (!client->QueryRPCFinished(pending.rpc_id)) {
+        continue;
       }
+      client->WaitRPCFinish(pending.rpc_id);
+      finished[i]   = true;
+      made_progress = true;
+      --remaining;
     }
-    if (!waiters.empty()) {
+    if (!made_progress) {
       std::this_thread::yield();
     }
   }
@@ -633,6 +625,18 @@ int RDMAPSClientAdapter::SubmitGetParameter(
       drain_and_release_window();
     }
   } else {
+    const std::size_t max_in_flight = MaxInFlightGetRpcs();
+    std::vector<PendingShardRpc> window;
+    window.reserve(max_in_flight);
+    auto drain_and_release_window = [this, &window, &batch]() {
+      WaitShardRpcsCooperatively(window);
+      for (const auto& pending : window) {
+        batch.shard_rpcs.push_back(pending);
+        shard_clients_[static_cast<std::size_t>(pending.client_index)]
+            ->RevokeRPCResource(pending.rpc_id);
+      }
+      window.clear();
+    };
     for (const auto& chunk : BuildChunks(keys)) {
       BaseParameterClient* client = shard_clients_[chunk.client_index].get();
       void* recv                  = client->GetReceiveBuffer(
@@ -643,7 +647,7 @@ int RDMAPSClientAdapter::SubmitGetParameter(
           static_cast<float*>(recv),
           isAsync,
           async_req_id);
-      batch.shard_rpcs.push_back(PendingShardRpc{
+      window.push_back(PendingShardRpc{
           chunk.shard_id,
           chunk.client_index,
           rpc_id,
@@ -651,6 +655,12 @@ int RDMAPSClientAdapter::SubmitGetParameter(
           recv,
           chunk.keys.size(),
       });
+      if (window.size() >= max_in_flight) {
+        drain_and_release_window();
+      }
+    }
+    if (!window.empty()) {
+      drain_and_release_window();
     }
   }
 

@@ -12,6 +12,7 @@
 #include "benchmark/ps/rdma_rc_transport_benchmark_values.h"
 #include "ps/rdma/allshards_ps_client.h"
 #include "ps/rdma/petps_client.h"
+#include "ps/rdma/rdma_ps_client_adapter.h"
 #include "ps/rdma/rdma_protocol.h"
 
 DECLARE_int32(value_size);
@@ -214,6 +215,43 @@ TEST(PetPSIntegrationTest, PutGetRoundTripMultiShard) {
 
   ExpectFlatSlots(output.data(), values, embedding_dim);
   wrapper.RevokeRPCResource(rpc_id);
+}
+
+TEST(PetPSIntegrationTest, AdapterSplitGetRoundTripMultiShard) {
+  const int embedding_dim       = FLAGS_value_size / sizeof(float);
+  json config                   = json::object();
+  config["cache_ps"]["ps_type"] = "RDMA";
+  config["cache_ps"]["base_kv_config"]["value"]["default_value_size_hint"] =
+      FLAGS_value_size;
+  config["client"] = json{{"host", "127.0.0.1"}, {"port", 1234}, {"shard", 0}};
+  config["distributed_client"] = {
+      {"num_shards", 2},
+      {"hash_method", "simple_mod"},
+      {"max_keys_per_request", 2},
+      {"servers",
+       json::array(
+           {json{{"host", "127.0.0.1"}, {"port", 1234}, {"shard", 0}},
+            json{{"host", "127.0.0.1"}, {"port", 1234}, {"shard", 1}}})},
+  };
+  recstore::RDMAPSClientAdapter adapter(config);
+
+  std::vector<std::uint64_t> keys;
+  keys.reserve(10);
+  for (std::uint64_t key = 0; key < 10; ++key) {
+    keys.push_back(5000000ULL + key);
+  }
+  auto values = MakeValues(keys, embedding_dim);
+
+  ASSERT_EQ(adapter.PutParameter(base::ConstArray<std::uint64_t>(keys), values),
+            0);
+
+  std::vector<float> output(
+      keys.size() * static_cast<std::size_t>(embedding_dim), 0.0f);
+  ASSERT_EQ(adapter.GetParameter(
+                base::ConstArray<std::uint64_t>(keys), output.data()),
+            0);
+
+  ExpectFlatSlots(output.data(), values, embedding_dim);
 }
 
 TEST(PetPSIntegrationTest, ExhaustedQpPoolFailsLoudly) {
