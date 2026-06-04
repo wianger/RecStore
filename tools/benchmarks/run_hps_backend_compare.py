@@ -24,6 +24,8 @@ BACKEND_ALIASES: dict[str, BackendSpec] = {
     "hps_hash_map": BackendSpec("hps_hash_map", "", ""),
     "hps_rocksdb": BackendSpec("hps_rocksdb", "", ""),
     "hps_native_tiered": BackendSpec("hps_native_tiered", "", ""),
+    "fasterkv": BackendSpec("fasterkv", "", ""),
+    "fasterkv_ssd": BackendSpec("fasterkv", "", ""),
     "dram_eh_dram": BackendSpec("recstore", "DRAM_EXTENDIBLE_HASH", "DRAM_VALUE_STORE"),
     "dram_eh_ssd": BackendSpec("recstore", "DRAM_EXTENDIBLE_HASH", "SSD_VALUE_STORE"),
     "dram_eh_tiered": BackendSpec("recstore", "DRAM_EXTENDIBLE_HASH", "TIERED_VALUE_STORE"),
@@ -240,6 +242,10 @@ def command_for(alias: str, spec: BackendSpec, data_path: Path, args: argparse.N
                 args.hps_native_overflow_resolution_target,
             )
         )
+    if alias == "fasterkv":
+        cmd.append(gflag("fasterkv_storage", "memory"))
+    if alias == "fasterkv_ssd":
+        cmd.append(gflag("fasterkv_storage", "ssd"))
     if args.dram_capacity_bytes:
         cmd.append(gflag("dram_capacity_bytes", args.dram_capacity_bytes))
     if ssd_capacity_bytes:

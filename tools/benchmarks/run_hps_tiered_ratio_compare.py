@@ -3,8 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import shutil
+import sys
 from pathlib import Path
 from types import SimpleNamespace
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from tools.benchmarks import run_hps_backend_compare as hps_compare
 
@@ -15,8 +20,13 @@ SUMMARY_FIELDS = [
     "configured_dram_capacity_bytes",
     "configured_ssd_capacity_bytes",
     "configured_high_watermark_ratio",
+    "target_memory_window_fraction",
+    "configured_fasterkv_hlog_memory_bytes",
     *hps_compare.SUMMARY_FIELDS,
 ]
+
+FASTERKV_RECORD_OVERHEAD_BYTES = 128
+FASTERKV_MIN_EFFECTIVE_HLOG_BYTES = 256 << 20
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,6 +59,21 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Also sweep HugeCTR HPS native volatile+persistent DB storage.",
+    )
+    parser.add_argument(
+        "--include-recstore-tiered",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Sweep RecStore TIERED_VALUE_STORE using --dram-fractions.",
+    )
+    parser.add_argument(
+        "--include-fasterkv",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Also run FasterKV memory baseline and sweep FasterKV SSD hlog "
+            "memory windows using --dram-fractions."
+        ),
     )
     parser.add_argument("--mode", choices=["fetch", "insert", "mixed", "fetch_insert"], default="fetch")
     parser.add_argument("--read-ratio", type=int, default=100)
@@ -122,6 +147,24 @@ def configured_ssd_capacity_bytes(args: argparse.Namespace) -> int:
     return max(int(args.record_count * slot_size * args.ssd_capacity_multiplier), 1)
 
 
+def next_power_of_two(value: int) -> int:
+    out = 1
+    while out < value:
+        out <<= 1
+    return out
+
+
+def configured_fasterkv_hlog_memory_bytes(
+    args: argparse.Namespace, memory_window_fraction: float
+) -> int:
+    if memory_window_fraction <= 0.0:
+        return FASTERKV_MIN_EFFECTIVE_HLOG_BYTES
+    per_record = args.value_size + FASTERKV_RECORD_OVERHEAD_BYTES
+    full_hlog_bytes = args.record_count * per_record * 2
+    target_bytes = int(full_hlog_bytes * memory_window_fraction)
+    return max(next_power_of_two(max(target_bytes, 1)), FASTERKV_MIN_EFFECTIVE_HLOG_BYTES)
+
+
 def base_run_args(args: argparse.Namespace) -> SimpleNamespace:
     return SimpleNamespace(
         mode=args.mode,
@@ -176,6 +219,8 @@ def annotate(
             "configured_dram_capacity_bytes": dram_capacity,
             "configured_ssd_capacity_bytes": ssd_capacity,
             "configured_high_watermark_ratio": high_watermark,
+            "target_memory_window_fraction": "",
+            "configured_fasterkv_hlog_memory_bytes": "",
         }
         annotated.update(row)
         out.append(annotated)
@@ -247,6 +292,54 @@ def run_hps_native_tiered(
     )
 
 
+def run_fasterkv_baseline(
+    args: argparse.Namespace, repeat: int
+) -> list[dict[str, object]]:
+    run_args = base_run_args(args)
+
+    rows = hps_compare.run_one(
+        "fasterkv", repeat, run_args, hps_compare.BACKEND_ALIASES["fasterkv"]
+    )
+    return annotate(
+        rows,
+        comparison_group="fasterkv",
+        dram_fraction="",
+        dram_capacity="",
+        ssd_capacity="",
+        high_watermark="",
+    )
+
+
+def run_fasterkv_ssd(
+    args: argparse.Namespace, repeat: int, dram_fraction: float
+) -> list[dict[str, object]]:
+    run_args = base_run_args(args)
+    hlog_bytes = configured_fasterkv_hlog_memory_bytes(args, dram_fraction)
+    run_args.extra_arg.extend(
+        [
+            "--fasterkv_storage=ssd",
+            f"--fasterkv_hlog_memory_bytes={hlog_bytes}",
+        ]
+    )
+
+    alias = f"fasterkv_ssd_hlog{dram_fraction:.6f}"
+    rows = hps_compare.run_one(
+        alias, repeat, run_args, hps_compare.BACKEND_ALIASES["fasterkv_ssd"]
+    )
+    annotated = annotate(
+        rows,
+        comparison_group="fasterkv_ssd",
+        dram_fraction=f"{dram_fraction:.6f}",
+        dram_capacity="",
+        ssd_capacity="",
+        high_watermark="",
+    )
+    for row in annotated:
+        row["target_memory_window_fraction"] = f"{dram_fraction:.6f}"
+        row["configured_fasterkv_hlog_memory_bytes"] = str(hlog_bytes)
+    return annotated
+
+
 def main() -> int:
     args = parse_args()
     validate_args(args)
@@ -279,16 +372,39 @@ def main() -> int:
                 )
                 write_summary(args.output_dir / "tiered_hps_ratio_summary.csv", rows)
 
-        for dram_fraction in args.dram_fractions:
-            new_rows = run_recstore_tiered(args, repeat, dram_fraction)
+        if args.include_fasterkv:
+            new_rows = run_fasterkv_baseline(args, repeat)
             rows.extend(new_rows)
             run_rows = [row for row in new_rows if row["phase"] == "run"]
             metric = run_rows[0]["throughput_keys_sec"] if run_rows else ""
             print(
-                f"recstore_tiered dram_fraction={dram_fraction:.6f} "
-                f"r{repeat}: exit={new_rows[0]['exit_code']} run_keys_sec={metric}"
+                f"fasterkv r{repeat}: exit={new_rows[0]['exit_code']} "
+                f"run_keys_sec={metric}"
             )
             write_summary(args.output_dir / "tiered_hps_ratio_summary.csv", rows)
+            for dram_fraction in args.dram_fractions:
+                new_rows = run_fasterkv_ssd(args, repeat, dram_fraction)
+                rows.extend(new_rows)
+                run_rows = [row for row in new_rows if row["phase"] == "run"]
+                metric = run_rows[0]["throughput_keys_sec"] if run_rows else ""
+                print(
+                    f"fasterkv_ssd hlog_fraction={dram_fraction:.6f} "
+                    f"r{repeat}: exit={new_rows[0]['exit_code']} "
+                    f"run_keys_sec={metric}"
+                )
+                write_summary(args.output_dir / "tiered_hps_ratio_summary.csv", rows)
+
+        if args.include_recstore_tiered:
+            for dram_fraction in args.dram_fractions:
+                new_rows = run_recstore_tiered(args, repeat, dram_fraction)
+                rows.extend(new_rows)
+                run_rows = [row for row in new_rows if row["phase"] == "run"]
+                metric = run_rows[0]["throughput_keys_sec"] if run_rows else ""
+                print(
+                    f"recstore_tiered dram_fraction={dram_fraction:.6f} "
+                    f"r{repeat}: exit={new_rows[0]['exit_code']} run_keys_sec={metric}"
+                )
+                write_summary(args.output_dir / "tiered_hps_ratio_summary.csv", rows)
 
     write_summary(args.output_dir / "tiered_hps_ratio_summary.csv", rows)
     if not args.keep_data:

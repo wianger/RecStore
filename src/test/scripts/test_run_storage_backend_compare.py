@@ -104,6 +104,42 @@ class TestRunStorageBackendCompare(unittest.TestCase):
         self.assertIn("--ssd_io_backend=IOURING", cmd)
         self.assertIn("--ssd_queue_depth=512", cmd)
 
+    def test_fasterkv_aliases_select_storage_mode(self):
+        class Args:
+            mode = "fetch"
+            read_ratio = 100
+            record_count = 1000000
+            runtime_seconds = 5
+            threads = 16
+            load_threads = 0
+            hps_rocksdb_load_threads = 1
+            hps_rocksdb_db_threads = 1
+            batch_size = 1024
+            value_size = 128
+            distribution = "uniform"
+            zipfian_alpha = 0.9
+            dram_allocator = "PERSIST_LOOP_SLAB"
+            dram_capacity_bytes = 0
+            extra_arg = []
+
+        memory_cmd = command_for(
+            "fasterkv",
+            BACKEND_ALIASES["fasterkv"],
+            Path("/tmp/fasterkv"),
+            Args(),
+        )
+        ssd_cmd = command_for(
+            "fasterkv_ssd",
+            BACKEND_ALIASES["fasterkv_ssd"],
+            Path("/tmp/fasterkv_ssd"),
+            Args(),
+        )
+
+        self.assertIn("--backend=fasterkv", memory_cmd)
+        self.assertIn("--fasterkv_storage=memory", memory_cmd)
+        self.assertIn("--backend=fasterkv", ssd_cmd)
+        self.assertIn("--fasterkv_storage=ssd", ssd_cmd)
+
     def test_merge_rows_preserves_common_fields(self):
         merged = merge_rows(
             [
