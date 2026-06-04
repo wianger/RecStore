@@ -1,33 +1,37 @@
 # 性能分析
 
-RecStore 内置了完善的性能埋点与分析机制，涵盖了从 PyTorch OP 层、C++ 客户端到 gRPC 服务端及底层存储的完整链路。
+RecStore 内置了完善的性能埋点与分析机制，涵盖了从 PyTorch OP 层、C++ 客户端到服务端及底层存储的完整链路。
 
 ## 1. 快速使用
 
-### Benchmark 分层报告
+### Agent Skills (强烈推荐)
 
-做性能结论时先区分层级：
+仓库在.agents目录下内置了一系列测试skills，可以以对话的形式方便地启动性能测试，并自动整理给出报告。
 
-- storage-only：直接测 KVEngine / index / value store。
-- PS/network：通过 RecStore PS client/server 与 transport。
-- PyTorch/model：模型训练侧端到端。
+用 Claude Code/Cursor/Codex 跑性能基准时，先按**测试层级**选 skill（定义在仓库 `.agents/skills/`）。
+
+| 测试层级 | 测什么 | 使用 skill | 主要入口 |
+|---|---|---|---|
+| **storage-only** | KVEngine（纯本地，无 PS 传输） | [benchmark-kvengine](../../.agents/skills/benchmark-kvengine/SKILL.md) | `tools/benchmarks/run_kvengine_compare.py` |
+| **PS/network** | 本机或指定拓扑上的 GRPC / BRPC / RDMA 等传输 | [benchmark-ps](../../.agents/skills/benchmark-ps/SKILL.md) | `tools/benchmarks/run_benchmark_ps.py` |
+| **PS/network（跨机 RDMA）** | 多机容器 + SSH 的 RDMA PS 压测与对照 | [cross-host-rdma-ps](../../.agents/skills/cross-host-rdma-ps/SKILL.md) | 同上 `run_benchmark_ps.py`，`--execution-backend ssh` |
+| **RDMA 代码/正确性** | `src/ps/rdma` 修改、PetPS/RDMA 测试、profile 解读 | [rdma-module](../../.agents/skills/rdma-module/SKILL.md) | RDMA 单测与 RC transport benchmark |
+| **跨层汇总 / 论文式报告** | 端到端 | [benchmark-e2e](../../.agents/skills/benchmark-e2e/SKILL.md) | `tools/benchmarks/run_paper_e2e.py` |
 
 不要把某一层的结果直接扩展成整体架构结论。当前 RDMA GET 的阶段性结论对齐了
 storage-only 的 `BatchGetFlat(500 random keys)` 和 PS/network 的
 RDMA GET `batch_keys=500`，结论是：
 
-| 层级 | 场景 | 吞吐 |
-|---|---|---:|
-| storage-only | `DRAM_EXTENDIBLE_HASH BatchGetFlat` | `19.45M keys/s` |
-| PS/network | `DRAM_EXTENDIBLE_HASH + direct-SG` | `19.37M keys/s` |
-| storage-only | `DRAM_PET_HASH BatchGetFlat` | `51.96M keys/s` |
-| PS/network | `DRAM_PET_HASH + staging-copy` | stable `~41.64M keys/s` avg, best `45.62M keys/s` |
+目前的性能数据（由于机器配置不同），仅供参考，PS启动了16核，RDMA网卡为200 Gbps：
 
-因此当前 RDMA GET 默认优化主线是
-`DRAM_PET_HASH + rdma-get-response-mode=auto`，而不是继续单纯增加 client、
-GET worker 或 coroutine scanner。
 
-### Grafana
+| 层级           | 场景                                       | 吞吐                                                |
+| ------------ | ---------------------------------------- | ------------------------------------------------- |
+| storage-only | `DRAM_PET_HASH, DRAM_VALUE_STORE (Ours)` | `51.96M keys/s`                                   |
+| PS/network   | `RDMA(staging-copy)`                     | stable `~41.64M keys/s` avg, best `45.62M keys/s` |
+
+
+### 内置Grafana性能看板
 
 编译时开启性能上报宏：
 
@@ -39,129 +43,98 @@ cmake .. \
 
 === "本地分析"
 
-    该模式无需依赖 ClickHouse/Grafana，可直接在模型训练时采集 `embupdate_stages` 真实链路数据，分析 update 在 OP 层、gRPC 客户端、gRPC 服务端各阶段耗时。
+```
+该模式无需依赖 ClickHouse/Grafana，可直接在模型训练时采集 `embupdate_stages` 真实链路数据，分析 update 在 OP 层、gRPC 客户端、gRPC 服务端各阶段耗时。
 
-    ```bash title="开启本地结构化事件落盘（JSONL）"
-    export RECSTORE_REPORT_MODE=local
-    export RECSTORE_REPORT_LOCAL_SINK=jsonl
-    export RECSTORE_REPORT_JSONL_PATH=/tmp/recstore_report_events.jsonl
-    export RECSTORE_REPORT_FLUSH_EVERY_N=256
-    ```
+```bash title="开启本地结构化事件落盘（JSONL）"
+export RECSTORE_REPORT_MODE=local
+export RECSTORE_REPORT_LOCAL_SINK=jsonl
+export RECSTORE_REPORT_JSONL_PATH=/tmp/recstore_report_events.jsonl
+export RECSTORE_REPORT_FLUSH_EVERY_N=256
+```
 
-    接下来启动参数服务器与模型训练，可以使用随机数据集的DLRM：
+接下来启动参数服务器与模型训练，可以使用随机数据集的DLRM：
 
-    ```bash title="运行 DLRM 模型（随机数据），自动拉起ps_server"
-    cd model_zoo/torchrec_dlrm/
-    bash ./run_single_day.sh --ps --random-dataset --dataset-size 256
-    ```
-    
-    使用分析脚本：
+```bash title="运行 DLRM 模型（随机数据），自动拉起ps_server"
+cd model_zoo/torchrec_dlrm/
+bash ./run_single_day.sh --ps --random-dataset --dataset-size 256
+```
 
-    ```bash title="分析模型层真实 update 数据"
-    python3 src/test/scripts/analyze_embupdate_stages.py \
-      --input /tmp/recstore_report_events.jsonl \
-      --group-by-prefix \
-      --export-csv /tmp/embupdate_real.csv \
-      --top 30
-    ```
+使用分析脚本：
 
-    脚本会输出：
-    - 各阶段统计（mean / p50 / p95 / p99 / max）
-    - 近似网络开销：`client_rpc_us - server_total_us`
-    - 慢请求 TopN（按同一 trace 聚合）
-    - 可直接二次分析的 CSV（如 `/tmp/embupdate_real.csv`）
+```bash title="分析模型层真实 update 数据"
+python3 src/test/scripts/analyze_embupdate_stages.py \
+  --input /tmp/recstore_report_events.jsonl \
+  --group-by-prefix \
+  --export-csv /tmp/embupdate_real.csv \
+  --top 30
+```
 
-    ??? tip "DLRM 同源 mock demo"
+脚本会输出：
 
-        目录：`model_zoo/rs_demo`
+- 各阶段统计（mean / p50 / p95 / p99 / max）
+- 近似网络开销：`client_rpc_us - server_total_us`
+- 慢请求 TopN（按同一 trace 聚合）
+- 可直接二次分析的 CSV（如 `/tmp/embupdate_real.csv`）
 
-        用途：
-        - 复用 DLRM 相同数据入口：`model_zoo/torchrec_dlrm/processed_day_0_data`
-        - 复用 DLRM 相同稀疏组织：26 特征 -> KJT
-        - 复用 DLRM 相同 fused id 规则：`(table_idx << fuse_k) + id`
-        - 产出 `op_client / brpc_client / brpc_server` 三段 `embupdate_stages`
+??? tip "DLRM 同源 mock demo"
 
-        最小运行：
+```
+目录：`model_zoo/rs_demo`
 
-        ```bash
-        python3 model_zoo/rs_demo/run_mock_stress.py \
-          --steps 60 \
-          --batch-size 4096 \
-          --num-embeddings 200000 \
-          --embedding-dim 128 \
-          --jsonl /tmp/rs_demo_events.jsonl \
-          --csv /tmp/rs_demo_embupdate.csv
-        ```
+用途：
+- 复用 DLRM 相同数据入口：`model_zoo/torchrec_dlrm/processed_day_0_data`
+- 复用 DLRM 相同稀疏组织：26 特征 -> KJT
+- 复用 DLRM 相同 fused id 规则：`(table_idx << fuse_k) + id`
+- 产出 `op_client / brpc_client / brpc_server` 三段 `embupdate_stages`
 
-        必看输出：
-        - JSONL：`/tmp/rs_demo_events.jsonl`
-        - CSV：`/tmp/rs_demo_embupdate.csv`
-        - 服务端日志：`/tmp/rs_demo_ps_server.log`
+最小运行：
+
+```bash
+python3 model_zoo/rs_demo/run_mock_stress.py \
+  --steps 60 \
+  --batch-size 4096 \
+  --num-embeddings 200000 \
+  --embedding-dim 128 \
+  --jsonl /tmp/rs_demo_events.jsonl \
+  --csv /tmp/rs_demo_embupdate.csv
+```
+
+必看输出：
+
+- JSONL：`/tmp/rs_demo_events.jsonl`
+- CSV：`/tmp/rs_demo_embupdate.csv`
+- 服务端日志：`/tmp/rs_demo_ps_server.log`
+
+```
+
+```
 
 === "Grafana 在线看板（ClickHouse）"
 
-    运行时确保 `recstore_config.json` 中 `report_API` 指向可写入 ClickHouse 的 report 服务，然后启动训练/服务端即可自动上报，可在 Grafana 端口查看看板。
-
-    ??? info "启用 Grafana 和相关上报命令"
-
-        ```bash title="启动 ClickHouse"
-        systemctl is-active --quiet clickhouse-server || sudo systemctl start clickhouse-server; echo "✅ ClickHouse is running."
-        ```
-
-        ```bash title="启动 Grafana"
-        systemctl is-active --quiet grafana-server || sudo systemctl start grafana-server; echo "✅ Grafana is running (http://localhost:3000)."
-        ```
-
-        ```bash title="启动 Report Service（端口需要和 recstore_config.json 对齐）"
-        pkill -f "uvicorn report_service:app" 2>/dev/null; nohup uvicorn report_service:app --host 127.0.0.1 --port 8080 > report_service.log 2>&1 & echo "✅ Report Service is running (http://127.0.0.1:8080)."
-        ```
-
-### bRPC 内置 CPU Profiler
-
-RecStore 支持直接用 bRPC builtin profiler 进行热点分析，适合 Get/Update 等多种 RPC 混合流量场景。
-
-#### 编译
-
-需在 CMake 配置时打开 `USE_BRPC_CPU_PROFILER`：
-
-```bash linenums="1" hl_lines="4"
-cmake .. \
-    -DCMAKE_BUILD_TYPE=Debug \
-    -DUSE_PERF_REPORT=ON \
-    -DUSE_BRPC_CPU_PROFILER=ON \
-    -DUSE_GPERF_PROFILING=ON
 ```
 
-#### 启动
+运行时确保 `recstore_config.json` 中 `report_API` 指向可写入 ClickHouse 的 report 服务，然后启动训练/服务端即可自动上报，可在 Grafana 端口查看看板。
 
-??? info "安装 FlameGraph 来生成火焰图"
-    
-    ```bash
-    cd /tmp
-    git clone https://github.com/brendangregg/FlameGraph.git
-    ```
+??? info "启用 Grafana 和相关上报命令"
 
-启动时需要使用 bRPC 作为网络层通讯，同时不要设置 `CPUPROFILE`，否则会和 builtin profiler 冲突：
-
-```bash title="带参数启用参数服务器"
-unset CPUPROFILE
-export FLAMEGRAPH_PL_PATH=/tmp/FlameGraph/flamegraph.pl
-./build/bin/ps_server --config_path ./recstore_config.json
 ```
 
-假设服务监听端口为 15000（通常在终端输出地址），可访问：
+```bash title="启动 ClickHouse"
+systemctl is-active --quiet clickhouse-server || sudo systemctl start clickhouse-server; echo "✅ ClickHouse is running."
+```
 
-- `http://127.0.0.1:15000/hotspots/cpu?seconds=10`
-- `http://127.0.0.1:15000/pprof/profile?seconds=10`
+```bash title="启动 Grafana"
+systemctl is-active --quiet grafana-server || sudo systemctl start grafana-server; echo "✅ Grafana is running (http://localhost:3000)."
+```
 
-如需远程访问，可先做端口转发。
+```bash title="启动 Report Service（端口需要和 recstore_config.json 对齐）"
+pkill -f "uvicorn report_service:app" 2>/dev/null; nohup uvicorn report_service:app --host 127.0.0.1 --port 8080 > report_service.log 2>&1 & echo "✅ Report Service is running (http://127.0.0.1:8080)."
+```
 
+```
 
-???+ info "采样频率与时长"
-
-    采样频率由 `CPUPROFILE_FREQUENCY` 环境变量控制，默认 100（每秒 100 次）。
-    采样时长通过 URL 参数 `?seconds=5` 控制。
-    其他信息请参考 [bRPC 官方 profiler 文档](https://github.com/apache/brpc/blob/master/docs/cn/cpu_profiler.md)
+```
 
 ### 运行性能统计
 
@@ -187,7 +160,7 @@ bash run_single_day.sh --custom --dataset-size 4096 --epochs 10
     这是对于模型层 DLRM 的小型测试脚本，可以使用单天数据进行测试，同时限制了数据量和嵌入表的大小。
     运行 `bash run_single_day.sh --help` 可查看更多参数说明。
 
-### 查看结果
+**查看结果** 
 
 **日志分析**
 
@@ -217,43 +190,44 @@ google-pprof --pdf build/bin/grpc_ps_server /tmp/ps_cpu.prof > ps_cpu.pdf
 tensorboard --logdir=./logs --port=6006
 ```
 
-## 2. 性能埋点关键字
+## 2. 新增性能埋点（txt，已弃用）
 
-??? warning "本段落内容在最新版本可能被弃用，请参考下面 Grafana report"
+??? warning "本段落内容在最新版本被弃用，请参考下面 Grafana report"
 
-    RecStore 使用 `xmh::Timer` (位于 `src/base/timer.h`) 进行全链路的耗时打点。数据流向如下：
+```
+RecStore 使用 `xmh::Timer`（位于 `src/base/timer.h`）进行全链路的耗时打点。数据流向如下：
 
-    ### 写路径自顶向下
+### 写路径自顶向下
 
-    | 层级 (Layer) | Timer 名称 | 说明 | 代码位置 |
-    | :--- | :--- | :--- | :--- |
-    | **PyTorch OP** | `OP.EmbWrite.Total` | Python 端调用 C++ OP 的总耗时 | `src/framework/pytorch/op_torch.cc` |
-    | | `OP.EmbWrite.Call` | 核心逻辑调用耗时 | |
-    | **C++ Client** | `ClientOp.EmbWrite.Total` | 客户端操作总耗时 | `src/framework/op.cc` |
-    | | `ClientOp.EmbWrite.BuildVector` | Tensor 转 C++ Vector 的开销 | |
-    | **gRPC Client** | `Client.PutParameter.Total` | RPC 请求总耗时 | `src/ps/grpc/dist_grpc_ps_client.cpp` |
-    | | `Client.PutParameter.Serialize` | 序列化 Data Request 耗时 | |
-    | | `Client.PutParameter.RPC` | 网络传输 + 服务端处理总耗时 | |
-    | **Server** | `PS.PutParameter.Handle` | 服务端处理总耗时 | `src/ps/grpc/grpc_ps_server.cpp` |
-    | | `PS.PutParameter.KVPutAll` | 写入底层 KV 存储的耗时 | |
+| 层级 (Layer) | Timer 名称 | 说明 | 代码位置 |
+| :--- | :--- | :--- | :--- |
+| **PyTorch OP** | `OP.EmbWrite.Total` | Python 端调用 C++ OP 的总耗时 | `src/framework/pytorch/op_torch.cc` |
+| | `OP.EmbWrite.Call` | 核心逻辑调用耗时 | |
+| **C++ Client** | `ClientOp.EmbWrite.Total` | 客户端操作总耗时 | `src/framework/op.cc` |
+| | `ClientOp.EmbWrite.BuildVector` | Tensor 转 C++ Vector 的开销 | |
+| **gRPC Client** | `Client.PutParameter.Total` | RPC 请求总耗时 | `src/ps/grpc/dist_grpc_ps_client.cpp` |
+| | `Client.PutParameter.Serialize` | 序列化 Data Request 耗时 | |
+| | `Client.PutParameter.RPC` | 网络传输 + 服务端处理总耗时 | |
+| **Server** | `PS.PutParameter.Handle` | 服务端处理总耗时 | `src/ps/grpc/grpc_ps_server.cpp` |
+| | `PS.PutParameter.KVPutAll` | 写入底层 KV 存储的耗时 | |
 
-    ### 读路径自顶向下
+### 读路径自顶向下
 
-    | 层级 (Layer) | Timer 名称 | 说明 | 代码位置 |
-    | :--- | :--- | :--- | :--- |
-    | **PyTorch OP** | `OP.EmbRead.Total` | Python 端调用 C++ OP 的总耗时 | `src/framework/pytorch/op_torch.cc` |
-    | | `OP.EmbRead.ToCPUKeys` | Embedding Key 从 GPU 拷贝到 CPU 的耗时 | |
-    | **gRPC Client** | `Client.GetParameter.Total` | RPC 请求总耗时 | `src/ps/grpc/dist_grpc_ps_client.cpp` |
-    | | `Client.GetParameter.AsyncWait` | 异步等待网络回包的耗时（反映服务端处理+网络延迟） | |
-    | **Server** | `KV BatchGet` | 底层 KV 引擎批量读取耗时 | `docs/storage/composite_kvengine.md` |
+| 层级 (Layer) | Timer 名称 | 说明 | 代码位置 |
+| :--- | :--- | :--- | :--- |
+| **PyTorch OP** | `OP.EmbRead.Total` | Python 端调用 C++ OP 的总耗时 | `src/framework/pytorch/op_torch.cc` |
+| | `OP.EmbRead.ToCPUKeys` | Embedding Key 从 GPU 拷贝到 CPU 的耗时 | |
+| **gRPC Client** | `Client.GetParameter.Total` | RPC 请求总耗时 | `src/ps/grpc/dist_grpc_ps_client.cpp` |
+| | `Client.GetParameter.AsyncWait` | 异步等待网络回包的耗时（反映服务端处理+网络延迟） | |
+| **Server** | `KV BatchGet` | 底层 KV 引擎批量读取耗时 | `docs/storage/composite_kvengine.md` |
 
-    ??? tip "什么是 Timer?"
-        `xmh::Timer` 是一个高性能的 C++ 计时器工具类。它通过 `Timer::Start("Name")` 和 `Timer::Stop("Name")` 记录代码块耗时，并自动统计 P50、P99 等分位数值，定期输出到日志文件中。
+??? tip "什么是 Timer?"
+    `xmh::Timer` 是一个高性能的 C++ 计时器工具类。它通过 `Timer::Start("Name")` 和 `Timer::Stop("Name")` 记录代码块耗时，并自动统计 P50、P99 等分位数值，定期输出到日志文件中。
+```
 
+## 3. 新增性能埋点（Grafana，请使用）
 
-## 3. Grafana report
-
-RecStore 的 Grafana 看板基于 `report()` 上报链路，完整链路为：
+RecStore 的 Grafana 看板基于 `report()` 函数上报链路，完整链路为：
 
 `RecStore (C++/Python 调用 report)` -> `HTTP report_API` -> `ClickHouse` -> `Grafana`
 
@@ -262,33 +236,28 @@ RecStore 的 Grafana 看板基于 `report()` 上报链路，完整链路为：
 - 上报接口由 `recstore_config.json` 中 `report_API` 指定（默认：`http://127.0.0.1:8081/report`）。
 - `report()` 会构造 JSON 并异步发送，核心字段如下：
 
-| 字段名 | 含义 | 示例 |
-| :--- | :--- | :--- |
-| `table_name` | 目标报表/逻辑表名 | `op_latency` |
-| `unique_id` | 单次请求或链路标识 | `EmbRead|1711111111000000` |
-| `metric_name` | 指标名称 | `recstore_us` |
-| `metric_value` | 指标数值（double） | `532.0` |
+
+| 字段名            | 含义           | 示例                                     |
+| -------------- | ------------ | -------------------------------------- |
+| `table_name`   | 目标报表/逻辑表名    | `op_latency`                           |
+| `unique_id`    | 单次请求或链路标识    | `embread_debug` + 时间戳（如 `embread_debug |
+| `metric_name`  | 指标名称         | `recstore_us`                          |
+| `metric_value` | 指标数值（double） | `532.0`                                |
+
 
 对应实现可参考：
 
 - `src/base/report/report_client.cpp`
 - `src/base/report/report_client.h`
 
-#### 常见 report 表与指标（来自当前代码）
+#### 常见 report 表与指标
 
-| 表名 | 常见指标名 | 说明 |
-| :--- | :--- | :--- |
-| `op_latency` | `recstore_us`、`recserver_us` | 端到端或服务端处理耗时 |
-| `embread_stages` | `duration_us`、`request_size`、`cache_lookup_us`、`deserialize_duration_us` | EmbRead 细分阶段耗时与规模 |s
-| `ps_client_latency` | `latency_us` | PS 客户端侧延迟 |
-| `ps_server_latency` | `latency_us` | PS 服务端侧延迟 |
-| `emb_read_flame_map` | `level`、`value`、`self`、`start` | 火焰图分层结构数据 |
 
-典型调用位置：
+| 表名                   | 常见指标名                                                                    | 说明                |
+| -------------------- | ------------------------------------------------------------------------ | ----------------- |
+| `op_latency`         | `recstore_us`、`recserver_us`                                             | 端到端或服务端处理耗时       |
+| `embread_stages`     | `duration_us`、`request_size`、`cache_lookup_us`、`deserialize_duration_us` | EmbRead 细分阶段耗时与规模 |
+| `ps_client_latency`  | `latency_us`                                                             | PS 客户端侧延迟         |
+| `ps_server_latency`  | `latency_us`                                                             | PS 服务端侧延迟         |
+| `emb_read_flame_map` | `level`、`value`、`self`、`start`                                           | 火焰图分层结构数据         |
 
-- `src/framework/op.cc`
-- `src/ps/grpc/grpc_ps_server.cpp`
-- `src/ps/brpc/brpc_ps_client.cpp`
-- `src/ps/brpc/brpc_ps_server.cpp`
-- `src/ps/grpc/grpc_ps_client.cpp`
-- `src/ps/base/cache_ps_impl.h`
