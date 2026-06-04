@@ -1,17 +1,17 @@
 #!/bin/bash
-# ci/test/test_ycsb.sh
+# tools/env/test_ycsb.sh
 # Purpose: Run diverse, fine-grained YCSB tests (KVDB, CCEH, multiple workloads).
-# Usage: bash ci/test/test_ycsb.sh [install_prefix]
+# Usage: bash tools/env/test_ycsb.sh [install_prefix]
 
 set -euo pipefail
 
 # 1. Setup Environment
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Source the env script
-source ci/env/init_ycsb_env.sh "${1:-}"
+source tools/env/init_ycsb_env.sh "${1:-}"
 
 # 2. Define Test Runner Function
 run_test() {

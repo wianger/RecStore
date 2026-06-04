@@ -1,6 +1,10 @@
 import unittest
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "tools" / "coverage"))
 
 from coverage_scope import extract_scope_globs, glob_to_gcovr_filter
 

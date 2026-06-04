@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          bash ci/env/init_host_prereqs.sh
+          bash .github/scripts/env/init_host_prereqs.sh
 
       - name: Init env inside docker
         run: |
@@ -155,8 +155,8 @@ jobs:
       - name: Pack release artifacts
         run: |
           set -euo pipefail
-          bash ci/pack/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-ps_server.tar.gz" build/bin/ps_server
-          bash ci/pack/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-recstore_ops.tar.gz" build/lib/lib_recstore_ops.so
+          bash tools/packaging/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-ps_server.tar.gz" build/bin/ps_server
+          bash tools/packaging/pack_artifact.sh "build/recstore-${RELEASE_VERSION}-linux-x86_64-recstore_ops.tar.gz" build/lib/lib_recstore_ops.so
 
       - name: Pack third_party sources
         run: |
@@ -206,7 +206,7 @@ jobs:
       - name: Fix config to reduce resource usage
         run: |
           set -euo pipefail
-          bash ci/env/ci_fix_config.sh || true
+          bash .github/scripts/env/ci_fix_config.sh || true
 
       - name: Run ps_server package
         run: |
@@ -214,7 +214,7 @@ jobs:
           export GLOG_logtostderr=1
           export GLOG_v=1
           PKG_ROOT=runner/extracted/ps-server/package
-          python3 ci/pack/runner.py "${PKG_ROOT}" bin/ps_server --ready-pattern "listening on" --timeout 180 --log runner/logs/recstore-release-ps-server.log --inject-rpath --keep-alive
+          python3 tools/packaging/runner.py "${PKG_ROOT}" bin/ps_server --ready-pattern "listening on" --timeout 180 --log runner/logs/recstore-release-ps-server.log --inject-rpath --keep-alive
 
       - name: Run packaged OP Python tests
         run: |

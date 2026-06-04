@@ -9,6 +9,11 @@ PY_PKG_ROOT="${REPO_ROOT}/src/python/pytorch"
 
 GRPC_SERVER_PATH="${REPO_ROOT}/build/bin/grpc_ps_server"
 
+if [[ "$*" == *"--mock"* ]]; then
+    echo "Mock mode enabled; skipping this script."
+    exit 0
+fi
+
 CONFIG_JSON_PATH="${REPO_ROOT}/recstore_config.json"
 if [[ -f "${CONFIG_JSON_PATH}" ]]; then
     if command -v jq >/dev/null 2>&1; then
@@ -55,11 +60,6 @@ echo "Ensured KV path exists: ${KV_PATH}"
 
 export LD_LIBRARY_PATH="${REPO_ROOT}/build/lib:${LD_LIBRARY_PATH:-}"
 export PYTHONPATH="${PY_PKG_ROOT}:${PYTHONPATH:-}"
-
-if [[ "$@" == *"--mock"* ]]; then
-    echo "Mock mode enabled; skipping this script."
-    exit 0
-fi
 
 # Ensure ctest is available (fallback to pip cmake bin)
 PY_CMAKE_BIN=$(python3 - <<'PY'

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PACK_SCRIPT = REPO_ROOT / "ci" / "pack" / "pack_artifact.sh"
+PACK_SCRIPT = REPO_ROOT / "tools" / "packaging" / "pack_artifact.sh"
 
 
 class PackArtifactTest(unittest.TestCase):

@@ -45,7 +45,7 @@ jobs:
       - name: Check documentation
         id: check
         run: |
-          python3 ci/docs/check_updated_docs.py "${{ steps.changes.outputs.files }}" > /tmp/comment.txt 2>&1
+          python3 tools/docs/check_updated_docs.py "${{ steps.changes.outputs.files }}" > /tmp/comment.txt 2>&1
           if [ -s /tmp/comment.txt ] && [ $? -eq 0 ]; then
             cat /tmp/comment.txt
             echo "has_comment=true" >> $GITHUB_OUTPUT

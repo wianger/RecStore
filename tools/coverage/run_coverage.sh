@@ -16,7 +16,7 @@ SKIP_PY=0
 
 usage() {
   cat <<'EOF'
-Usage: bash ci/test/run_coverage.sh [options]
+Usage: bash tools/coverage/run_coverage.sh [options]
 
 Generate C++ and Python coverage reports in one command.
 
@@ -147,7 +147,7 @@ if [[ "${SKIP_CPP}" -eq 0 ]]; then
   fi
 
   echo "[4/6] Generating C++ coverage reports"
-  eval "$(python3 "${REPO_ROOT}/ci/test/coverage_scope.py" \
+  eval "$(python3 "${REPO_ROOT}/tools/coverage/coverage_scope.py" \
     --labeler "${REPO_ROOT}/.github/labeler.yml" \
     --format gcovr)"
   gcovr \
@@ -192,7 +192,7 @@ if [[ "${SKIP_PY}" -eq 0 ]]; then
   python3 -m coverage combine \
     "${REPO_ROOT}/src/test/framework/pytorch" \
     "${REPO_ROOT}/src/python/pytorch"
-  eval "$(python3 "${REPO_ROOT}/ci/test/coverage_scope.py" \
+  eval "$(python3 "${REPO_ROOT}/tools/coverage/coverage_scope.py" \
     --labeler "${REPO_ROOT}/.github/labeler.yml" \
     --format coverage)"
   python3 -m coverage html "${COVERAGE_SCOPE_ARGS[@]}" -d "${PY_REPORT_DIR}"

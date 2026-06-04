@@ -3,10 +3,10 @@ set -euo pipefail
 
 # RecStore CI packer: collects executables or .so libraries and their runtime deps.
 # Usage:
-#   ci/pack/pack_artifact.sh <output-tar.gz> <artifact1> [artifact2 ...]
+#   tools/packaging/pack_artifact.sh <output-tar.gz> <artifact1> [artifact2 ...]
 # Examples:
-#   ci/pack/pack_artifact.sh build/packed-bin.tar.gz build/bin/grpc_ps_server
-#   ci/pack/pack_artifact.sh build/packed-lib.tar.gz build/lib/lib_recstore_ops.so
+#   tools/packaging/pack_artifact.sh build/packed-bin.tar.gz build/bin/grpc_ps_server
+#   tools/packaging/pack_artifact.sh build/packed-lib.tar.gz build/lib/lib_recstore_ops.so
 
 if [[ $# -lt 2 ]]; then
   echo "Usage: $0 <output-tar.gz> <artifact1> [artifact2 ...]" >&2

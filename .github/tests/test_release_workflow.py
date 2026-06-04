@@ -24,7 +24,7 @@ def test_release_workflow_builds_cpu_libtorch_ops_package() -> None:
 
     assert "LIBTORCH_VARIANT=cpu" in workflow
     assert "cmake -DENABLE_CUDA=OFF" in workflow
-    assert "bash ci/pack/pack_artifact.sh" in workflow
+    assert "bash tools/packaging/pack_artifact.sh" in workflow
     assert "build/lib/lib_recstore_ops.so" in workflow
 
 

@@ -9,7 +9,7 @@ mapfile -t staged_files < <(
     | grep -E '^src/.*\.(cc|cpp|h)$' || true
 )
 
-ci/format/clang_format.sh --staged
+tools/format/clang_format.sh --staged
 
 if [[ ${#staged_files[@]} -gt 0 ]]; then
   git add -- "${staged_files[@]}"

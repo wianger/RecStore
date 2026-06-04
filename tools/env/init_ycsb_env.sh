@@ -1,7 +1,7 @@
 #!/bin/bash
-# ci/env/init_ycsb_env.sh
+# tools/env/init_ycsb_env.sh
 # Purpose: Initialize environment variables (paths, LD_LIBRARY_PATH) for running YCSB.
-# Usage: source ci/env/init_ycsb_env.sh [install_prefix]
+# Usage: source tools/env/init_ycsb_env.sh [install_prefix]
 #
 # Arguments:
 #   install_prefix (optional): Path to the directory containing bin/ycsb and lib/.
@@ -15,7 +15,7 @@ if [ -n "${BASH_SOURCE[0]}" ]; then
 else
     SCRIPT_PATH="$0"
 fi
-PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../../" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
 
 # 1. Determine Installation Prefix
 INSTALL_PREFIX="${1:-}"

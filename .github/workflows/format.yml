@@ -8,7 +8,7 @@ on:
       - 'src/**/*.h'
       - '.clang-format'
       - '.githooks/pre-commit'
-      - 'ci/format/clang_format.sh'
+      - 'tools/format/clang_format.sh'
       - '.github/workflows/format.yml'
   push:
     paths:
@@ -17,7 +17,7 @@ on:
       - 'src/**/*.h'
       - '.clang-format'
       - '.githooks/pre-commit'
-      - 'ci/format/clang_format.sh'
+      - 'tools/format/clang_format.sh'
       - '.github/workflows/format.yml'
   workflow_dispatch:
 
@@ -45,4 +45,4 @@ jobs:
       - name: Check formatting
         env:
           FORMAT_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-        run: ci/format/clang_format.sh --check --changed
+        run: tools/format/clang_format.sh --check --changed
