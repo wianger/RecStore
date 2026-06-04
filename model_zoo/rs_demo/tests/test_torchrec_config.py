@@ -112,6 +112,17 @@ class TestTorchRecConfig(unittest.TestCase):
         )
         self.assertEqual(cfg.torchrec_memory_mode, "uvm_caching")
 
+    def test_torchrec_timing_sync_mode_parses_step(self) -> None:
+        cfg = parse_config(
+            [
+                "--backend",
+                "torchrec",
+                "--torchrec-timing-sync-mode",
+                "step",
+            ]
+        )
+        self.assertEqual(cfg.torchrec_timing_sync_mode, "step")
+
     def test_recstore_ps_type_accepts_rdma(self) -> None:
         cfg = parse_config(
             [

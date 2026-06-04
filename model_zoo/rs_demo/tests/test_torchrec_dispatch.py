@@ -362,6 +362,31 @@ class TestTorchRecDispatch(unittest.TestCase):
         self.assertIn("--torchrec-memory-mode", cmd)
         self.assertIn("uvm_caching", cmd)
 
+    def test_runner_forwards_torchrec_timing_sync_mode_to_worker(self) -> None:
+        cfg = RunConfig(
+            backend="torchrec",
+            steps=1,
+            nnodes=2,
+            node_rank=0,
+            nproc=1,
+            nproc_per_node=1,
+            master_addr="10.0.2.196",
+            master_port=29611,
+            rdzv_backend="c10d",
+            rdzv_id="timing-case",
+            output_root="/tmp/rs_demo",
+            run_id="timing-case",
+            torchrec_main_csv="/tmp/rs_demo/out.csv",
+            torchrec_main_agg_csv="/tmp/rs_demo/out_agg.csv",
+            torchrec_trace_dir="/tmp/rs_demo/traces",
+            torchrec_trace_csv="/tmp/rs_demo/trace.csv",
+            torchrec_timing_sync_mode="step",
+        )
+        runner = TorchRecRunner(Path("/tmp/runtime"))
+        cmd = runner._build_torchrun_cmd(Path("/app/RecStore"), cfg)
+        self.assertIn("--torchrec-timing-sync-mode", cmd)
+        self.assertIn("step", cmd)
+
     def test_build_uvm_caching_constraints_uses_all_table_names(self) -> None:
         constraints = _build_uvm_caching_constraints(
             table_names=["t_cat_0", "t_cat_1"],
