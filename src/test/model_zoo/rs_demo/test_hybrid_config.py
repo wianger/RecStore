@@ -9,6 +9,13 @@ from model_zoo.rs_demo.config import parse_config
 from model_zoo.rs_demo.config import populate_default_paths
 
 
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "model_zoo" / "rs_demo" / "run_mock_stress.py").is_file():
+            return parent
+    raise RuntimeError("Could not locate RecStore repository root")
+
+
 class TestHybridConfig(unittest.TestCase):
     def test_parse_config_accepts_dlrm_arch_flags(self) -> None:
         cfg = parse_config(
@@ -53,7 +60,7 @@ class TestHybridConfig(unittest.TestCase):
         self.assertEqual(cfg.tiered_dram_capacity_multiplier, 0.02)
 
     def test_run_mock_stress_script_help_works_from_repo_root(self) -> None:
-        repo_root = Path(__file__).resolve().parents[3]
+        repo_root = _repo_root()
         res = subprocess.run(
             [
                 sys.executable,

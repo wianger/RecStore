@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def _load_module():
-    path = Path("/app/RecStore/src/test/scripts/analyze_embupdate_stages.py")
+    path = Path(__file__).with_name("analyze_embupdate_stages.py")
     spec = importlib.util.spec_from_file_location("analyze_embupdate_stages", path)
     module = importlib.util.module_from_spec(spec)
     assert spec is not None and spec.loader is not None
