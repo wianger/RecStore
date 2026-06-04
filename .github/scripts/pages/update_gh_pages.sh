@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: bash ci/pages/update_gh_pages.sh --source <dir> --mode <docs|coverage> [options]
+Usage: bash .github/scripts/pages/update_gh_pages.sh --source <dir> --mode <docs|coverage> [options]
 
 Update the gh-pages branch without clobbering independently published content.
 

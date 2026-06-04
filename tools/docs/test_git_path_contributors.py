@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).with_name("git_path_contributors.py")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MODULE_PATH = REPO_ROOT / "tools" / "docs" / "git_path_contributors.py"
 SPEC = importlib.util.spec_from_file_location("git_path_contributors", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)

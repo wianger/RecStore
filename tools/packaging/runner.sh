@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Generic runner for packed RecStore artifacts
 # Usage:
-#   ci/pack/runner.sh <package_root> <binary_rel_path> [--ready-pattern PATTERN] [--timeout SECONDS] [--log LOG_FILE]
+#   tools/packaging/runner.sh <package_root> <binary_rel_path> [--ready-pattern PATTERN] [--timeout SECONDS] [--log LOG_FILE]
 # Defaults:
 #   ready-pattern: "listening on"
 #   timeout: 180

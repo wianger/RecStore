@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ci/format/clang_format.sh [--check] [--all | --staged | --changed]
+Usage: tools/format/clang_format.sh [--check] [--all | --staged | --changed]
 
 Options:
   --check    Verify formatting without modifying files.

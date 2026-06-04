@@ -276,7 +276,7 @@ jobs:
             PY_REPORT_DIR=/workspace/build_coverage/coverage/python
             mkdir -p "${CPP_REPORT_DIR}" "${PY_REPORT_DIR}"
 
-            eval "$(python3 /workspace/ci/test/coverage_scope.py --labeler /workspace/.github/labeler.yml --format gcovr)"
+            eval "$(python3 /workspace/tools/coverage/coverage_scope.py --labeler /workspace/.github/labeler.yml --format gcovr)"
             gcovr \
               --root /workspace \
               --object-directory /workspace/build_coverage \
@@ -308,14 +308,14 @@ jobs:
             python3 -m coverage combine \
               /workspace/src/test/framework/pytorch \
               /workspace/src/python/pytorch
-            eval "$(python3 /workspace/ci/test/coverage_scope.py --labeler /workspace/.github/labeler.yml --format coverage)"
+            eval "$(python3 /workspace/tools/coverage/coverage_scope.py --labeler /workspace/.github/labeler.yml --format coverage)"
             python3 -m coverage html "${COVERAGE_SCOPE_ARGS[@]}" -d "${PY_REPORT_DIR}"
             python3 -m coverage xml "${COVERAGE_SCOPE_ARGS[@]}" -o "${PY_REPORT_DIR}/coverage.xml"
             python3 -m coverage report "${COVERAGE_SCOPE_ARGS[@]}" -m | tee "${PY_REPORT_DIR}/coverage.txt"
           '
 
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          bash ci/pages/update_gh_pages.sh \
+          bash .github/scripts/pages/update_gh_pages.sh \
             --source build_coverage/coverage \
             --mode coverage \
             --message "ci: deploy coverage reports"
