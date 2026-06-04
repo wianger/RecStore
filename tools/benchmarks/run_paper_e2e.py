@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import os
+import shlex
 import statistics
 import subprocess
 import sys
@@ -62,6 +63,21 @@ class PlanOverrides:
     repeat: int | None = None
     only_lanes: tuple[str, ...] = ()
     include_ablation_lanes: bool = False
+
+
+@dataclass(frozen=True)
+class ExecutionContext:
+    remote_train_host: str = ""
+    remote_repo_root: Path = ROOT
+    python_bin: str = sys.executable
+    nnodes: int = 1
+    node_rank: int = 0
+    master_addr: str = "127.0.0.1"
+    external_recstore_runtime_dir: Path | None = None
+    no_start_recstore_server: bool = False
+    server_host: str = ""
+    server_port0: int | None = None
+    server_port1: int | None = None
 
 
 @dataclass(frozen=True)
@@ -402,7 +418,7 @@ def _run(cmd: list[str], *, cwd: Path = ROOT, log_path: Path | None = None, dry_
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as f:
-            f.write("$ " + " ".join(cmd) + "\n")
+            f.write("$ " + format_command(cmd) + "\n")
     if dry_run:
         return 0
     start = time.time()
@@ -465,6 +481,7 @@ def prepare_dataset_slice(
 def build_rs_demo_command(
     *,
     lane: E2ELane,
+    context: ExecutionContext,
     run_id: str,
     data_dir: Path,
     output_root: Path,
@@ -478,8 +495,8 @@ def build_rs_demo_command(
 ) -> list[str]:
     del rows
     cmd = [
-        sys.executable,
-        str(ROOT / "model_zoo/rs_demo/run_mock_stress.py"),
+        context.python_bin,
+        str(context.remote_repo_root / "model_zoo/rs_demo/run_mock_stress.py"),
         "--backend",
         lane.backend,
         "--run-id",
@@ -501,13 +518,13 @@ def build_rs_demo_command(
         "--dense-arch-layer-sizes",
         _dense_arch_for_embedding_dim(embedding_dim),
         "--nnodes",
-        "1",
+        str(context.nnodes),
         "--node-rank",
-        "0",
+        str(context.node_rank),
         "--nproc-per-node",
         str(lane.nproc_per_node),
         "--master-addr",
-        "127.0.0.1",
+        context.master_addr,
         "--master-port",
         str(master_port),
         "--rdzv-id",
@@ -538,8 +555,30 @@ def build_rs_demo_command(
                     lane.single_node_ps_backend,
                 ]
             )
+        if context.external_recstore_runtime_dir is not None:
+            cmd.extend(["--recstore-runtime-dir", str(context.external_recstore_runtime_dir)])
+        if context.no_start_recstore_server:
+            cmd.append("--no-start-server")
+        if context.server_host:
+            cmd.extend(["--server-host", context.server_host])
+        if context.server_port0 is not None:
+            cmd.extend(["--server-port0", str(context.server_port0)])
+        if context.server_port1 is not None:
+            cmd.extend(["--server-port1", str(context.server_port1)])
     cmd.extend(lane.extra_args)
     return cmd
+
+
+def format_command(cmd: list[str]) -> str:
+    return " ".join(shlex.quote(part) for part in cmd)
+
+
+def wrap_remote_command(cmd: list[str], host: str, *, cwd: Path) -> list[str]:
+    remote = "cd {cwd} && {cmd}".format(
+        cwd=shlex.quote(str(cwd)),
+        cmd=" ".join(shlex.quote(part) for part in cmd),
+    )
+    return ["ssh", host, remote]
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -972,7 +1011,14 @@ def _dedupe_manifest_for_report(rows: list[dict[str, Any]]) -> list[dict[str, An
     return [selected[key] for key in order]
 
 
-def run_e2e_plan(plan: ExperimentPlan, *, input_file: Path, dry_run: bool = False) -> list[dict[str, Any]]:
+def run_e2e_plan(
+    plan: ExperimentPlan,
+    *,
+    input_file: Path,
+    context: ExecutionContext | None = None,
+    dry_run: bool = False,
+) -> list[dict[str, Any]]:
+    context = context or ExecutionContext()
     manifest: list[dict[str, Any]] = []
     run_index = 0
     detected_gpus = _gpu_count()
@@ -1062,6 +1108,7 @@ def run_e2e_plan(plan: ExperimentPlan, *, input_file: Path, dry_run: bool = Fals
                             )
                             cmd = build_rs_demo_command(
                                 lane=lane,
+                                context=context,
                                 run_id=run_id,
                                 data_dir=dataset_dir,
                                 output_root=plan.output_root,
@@ -1073,9 +1120,14 @@ def run_e2e_plan(plan: ExperimentPlan, *, input_file: Path, dry_run: bool = Fals
                                 embedding_dim=embedding_dim,
                                 master_port=29600 + (run_index % 1000),
                             )
+                            run_cmd = (
+                                wrap_remote_command(cmd, context.remote_train_host, cwd=context.remote_repo_root)
+                                if context.remote_train_host
+                                else cmd
+                            )
                             log_path = plan.output_root / "logs" / "e2e" / f"{run_id}.log"
                             status = "dry_run" if dry_run else "ok"
-                            exit_code = _run(cmd, log_path=log_path, dry_run=dry_run)
+                            exit_code = _run(run_cmd, log_path=log_path, dry_run=dry_run)
                             if not dry_run and (exit_code != 0 or not main_csv.exists()):
                                 status = "failed"
                             manifest.append(
@@ -1099,7 +1151,14 @@ def run_e2e_plan(plan: ExperimentPlan, *, input_file: Path, dry_run: bool = Fals
                                     "exit_code": exit_code,
                                     "main_csv": str(main_csv),
                                     "log_path": str(log_path),
-                                    "command": " ".join(cmd),
+                                    "command": format_command(run_cmd),
+                                    "remote_train_host": context.remote_train_host,
+                                    "server_host": context.server_host,
+                                    "recstore_runtime_dir": (
+                                        str(context.external_recstore_runtime_dir)
+                                        if context.external_recstore_runtime_dir is not None
+                                        else ""
+                                    ),
                                 }
                             )
     return manifest
@@ -2608,6 +2667,39 @@ def main(argv: list[str] | None = None) -> int:
         help="Include extra 1P RecStore backend/transport/prefetch ablation lanes.",
     )
     parser.add_argument(
+        "--remote-train-host",
+        default="",
+        help="Run E2E benchmark commands through ssh on this host/container.",
+    )
+    parser.add_argument(
+        "--remote-repo-root",
+        type=Path,
+        default=ROOT,
+        help="Repository path visible from --remote-train-host.",
+    )
+    parser.add_argument(
+        "--remote-python-bin",
+        default=sys.executable,
+        help="Python executable used on --remote-train-host.",
+    )
+    parser.add_argument("--nnodes", type=int, default=1, help="torchrun/rs_demo node count.")
+    parser.add_argument("--node-rank", type=int, default=0, help="torchrun/rs_demo node rank for this runner.")
+    parser.add_argument("--master-addr", default="127.0.0.1", help="torchrun master address.")
+    parser.add_argument(
+        "--external-recstore-runtime-dir",
+        type=Path,
+        default=None,
+        help="Existing RecStore runtime dir/config visible to the train host.",
+    )
+    parser.add_argument(
+        "--no-start-recstore-server",
+        action="store_true",
+        help="Pass --no-start-server for RecStore lanes so training uses an external PS.",
+    )
+    parser.add_argument("--server-host", default="", help="RecStore PS host passed to RecStore lanes.")
+    parser.add_argument("--server-port0", type=int, default=None, help="RecStore shard-0 port.")
+    parser.add_argument("--server-port1", type=int, default=None, help="RecStore shard-1 port.")
+    parser.add_argument(
         "--aggregate-only",
         action="store_true",
         help="Regenerate summary CSV and LaTeX from existing manifest/results.",
@@ -2627,6 +2719,10 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--warmup-steps must be non-negative")
     if args.repeat is not None and args.repeat <= 0:
         raise ValueError("--repeat must be positive")
+    if args.nnodes <= 0:
+        raise ValueError("--nnodes must be positive")
+    if args.node_rank < 0:
+        raise ValueError("--node-rank must be non-negative")
 
     output_root = args.output_root.resolve()
     output_root.mkdir(parents=True, exist_ok=True)
@@ -2642,6 +2738,19 @@ def main(argv: list[str] | None = None) -> int:
         include_ablation_lanes=args.include_ablation_lanes,
     )
     plan = build_plan(args.profile, output_root, overrides)
+    context = ExecutionContext(
+        remote_train_host=args.remote_train_host,
+        remote_repo_root=args.remote_repo_root,
+        python_bin=args.remote_python_bin,
+        nnodes=args.nnodes,
+        node_rank=args.node_rank,
+        master_addr=args.master_addr,
+        external_recstore_runtime_dir=args.external_recstore_runtime_dir,
+        no_start_recstore_server=args.no_start_recstore_server,
+        server_host=args.server_host,
+        server_port0=args.server_port0,
+        server_port1=args.server_port1,
+    )
     metadata = {
         "profile": plan.profile,
         "output_root": str(output_root),
@@ -2657,6 +2766,20 @@ def main(argv: list[str] | None = None) -> int:
         "warmup_steps": plan.warmup_steps,
         "repeat": plan.repeat,
         "lanes": [lane.slug for lane in plan.lanes],
+        "remote_train_host": context.remote_train_host,
+        "remote_repo_root": str(context.remote_repo_root),
+        "nnodes": context.nnodes,
+        "node_rank": context.node_rank,
+        "master_addr": context.master_addr,
+        "external_recstore_runtime_dir": (
+            str(context.external_recstore_runtime_dir)
+            if context.external_recstore_runtime_dir is not None
+            else ""
+        ),
+        "no_start_recstore_server": context.no_start_recstore_server,
+        "server_host": context.server_host,
+        "server_port0": context.server_port0 if context.server_port0 is not None else "",
+        "server_port1": context.server_port1 if context.server_port1 is not None else "",
     }
     metadata.update(_collect_environment_metadata())
     (output_root / "metadata.json").write_text(
@@ -2670,7 +2793,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest = _load_manifest(output_root / "manifest.csv")
         combined_ps_rows = []
     else:
-        manifest = [] if args.skip_e2e else run_e2e_plan(plan, input_file=args.input_file, dry_run=args.dry_run)
+        manifest = (
+            []
+            if args.skip_e2e
+            else run_e2e_plan(plan, input_file=args.input_file, context=context, dry_run=args.dry_run)
+        )
         combined_ps_rows = []
     _write_csv(output_root / "manifest.csv", manifest)
     summary_rows = collect_e2e_summary(manifest=manifest, output_root=output_root)

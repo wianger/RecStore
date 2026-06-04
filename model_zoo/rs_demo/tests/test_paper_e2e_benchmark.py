@@ -83,7 +83,7 @@ class TestPaperE2EBenchmark(unittest.TestCase):
         self.assertEqual(plan.lanes[2].prefetch_depth, 4)
 
     def test_recstore_command_includes_backend_parameters(self) -> None:
-        from tools.benchmarks.run_paper_e2e import E2ELane, build_rs_demo_command
+        from tools.benchmarks.run_paper_e2e import ExecutionContext, E2ELane, build_rs_demo_command
 
         lane = E2ELane(
             slug="recstore-brpc-pet-1p",
@@ -97,6 +97,7 @@ class TestPaperE2EBenchmark(unittest.TestCase):
 
         cmd = build_rs_demo_command(
             lane=lane,
+            context=ExecutionContext(),
             run_id="run-x",
             data_dir=Path("/data/slice_4096"),
             output_root=Path("/tmp/out"),
@@ -117,7 +118,7 @@ class TestPaperE2EBenchmark(unittest.TestCase):
         self.assertIn("recstore_dram", cmd)
 
     def test_recstore_rdma_command_uses_rdma_ps_type(self) -> None:
-        from tools.benchmarks.run_paper_e2e import E2ELane, build_rs_demo_command
+        from tools.benchmarks.run_paper_e2e import ExecutionContext, E2ELane, build_rs_demo_command
 
         lane = E2ELane(
             slug="recstore-rdma-pet-1p",
@@ -131,6 +132,7 @@ class TestPaperE2EBenchmark(unittest.TestCase):
 
         cmd = build_rs_demo_command(
             lane=lane,
+            context=ExecutionContext(),
             run_id="run-rdma",
             data_dir=Path("/data/slice_4096"),
             output_root=Path("/tmp/out"),
@@ -145,6 +147,67 @@ class TestPaperE2EBenchmark(unittest.TestCase):
 
         self.assertIn("--ps-type", cmd)
         self.assertIn("RDMA", cmd)
+
+    def test_recstore_command_supports_remote_external_ps_context(self) -> None:
+        from tools.benchmarks.run_paper_e2e import (
+            ExecutionContext,
+            E2ELane,
+            build_rs_demo_command,
+            wrap_remote_command,
+        )
+
+        lane = E2ELane(
+            slug="recstore-brpc-pet-1p",
+            label="RecStore BRPC PET",
+            backend="recstore",
+            ps_type="BRPC",
+            recstore_index_type="DRAM_PET_HASH",
+            ps_kv_backend="recstore_dram",
+            nproc_per_node=1,
+        )
+        context = ExecutionContext(
+            remote_train_host="root@10.0.2.191 -p 50201",
+            remote_repo_root=Path("/remote/RecStore"),
+            python_bin="/usr/bin/python3",
+            nnodes=2,
+            node_rank=1,
+            master_addr="10.0.2.191",
+            external_recstore_runtime_dir=Path("/tmp/rs-runtime"),
+            no_start_recstore_server=True,
+            server_host="10.0.2.190",
+            server_port0=15000,
+        )
+
+        cmd = build_rs_demo_command(
+            lane=lane,
+            context=context,
+            run_id="remote-run",
+            data_dir=Path("/data/slice_4096"),
+            output_root=Path("/tmp/out"),
+            rows=4096,
+            batch_size=256,
+            steps=3,
+            warmup_steps=1,
+            num_embeddings=10000,
+            embedding_dim=128,
+            master_port=29600,
+        )
+        remote = wrap_remote_command(cmd, context.remote_train_host, cwd=context.remote_repo_root)
+
+        self.assertEqual(cmd[0], "/usr/bin/python3")
+        self.assertIn("/remote/RecStore/model_zoo/rs_demo/run_mock_stress.py", cmd)
+        self.assertIn("--recstore-runtime-dir", cmd)
+        self.assertIn("/tmp/rs-runtime", cmd)
+        self.assertIn("--no-start-server", cmd)
+        self.assertIn("--server-host", cmd)
+        self.assertIn("10.0.2.190", cmd)
+        self.assertIn("--server-port0", cmd)
+        self.assertIn("15000", cmd)
+        self.assertIn("--nnodes", cmd)
+        self.assertIn("2", cmd)
+        self.assertEqual(remote[0], "ssh")
+        self.assertEqual(remote[1], "root@10.0.2.191 -p 50201")
+        self.assertIn("cd /remote/RecStore &&", remote[2])
 
     def test_collect_e2e_summary_computes_rows_per_second(self) -> None:
         from tools.benchmarks.run_paper_e2e import collect_e2e_summary
