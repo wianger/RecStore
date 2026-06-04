@@ -1,9 +1,9 @@
 ---
-name: kvengine-ycsb
-description: Run RecStore KVEngine correctness, YCSB, and storage-only batch lookup benchmark workflows, including read_mode=batch_get_flat for aligning KVEngine limits with PS RDMA batch GET. Use when Codex needs to validate src/test/test_kvengine.cpp, run tools/benchmarks/run_ycsb_compare.py, prompt for thread count, SSD benchmark path, results directory, read mode, and batch keys, then generate a Chinese summary.md.
+name: benchmark-kvengine
+description: Run RecStore KVEngine correctness, YCSB, and storage-only batch lookup benchmark workflows, including read_mode=batch_get_flat for aligning KVEngine limits with PS RDMA batch GET. Use when Codex needs to validate src/test/test_kvengine.cpp, run tools/benchmarks/run_kvengine_compare.py, prompt for thread count, SSD benchmark path, results directory, read mode, and batch keys, then generate a Chinese summary.md.
 ---
 
-# KVEngine YCSB
+# Benchmark KVEngine
 
 ## Workflow
 
@@ -13,7 +13,7 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
 2. Prompt the user for:
    - thread count (default = 16)
    - SSD root path for benchmark data (default = /mnt/nvme1n1_recstore/recstore)
-   - result output directory (default = results/kvengine_ycsb_$(date +%m%d%H%M))
+   - result output directory (default = results/benchmark_kvengine_$(date +%m%d%H%M))
    - workloads to run (default = a b c)
    - repeat count for YCSB (default = 3, ask if user wants 1)
    - distributions to use (default = uniform and zipfian)
@@ -25,7 +25,7 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - `cmake --build build --target test_kvengine -j`
    - `ctest -R '^test_kvengine$' -VV`
    - `cmake --build build --target benchmark_kv_engine -j`
-   - `tools/benchmarks/run_ycsb_compare.py`
+   - `tools/benchmarks/run_kvengine_compare.py`
 4. Save logs and CSV/SVG artifacts under the chosen result directory.
 5. Write `summary.md` as exactly three report tables, with the benchmark hyperparameters recorded as Chinese prose under `Workload 说明` before the first table:
    - Workload description
@@ -44,7 +44,7 @@ cmake --build build --target benchmark_kv_engine -j
 ```
 
 ```bash
-python3 tools/benchmarks/run_ycsb_compare.py \
+python3 tools/benchmarks/run_kvengine_compare.py \
   --output-dir <output_dir> \
   --workloads a b c \
   --distributions uniform \
@@ -57,14 +57,14 @@ python3 tools/benchmarks/run_ycsb_compare.py \
   --read-mode get
 ```
 
-`tools/benchmarks/run_ycsb_compare.py` currently uses `/mnt/nvme1n1_recstore/recstore` internally for SSD data. If the user provides a different SSD path, create a temporary symlink or patch the command wrapper only after making that choice explicit.
+`tools/benchmarks/run_kvengine_compare.py` currently uses `/mnt/nvme1n1_recstore/recstore` internally for SSD data. If the user provides a different SSD path, create a temporary symlink or patch the command wrapper only after making that choice explicit.
 
 If the user asks for "3 次平均", pass `--repeat 3`; otherwise preserve the requested repeat count in the `summary.md` heading.
 
 For storage-only PS RDMA alignment, use random batch lookup rather than single-key reads. This is the path used to establish that `DRAM_EXTENDIBLE_HASH` is around `19.45M keys/s` for `BatchGetFlat(500 random keys)`, while `DRAM_PET_HASH` is around `51.96M keys/s`.
 
 ```bash
-python3 tools/benchmarks/run_ycsb_compare.py \
+python3 tools/benchmarks/run_kvengine_compare.py \
   --output-dir <output_dir> \
   --engines dram_eh_dram dram_pet_dram \
   --workloads workloadc \
@@ -100,7 +100,7 @@ Use `M` for values >= 1,000,000 and `K` for values >= 1,000. Include the `三 wo
 
 ## Current Bring-up Notes
 
-- `run_ycsb_compare.py` renders `kvengine_ycsb_run_throughput.svg` unconditionally at the end of a normal run. If `matplotlib` is missing, the command can exit nonzero after `summary.csv` and `kvengine_workload_summary.csv` are already written.
+- `run_kvengine_compare.py` renders `kvengine_ycsb_run_throughput.svg` unconditionally at the end of a normal run. If `matplotlib` is missing, the command can exit nonzero after `summary.csv` and `kvengine_workload_summary.csv` are already written.
 - In that case, still generate `summary.md` from `kvengine_workload_summary.csv` and report the missing chart dependency separately.
 - For `DRAM_VALUE_STORE` lanes, watch for allocator failures such as `ConcurrentSlabMemoryPool OOM`. If that happens, record the failing engine row and consider rerunning with explicit `--dram-capacity-bytes` or a different allocator.
 - Judge `petkv` success by exit code plus `YCSB_LOAD_RESULT` / `YCSB_RESULT`, not by incidental `PetHash invalid. capacity_ == 0` log lines alone.

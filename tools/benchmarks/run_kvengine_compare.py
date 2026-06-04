@@ -2,7 +2,7 @@
 
 Typical usage::
 
-    python tools/benchmarks/run_ycsb_compare.py \\
+    python tools/benchmarks/run_kvengine_compare.py \\
         --engines petkv dram_pet_dram fasterkv \\
         --workloads a b c \\
         --distributions uniform zipfian \\
@@ -11,7 +11,7 @@ Typical usage::
 
 Draw-only mode (re-render charts from an existing summary.csv)::
 
-    python tools/benchmarks/run_ycsb_compare.py --draw --output-dir results/ycsb
+    python tools/benchmarks/run_kvengine_compare.py --draw --output-dir results/ycsb
 """
 
 from __future__ import annotations

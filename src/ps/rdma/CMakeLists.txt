@@ -53,6 +53,10 @@ add_executable(
     petps_integration_test
     ${PROJECT_SOURCE_DIR}/src/test/ps/rdma/petps_integration_test.cpp
 )
+target_sources(petps_integration_test PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/framework/common/ps_client_config_adapter.cc
+    ${PROJECT_SOURCE_DIR}/src/ps/rdma/rdma_ps_client_adapter.cc
+)
 add_dependencies(petps_integration_test petps_server)
 target_link_libraries(petps_integration_test PUBLIC
     wq_ps_client
@@ -113,6 +117,25 @@ add_test(
     )
     set_tests_properties(
         petps_multi_shard_test
+        PROPERTIES
+            SKIP_RETURN_CODE 77
+            TIMEOUT 60
+            LABELS "rdma_integration"
+    )
+
+    add_test(
+        NAME petps_adapter_split_get_multi_shard_test
+        COMMAND ${Python3_EXECUTABLE}
+                ${PROJECT_SOURCE_DIR}/src/test/scripts/run_petps_integration.py
+                --server-count 2
+                --client-count 1
+                --config-path ${PROJECT_SOURCE_DIR}/src/test/configs/recstore_config.rdma_multishard_test.json
+                --test-binary $<TARGET_FILE:petps_integration_test>
+                --gtest-filter=PetPSIntegrationTest.AdapterSplitGetRoundTripMultiShard
+                --max-kv-num-per-request 2
+    )
+    set_tests_properties(
+        petps_adapter_split_get_multi_shard_test
         PROPERTIES
             SKIP_RETURN_CODE 77
             TIMEOUT 60

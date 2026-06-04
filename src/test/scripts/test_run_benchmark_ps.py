@@ -15,6 +15,7 @@ from run_benchmark_ps import (  # noqa: E402
     build_benchmark_cmd,
     build_rdma_runner,
     build_remote_exec_cmd,
+    build_rpc_server_cmd,
     build_runtime_config,
     build_topology_plan,
     collect_ps_result_rows,
@@ -25,6 +26,7 @@ from run_benchmark_ps import (  # noqa: E402
     parse_client_plan,
     parse_server_plan,
     recommended_dram_capacity_bytes,
+    recommended_ssd_capacity_bytes,
     replace_config_path_arg,
     resolve_base_port,
     resolve_rdma_get_response_mode,
@@ -151,8 +153,13 @@ class TestRunBenchmarkPS(unittest.TestCase):
             max_keys_per_request=256,
             num_threads=8,
             index_type="DRAM_PET_HASH",
+            value_store_type="DRAM_VALUE_STORE",
             dram_allocator="PERSIST_LOOP_SLAB",
             data_root="/tmp/bench/value",
+            ssd_data_root="/tmp/bench/ssd",
+            ssd_capacity_bytes=268435456,
+            ssd_io_backend="IOURING",
+            ssd_queue_depth=512,
         )
         self.assertEqual(config["cache_ps"]["ps_type"], "BRPC")
         self.assertEqual(config["distributed_client"]["servers"][1]["host"], "server-b")
@@ -175,8 +182,13 @@ class TestRunBenchmarkPS(unittest.TestCase):
             max_keys_per_request=64,
             num_threads=2,
             index_type="DRAM_EXTENDIBLE_HASH",
+            value_store_type="DRAM_VALUE_STORE",
             dram_allocator="PERSIST_LOOP_SLAB",
             data_root="/tmp/rdma/value",
+            ssd_data_root="/tmp/rdma/ssd",
+            ssd_capacity_bytes=268435456,
+            ssd_io_backend="IOURING",
+            ssd_queue_depth=512,
         )
         self.assertEqual(config["cache_ps"]["ps_type"], "RDMA")
 
@@ -196,13 +208,49 @@ class TestRunBenchmarkPS(unittest.TestCase):
             max_keys_per_request=64,
             num_threads=2,
             index_type="DRAM_EXTENDIBLE_HASH",
+            value_store_type="DRAM_VALUE_STORE",
             dram_allocator="PERSIST_LOOP_SLAB",
             data_root="/tmp/grpc/value",
+            ssd_data_root="/tmp/grpc/ssd",
+            ssd_capacity_bytes=268435456,
+            ssd_io_backend="IOURING",
+            ssd_queue_depth=512,
         )
         self.assertEqual(
             config["cache_ps"]["base_kv_config"]["value"]["dram_allocator"]["capacity_bytes"],
             1 << 20,
         )
+
+    def test_build_runtime_config_supports_tiered_value_store(self):
+        topology = build_topology_plan(
+            "GRPC",
+            server_shard_ips=["127.0.0.1"],
+            client_ips=["127.0.0.1"],
+            client_processes_per_ip=1,
+            base_port=15000,
+        )
+        config = build_runtime_config(
+            transport="GRPC",
+            topology=topology,
+            capacity=1024,
+            value_size=128,
+            max_keys_per_request=64,
+            num_threads=2,
+            index_type="DRAM_EXTENDIBLE_HASH",
+            value_store_type="TIERED_VALUE_STORE",
+            dram_allocator="PERSIST_LOOP_SLAB",
+            data_root="/tmp/grpc/value",
+            ssd_data_root="/tmp/grpc/ssd",
+            ssd_capacity_bytes=268435456,
+            ssd_io_backend="IOURING",
+            ssd_queue_depth=512,
+        )
+        value = config["cache_ps"]["base_kv_config"]["value"]
+        self.assertEqual(value["type"], "TIERED_VALUE_STORE")
+        self.assertNotIn("path", value)
+        self.assertEqual(value["dram_allocator"]["path"], "/tmp/grpc/value/dram")
+        self.assertEqual(value["ssd_allocator"]["path"], "/tmp/grpc/ssd/ssd.db")
+        self.assertEqual(value["ssd_allocator"]["io"]["type"], "IOURING")
 
     def test_recommended_dram_capacity_bytes_adds_slab_headroom(self):
         self.assertEqual(
@@ -212,6 +260,12 @@ class TestRunBenchmarkPS(unittest.TestCase):
                 dram_allocator="PERSIST_LOOP_SLAB",
             ),
             596 * (1 << 20),
+        )
+
+    def test_recommended_ssd_capacity_bytes_has_minimum(self):
+        self.assertEqual(
+            recommended_ssd_capacity_bytes(capacity=1024, value_size=128),
+            256 * 1024 * 1024,
         )
 
     def test_recommended_dram_capacity_bytes_keeps_non_slab_exact(self):
@@ -265,6 +319,7 @@ class TestRunBenchmarkPS(unittest.TestCase):
             prefetch_depth=4,
             rdma_adapter_skip_prefetch_result_copy=True,
             rdma_get_response_mode="staging_copy",
+            verify_deterministic_values=True,
         )
         self.assertIn("--workload=transactions", cmd)
         self.assertIn("--record_count=1000", cmd)
@@ -273,6 +328,32 @@ class TestRunBenchmarkPS(unittest.TestCase):
         self.assertIn("--prefetch_depth=4", cmd)
         self.assertIn("--rdma_adapter_skip_prefetch_result_copy=true", cmd)
         self.assertIn("--rdma_get_response_mode=staging_copy", cmd)
+        self.assertIn("--verify_deterministic_values=true", cmd)
+
+    def test_build_rpc_server_cmd_passes_brpc_config_and_port(self):
+        cmd = build_rpc_server_cmd(
+            "/tmp/ps_server",
+            "BRPC",
+            "/tmp/config.json",
+            shard=3,
+            port=25000,
+        )
+        self.assertIn("--config_path=/tmp/config.json", cmd)
+        self.assertIn("--brpc_config_path=/tmp/config.json", cmd)
+        self.assertIn("--local_shard_id=3", cmd)
+        self.assertIn("--brpc_server_port=25000", cmd)
+
+    def test_build_rpc_server_cmd_leaves_grpc_single_shard_default_port(self):
+        cmd = build_rpc_server_cmd(
+            "/tmp/ps_server",
+            "GRPC",
+            "/tmp/config.json",
+            shard=0,
+            port=25000,
+        )
+        self.assertIn("--config_path=/tmp/config.json", cmd)
+        self.assertIn("--grpc_local_shard_id=0", cmd)
+        self.assertNotIn("--brpc_server_port=25000", cmd)
 
     def test_parse_args_rejects_rdma_prefetch_depth_above_slot_capacity(self):
         argv = [
@@ -315,6 +396,20 @@ class TestRunBenchmarkPS(unittest.TestCase):
 
         self.assertEqual(args.build_dir, "build_release")
         self.assertEqual(args.remote_build_dir, "build_release")
+
+    def test_parse_args_accepts_tiered_dram_capacity_override(self):
+        argv = [
+            "run_benchmark_ps.py",
+            "--value-store-type",
+            "TIERED_VALUE_STORE",
+            "--tiered-dram-capacity-bytes",
+            "1048576",
+        ]
+        with mock.patch.object(sys, "argv", argv):
+            args = parse_args()
+
+        self.assertEqual(args.value_store_type, "TIERED_VALUE_STORE")
+        self.assertEqual(args.tiered_dram_capacity_bytes, 1048576)
 
     def test_parse_args_sets_local_rdma_bind_core_defaults(self):
         argv = [

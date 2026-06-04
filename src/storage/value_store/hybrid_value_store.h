@@ -99,6 +99,14 @@ public:
     return dram_store_.DirectPtr(DramRawHandle(handle));
   }
 
+  char* RDMABackingData() const override {
+    return dram_store_.RDMABackingData();
+  }
+
+  size_t RDMABackingSize() const override {
+    return dram_store_.RDMABackingSize();
+  }
+
   size_t SlotCapacity(uint64_t handle) const override {
     if (handle == kValueHandleNone) {
       return 0;

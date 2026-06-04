@@ -46,7 +46,15 @@ endif()
 # KV engine factory done
 
 add_executable(benchmark_kv_engine benchmark_kv_engine.cc)
-target_link_libraries(benchmark_kv_engine PUBLIC pthread base kv_engine ps_common)
+target_link_libraries(
+  benchmark_kv_engine
+  PUBLIC
+    pthread
+    base
+    -Wl,--whole-archive
+    kv_engine
+    -Wl,--no-whole-archive
+    ps_common)
 target_link_libraries(benchmark_kv_engine PUBLIC OpenMP::OpenMP_CXX)
 if(USE_GPERF_PROFILING)
   target_compile_options(benchmark_kv_engine PRIVATE -fno-omit-frame-pointer)
