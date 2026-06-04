@@ -12,13 +12,8 @@ RecStore 内置了完善的性能埋点与分析机制，涵盖了从 PyTorch OP
 - PS/network：通过 RecStore PS client/server 与 transport。
 - PyTorch/model：模型训练侧端到端。
 
-不要把某一层的结果直接扩展成整体架构结论。当前 RDMA GET 的阶段性完整报告是：
-
-```text
-ps_rdma_benchmark_report_0531.md
-```
-
-这份报告对齐了 storage-only 的 `BatchGetFlat(500 random keys)` 和 PS/network 的
+不要把某一层的结果直接扩展成整体架构结论。当前 RDMA GET 的阶段性结论对齐了
+storage-only 的 `BatchGetFlat(500 random keys)` 和 PS/network 的
 RDMA GET `batch_keys=500`，结论是：
 
 | 层级 | 场景 | 吞吐 |

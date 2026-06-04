@@ -12,7 +12,7 @@ for path in (REPO_ROOT, TEST_SCRIPTS_PATH):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from recstore_config_path import resolve_recstore_config_path
+from tools.config.recstore_config_path import resolve_recstore_config_path
 
 
 def resolve_repo_config_path(start_dir: Optional[Path | str] = None) -> str:

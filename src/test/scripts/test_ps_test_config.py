@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import recstore_config_path
+import tools.config.recstore_config_path as recstore_config_path
 from ps_test_config import (
     DEFAULT_BRPC_BENCHMARK_CONFIG,
     DEFAULT_GRPC_MAIN_CONFIG,

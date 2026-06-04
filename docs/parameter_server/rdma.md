@@ -407,12 +407,6 @@ raw results 保存在：
 results/benchmark_ps_matrix_0529
 ```
 
-这组历史矩阵已经由当前完整报告承接：
-
-```text
-ps_rdma_benchmark_report_0531.md
-```
-
 总吞吐矩阵如下，单位为 `M keys/s`：
 
 | server_shards | client_processes | client_threads_per_process | GRPC | BRPC | RDMA |
@@ -450,12 +444,6 @@ ps_rdma_benchmark_report_0531.md
 排障时先用 dedicated RC benchmark 建立 transport baseline，再看 generic benchmark 是否是更上层生命周期或调用方式问题。
 
 #### 6.2.4 2026-05-31 RDMA GET response path 固化
-
-当前完整报告见仓库根目录：
-
-```text
-ps_rdma_benchmark_report_0531.md
-```
 
 本轮对齐了 storage-only 与 PS/network 两层：
 
@@ -658,9 +646,9 @@ python3 tools/benchmarks/run_rdma_rc_transport_benchmark.py \
 ## 8. 当前路线图
 
 当前主线已经从“单纯追更高并发”调整为“按 KVEngine 和 value layout 选择正确的
-GET response path”。根目录 `ps_rdma_benchmark_report_0531.md` 记录从
-`~2M keys/s` 到 `qps=16` repeat 平均 `~41.64M keys/s`、单轮最高
-`45.62M keys/s`，以及 `qps=20` tuning profile 最高 `~46.69M keys/s` 的完整阶段。
+GET response path”。阶段数据覆盖了从 `~2M keys/s` 到 `qps=16` repeat 平均
+`~41.64M keys/s`、单轮最高 `45.62M keys/s`，以及 `qps=20` tuning profile
+最高 `~46.69M keys/s` 的优化过程。
 
 ### 8.1 第一优先级：固化 PET staging-copy 主线
 

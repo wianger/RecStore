@@ -82,7 +82,7 @@ def report_latency(name: str, ms_value: float):
     device_str = "GPU" if torch.cuda.is_available() else "CPU"
     
     import json
-    from recstore_config_path import resolve_recstore_config_path
+    from tools.config.recstore_config_path import resolve_recstore_config_path
 
     try:
         with open(resolve_recstore_config_path(), 'r') as f:

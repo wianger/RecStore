@@ -7,7 +7,7 @@ from pathlib import Path
 
 import torch
 
-from recstore_config_path import resolve_recstore_config_path
+from tools.config.recstore_config_path import resolve_recstore_config_path
 
 from ..KVClient import RecStoreClient
 

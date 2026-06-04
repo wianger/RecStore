@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .common import DEFAULT_OUTPUT_ROOT, REPO_ROOT
 
-from recstore_config_path import resolve_recstore_config_path
+from tools.config.recstore_config_path import resolve_recstore_config_path
 
 
 def build_remote_recstore_runtime(run_slug: str, *, path_name: str, output_root: Path = DEFAULT_OUTPUT_ROOT) -> Path:

@@ -26,7 +26,7 @@ if TEST_SCRIPTS_PATH not in sys.path:
 try:
     from ps_server_runner import ps_server_context
     from ps_server_helpers import find_ps_server_binary
-    from recstore_config_path import resolve_recstore_config_path
+    from tools.config.recstore_config_path import resolve_recstore_config_path
 except ImportError:
     print("Error: Could not import ps_server_runner. Make sure the script is in the correct location.")
     sys.exit(1)

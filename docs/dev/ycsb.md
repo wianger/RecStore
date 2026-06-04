@@ -91,12 +91,6 @@ lookup 上限卡住。2026-05-31 的 RDMA GET 报告使用了 `batch_keys=500`�
 | `DRAM_EXTENDIBLE_HASH` | `19.45M keys/s` | PS RDMA EH `19.37M keys/s` 基本碰到存储层上限 |
 | `DRAM_PET_HASH` | `51.96M keys/s` | PET 需要搭配 staging-copy response path 才能释放存储层优势 |
 
-完整报告见仓库根目录：
-
-```text
-ps_rdma_benchmark_report_0531.md
-```
-
 直接运行二进制示例：
 
 ```bash

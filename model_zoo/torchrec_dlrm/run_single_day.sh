@@ -40,7 +40,7 @@ import sys
 repo_root = sys.argv[1]
 sys.path.insert(0, repo_root)
 
-from recstore_config_path import resolve_recstore_config_path
+from tools.config.recstore_config_path import resolve_recstore_config_path
 
 print(resolve_recstore_config_path())
 PY
