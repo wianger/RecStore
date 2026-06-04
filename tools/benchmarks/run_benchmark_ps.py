@@ -50,6 +50,7 @@ DEFAULT_REMOTE_RUNTIME_ROOT = "/tmp/recstore_benchmark_ps"
 DEFAULT_LOCAL_DATA_ROOT = "/tmp/recstore_benchmark_ps_data"
 DEFAULT_RESULT_PREFIX = "benchmark_ps_"
 DEFAULT_RDMA_FETCH_QPS_PER_CLIENT_PER_SHARD = 16
+MIN_SSD_CAPACITY_BYTES = 256 * 1024 * 1024
 SUCCESS_STATUS = "success"
 SKIPPED_STATUS = "skipped"
 SLAB_ALLOCATOR_CHUNK_BYTES = 1 << 20
@@ -324,13 +325,29 @@ def build_runtime_config(
     max_keys_per_request: int,
     num_threads: int,
     index_type: str,
+    value_store_type: str,
     dram_allocator: str,
     data_root: str,
+    ssd_data_root: str,
+    ssd_capacity_bytes: int,
+    ssd_io_backend: str,
+    ssd_queue_depth: int,
 ) -> dict:
     capacity_bytes = recommended_dram_capacity_bytes(
         capacity=capacity,
         value_size=value_size,
         dram_allocator=dram_allocator,
+    )
+    value_config = build_value_store_config(
+        value_store_type=value_store_type,
+        value_size=value_size,
+        dram_allocator=dram_allocator,
+        dram_capacity_bytes=capacity_bytes,
+        data_root=data_root,
+        ssd_data_root=ssd_data_root,
+        ssd_capacity_bytes=ssd_capacity_bytes,
+        ssd_io_backend=ssd_io_backend,
+        ssd_queue_depth=ssd_queue_depth,
     )
     servers = [
         {"host": server.host, "port": server.port, "shard": server.shard}
@@ -347,15 +364,7 @@ def build_runtime_config(
             "base_kv_config": {
                 "capacity": capacity,
                 "index": {"type": index_type},
-                "value": {
-                    "type": "DRAM_VALUE_STORE",
-                    "default_value_size_hint": value_size,
-                    "dram_allocator": {
-                        "type": dram_allocator,
-                        "capacity_bytes": capacity_bytes,
-                    },
-                    "path": data_root,
-                },
+                "value": value_config,
             },
         },
         "distributed_client": {
@@ -371,6 +380,72 @@ def build_runtime_config(
         },
     }
     return config
+
+
+def recommended_ssd_capacity_bytes(*, capacity: int, value_size: int) -> int:
+    return max(
+        capacity * max(value_size + SLAB_ALLOCATOR_METADATA_BYTES, 128) * 2,
+        MIN_SSD_CAPACITY_BYTES,
+    )
+
+
+def build_ssd_allocator_config(
+    *, capacity_bytes: int, ssd_io_backend: str, ssd_queue_depth: int
+) -> dict:
+    return {
+        "type": "SSD_SLAB",
+        "capacity_bytes": capacity_bytes,
+        "min_block_size": 128,
+        "max_block_size": 4096,
+        "io": {
+            "type": ssd_io_backend,
+            "queue_depth": ssd_queue_depth,
+            "base_offset_bytes": 4096,
+        },
+    }
+
+
+def build_value_store_config(
+    *,
+    value_store_type: str,
+    value_size: int,
+    dram_allocator: str,
+    dram_capacity_bytes: int,
+    data_root: str,
+    ssd_data_root: str,
+    ssd_capacity_bytes: int,
+    ssd_io_backend: str,
+    ssd_queue_depth: int,
+) -> dict:
+    if value_store_type == "DRAM_VALUE_STORE":
+        return {
+            "type": "DRAM_VALUE_STORE",
+            "default_value_size_hint": value_size,
+            "dram_allocator": {
+                "type": dram_allocator,
+                "capacity_bytes": dram_capacity_bytes,
+            },
+            "path": data_root,
+        }
+    if value_store_type == "TIERED_VALUE_STORE":
+        ssd_allocator = build_ssd_allocator_config(
+            capacity_bytes=ssd_capacity_bytes,
+            ssd_io_backend=ssd_io_backend,
+            ssd_queue_depth=ssd_queue_depth,
+        )
+        ssd_allocator["path"] = str(Path(ssd_data_root) / "ssd.db")
+        return {
+            "type": "TIERED_VALUE_STORE",
+            "default_value_size_hint": value_size,
+            "dram_allocator": {
+                "type": dram_allocator,
+                "capacity_bytes": dram_capacity_bytes,
+                "path": str(Path(data_root) / "dram"),
+            },
+            "ssd_allocator": ssd_allocator,
+            "tiering": {"cache_policy": "LRU"},
+        }
+    raise ValueError(f"unsupported value_store_type: {value_store_type}")
 
 
 def resolve_base_port(transport: str, requested_base_port: int, server_count: int) -> int:
@@ -421,6 +496,7 @@ def build_benchmark_cmd(
     rdma_adapter_skip_prefetch_result_copy: bool = False,
     rdma_get_response_mode: str = "direct_sg",
     skip_load: bool = False,
+    verify_deterministic_values: bool = False,
 ) -> list[str]:
     cmd = [
         benchmark_binary,
@@ -454,6 +530,8 @@ def build_benchmark_cmd(
         cmd.append(f"--rdma_get_response_mode={rdma_get_response_mode}")
     if skip_load:
         cmd.append("--skip_load=true")
+    if verify_deterministic_values:
+        cmd.append("--verify_deterministic_values=true")
     return cmd
 
 
@@ -1047,6 +1125,12 @@ def write_summary_markdown(
             f"{args.client_load_threads_per_process if args.client_load_threads_per_process > 0 else args.client_threads_per_process}，"
             f"server_worker_threads={args.server_worker_threads}，"
             f"server_rdma_threads={args.server_rdma_threads}，"
+            f"index_type={args.index_type}，value_store_type={args.value_store_type}，"
+            f"dram_allocator={args.dram_allocator}，"
+            f"tiered_dram_capacity_bytes={args.tiered_dram_capacity_bytes or '-'}，"
+            f"ssd_capacity_bytes={args.ssd_capacity_bytes or '-'}，"
+            f"ssd_io_backend={args.ssd_io_backend}，"
+            f"ssd_queue_depth={args.ssd_queue_depth}，"
             f"runtime_seconds={args.runtime_seconds}，repeat={args.repeat}，"
             f"distribution={args.distribution}，mode={args.mode}。"
         ),
@@ -2013,7 +2097,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-keys-per-request", type=int, default=500)
     parser.add_argument("--server-worker-threads", type=int, default=32)
     parser.add_argument("--index-type", default="DRAM_EXTENDIBLE_HASH")
+    parser.add_argument(
+        "--value-store-type",
+        choices=["DRAM_VALUE_STORE", "TIERED_VALUE_STORE"],
+        default="DRAM_VALUE_STORE",
+    )
     parser.add_argument("--dram-allocator", default="PERSIST_LOOP_SLAB")
+    parser.add_argument(
+        "--tiered-dram-capacity-bytes",
+        type=int,
+        default=0,
+        help=(
+            "Override TIERED_VALUE_STORE DRAM tier capacity. "
+            "Use a small value to force SSD-tier fallback coverage."
+        ),
+    )
+    parser.add_argument("--ssd-capacity-bytes", type=int, default=0)
+    parser.add_argument("--ssd-io-backend", default="IOURING")
+    parser.add_argument("--ssd-queue-depth", type=int, default=512)
     parser.add_argument(
         "--report-mode",
         choices=["summary", "per_round", "both"],
@@ -2063,6 +2164,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--rdma-rc-skip-client-copy", action="store_true")
     parser.add_argument("--transaction-profile", action="store_true")
+    parser.add_argument("--verify-deterministic-values", action="store_true")
     parser.add_argument("--rdma-direct-async-fetch", action="store_true")
     parser.add_argument("--rdma-adapter-skip-prefetch-result-copy", action="store_true")
     parser.add_argument(
@@ -2165,6 +2267,20 @@ def main() -> int:
         raise FileNotFoundError(f"benchmark binary not found: {benchmark_binary}")
 
     capacity = args.capacity if args.capacity > 0 else args.record_count
+    dram_capacity_bytes = recommended_dram_capacity_bytes(
+        capacity=capacity,
+        value_size=args.value_size,
+        dram_allocator=args.dram_allocator,
+    )
+    if (
+        args.value_store_type == "TIERED_VALUE_STORE"
+        and args.tiered_dram_capacity_bytes > 0
+    ):
+        dram_capacity_bytes = args.tiered_dram_capacity_bytes
+    ssd_capacity_bytes = args.ssd_capacity_bytes or recommended_ssd_capacity_bytes(
+        capacity=capacity,
+        value_size=args.value_size,
+    )
     load_threads = (
         args.client_load_threads_per_process
         if args.client_load_threads_per_process > 0
@@ -2218,6 +2334,11 @@ def main() -> int:
             case_data_root = (
                 Path(args.local_data_root) / run_id / "value"
             ).as_posix()
+            case_ssd_data_root = (
+                Path(args.local_data_root) / run_id / "ssd"
+            ).as_posix()
+            Path(case_data_root).mkdir(parents=True, exist_ok=True)
+            Path(case_ssd_data_root).mkdir(parents=True, exist_ok=True)
             config = build_runtime_config(
                 transport=transport,
                 topology=topology,
@@ -2226,9 +2347,17 @@ def main() -> int:
                 max_keys_per_request=max(args.batch_keys, args.max_keys_per_request),
                 num_threads=args.server_worker_threads,
                 index_type=args.index_type,
+                value_store_type=args.value_store_type,
                 dram_allocator=args.dram_allocator,
                 data_root=case_data_root,
+                ssd_data_root=case_ssd_data_root,
+                ssd_capacity_bytes=ssd_capacity_bytes,
+                ssd_io_backend=args.ssd_io_backend,
+                ssd_queue_depth=args.ssd_queue_depth,
             )
+            config["cache_ps"]["base_kv_config"]["value"]["dram_allocator"][
+                "capacity_bytes"
+            ] = dram_capacity_bytes
             config_path = args.output_dir / "configs" / f"{run_id}.json"
             write_json(config_path, config)
 
@@ -2256,6 +2385,7 @@ def main() -> int:
                 ),
                 rdma_get_response_mode=args.rdma_get_response_mode,
                 skip_load=args.skip_load,
+                verify_deterministic_values=args.verify_deterministic_values,
             )
 
             run_config["cases"].append(

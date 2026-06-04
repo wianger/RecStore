@@ -72,6 +72,9 @@ DEFINE_bool(rdma_direct_async_fetch,
             "RDMA fetch-only transactions use BaseParameterClient async GET "
             "with preallocated output buffers, bypassing the PS prefetch "
             "adapter state and result vector copy");
+DEFINE_bool(verify_deterministic_values,
+            false,
+            "write key-derived rows during preload and verify fetched values");
 DEFINE_int32(rdma_logical_client_id,
              -1,
              "Benchmark-only logical RDMA client id override for this process");
@@ -247,6 +250,39 @@ std::vector<float> MakeFlatValues(size_t rows, int dim, int seed) {
     values[i] = static_cast<float>((static_cast<int>(i) + seed) % 101);
   }
   return values;
+}
+
+float DeterministicValueForKey(uint64_t key, int column) {
+  return static_cast<float>(
+      (key % 1000003ULL) * 0.001 + static_cast<double>(column) * 0.0001);
+}
+
+std::vector<float>
+MakeDeterministicFlatValues(const std::vector<uint64_t>& keys, int dim) {
+  std::vector<float> values(keys.size() * static_cast<size_t>(dim));
+  for (size_t row = 0; row < keys.size(); ++row) {
+    for (int col = 0; col < dim; ++col) {
+      values[row * static_cast<size_t>(dim) + static_cast<size_t>(col)] =
+          DeterministicValueForKey(keys[row], col);
+    }
+  }
+  return values;
+}
+
+void VerifyDeterministicFlatValues(const std::vector<uint64_t>& keys,
+                                   const std::vector<float>& output,
+                                   int dim) {
+  CHECK_GE(output.size(), keys.size() * static_cast<size_t>(dim));
+  for (size_t row = 0; row < keys.size(); ++row) {
+    for (int col = 0; col < dim; ++col) {
+      const float expected = DeterministicValueForKey(keys[row], col);
+      const float actual =
+          output[row * static_cast<size_t>(dim) + static_cast<size_t>(col)];
+      CHECK(std::abs(actual - expected) <= 1e-6f)
+          << "deterministic value mismatch key=" << keys[row] << " col=" << col
+          << " expected=" << expected << " actual=" << actual;
+    }
+  }
 }
 
 bool ClientReturnsZeroOnSuccess(recstore::BasePSClient* client) {
@@ -631,8 +667,6 @@ PhaseStats LoadRecords(
               : reusable_clients->at(static_cast<std::size_t>(tid)).get();
       std::vector<uint64_t> keys;
       keys.reserve(static_cast<size_t>(FLAGS_batch_keys));
-      std::vector<float> values =
-          MakeFlatValues(static_cast<size_t>(FLAGS_batch_keys), dim, tid);
       const uint64_t begin = static_cast<uint64_t>(tid) * per_thread + 1;
       const uint64_t end   = std::min(record_count + 1, begin + per_thread);
       PhaseStats local;
@@ -642,6 +676,10 @@ PhaseStats LoadRecords(
                keys.size() < static_cast<size_t>(FLAGS_batch_keys)) {
           keys.push_back(key++);
         }
+        std::vector<float> values =
+            FLAGS_verify_deterministic_values
+                ? MakeDeterministicFlatValues(keys, dim)
+                : MakeFlatValues(keys.size(), dim, tid);
         CHECK(PutFlat(client, transport, keys, values, dim))
             << transport << " preload PutParameter failed";
         AccumulateLocalShmTransportStats(
@@ -719,6 +757,9 @@ PhaseStats RunTransactions(
         if (do_fetch) {
           CHECK(GetFlat(client, transport, keys, &output))
               << transport << " GetParameter failed";
+          if (FLAGS_verify_deterministic_values) {
+            VerifyDeterministicFlatValues(keys, output, dim);
+          }
           AccumulateLocalShmTransportStats(
               client, local_shm_stats, local_shm_stats_by_opcode);
         }
@@ -832,6 +873,9 @@ PhaseStats RunPrefetchFetchTransactions(
             << transport << " GetPrefetchResultFlat failed";
         const auto consume_end = std::chrono::steady_clock::now();
         CHECK_EQ(num_rows, static_cast<int64_t>(fetch.keys.size()));
+        if (FLAGS_verify_deterministic_values) {
+          VerifyDeterministicFlatValues(fetch.keys, output, dim);
+        }
         local_profile.consume_ns +=
             static_cast<uint64_t>(NsSince(consume_begin, consume_end));
         local_profile.wait_ns +=
@@ -975,6 +1019,9 @@ PhaseStats RunRdmaDirectAsyncFetchTransactions(int dim, int prefetch_depth) {
             slot->output.data(), slot->keys.size(), FLAGS_value_size);
         CHECK_EQ(*status_word, static_cast<std::int32_t>(petps::RpcStatus::kOk))
             << "RDMA direct async fetch failed with status=" << *status_word;
+        if (FLAGS_verify_deterministic_values) {
+          VerifyDeterministicFlatValues(slot->keys, slot->output, dim);
+        }
         client->RevokeRPCResource(slot->rpc_id);
         const auto consume_end = std::chrono::steady_clock::now();
         local_profile.consume_ns +=
