@@ -102,6 +102,7 @@ class RunConfig:
     read_before_update: bool = True
     read_mode: str = "prefetch"
     prefetch_depth: int = 0
+    recstore_enable_fusion: bool = True
     start_server: bool = True
     server_host: str = "127.0.0.1"
     server_port0: int | None = None
@@ -291,6 +292,12 @@ def build_parser() -> argparse.ArgumentParser:
             "0 keeps the legacy issue-and-immediate-wait path."
         ),
     )
+    parser.add_argument(
+        "--disable-recstore-fusion",
+        action="store_true",
+        default=False,
+        help="Disable RecStore fused table id path for ablation runs.",
+    )
     parser.add_argument("--start-server", action="store_true", default=True)
     parser.add_argument("--no-start-server", action="store_true")
     parser.add_argument("--server-host", type=str, default="127.0.0.1")
@@ -407,6 +414,7 @@ def parse_config(argv: list[str] | None = None) -> RunConfig:
     cfg_kwargs = vars(ns).copy()
     cfg_kwargs.pop("no_read_before_update", None)
     cfg_kwargs.pop("no_start_server", None)
+    disable_recstore_fusion = bool(cfg_kwargs.pop("disable_recstore_fusion", False))
     hps_no_materialize = bool(cfg_kwargs.pop("hps_torch_no_materialize_embeddings", False))
     hps_disable_gpucache = bool(cfg_kwargs.pop("hps_torch_disable_gpucache", False))
     if cfg_kwargs["nproc_per_node"] is None:
@@ -414,6 +422,8 @@ def parse_config(argv: list[str] | None = None) -> RunConfig:
     cfg = RunConfig(**cfg_kwargs)
     if ns.no_read_before_update:
         cfg.read_before_update = False
+    if disable_recstore_fusion:
+        cfg.recstore_enable_fusion = False
     if ns.no_start_server:
         cfg.start_server = False
     if hps_no_materialize:
