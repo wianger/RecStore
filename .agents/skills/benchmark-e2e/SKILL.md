@@ -43,17 +43,24 @@ skill directory; call project scripts directly.
    - multiple batch sizes, embedding dimensions, or cardinality sweeps
    - non-default index type, read mode, prefetch depth, or run length
    - custom dataset, runtime directory, or per-feature cardinalities
-   - RecStore ablation lanes. Use `RecStore-<PS_TYPE>` as the backend label,
-     for example `RecStore-BRPC`, `RecStore-GRPC`, `RecStore-SHM`, or
-     `RecStore-RDMA`. Use these suffixes consistently:
-     - `RecStore-<PS_TYPE>`: `--read-mode prefetch --prefetch-depth 0`, fused path
-       enabled. This is same-batch issue+wait, not lookahead overlap.
-     - `RecStore-<PS_TYPE>-无预取`: `--read-mode direct`, fused path enabled.
-     - `RecStore-<PS_TYPE>-无预取无融合`: `--read-mode direct
-       --disable-recstore-fusion`; before running, verify the local and remote
-       runner support this CLI.
-     - `RecStore-<PS_TYPE>-预取N`: `--read-mode prefetch --prefetch-depth N` with
-       `N > 0`, fused path enabled.
+   - RecStore optimization ablations. These are experiment-specific add-on
+     lanes, not generic comparison objects. Do not add them to the default
+     RecStore vs TorchRec matrix unless the user explicitly asks for prefetch,
+     no-prefetch, fusion, or optimization-ablation comparisons. Use
+     `RecStore-<PS_TYPE>` as the main RecStore backend label, for example
+     `RecStore-BRPC`, `RecStore-GRPC`, `RecStore-SHM`, or `RecStore-RDMA`.
+     When an ablation is requested, use these suffixes consistently:
+     - `RecStore-<PS_TYPE>`: main lane, `--read-mode prefetch
+       --prefetch-depth 0`, fused path enabled. This is same-batch issue+wait,
+       not lookahead overlap.
+     - `RecStore-<PS_TYPE>-无预取`: add only for no-prefetch ablation;
+       `--read-mode direct`, fused path enabled.
+     - `RecStore-<PS_TYPE>-无预取无融合`: add only for combined no-prefetch and
+       no-fusion ablation; `--read-mode direct --disable-recstore-fusion`.
+       Before running, verify the local and remote runner support this CLI.
+     - `RecStore-<PS_TYPE>-预取N`: add only for lookahead prefetch experiments;
+       `--read-mode prefetch --prefetch-depth N` with `N > 0`, fused path
+       enabled.
 5. Run:
    - `cmake -S . -B build`
    - `cmake --build build --target ps_server -j`
@@ -277,9 +284,9 @@ report, and do not silently hide the issue.
   shard layout.
 - Treat `hash_method`, `num_shards`, and `servers` as separate routing fields.
 - Do not assume `shard_id == server list index`; route by the explicit shard id.
-- For single-PS bring-up, prefer `DRAM_PET_HASH` first, then add
-  `DRAM_EXTENDIBLE_HASH` or TorchRec comparison lanes after the requested PS
-  backend is stable.
-- `--prefetch-depth 0` on the RecStore `prefetch` path is same-batch
-  issue+wait. Use `--read-mode direct` for a true no-prefetch ablation, and use
-  `--prefetch-depth > 0` for lookahead overlap experiments.
+- For single-PS bring-up, prefer `DRAM_PET_HASH` first, then add non-default
+  index types, extra TorchRec baselines, or RecStore optimization ablations only
+  after the requested PS backend is stable.
+- The default RecStore main lane uses `--prefetch-depth 0` on the `prefetch`
+  path, which is same-batch issue+wait. Treat `--read-mode direct` and
+  `--prefetch-depth > 0` as requested ablations, not mandatory comparison lanes.
