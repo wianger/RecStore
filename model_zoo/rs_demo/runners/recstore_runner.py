@@ -515,6 +515,8 @@ class RecStoreRunner(BenchmarkRunner):
             str(cfg.prefetch_depth),
             "--no-start-server",
         ]
+        if not cfg.recstore_enable_fusion:
+            cmd.append("--disable-recstore-fusion")
         if cfg.num_embeddings_per_feature:
             cmd.extend(
                 [
@@ -686,10 +688,15 @@ class RecStoreRunner(BenchmarkRunner):
                 cfg_item["feature_names"][0]: feature_idx << cfg.fuse_k
                 for feature_idx, cfg_item in enumerate(eb_configs)
             }
+            if not cfg.recstore_enable_fusion:
+                table_offsets = {
+                    cfg_item["feature_names"][0]: 0
+                    for cfg_item in eb_configs
+                }
 
             embedding_module = RecStoreEmbeddingBagCollection(
                 embedding_bag_configs=eb_configs,
-                enable_fusion=True,
+                enable_fusion=cfg.recstore_enable_fusion,
                 fusion_k=cfg.fuse_k,
                 kv_client=client,
                 initialize_tables=(rank == 0),
