@@ -1,6 +1,6 @@
 ---
 name: benchmark-e2e
-description: Use when setting up RecStore BRPC end-to-end DLRM/TorchRec benchmarks with explicit client placement, PS placement, sharding, runnable commands, and Chinese performance summaries.
+description: Use when setting up RecStore end-to-end DLRM/TorchRec benchmarks with explicit client placement, PS placement/type, sharding, runnable commands, and Chinese performance summaries.
 ---
 
 # Benchmark E2E
@@ -16,7 +16,7 @@ skill directory; call project scripts directly.
      default = one local client, GPU 0, `node_rank=0`, `nproc_per_node=1`
    - PS server list, each entry as `(ssh_host, repo_root, ip, port, shard_id)`;
      default = one local PS, `127.0.0.1:15000`, shard 0
-   - result output directory (default = `results/brpc_e2e_$(date +%m%d%H%M)`)
+   - result output directory (default = `results/e2e_$(date +%m%d%H%M)`)
 3. Apply P1 defaults without prompting, and record them in `summary.md`:
    - model = `dlrm`
    - client deployment = inferred from client list
@@ -31,7 +31,11 @@ skill directory; call project scripts directly.
    - steps = `80`, warmup steps = `5`, repeat = `3`
    - read mode = `prefetch`, prefetch depth = `0`
    - RecStore index type = `DRAM_PET_HASH`
-   - comparison lanes = RecStore BRPC + TorchRec-HBM
+   - comparison lanes = RecStore-`<PS_TYPE>` + TorchRec-HBM
+   - for large `num_embeddings` such as `800000`, use a RecStore PS capacity
+     large enough for the fused/multi-table key space; `capacity=8000000` is a
+     safe baseline for the day0 DLRM runs. Do not use the small template
+     capacity for large E2E comparisons.
 4. Override P1 defaults only when the user mentions them. Ask P2 questions only
    when required by the requested experiment:
    - additional TorchRec baseline lanes such as `uvm_caching`, or disabling
@@ -39,13 +43,31 @@ skill directory; call project scripts directly.
    - multiple batch sizes, embedding dimensions, or cardinality sweeps
    - non-default index type, read mode, prefetch depth, or run length
    - custom dataset, runtime directory, or per-feature cardinalities
+   - RecStore ablation lanes. Use `RecStore-<PS_TYPE>` as the backend label,
+     for example `RecStore-BRPC`, `RecStore-GRPC`, `RecStore-SHM`, or
+     `RecStore-RDMA`. Use these suffixes consistently:
+     - `RecStore-<PS_TYPE>`: `--read-mode prefetch --prefetch-depth 0`, fused path
+       enabled. This is same-batch issue+wait, not lookahead overlap.
+     - `RecStore-<PS_TYPE>-无预取`: `--read-mode direct`, fused path enabled.
+     - `RecStore-<PS_TYPE>-无预取无融合`: `--read-mode direct
+       --disable-recstore-fusion`; before running, verify the local and remote
+       runner support this CLI.
+     - `RecStore-<PS_TYPE>-预取N`: `--read-mode prefetch --prefetch-depth N` with
+       `N > 0`, fused path enabled.
 5. Run:
    - `cmake -S . -B build`
    - `cmake --build build --target ps_server -j`
-   - `ctest -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`
+   - run the correctness tests relevant to the requested PS backend. For BRPC,
+     use `ctest -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`;
+     for GRPC, LOCAL_SHM/SHM, RDMA, or other PS types, use the corresponding
+     targeted tests before E2E.
    - start one `ps_server` per PS entry
    - run `model_zoo/rs_demo/run_mock_stress.py` for each RecStore E2E client
    - run matched TorchRec-HBM client commands with the same workload
+   - for multi-host runs, verify the runner files and CLI options are present
+     on every host before launching. If local code changed, sync the relevant
+     files or compare fingerprints; otherwise remote workers may fail with
+     `unrecognized arguments` or mismatched behavior.
 6. Save deployment, commands, logs, runtime config, CSV artifacts, and
    `summary.md` under the chosen result directory.
 7. Write `summary.md` as exactly three report sections, with benchmark
@@ -64,11 +86,14 @@ overrides them.
 ```bash
 cmake -S . -B build
 cmake --build build --target ps_server -j
+# Example for BRPC. Replace with the targeted tests for the requested PS type.
 ctest -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure
 ```
 
-Create `<runtime_dir>/recstore_config.json` with BRPC and the requested shard
-layout:
+Create `<runtime_dir>/recstore_config.json` with the requested PS type and
+shard layout. This example uses BRPC; replace `ps_type`, startup requirements,
+and environment variables as needed for GRPC, LOCAL_SHM/SHM, RDMA, or other
+available PS backends:
 
 ```json
 {
@@ -79,7 +104,7 @@ layout:
       {"host": "127.0.0.1", "port": 15000, "shard": 0}
     ],
     "base_kv_config": {
-      "capacity": 200000,
+      "capacity": 8000000,
       "index": {"type": "DRAM_PET_HASH"},
       "value": {"type": "DRAM_VALUE_STORE"}
     }
@@ -109,7 +134,7 @@ cd <client_repo>
 CUDA_VISIBLE_DEVICES=<gpu_id> \
 python3 model_zoo/rs_demo/run_mock_stress.py \
   --backend recstore \
-  --ps-type BRPC \
+  --ps-type <PS_TYPE> \
   --recstore-index-type <index_type> \
   --ps-kv-backend recstore_dram \
   --batch-size <batch_size> \
@@ -138,10 +163,44 @@ For distributed clients, add:
   --master-port <master_port>
 ```
 
+For single-node distributed runs, `--master-addr` must be an address on that
+same node. For example, a 191 single-node 2-GPU run should use
+`--master-addr 10.0.2.191`, not a 190 address. For cross-node runs, use the
+rank-0 host such as `10.0.2.190`.
+
+The current `run_mock_stress.py` parent runner assumes homogeneous
+`nproc_per_node` because it computes `world_size = nnodes * nproc_per_node`.
+Do not use it as-is for heterogeneous trainer placement such as
+`190:1 trainer + 191:2 trainers`. Manual RecStore workers may be possible, but
+TorchRec `DistributedModelParallel` planning still uses `local_world_size` from
+`nproc_per_node` and can create invalid placements such as `cuda:2` on a node
+with only two visible GPUs. Report such cases as unsupported unless the runner
+has been changed to support heterogeneous local world sizes.
+
 Run the matched TorchRec-HBM command by default with the same dataset, batch
 size, embedding dimension, steps, warmup steps, client deployment, and GPU
 placement. If the user requests `uvm_caching`, add a second TorchRec baseline;
 if the user requests RecStore-only, pass `--no-torchrec`.
+
+For TorchRec distributed lanes, prefer NCCL over IB when comparing against a
+networked RecStore PS. Do not hard-code HCA or interface names blindly: inspect
+the hosts first and set `NCCL_IB_HCA`, `NCCL_SOCKET_IFNAME`, and related
+variables to match the actual common devices. The following is only an example
+for a cluster where all nodes should use `mlx5_0` and `eno8303`:
+
+```bash
+NCCL_IB_DISABLE=0
+NCCL_IB_HCA=mlx5_0
+NCCL_IB_MERGE_NICS=0
+NCCL_SOCKET_IFNAME=eno8303
+GLOO_SOCKET_IFNAME=eno8303
+NCCL_SOCKET_FAMILY=AF_INET
+NCCL_DEBUG=INFO
+```
+
+After the run, check the NCCL logs for `NET/IB` and the expected HCA/interface
+before describing the TorchRec lane as NCCL-IB. If the HCA name is different,
+check for the actual device name selected by NCCL instead.
 
 ## Deployment Record
 
@@ -149,7 +208,7 @@ Write `<output_dir>/deployment.md` before running:
 
 ```text
 模型: dlrm
-传输: BRPC
+传输: <PS_TYPE>
 client:
   - ssh_host=<ssh_host>, repo=<repo_root>, ip=<client_ip>, gpu=<gpu_id>, node_rank=<rank>, nproc_per_node=<nproc>
 ps:
@@ -182,13 +241,35 @@ prefetch depth, RecStore index type, and GPU placement.
 Use `M` for values >= 1,000,000 and `K` for values >= 1,000. Include repeat
 mean and CV columns only when repeat >= 3.
 
+For any RecStore vs TorchRec comparison, include an E2E latency breakdown, not
+only throughput. At minimum report `batch_prepare_ms`, `input_pack_ms`,
+`embed_lookup_local_ms`, `dense_fwd_ms`, `backward_ms`, `optimizer_ms`,
+`sparse_update_ms`, and `step_total_ms` where available. This breakdown is
+required even when the throughput ordering looks reasonable, because RecStore
+and TorchRec runner paths can differ in sparse update, ID deduplication, and
+batch preparation work.
+
+For multi-rank CSVs, compute aggregate throughput by grouping rows by `step`,
+summing per-rank `samples_per_sec` within each step, then averaging over steps
+after excluding warmup rows. Do not average all rank rows directly, because that
+produces a per-rank throughput instead of job throughput.
+
+If a distributed parent process exits nonzero but all expected `rank*.csv`
+files exist, verify the rank CSVs before treating the run as failed. Check the
+expected rank count, row count, warmup markers, and final step. If complete,
+manually merge the rank CSVs, record the parent-process failure reason in the
+report, and do not silently hide the issue.
+
 ## Reporting Rules
 
 - Do not claim tests pass unless the commands completed successfully.
-- If a BRPC correctness test fails, stop before E2E and report the log path.
+- If a PS correctness test for the requested backend fails, stop before E2E and
+  report the log path.
 - If an E2E command exits nonzero, report the command and log path in the final
   response.
 - Keep generated project-facing report text in Chinese.
+- If a TorchRec distributed run is reported, state whether NCCL-IB was actually
+  observed in the log. If not verified, label it as unverified.
 
 ## Current Bring-up Notes
 
@@ -197,4 +278,8 @@ mean and CV columns only when repeat >= 3.
 - Treat `hash_method`, `num_shards`, and `servers` as separate routing fields.
 - Do not assume `shard_id == server list index`; route by the explicit shard id.
 - For single-PS bring-up, prefer `DRAM_PET_HASH` first, then add
-  `DRAM_EXTENDIBLE_HASH` or TorchRec comparison lanes after BRPC is stable.
+  `DRAM_EXTENDIBLE_HASH` or TorchRec comparison lanes after the requested PS
+  backend is stable.
+- `--prefetch-depth 0` on the RecStore `prefetch` path is same-batch
+  issue+wait. Use `--read-mode direct` for a true no-prefetch ablation, and use
+  `--prefetch-depth > 0` for lookahead overlap experiments.
