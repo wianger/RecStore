@@ -300,7 +300,7 @@ def build_runtime_config(
     cfg["client"]["shard"] = 0
 
     cfg.setdefault("distributed_client", {})
-    if cfg["cache_ps"]["ps_type"] in {"LOCAL_SHM", "RDMA"}:
+    if cfg["cache_ps"]["ps_type"] == "LOCAL_SHM":
         servers = [{"host": host, "port": port0, "shard": 0}]
     else:
         servers = [
@@ -392,6 +392,7 @@ def start_rdma_server_cluster(
     cfg_path: Path,
     log_path: Path,
     *,
+    num_clients: int = 1,
     thread_num: int = 1,
     value_size: int = 512,
     max_kv_num_per_request: int = 512,
@@ -421,7 +422,7 @@ def start_rdma_server_cluster(
         server_path=str(repo_root / "build/bin/petps_server"),
         config_path=str(cfg_path),
         num_servers=server_count,
-        num_clients=1,
+        num_clients=max(1, int(num_clients)),
         thread_num=int(thread_num),
         value_size=int(value_size),
         max_kv_num_per_request=int(max_kv_num_per_request),

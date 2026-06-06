@@ -176,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
                     repo_root,
                     runtime_cfg_path,
                     Path(cfg.server_log),
+                    num_clients=max(1, int(cfg.nnodes) * int(cfg.nproc_per_node)),
                     thread_num=1,
                     value_size=int(cfg.embedding_dim) * 4,
                     max_kv_num_per_request=max(1, int(cfg.batch_size) * 26),

@@ -114,10 +114,20 @@ def _add_sparse_id_stats(
     row["prefetch_depth"] = int(prefetch_depth)
 
 
+def _safe_fused_ids(
+    sparse_features: Any,
+    table_offsets: dict[str, int],
+) -> torch.Tensor:
+    if not hasattr(sparse_features, "keys"):
+        return torch.empty((0,), dtype=torch.int64)
+    return convert_kjt_ids_to_fused_ids(sparse_features, table_offsets)
+
+
 def _finalize_step_timing(row: dict[str, Any], *, consume_start: float) -> None:
     visible_ms = (time.perf_counter() - consume_start) * 1e3
     row["step_visible_ms"] = visible_ms
     row["step_total_ms"] = visible_ms
+    row["step_end_to_end_ms"] = visible_ms
     row["samples_per_sec"] = _safe_ratio(
         float(row.get("batch_size", 0.0)) * 1000.0,
         visible_ms,
@@ -161,6 +171,58 @@ def _reset_perf_stats(obj: Any) -> None:
     reset = getattr(obj, "reset_perf_stats", None)
     if reset is not None:
         reset()
+
+
+def _attach_or_refetch_with_bagpipe_policy(
+    *,
+    prefetch_depth: int,
+    bagpipe_policy: Any,
+    lookahead_prefetcher: LookaheadPrefetcher,
+    embedding_module: Any,
+    sparse_features: Any,
+    row: dict[str, Any],
+    step: int,
+) -> None:
+    try:
+        from python.pytorch.recstore.bagpipe_cache import (  # type: ignore
+            attach_or_refetch_with_bagpipe_policy,
+        )
+    except ModuleNotFoundError:
+        from pytorch.recstore.bagpipe_cache import (  # type: ignore
+            attach_or_refetch_with_bagpipe_policy,
+        )
+
+    attach_or_refetch_with_bagpipe_policy(
+        prefetch_depth=prefetch_depth,
+        bagpipe_policy=bagpipe_policy,
+        lookahead_prefetcher=lookahead_prefetcher,
+        embedding_module=embedding_module,
+        sparse_features=sparse_features,
+        row=row,
+        step=step,
+    )
+
+
+def _notify_bagpipe_sparse_update(
+    *,
+    bagpipe_policy: Any,
+    sparse_optimizer: Any,
+    fallback_updated_ids: torch.Tensor,
+    row: dict[str, Any],
+    step: int,
+) -> None:
+    try:
+        from python.pytorch.recstore.bagpipe_cache import notify_sparse_update  # type: ignore
+    except ModuleNotFoundError:
+        from pytorch.recstore.bagpipe_cache import notify_sparse_update  # type: ignore
+
+    notify_sparse_update(
+        bagpipe_policy=bagpipe_policy,
+        sparse_optimizer=sparse_optimizer,
+        fallback_updated_ids=fallback_updated_ids,
+        row=row,
+        step=step,
+    )
 
 
 def _load_rows(path: Path) -> list[dict[str, str]]:
@@ -607,6 +669,16 @@ class RecStoreRunner(BenchmarkRunner):
     ) -> dict[str, Any]:
         inject_project_paths(repo_root)
         from client import RecstoreClient  # type: ignore
+        try:
+            from python.pytorch.recstore.bagpipe_cache import (  # type: ignore
+                BagPipeCachePolicy,
+                BagPipeWindowScheduler,
+            )
+        except ModuleNotFoundError:
+            from pytorch.recstore.bagpipe_cache import (  # type: ignore
+                BagPipeCachePolicy,
+                BagPipeWindowScheduler,
+            )
         from python.pytorch.recstore.optimizer import SparseSGD  # type: ignore
         from python.pytorch.torchrec_kv.EmbeddingBag import (  # type: ignore
             RecStoreEmbeddingBagCollection,
@@ -711,6 +783,19 @@ class RecStoreRunner(BenchmarkRunner):
                 cfg,
                 embedding_dim=cfg.embedding_dim,
             )
+            if (
+                cfg.enable_gpu_cache
+                and cfg.read_before_update
+                and cfg.read_mode == "prefetch"
+                and cfg.prefetch_depth > 0
+            ):
+                set_clear_after_cpu_update = getattr(
+                    client,
+                    "set_clear_gpu_cache_after_cpu_update",
+                    None,
+                )
+                if callable(set_clear_after_cpu_update):
+                    set_clear_after_cpu_update(False)
             _append_worker_debug(
                 cfg,
                 rank,
@@ -772,8 +857,19 @@ class RecStoreRunner(BenchmarkRunner):
                 else 0,
                 embedding_dim=cfg.embedding_dim,
             )
+            bagpipe_policy = BagPipeCachePolicy(
+                lookahead_depth=lookahead_prefetcher.depth,
+                cache_capacity=cfg.gpu_cache_capacity if cfg.enable_gpu_cache else 0,
+            )
+            bagpipe_scheduler = BagPipeWindowScheduler(
+                bagpipe_policy=bagpipe_policy,
+                lookahead_prefetcher=lookahead_prefetcher,
+                embedding_module=embedding_module,
+                read_before_update=cfg.read_before_update,
+                read_mode=cfg.read_mode,
+            )
             prepared_batches: deque[
-                tuple[dict[str, Any], float, Any, Any, Any, Any]
+                tuple[int, dict[str, Any], float, Any, Any, Any]
             ] = deque()
 
             def prepare_next_batch(batch_step: int):
@@ -807,7 +903,7 @@ class RecStoreRunner(BenchmarkRunner):
                 ) * 1e3
 
                 input_pack_start = time.perf_counter()
-                _, sparse_features = build_kjt_batch_from_dense_sparse_labels(
+                _, prefetch_sparse_features = build_kjt_batch_from_dense_sparse_labels(
                     dense_batch,
                     sparse_batch,
                     labels_batch,
@@ -816,51 +912,80 @@ class RecStoreRunner(BenchmarkRunner):
                 row["input_pack_ms"] = (time.perf_counter() - input_pack_start) * 1e3
                 _add_sparse_id_stats(
                     row,
-                    sparse_features,
+                    prefetch_sparse_features,
                     table_offsets,
                     cache_capacity=cfg.gpu_cache_capacity if cfg.enable_gpu_cache else 0,
                     prefetch_depth=cfg.prefetch_depth,
                 )
+                prefetch_fused_ids = _safe_fused_ids(
+                    prefetch_sparse_features,
+                    table_offsets,
+                )
+                bagpipe_scheduler.observe_batch(batch_step, prefetch_fused_ids)
 
-                if cfg.read_before_update and cfg.read_mode == "prefetch":
-                    lookahead_prefetcher.enqueue(sparse_features)
-                    lookahead_prefetcher.advance()
-
-                return row, time.perf_counter(), dense_batch, sparse_features, labels_batch
+                return (
+                    batch_step,
+                    row,
+                    time.perf_counter(),
+                    dense_batch,
+                    sparse_batch,
+                    labels_batch,
+                )
 
             data_iter_state = {"iter": data_iter}
             for step in range(cfg.steps):
+                observed_depth = lookahead_prefetcher.depth * 2
                 while (
-                    len(prepared_batches) <= lookahead_prefetcher.depth
+                    len(prepared_batches) <= observed_depth
                     and step + len(prepared_batches) < cfg.steps
                 ):
                     prepared_batches.append(prepare_next_batch(step + len(prepared_batches)))
+                bagpipe_scheduler.plan_ready(
+                    current_step=step,
+                    prepared_batches=prepared_batches,
+                )
                 if step + len(prepared_batches) >= cfg.steps:
                     lookahead_prefetcher.advance_all()
 
-                row, step_start, dense_batch, sparse_features, labels_batch = (
+                _, row, step_start, dense_batch, sparse_batch, labels_batch = (
                     prepared_batches.popleft()
                 )
                 consume_step_start = time.perf_counter()
                 row["prefetch_queue_residence_ms"] = (
                     consume_step_start - step_start
                 ) * 1e3
+                input_pack_consume_start = time.perf_counter()
+                _, sparse_features = build_kjt_batch_from_dense_sparse_labels(
+                    dense_batch,
+                    sparse_batch,
+                    labels_batch,
+                    device=device,
+                )
+                row["input_pack_consume_ms"] = (
+                    time.perf_counter() - input_pack_consume_start
+                ) * 1e3
 
                 _reset_perf_stats(embedding_module)
                 _reset_perf_stats(sparse_optimizer)
-                lookahead_prefetcher.reset_stats()
                 sparse_optimizer.zero_grad()
                 embeddings = None
                 with stage_timer(row, "embed_lookup_local_ms"):
                     sync_device(torch, device)
                     if cfg.read_before_update and cfg.read_mode == "prefetch":
-                        if cfg.prefetch_depth > 0:
-                            lookahead_prefetcher.attach_next()
-                        else:
-                            embedding_module.issue_fused_prefetch(sparse_features)
+                        _attach_or_refetch_with_bagpipe_policy(
+                            prefetch_depth=cfg.prefetch_depth,
+                            bagpipe_policy=bagpipe_policy,
+                            lookahead_prefetcher=lookahead_prefetcher,
+                            embedding_module=embedding_module,
+                            sparse_features=sparse_features,
+                            row=row,
+                            step=step,
+                        )
                     embeddings = embedding_module(sparse_features)
                     sync_device(torch, device)
-                row.update(lookahead_prefetcher.consume_stats(reset=False))
+                prefetch_row_stats = lookahead_prefetcher.consume_stats(reset=False)
+                for key, value in prefetch_row_stats.items():
+                    row.setdefault(key, value)
                 _merge_numeric_fields(
                     row,
                     getattr(embedding_module, "_single_node_forward_profile", None),
@@ -935,6 +1060,17 @@ class RecStoreRunner(BenchmarkRunner):
                     row["sparse_optimizer_flush_ms"] = (
                         time.perf_counter() - flush_start
                     ) * 1e3
+                    updated_fused_ids = _safe_fused_ids(
+                        sparse_features,
+                        table_offsets,
+                    )
+                    _notify_bagpipe_sparse_update(
+                        bagpipe_policy=bagpipe_policy,
+                        sparse_optimizer=sparse_optimizer,
+                        fallback_updated_ids=updated_fused_ids,
+                        row=row,
+                        step=step,
+                    )
 
                     zero_grad_start = time.perf_counter()
                     sparse_optimizer.zero_grad()
@@ -957,16 +1093,22 @@ class RecStoreRunner(BenchmarkRunner):
                     + float(row.get("optimizer_ms", 0.0))
                 )
                 row["dense_compute_ms"] = dense_compute_ms
-                row.update(
-                    lookahead_prefetcher.consume_stats(
-                        reset=False,
-                        dense_compute_ms=dense_compute_ms,
-                        wait_ms=(
-                            float(row.get("lookup_wait_ms", 0.0))
-                            + float(row.get("planned_gpu_cache_prefill_wait_ms", 0.0))
-                        ),
-                    )
+                prefetch_row_stats = lookahead_prefetcher.consume_stats(
+                    reset=False,
+                    dense_compute_ms=dense_compute_ms,
+                    wait_ms=(
+                        float(row.get("lookup_wait_ms", 0.0))
+                        + float(row.get("planned_gpu_cache_prefill_wait_ms", 0.0))
+                    ),
                 )
+                for key, value in prefetch_row_stats.items():
+                    if key in {
+                        "prefetch_issued_batches",
+                        "prefetch_total_ids",
+                        "prefetch_issue_ms",
+                    }:
+                        continue
+                    row[key] = value
                 gpu_cache_capacity = float(row.get("gpu_cache_capacity", 0.0))
                 row["prefetch_window_live_cache_capacity_ratio"] = _safe_ratio(
                     float(row.get("prefetch_window_live_ids", 0.0)),
@@ -982,8 +1124,10 @@ class RecStoreRunner(BenchmarkRunner):
                 )
                 if step >= cfg.warmup_steps:
                     update_lat_us.append(row["sparse_update_ms"] * 1e3)
+                bagpipe_scheduler.on_step_end(step, row)
                 _finalize_step_timing(row, consume_start=consume_step_start)
                 rows.append(finalize_recstore_row(row))
+                lookahead_prefetcher.reset_stats()
                 _barrier_for_step_alignment(
                     dist=dist,
                     device=device,

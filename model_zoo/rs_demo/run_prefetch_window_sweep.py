@@ -92,7 +92,7 @@ def _run_cmd(args: argparse.Namespace, *, depth: int, capacity: int) -> tuple[li
         "--embedding-dim",
         str(args.embedding_dim),
         "--read-mode",
-        "prefetch" if depth > 0 else "direct",
+        "prefetch",
         "--prefetch-depth",
         str(depth),
         "--run-id",

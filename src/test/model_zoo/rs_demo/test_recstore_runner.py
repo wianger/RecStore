@@ -17,6 +17,7 @@ from model_zoo.rs_demo.config import RunConfig
 from model_zoo.rs_demo.runners import recstore_runner
 from model_zoo.rs_demo.runners.recstore_runner import (
     RecStoreRunner,
+    _attach_or_refetch_with_bagpipe_policy,
     _build_train_dataloader_for_mode,
     _maybe_wrap_dense_module_for_dist,
 )
@@ -46,9 +47,12 @@ class _FakeShardedClient:
         self.activate_shard_calls: list[int] = []
         self.enable_gpu_cache_calls: list[tuple[int, int]] = []
         self.enable_gpu_cache_result = True
+        self.gpu_cache_enabled = False
         self.gpu_cache_lookup_bypass_enabled: bool | None = True
         self.gpu_cache_profile = {}
         self.gpu_cache_clear_count = 0
+        self.clear_after_cpu_update_flags: list[bool] = []
+        self.gpu_cache_sgd_update_calls = []
         self.local_shm_warmup_calls = 0
         self._shared_local_shm_table = False
         self._last_prefetch_keys = torch.empty((0,), dtype=torch.int64)
@@ -67,7 +71,11 @@ class _FakeShardedClient:
 
     def enable_gpu_cache(self, capacity: int, embedding_dim: int) -> bool:
         self.enable_gpu_cache_calls.append((int(capacity), int(embedding_dim)))
+        self.gpu_cache_enabled = bool(self.enable_gpu_cache_result)
         return self.enable_gpu_cache_result
+
+    def is_gpu_cache_enabled(self) -> bool:
+        return self.gpu_cache_enabled
 
     def set_gpu_cache_lookup_bypass_enabled(self, enabled: bool) -> None:
         self.gpu_cache_lookup_bypass_enabled = bool(enabled)
@@ -77,6 +85,20 @@ class _FakeShardedClient:
 
     def get_gpu_cache_clear_count(self) -> int:
         return int(self.gpu_cache_clear_count)
+
+    def set_clear_gpu_cache_after_cpu_update(self, enabled: bool) -> None:
+        self.clear_after_cpu_update_flags.append(bool(enabled))
+
+    def apply_sgd_update_gpu_cache(self, name, ids, grads, *, learning_rate) -> bool:
+        self.gpu_cache_sgd_update_calls.append(
+            (
+                str(name),
+                ids.detach().to(dtype=torch.int64, device="cpu").clone(),
+                grads.detach().to(dtype=torch.float32, device="cpu").clone(),
+                float(learning_rate),
+            )
+        )
+        return True
 
     def init_embedding_table(self, table_name: str, num_embeddings: int, embedding_dim: int) -> bool:
         self.init_embedding_table_calls += 1
@@ -128,13 +150,16 @@ class _FakeRecStoreEmbeddingBagCollection:
         self.kv_client = kwargs.get("kv_client")
         self.issue_fused_prefetch_calls = 0
         self.issue_fused_prefetch_record_flags: list[bool] = []
+        self.issue_fused_prefetch_features: list[object] = []
+        self.issue_fused_id_prefetch_ids: list[torch.Tensor] = []
         self.set_fused_prefetch_handle_calls = 0
+        self.forward_features: list[object] = []
         self.reset_perf_stats_calls = 0
         self._single_node_forward_profile = {}
         _FakeRecStoreEmbeddingBagCollection.last_instance = self
 
     def issue_fused_prefetch(self, features, *, record_handle: bool = True):
-        del features
+        self.issue_fused_prefetch_features.append(features)
         self.issue_fused_prefetch_calls += 1
         self.issue_fused_prefetch_record_flags.append(bool(record_handle))
         return (
@@ -143,6 +168,18 @@ class _FakeRecStoreEmbeddingBagCollection:
             12.5,
             torch.tensor([1], dtype=torch.int64),
             torch.tensor([0], dtype=torch.int64),
+        )
+
+    def issue_fused_id_prefetch(self, fused_ids, *, record_handle: bool = True):
+        self.issue_fused_id_prefetch_ids.append(fused_ids.detach().cpu().clone())
+        self.issue_fused_prefetch_calls += 1
+        self.issue_fused_prefetch_record_flags.append(bool(record_handle))
+        return (
+            2000 + self.issue_fused_prefetch_calls,
+            int(fused_ids.numel()),
+            12.5,
+            fused_ids.detach().to(dtype=torch.int64, device="cpu").flatten(),
+            torch.arange(int(fused_ids.numel()), dtype=torch.int64),
         )
 
     def set_fused_prefetch_handle(self, *args, **kwargs) -> None:
@@ -164,6 +201,7 @@ class _FakeRecStoreEmbeddingBagCollection:
         }
 
     def __call__(self, features):
+        self.forward_features.append(features)
         return object()
 
     def _can_use_single_node_distributed_fast_path(self) -> bool:
@@ -177,7 +215,9 @@ class _FakePrefetchModule:
     def __init__(self) -> None:
         self.next_handle = 100
         self.issued: list[tuple[object, bool]] = []
+        self.issued_fused_ids: list[torch.Tensor] = []
         self.consumed: list[tuple[int, int]] = []
+        self.consume_kwargs: list[dict[str, object]] = []
 
     def issue_fused_prefetch(self, features, *, record_handle: bool = True):
         self.issued.append((features, record_handle))
@@ -191,14 +231,50 @@ class _FakePrefetchModule:
             torch.tensor([0], dtype=torch.int64),
         )
 
+    def issue_fused_id_prefetch(self, fused_ids, *, record_handle: bool = True):
+        del record_handle
+        self.issued_fused_ids.append(fused_ids.detach().cpu().clone())
+        handle = self.next_handle
+        self.next_handle += 1
+        fused_ids_cpu = fused_ids.detach().to(dtype=torch.int64, device="cpu").flatten()
+        return (
+            handle,
+            int(fused_ids_cpu.numel()),
+            10.0 + handle,
+            fused_ids_cpu,
+            torch.arange(int(fused_ids_cpu.numel()), dtype=torch.int64),
+        )
+
     def set_fused_prefetch_handle(self, handle, num_ids=None, issue_ts=None, **kwargs) -> None:
-        del issue_ts, kwargs
+        del issue_ts
         self.consumed.append((int(handle), int(num_ids or 0)))
+        self.consume_kwargs.append(dict(kwargs))
 
 
 class _FakeSparseFeatures:
     def __init__(self, num_ids: int) -> None:
         self.num_ids = int(num_ids)
+
+
+class _FakeJaggedFeature:
+    def __init__(self, values: torch.Tensor) -> None:
+        self._values = values
+
+    def values(self) -> torch.Tensor:
+        return self._values
+
+
+class _FakeKeyedSparseFeatures:
+    def __init__(self, values: list[int]) -> None:
+        self._values = torch.tensor(values, dtype=torch.int64)
+
+    def keys(self):
+        return ["cat_0"]
+
+    def __getitem__(self, key: str) -> _FakeJaggedFeature:
+        if key != "cat_0":
+            raise KeyError(key)
+        return _FakeJaggedFeature(self._values)
 
 
 class _FakeSparseSGD:
@@ -212,6 +288,7 @@ class _FakeSparseSGD:
         self.zero_grad_calls = 0
         self.reset_perf_stats_calls = 0
         self._last_step_profile = {}
+        self._last_update_payloads = []
         _FakeSparseSGD.last_instance = self
 
     def zero_grad(self):
@@ -219,6 +296,25 @@ class _FakeSparseSGD:
 
     def step(self):
         self.step_calls += 1
+        self._last_update_payloads = []
+        for mod in self.params:
+            forward_features = getattr(mod, "forward_features", [])
+            if not forward_features:
+                continue
+            feature = forward_features[-1]
+            values = getattr(feature, "_values", torch.empty((0,), dtype=torch.int64))
+            ids = values.detach().to(dtype=torch.int64)
+            if ids.numel() == 0:
+                continue
+            self._last_update_payloads.append(
+                {
+                    "module": mod,
+                    "name": "t0",
+                    "ids": ids,
+                    "grads": torch.ones((int(ids.numel()), 4), dtype=torch.float32),
+                    "lr": float(self.lr),
+                }
+            )
 
     def flush(self):
         self.flush_calls += 1
@@ -236,6 +332,9 @@ class _FakeSparseSGD:
             "update_flush_wait_ms": 0.15,
         }
 
+    def last_update_payloads(self):
+        return list(self._last_update_payloads)
+
 
 class _FakeDenseOptimizer:
     def __init__(self, params, lr: float) -> None:
@@ -250,6 +349,55 @@ class _FakeDenseOptimizer:
 
     def step(self) -> None:
         self.step_calls += 1
+
+
+class _FakeConsumeDecision:
+    def __init__(
+        self,
+        stale_ids: list[int],
+        valid_ids: list[int],
+        *,
+        stale_cached_ids: list[int] | None = None,
+        stale_refetch_ids: list[int] | None = None,
+    ) -> None:
+        self.stale_ids = torch.tensor(stale_ids, dtype=torch.int64)
+        self.valid_prefetch_ids = torch.tensor(valid_ids, dtype=torch.int64)
+        self.stale_cached_ids = torch.tensor(
+            stale_cached_ids if stale_cached_ids is not None else [],
+            dtype=torch.int64,
+        )
+        self.stale_refetch_ids = torch.tensor(
+            stale_refetch_ids if stale_refetch_ids is not None else stale_ids,
+            dtype=torch.int64,
+        )
+
+    @property
+    def requires_refetch(self) -> bool:
+        return bool(self.stale_refetch_ids.numel() > 0)
+
+
+class _FakeBagPipePolicy:
+    def __init__(self, decision: _FakeConsumeDecision) -> None:
+        self.decision = decision
+        self.consume_steps: list[int] = []
+
+    def on_consume(self, step: int) -> _FakeConsumeDecision:
+        self.consume_steps.append(int(step))
+        return self.decision
+
+
+class _FakeBagPipeUpdatePolicy:
+    def __init__(self) -> None:
+        self.update_calls: list[tuple[int, torch.Tensor, torch.Tensor]] = []
+
+    def on_update(self, step: int, ids, *, cache_updated_ids=()) -> None:
+        self.update_calls.append(
+            (
+                int(step),
+                ids.detach().cpu().clone(),
+                cache_updated_ids.detach().cpu().clone(),
+            )
+        )
 
 
 class TestRecStoreRunner(unittest.TestCase):
@@ -322,8 +470,162 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual(stats["prefetch_exposed_network_ms"], 3.0)
         self.assertEqual(stats["prefetch_dense_cover_ratio"], 0.4)
 
+    def test_lookahead_prefetcher_can_discard_stale_ready_handle(self) -> None:
+        module = _FakePrefetchModule()
+        prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
+
+        prefetcher.enqueue(_FakeSparseFeatures(10))
+        prefetcher.enqueue(_FakeSparseFeatures(20))
+        self.assertTrue(prefetcher.advance())
+        self.assertTrue(prefetcher.discard_next_ready())
+        self.assertFalse(prefetcher.attach_next())
+
+        prefetcher.enqueue(_FakeSparseFeatures(30))
+        self.assertTrue(prefetcher.advance())
+        self.assertTrue(prefetcher.attach_next())
+
+        self.assertEqual(module.consumed, [(101, 20)])
+
+    def test_lookahead_prefetcher_can_enqueue_bagpipe_fused_ids(self) -> None:
+        module = _FakePrefetchModule()
+        prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
+
+        prefetcher.enqueue_fused_ids(torch.tensor([7, 8], dtype=torch.int64))
+        prefetcher.enqueue_fused_ids(torch.tensor([9], dtype=torch.int64))
+        self.assertTrue(prefetcher.advance())
+        self.assertTrue(prefetcher.attach_next())
+
+        self.assertEqual([ids.tolist() for ids in module.issued_fused_ids], [[7, 8], [9]])
+        self.assertEqual(module.consumed, [(100, 2)])
+
+    def test_bagpipe_stale_prefetch_discards_handle_and_refetches_same_batch(self) -> None:
+        module = _FakePrefetchModule()
+        prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
+        prefetcher.enqueue(_FakeSparseFeatures(10))
+        prefetcher.enqueue(_FakeSparseFeatures(20))
+        self.assertTrue(prefetcher.advance())
+        row: dict[str, object] = {}
+
+        _attach_or_refetch_with_bagpipe_policy(
+            prefetch_depth=1,
+            bagpipe_policy=_FakeBagPipePolicy(_FakeConsumeDecision([7], [8])),
+            lookahead_prefetcher=prefetcher,
+            embedding_module=module,
+            sparse_features=_FakeSparseFeatures(30),
+            row=row,
+            step=2,
+        )
+
+        self.assertEqual(row["bagpipe_stale_ids"], 1)
+        self.assertEqual(row["bagpipe_valid_prefetch_ids"], 1)
+        self.assertEqual(row["bagpipe_discarded_stale_handle"], 1)
+        self.assertEqual(module.consumed, [])
+        self.assertEqual([record for _, record in module.issued], [False, False, True])
+
+    def test_bagpipe_stale_cached_attaches_handle_with_invalid_ids(self) -> None:
+        module = _FakePrefetchModule()
+        prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
+        prefetcher.enqueue(_FakeSparseFeatures(10))
+        prefetcher.enqueue(_FakeSparseFeatures(20))
+        self.assertTrue(prefetcher.advance())
+        row: dict[str, object] = {}
+
+        _attach_or_refetch_with_bagpipe_policy(
+            prefetch_depth=1,
+            bagpipe_policy=_FakeBagPipePolicy(
+                _FakeConsumeDecision(
+                    [7],
+                    [8],
+                    stale_cached_ids=[7],
+                    stale_refetch_ids=[],
+                )
+            ),
+            lookahead_prefetcher=prefetcher,
+            embedding_module=module,
+            sparse_features=_FakeSparseFeatures(30),
+            row=row,
+            step=2,
+        )
+
+        self.assertEqual(row["bagpipe_stale_ids"], 1)
+        self.assertEqual(row["bagpipe_stale_cached_ids"], 1)
+        self.assertEqual(row["bagpipe_stale_refetch_ids"], 0)
+        self.assertEqual(row["bagpipe_discarded_stale_handle"], 0)
+        self.assertEqual(module.consumed, [(100, 10)])
+        self.assertEqual(module.consume_kwargs[0]["invalid_fused_ids_cpu"].tolist(), [7])
+        self.assertEqual([record for _, record in module.issued], [False, False])
+
+    def test_bagpipe_valid_prefetch_attaches_ready_handle(self) -> None:
+        module = _FakePrefetchModule()
+        prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
+        prefetcher.enqueue(_FakeSparseFeatures(10))
+        prefetcher.enqueue(_FakeSparseFeatures(20))
+        self.assertTrue(prefetcher.advance())
+        row: dict[str, object] = {}
+
+        _attach_or_refetch_with_bagpipe_policy(
+            prefetch_depth=1,
+            bagpipe_policy=_FakeBagPipePolicy(_FakeConsumeDecision([], [7])),
+            lookahead_prefetcher=prefetcher,
+            embedding_module=module,
+            sparse_features=_FakeSparseFeatures(30),
+            row=row,
+            step=2,
+        )
+
+        self.assertEqual(row["bagpipe_stale_ids"], 0)
+        self.assertEqual(row["bagpipe_valid_prefetch_ids"], 1)
+        self.assertEqual(row["bagpipe_discarded_stale_handle"], 0)
+        self.assertEqual(module.consumed, [(100, 10)])
+        self.assertEqual([record for _, record in module.issued], [False, False])
+
+    def test_bagpipe_update_maintains_gpu_cache_for_optimizer_payloads(self) -> None:
+        class _Client:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def apply_sgd_update_gpu_cache(self, name, ids, grads, *, learning_rate):
+                self.calls.append((name, ids.clone(), grads.clone(), float(learning_rate)))
+                return True
+
+        client = _Client()
+        module = types.SimpleNamespace(kv_client=client)
+        optimizer = types.SimpleNamespace(
+            last_update_payloads=lambda: [
+                {
+                    "module": module,
+                    "name": "table0",
+                    "ids": torch.tensor([4, 5], dtype=torch.int64),
+                    "grads": torch.ones((2, 4), dtype=torch.float32),
+                    "lr": 0.25,
+                }
+            ]
+        )
+        policy = _FakeBagPipeUpdatePolicy()
+        row: dict[str, object] = {}
+
+        recstore_runner._notify_bagpipe_sparse_update(
+            bagpipe_policy=policy,
+            sparse_optimizer=optimizer,
+            fallback_updated_ids=torch.tensor([4, 5], dtype=torch.int64),
+            row=row,
+            step=3,
+        )
+
+        self.assertEqual(len(client.calls), 1)
+        self.assertEqual(client.calls[0][0], "table0")
+        self.assertEqual(client.calls[0][3], 0.25)
+        self.assertEqual(row["bagpipe_gpu_cache_update_ids"], 2)
+        self.assertEqual(row["bagpipe_gpu_cache_update_failures"], 0)
+        self.assertEqual(policy.update_calls[0][1].tolist(), [4, 5])
+        self.assertEqual(policy.update_calls[0][2].tolist(), [4, 5])
+
     def test_finalize_step_timing_uses_visible_training_time(self) -> None:
-        row = {"batch_size": 64, "prefetch_queue_residence_ms": 50.0}
+        row = {
+            "batch_size": 64,
+            "prefetch_queue_residence_ms": 50.0,
+            "input_pack_consume_ms": 3.0,
+        }
         with mock.patch(
             "model_zoo.rs_demo.runners.recstore_runner.time.perf_counter",
             return_value=12.0,
@@ -335,6 +637,7 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual(row["samples_per_sec"], 32.0)
         self.assertEqual(row["batches_per_sec"], 0.5)
         self.assertEqual(row["prefetch_queue_residence_ms"], 50.0)
+        self.assertEqual(row["step_end_to_end_ms"], 2000.0)
 
     def test_warmup_gpu_local_shm_fast_path_runs_only_for_shared_cuda_fast_path(self) -> None:
         cfg = RunConfig(
@@ -1429,6 +1732,8 @@ class TestRecStoreRunner(unittest.TestCase):
             read_before_update=True,
             read_mode="prefetch",
             prefetch_depth=1,
+            enable_gpu_cache=True,
+            gpu_cache_capacity=8,
             recstore_main_csv=str(runner_runtime / "main.csv"),
         )
 
@@ -1437,6 +1742,10 @@ class TestRecStoreRunner(unittest.TestCase):
         labels = torch.zeros((1, 1), dtype=torch.float32)
         dataset = [(dense, sparse, labels)] * 3
         dataloader = list(dataset)
+        feature_values_by_build = [4, 5, 4, 4, 5, 4]
+        built_sparse_features: list[object] = []
+        build_devices: list[torch.device | None] = []
+        build_device_by_feature: dict[object, torch.device | None] = {}
 
         fake_client = _FakeShardedClient()
         fake_client_module = types.ModuleType("client")
@@ -1477,9 +1786,19 @@ class TestRecStoreRunner(unittest.TestCase):
                                         "model_zoo.rs_demo.runners.recstore_runner.build_train_dataloader",
                                         lambda **kwargs: (dataset, dataloader),
                                     ):
+                                        def build_fake_kjt(*args, **kwargs):
+                                            feature = _FakeKeyedSparseFeatures(
+                                                [feature_values_by_build[len(built_sparse_features)]]
+                                            )
+                                            built_sparse_features.append(feature)
+                                            build_device = kwargs.get("device")
+                                            build_devices.append(build_device)
+                                            build_device_by_feature[feature] = build_device
+                                            return None, feature
+
                                         with mock.patch(
                                             "model_zoo.rs_demo.runners.recstore_runner.build_kjt_batch_from_dense_sparse_labels",
-                                            lambda *args, **kwargs: (None, object()),
+                                            build_fake_kjt,
                                         ):
                                             with mock.patch(
                                                 "model_zoo.rs_demo.runners.recstore_runner.build_hybrid_dense_arch",
@@ -1522,12 +1841,69 @@ class TestRecStoreRunner(unittest.TestCase):
 
         fake_ebc = _FakeRecStoreEmbeddingBagCollection.last_instance
         self.assertIsNotNone(fake_ebc)
-        self.assertEqual(fake_ebc.issue_fused_prefetch_record_flags, [False, False, False])
-        self.assertEqual(fake_ebc.set_fused_prefetch_handle_calls, 3)
+        self.assertEqual(fake_client.clear_after_cpu_update_flags, [False])
+        self.assertEqual(
+            fake_ebc.issue_fused_prefetch_record_flags,
+            [False, False, False, True],
+        )
+        self.assertEqual(fake_ebc.set_fused_prefetch_handle_calls, 2)
+        self.assertEqual(len(built_sparse_features), 6)
+        self.assertEqual([str(device) for device in build_devices], ["cuda:0"] * 6)
+        self.assertEqual(len(fake_ebc.issue_fused_prefetch_features), 1)
+        self.assertEqual(fake_client.gpu_cache_sgd_update_calls, [])
+        self.assertEqual(
+            [ids.tolist() for ids in fake_ebc.issue_fused_id_prefetch_ids],
+            [[4], [5], [4]],
+        )
+        self.assertEqual(len(fake_ebc.forward_features), 3)
+        self.assertEqual(
+            [str(build_device_by_feature[feature]) for feature in fake_ebc.forward_features],
+            ["cuda:0", "cuda:0", "cuda:0"],
+        )
         self.assertEqual([row["prefetch_depth"] for row in captured_rows], [1.0, 1.0, 1.0])
-        self.assertEqual([row["prefetch_consumed_batches"] for row in captured_rows], [1.0, 1.0, 1.0])
-        self.assertEqual([row["prefetch_consumed_total_ids"] for row in captured_rows], [7.0, 7.0, 7.0])
+        self.assertEqual([row["prefetch_issued_batches"] for row in captured_rows], [1.0, 1.0, 1.0])
+        self.assertEqual([row["prefetch_consumed_batches"] for row in captured_rows], [1.0, 1.0, 0.0])
+        self.assertEqual([row["prefetch_discarded_batches"] for row in captured_rows], [0.0, 0.0, 1.0])
+        self.assertEqual([row["prefetch_total_ids"] for row in captured_rows], [1.0, 1.0, 1.0])
+        self.assertEqual([row["prefetch_consumed_total_ids"] for row in captured_rows], [1.0, 1.0, 0.0])
+        self.assertEqual([row["prefetch_discarded_total_ids"] for row in captured_rows], [0.0, 0.0, 1.0])
+        self.assertTrue(all(row["prefetch_issue_ms"] > 0 for row in captured_rows))
         self.assertTrue(all(row["prefetch_issue_to_consume_ms"] >= 0 for row in captured_rows))
+        self.assertEqual([row["bagpipe_stale_ids"] for row in captured_rows], [0, 0, 1])
+        self.assertEqual(
+            [row["bagpipe_stale_cached_ids"] for row in captured_rows],
+            [0, 0, 0],
+        )
+        self.assertEqual(
+            [row["bagpipe_stale_refetch_ids"] for row in captured_rows],
+            [0, 0, 1],
+        )
+        self.assertEqual(
+            [row["bagpipe_discarded_stale_handle"] for row in captured_rows],
+            [0, 0, 1],
+        )
+        self.assertEqual(
+            [row["bagpipe_gpu_cache_update_ids"] for row in captured_rows],
+            [0, 0, 0],
+        )
+        self.assertEqual(
+            [row["bagpipe_cache_insert_ids"] for row in captured_rows],
+            [0, 0, 0],
+        )
+        self.assertEqual(
+            [row["bagpipe_step_end_evict_ids"] for row in captured_rows],
+            [0, 0, 0],
+        )
+        self.assertTrue(
+            all(row["step_end_to_end_ms"] >= row["step_total_ms"] for row in captured_rows)
+        )
+        self.assertTrue(
+            all(row["step_end_to_end_ms"] == row["step_total_ms"] for row in captured_rows)
+        )
+        self.assertTrue(all(row["input_pack_consume_ms"] >= 0 for row in captured_rows))
+        self.assertTrue(
+            all(row["step_end_to_end_ms"] >= row["input_pack_consume_ms"] for row in captured_rows)
+        )
 
     def test_local_worker_emits_perf_breakdown_columns_from_model_layer_stats(self) -> None:
         runner_runtime = Path(tempfile.mkdtemp())
@@ -1875,9 +2251,9 @@ class TestRecStoreRunner(unittest.TestCase):
                                                                     runner = RecStoreRunner(runner_runtime)
                                                                     runner.run(repo_root=repo_root, cfg=cfg)
 
-        self.assertEqual(len(device_calls), 1)
+        self.assertGreaterEqual(len(device_calls), 1)
         expected_device_type = "cuda" if torch.cuda.is_available() else "cpu"
-        self.assertEqual(device_calls[0].type, expected_device_type)
+        self.assertTrue(all(device.type == expected_device_type for device in device_calls))
 
     def test_nonzero_rank_skips_table_init_and_warm_write(self) -> None:
         runner_runtime = Path(tempfile.mkdtemp())

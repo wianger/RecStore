@@ -84,6 +84,7 @@ def build_client_command(
     transport: str,
     client: ClientSpec,
     run_id: str,
+    rdzv_id: str | None = None,
 ) -> list[str]:
     first_server = sorted(cfg.servers, key=lambda item: item.shard_id)[0]
     cmd = [
@@ -141,7 +142,7 @@ def build_client_command(
         "--master-port",
         str(cfg.master_port),
         "--rdzv-id",
-        run_id,
+        rdzv_id or run_id,
     ]
     return _wrap_remote(cmd, ssh_host=client.ssh_host, cwd=client.repo_root)
 
@@ -152,6 +153,7 @@ def build_torchrec_command(
     memory_mode: str,
     client: ClientSpec,
     run_id: str,
+    rdzv_id: str | None = None,
 ) -> list[str]:
     output_dir = cfg.output_dir / "outputs" / run_id
     cmd = [
@@ -197,6 +199,6 @@ def build_torchrec_command(
         "--master-port",
         str(cfg.master_port),
         "--rdzv-id",
-        run_id,
+        rdzv_id or run_id,
     ]
     return _wrap_remote(cmd, ssh_host=client.ssh_host, cwd=client.repo_root)
