@@ -163,6 +163,7 @@ class ShardedRecstoreClient:
         self._gpu_cache_table_name: str | None = None
         self._gpu_cache_enabled: bool = False
         self._gpu_cache_clear_count = 0
+        self._clear_gpu_cache_after_cpu_update = True
         self._prefetch_table_name: str | None = None
         self._native_distributed_backend = self._detect_native_distributed_backend()
 
@@ -491,7 +492,6 @@ class ShardedRecstoreClient:
     ) -> None:
         if not self._gpu_cache_enabled:
             raise RuntimeError("prefill_gpu_cache requires GPU cache to be enabled")
-        self._require_active_shard("prefill_gpu_cache")
         prefill = getattr(self._client, "prefill_gpu_cache", None)
         if callable(prefill):
             prefill(name, ids, values)
@@ -504,7 +504,92 @@ class ShardedRecstoreClient:
                 "exposing prefill_gpu_cache()."
             )
         normalized_ids = self._normalize_ids(ids, keep_device=True)
-        prefill(normalized_ids, values)
+        normalized_values = self._normalize_grads(values, keep_device=True)
+        if (
+            normalized_ids.numel() > 0
+            and normalized_ids.device.type == "cpu"
+            and normalized_values.device.type == "cpu"
+            and torch.cuda.is_available()
+        ):
+            cache_device = torch.device("cuda", torch.cuda.current_device())
+            normalized_ids = normalized_ids.to(cache_device)
+            normalized_values = normalized_values.to(cache_device)
+        prefill(normalized_ids, normalized_values)
+
+    def invalidate_gpu_cache(self, name: str, ids: torch.Tensor) -> None:
+        if name not in self._tensor_meta:
+            raise RuntimeError(f"Tensor '{name}' has not been initialized.")
+        if not self._gpu_cache_enabled:
+            raise RuntimeError("invalidate_gpu_cache requires GPU cache to be enabled")
+        invalidator = getattr(self._client, "invalidate_gpu_cache", None)
+        if callable(invalidator):
+            invalidator(name, ids)
+            return
+        ops = getattr(self._client, "ops", None)
+        invalidator = getattr(ops, "invalidate_gpu_cache", None)
+        if not callable(invalidator):
+            raise RuntimeError(
+                "invalidate_gpu_cache requires a RecStore client or ops library "
+                "exposing invalidate_gpu_cache()."
+            )
+        self._ensure_gpu_cache_table(name)
+        normalized_ids = self._normalize_ids(ids, keep_device=True)
+        if normalized_ids.numel() > 0 and normalized_ids.device.type == "cpu":
+            if not torch.cuda.is_available():
+                raise RuntimeError("invalidate_gpu_cache requires CUDA ids")
+            normalized_ids = normalized_ids.to(torch.device("cuda", torch.cuda.current_device()))
+        invalidator(normalized_ids)
+
+    def apply_sgd_update_gpu_cache(
+        self,
+        name: str,
+        ids: torch.Tensor,
+        grads: torch.Tensor,
+        *,
+        learning_rate: float,
+    ) -> bool:
+        if name not in self._tensor_meta:
+            raise RuntimeError(f"Tensor '{name}' has not been initialized.")
+        if not self._gpu_cache_enabled:
+            raise RuntimeError("apply_sgd_update_gpu_cache requires GPU cache to be enabled")
+        self._ensure_gpu_cache_table(name)
+        ops = getattr(self._client, "ops", None)
+        updater = getattr(ops, "apply_sgd_update_gpu_cache", None)
+        if not callable(updater):
+            updater = getattr(self._client, "apply_sgd_update_gpu_cache", None)
+            if callable(updater):
+                return bool(
+                    updater(
+                        name,
+                        ids,
+                        grads,
+                        learning_rate=float(learning_rate),
+                    )
+                )
+            raise RuntimeError(
+                "apply_sgd_update_gpu_cache requires a RecStore client or ops library "
+                "exposing apply_sgd_update_gpu_cache()."
+            )
+        normalized_ids = self._normalize_ids(ids, keep_device=True)
+        normalized_grads = self._normalize_grads(grads, keep_device=True)
+        if normalized_grads.dim() != 2:
+            raise ValueError("grads must be a 2-dimensional tensor")
+        if normalized_ids.size(0) != normalized_grads.size(0):
+            raise ValueError("ids and grads must have the same number of rows")
+        embedding_dim = int(self._tensor_meta[name]["shape"][1])
+        if normalized_grads.size(1) != embedding_dim:
+            raise ValueError(
+                f"grads second dimension must match embedding dim {embedding_dim} for tensor '{name}'"
+            )
+        if (
+            normalized_ids.numel() > 0
+            and normalized_ids.device.type == "cpu"
+            and normalized_grads.device.type == "cpu"
+            and torch.cuda.is_available()
+        ):
+            cache_device = torch.device("cuda", torch.cuda.current_device())
+            normalized_grads = normalized_grads.to(cache_device)
+        return bool(updater(normalized_ids, normalized_grads, float(learning_rate)))
 
     def get_last_gpu_cache_profile(self) -> dict[str, float]:
         getter = getattr(self._client, "get_last_gpu_cache_profile", None)
@@ -525,6 +610,9 @@ class ShardedRecstoreClient:
 
     def get_gpu_cache_clear_count(self) -> int:
         return int(self._gpu_cache_clear_count)
+
+    def set_clear_gpu_cache_after_cpu_update(self, enabled: bool) -> None:
+        self._clear_gpu_cache_after_cpu_update = bool(enabled)
 
     def _clear_gpu_cache_if_available(self) -> None:
         clear = getattr(self._client, "clear_gpu_cache", None)
@@ -814,7 +902,7 @@ class ShardedRecstoreClient:
                 self._normalize_ids(ids),
                 self._normalize_grads(grads),
             )
-            if updated_on_cpu:
+            if updated_on_cpu and self._clear_gpu_cache_after_cpu_update:
                 self._clear_gpu_cache_if_available()
             return
         for shard, index_tensor, shard_keys in self._group_ids_by_shard(
@@ -828,5 +916,5 @@ class ShardedRecstoreClient:
             shard_grads = grads.index_select(0, grad_index).contiguous()
             self._activate_shard(shard)
             self._client.emb_update_table(name, shard_keys, shard_grads)
-        if updated_on_cpu:
+        if updated_on_cpu and self._clear_gpu_cache_after_cpu_update:
             self._clear_gpu_cache_if_available()
