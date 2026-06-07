@@ -498,7 +498,7 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual([ids.tolist() for ids in module.issued_fused_ids], [[7, 8], [9]])
         self.assertEqual(module.consumed, [(100, 2)])
 
-    def test_bagpipe_stale_prefetch_discards_handle_and_refetches_same_batch(self) -> None:
+    def test_bagpipe_partial_stale_prefetch_attaches_with_invalid_ids(self) -> None:
         module = _FakePrefetchModule()
         prefetcher = LookaheadPrefetcher(module, depth=1, embedding_dim=64)
         prefetcher.enqueue(_FakeSparseFeatures(10))
@@ -518,9 +518,10 @@ class TestRecStoreRunner(unittest.TestCase):
 
         self.assertEqual(row["bagpipe_stale_ids"], 1)
         self.assertEqual(row["bagpipe_valid_prefetch_ids"], 1)
-        self.assertEqual(row["bagpipe_discarded_stale_handle"], 1)
-        self.assertEqual(module.consumed, [])
-        self.assertEqual([record for _, record in module.issued], [False, False, True])
+        self.assertEqual(row["bagpipe_discarded_stale_handle"], 0)
+        self.assertEqual(module.consumed, [(100, 10)])
+        self.assertEqual(module.consume_kwargs[0]["invalid_fused_ids_cpu"].tolist(), [7])
+        self.assertEqual([record for _, record in module.issued], [False, False])
 
     def test_bagpipe_stale_cached_attaches_handle_with_invalid_ids(self) -> None:
         module = _FakePrefetchModule()
@@ -1844,43 +1845,44 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual(fake_client.clear_after_cpu_update_flags, [False])
         self.assertEqual(
             fake_ebc.issue_fused_prefetch_record_flags,
-            [False, False, False, True],
+            [False, False],
         )
         self.assertEqual(fake_ebc.set_fused_prefetch_handle_calls, 2)
         self.assertEqual(len(built_sparse_features), 6)
-        self.assertEqual([str(device) for device in build_devices], ["cuda:0"] * 6)
-        self.assertEqual(len(fake_ebc.issue_fused_prefetch_features), 1)
+        expected_device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.assertEqual([str(device) for device in build_devices], [expected_device] * 6)
+        self.assertEqual(len(fake_ebc.issue_fused_prefetch_features), 0)
         self.assertEqual(fake_client.gpu_cache_sgd_update_calls, [])
         self.assertEqual(
             [ids.tolist() for ids in fake_ebc.issue_fused_id_prefetch_ids],
-            [[4], [5], [4]],
+            [[5], [4]],
         )
         self.assertEqual(len(fake_ebc.forward_features), 3)
         self.assertEqual(
             [str(build_device_by_feature[feature]) for feature in fake_ebc.forward_features],
-            ["cuda:0", "cuda:0", "cuda:0"],
+            [expected_device, expected_device, expected_device],
         )
         self.assertEqual([row["prefetch_depth"] for row in captured_rows], [1.0, 1.0, 1.0])
-        self.assertEqual([row["prefetch_issued_batches"] for row in captured_rows], [1.0, 1.0, 1.0])
-        self.assertEqual([row["prefetch_consumed_batches"] for row in captured_rows], [1.0, 1.0, 0.0])
-        self.assertEqual([row["prefetch_discarded_batches"] for row in captured_rows], [0.0, 0.0, 1.0])
-        self.assertEqual([row["prefetch_total_ids"] for row in captured_rows], [1.0, 1.0, 1.0])
-        self.assertEqual([row["prefetch_consumed_total_ids"] for row in captured_rows], [1.0, 1.0, 0.0])
-        self.assertEqual([row["prefetch_discarded_total_ids"] for row in captured_rows], [0.0, 0.0, 1.0])
-        self.assertTrue(all(row["prefetch_issue_ms"] > 0 for row in captured_rows))
+        self.assertEqual([row["prefetch_issued_batches"] for row in captured_rows], [1.0, 1.0, 0.0])
+        self.assertEqual([row["prefetch_consumed_batches"] for row in captured_rows], [0.0, 1.0, 1.0])
+        self.assertEqual([row["prefetch_discarded_batches"] for row in captured_rows], [0.0, 0.0, 0.0])
+        self.assertEqual([row["prefetch_total_ids"] for row in captured_rows], [1.0, 1.0, 0.0])
+        self.assertEqual([row["prefetch_consumed_total_ids"] for row in captured_rows], [0.0, 1.0, 1.0])
+        self.assertEqual([row["prefetch_discarded_total_ids"] for row in captured_rows], [0.0, 0.0, 0.0])
+        self.assertTrue(all(row["prefetch_issue_ms"] >= 0 for row in captured_rows))
         self.assertTrue(all(row["prefetch_issue_to_consume_ms"] >= 0 for row in captured_rows))
-        self.assertEqual([row["bagpipe_stale_ids"] for row in captured_rows], [0, 0, 1])
+        self.assertEqual([row["bagpipe_stale_ids"] for row in captured_rows], [0, 0, 0])
         self.assertEqual(
             [row["bagpipe_stale_cached_ids"] for row in captured_rows],
             [0, 0, 0],
         )
         self.assertEqual(
             [row["bagpipe_stale_refetch_ids"] for row in captured_rows],
-            [0, 0, 1],
+            [0, 0, 0],
         )
         self.assertEqual(
             [row["bagpipe_discarded_stale_handle"] for row in captured_rows],
-            [0, 0, 1],
+            [0, 0, 0],
         )
         self.assertEqual(
             [row["bagpipe_gpu_cache_update_ids"] for row in captured_rows],

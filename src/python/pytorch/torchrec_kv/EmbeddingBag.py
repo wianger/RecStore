@@ -425,6 +425,12 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             unique_ids = fused_ids_cpu_full
             inverse = fused_ids_cpu_full
         self._perf_add("lookup_ids_build_ms", (perf_counter() - t_build_start) * 1e3)
+        if unique_ids.numel() == 0:
+            issue_ts = perf_counter()
+            if record_handle:
+                self.set_prefetch_handles({})
+                return 0
+            return 0, 0, issue_ts, unique_ids, inverse
         t_issue_start = perf_counter()
         set_prefetch_table_name = getattr(self.kv_client, "set_prefetch_table_name", None)
         if callable(set_prefetch_table_name):
@@ -459,6 +465,12 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             unique_ids = fused_ids_cpu_full
             inverse = fused_ids_cpu_full
         self._perf_add("lookup_ids_build_ms", (perf_counter() - t_build_start) * 1e3)
+        if unique_ids.numel() == 0:
+            issue_ts = perf_counter()
+            if record_handle:
+                self.set_prefetch_handles({})
+                return 0
+            return 0, 0, issue_ts, unique_ids, inverse
 
         t_issue_start = perf_counter()
         set_prefetch_table_name = getattr(self.kv_client, "set_prefetch_table_name", None)
@@ -893,8 +905,17 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             inv = self._fused_inverse
             ids_cached = self._fused_ids_cpu
             if inv is not None and ids_cached is not None and all_embeddings.size(0) == ids_cached.numel():
+                current_unique_ids = torch.unique(fused_values_all.detach().to(dtype=torch.int64, device="cpu"))
+                ids_match_current_batch = (
+                    ids_cached.detach().to(dtype=torch.int64, device="cpu").flatten().numel()
+                    == current_unique_ids.numel()
+                    and torch.equal(
+                        ids_cached.detach().to(dtype=torch.int64, device="cpu").flatten(),
+                        current_unique_ids,
+                    )
+                )
                 if (
-                    ids_cached.numel() == torch.unique(fused_values_all).numel()
+                    ids_match_current_batch
                     and (invalid_ids is None or invalid_ids.numel() == 0)
                 ):
                     indexer = inv.to(device=all_embeddings.device, dtype=torch.long)

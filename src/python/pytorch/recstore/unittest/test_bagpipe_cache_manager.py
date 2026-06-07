@@ -136,8 +136,49 @@ class _FakeLookaheadPrefetcher:
         return True
 
 
+class _RealPrefetchModule:
+    def __init__(self) -> None:
+        self.next_handle = 1
+        self.issued_fused_ids: dict[int, torch.Tensor] = {}
+        self.attached: list[tuple[int, list[int]]] = []
+
+    def issue_fused_id_prefetch(
+        self,
+        fused_ids: torch.Tensor,
+        *,
+        record_handle: bool = True,
+    ):
+        del record_handle
+        handle = self.next_handle
+        self.next_handle += 1
+        fused_ids_cpu = fused_ids.detach().to(dtype=torch.int64, device="cpu").flatten()
+        self.issued_fused_ids[handle] = fused_ids_cpu.clone()
+        return handle, int(fused_ids_cpu.numel()), 0.0, fused_ids_cpu, None
+
+    def set_fused_prefetch_handle(
+        self,
+        handle: int,
+        *,
+        num_ids: int,
+        issue_ts: float,
+        fused_ids_cpu: torch.Tensor,
+        fused_inverse=None,
+        invalid_fused_ids_cpu=None,
+    ) -> None:
+        del num_ids, issue_ts, fused_inverse, invalid_fused_ids_cpu
+        self.attached.append((int(handle), fused_ids_cpu.tolist()))
+
+    def prefill_gpu_cache_for_fused_ids(self, fused_ids: torch.Tensor) -> bool:
+        del fused_ids
+        return True
+
+    def invalidate_gpu_cache_for_fused_ids(self, fused_ids: torch.Tensor) -> bool:
+        del fused_ids
+        return True
+
+
 class TestBagPipeCacheManager(unittest.TestCase):
-    def test_window_scheduler_observes_plans_and_enqueues_once(self) -> None:
+    def test_window_scheduler_issues_future_nonempty_prefetches_after_step_barrier(self) -> None:
         from ..bagpipe_cache import BagPipeCachePolicy
 
         policy = BagPipeCachePolicy(lookahead_depth=2, cache_capacity=8)
@@ -163,20 +204,65 @@ class TestBagPipeCacheManager(unittest.TestCase):
         scheduler.plan_ready(current_step=0, prepared_batches=prepared_batches)
 
         rows = [row for _, row, _ in prepared_batches]
-        self.assertEqual([ids.tolist() for ids in prefetcher.enqueued_ids], [[4], [5], []])
-        self.assertEqual(prefetcher.advance_calls, 3)
+        self.assertEqual(prefetcher.enqueued_ids, [])
+        self.assertEqual(prefetcher.advance_calls, 0)
+        end_row: dict[str, object] = {}
+        scheduler.on_step_end(0, end_row)
+        self.assertEqual(prefetcher.enqueued_ids, [])
+        scheduler.issue_prefetches_ready_after_update(current_step=0, row=end_row)
+        self.assertEqual([ids.tolist() for ids in prefetcher.enqueued_ids], [[5]])
+        self.assertEqual(prefetcher.advance_calls, 1)
         self.assertEqual(rows[0]["bagpipe_prefetch_ids"], 1)
         self.assertEqual(rows[0]["bagpipe_cache_insert_ids"], 1)
-        self.assertEqual(rows[0]["bagpipe_cache_insert_success_ids"], 1)
+        self.assertEqual(rows[0]["bagpipe_cache_insert_success_ids"], 0)
         self.assertEqual(rows[1]["bagpipe_prefetch_ids"], 1)
         self.assertEqual(rows[2]["bagpipe_prefetch_ids"], 0)
-        self.assertEqual([ids.tolist() for ids in module.cache_insert_ids], [[4], [4, 5], [5]])
+        self.assertEqual([ids.tolist() for ids in module.cache_insert_ids], [])
         self.assertNotIn("bagpipe_prefetch_ids", rows[3])
-        self.assertEqual(rows[0]["prefetch_issued_batches"], 1.0)
-        self.assertEqual(rows[0]["prefetch_total_ids"], 1.0)
-        self.assertEqual(rows[2]["prefetch_issue_ms"], 0.5)
+        self.assertEqual(end_row["prefetch_issued_batches"], 1.0)
+        self.assertEqual(end_row["prefetch_total_ids"], 1.0)
+        self.assertEqual(end_row["prefetch_issue_ms"], 0.5)
 
-    def test_window_scheduler_invalidates_capacity_evicted_gpu_cache_rows(self) -> None:
+    def test_window_scheduler_real_prefetcher_attaches_handle_for_matching_step(self) -> None:
+        from model_zoo.rs_demo.runtime.prefetch import LookaheadPrefetcher
+        from ..bagpipe_cache import BagPipeCachePolicy
+
+        module = _RealPrefetchModule()
+        policy = BagPipeCachePolicy(lookahead_depth=2, cache_capacity=8)
+        prefetcher = LookaheadPrefetcher(module, depth=2, embedding_dim=4)
+        scheduler = BagPipeWindowScheduler(
+            bagpipe_policy=policy,
+            lookahead_prefetcher=prefetcher,
+            embedding_module=module,
+            read_before_update=True,
+            read_mode="prefetch",
+        )
+        prepared_batches = [
+            (0, {}, torch.tensor([100], dtype=torch.int64)),
+            (1, {}, torch.tensor([101], dtype=torch.int64)),
+            (2, {}, torch.tensor([102], dtype=torch.int64)),
+            (3, {}, torch.tensor([103], dtype=torch.int64)),
+        ]
+        for step, _, fused_ids in prepared_batches:
+            scheduler.observe_batch(step, fused_ids)
+
+        scheduler.plan_ready(current_step=0, prepared_batches=prepared_batches)
+        row0: dict[str, object] = {}
+        scheduler.on_step_end(0, row0)
+        scheduler.issue_prefetches_ready_after_update(current_step=0, row=row0)
+
+        self.assertTrue(prefetcher.attach_next())
+        self.assertEqual(module.attached, [(1, [101])])
+
+        scheduler.plan_ready(current_step=1, prepared_batches=prepared_batches)
+        row1: dict[str, object] = {}
+        scheduler.on_step_end(1, row1)
+        scheduler.issue_prefetches_ready_after_update(current_step=1, row=row1)
+
+        self.assertTrue(prefetcher.attach_next())
+        self.assertEqual(module.attached, [(1, [101]), (2, [102])])
+
+    def test_window_scheduler_surfaces_capacity_overflow(self) -> None:
         from ..bagpipe_cache import BagPipeCachePolicy
 
         policy = BagPipeCachePolicy(lookahead_depth=2, cache_capacity=1)
@@ -197,13 +283,10 @@ class TestBagPipeCacheManager(unittest.TestCase):
 
         for step, _, fused_ids in prepared_batches:
             scheduler.observe_batch(step, fused_ids)
-        scheduler.plan_ready(current_step=0, prepared_batches=prepared_batches)
 
-        rows = [row for _, row, _ in prepared_batches]
-        self.assertEqual([ids.tolist() for ids in module.cache_invalidate_ids], [[4]])
-        self.assertEqual(rows[1]["bagpipe_evict_ids"], 1)
-        self.assertEqual(rows[1]["bagpipe_gpu_cache_evict_success_ids"], 1)
-        self.assertEqual(rows[1]["bagpipe_gpu_cache_evict_failures"], 0)
+        with self.assertRaisesRegex(RuntimeError, "BagPipe cache capacity exceeded"):
+            scheduler.plan_ready(current_step=0, prepared_batches=prepared_batches)
+        self.assertEqual(module.cache_invalidate_ids, [])
 
     def test_window_scheduler_invalidates_step_end_expired_gpu_cache_rows(self) -> None:
         from ..bagpipe_cache import BagPipeCachePolicy
@@ -260,8 +343,8 @@ class TestBagPipeCacheManager(unittest.TestCase):
         self.assertEqual(row["bagpipe_valid_prefetch_ids"], 1)
         self.assertEqual(row["bagpipe_discarded_stale_handle"], 0)
 
-    def test_stale_refetch_discards_handle_and_refetches_same_batch(self) -> None:
-        policy = _FakeBagPipePolicy(_FakeConsumeDecision([7], [8]))
+    def test_all_stale_refetch_discards_handle_and_refetches_same_batch(self) -> None:
+        policy = _FakeBagPipePolicy(_FakeConsumeDecision([7], []))
         prefetcher = _FakePrefetcher()
         module = _FakeEmbeddingModule()
         features = object()
@@ -284,6 +367,31 @@ class TestBagPipeCacheManager(unittest.TestCase):
         self.assertEqual(row["bagpipe_stale_cached_ids"], 0)
         self.assertEqual(row["bagpipe_stale_refetch_ids"], 1)
         self.assertEqual(row["bagpipe_discarded_stale_handle"], 1)
+
+    def test_partial_stale_refetch_repairs_invalid_ids_without_discard(self) -> None:
+        policy = _FakeBagPipePolicy(_FakeConsumeDecision([7], [8]))
+        prefetcher = _FakePrefetcher()
+        module = _FakeEmbeddingModule()
+        row: dict[str, object] = {}
+
+        attach_or_refetch_with_bagpipe_policy(
+            prefetch_depth=1,
+            bagpipe_policy=policy,
+            lookahead_prefetcher=prefetcher,
+            embedding_module=module,
+            sparse_features=object(),
+            row=row,
+            step=2,
+        )
+
+        self.assertEqual(prefetcher.discard_calls, 0)
+        self.assertEqual(prefetcher.attach_calls, 1)
+        self.assertEqual(
+            prefetcher.attach_kwargs[0]["invalid_fused_ids"].tolist(),
+            [7],
+        )
+        self.assertEqual(module.issue_fused_prefetch_calls, [])
+        self.assertEqual(row["bagpipe_discarded_stale_handle"], 0)
 
     def test_stale_cached_discards_handle_without_refetch(self) -> None:
         policy = _FakeBagPipePolicy(

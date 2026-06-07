@@ -169,6 +169,32 @@ class TestFusedPrefetch(unittest.TestCase):
         stats = ebc.report_prefetch_stats(reset=True)
         self.assertGreaterEqual(stats.get("batches_prefetched", 0), 1)
 
+    def test_empty_fused_id_prefetch_does_not_call_backend(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClient(fake)
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+
+        result = ebc.issue_fused_id_prefetch(
+            torch.empty((0,), dtype=torch.int64),
+            record_handle=False,
+        )
+
+        handle, num_ids, _, unique_ids, inverse = result
+        self.assertEqual(handle, 0)
+        self.assertEqual(num_ids, 0)
+        self.assertEqual(unique_ids.numel(), 0)
+        self.assertEqual(inverse.numel(), 0)
+        self.assertEqual(fake._prefetch_buf, {})
+
     def test_partial_fused_id_prefetch_merges_with_local_lookup(self):
         configs = [
             dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),

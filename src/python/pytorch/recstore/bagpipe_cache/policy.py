@@ -77,24 +77,41 @@ class BagPipeCachePolicy:
 
     def plan_for_step(self, step: int) -> BagPipeStepPlan:
         step = int(step)
+        self._evict_expired_before(step)
         current_ids = set(self._batches.get(step, ()))
         next_ids = set(self._batches.get(step + 1, ()))
         future_last_use = self._future_last_use(step)
 
-        cached_before_insert = set(self._cache_ttl.keys())
+        cache_before_batch = set(self._cache_ttl.keys())
+        prefetch_ids = sorted(current_ids - cache_before_batch)
         cache_insert = {
             emb_id
             for emb_id in current_ids
+            if emb_id not in cache_before_batch
+            and step < future_last_use.get(emb_id, step) <= step + self.lookahead_depth
+        }
+        ttl_updates = {
+            emb_id: future_last_use[emb_id]
+            for emb_id in sorted(current_ids)
             if step < future_last_use.get(emb_id, step) <= step + self.lookahead_depth
         }
-        ttl_updates = {emb_id: future_last_use[emb_id] for emb_id in sorted(cache_insert)}
 
-        for emb_id in sorted(cache_insert):
+        for emb_id in sorted(ttl_updates):
             self._touch_cache(emb_id, ttl_updates[emb_id])
 
-        evict_ids = self._trim_to_capacity()
-        prefetch_ids = sorted(current_ids - cached_before_insert)
-        self._planned_prefetch[step] = set(current_ids)
+        if self.cache_capacity <= 0 and self._cache_ttl:
+            raise RuntimeError(
+                "BagPipe cache capacity exceeded: capacity=0 "
+                f"required={len(self._cache_ttl)} at step={step}"
+            )
+        if self.cache_capacity > 0 and len(self._cache_ttl) > self.cache_capacity:
+            raise RuntimeError(
+                "BagPipe cache capacity exceeded: "
+                f"capacity={self.cache_capacity} live={len(self._cache_ttl)} "
+                f"at step={step}"
+            )
+        evict_ids = torch.empty((0,), dtype=torch.int64)
+        self._planned_prefetch.setdefault(step, set())
 
         sync_now = sorted(current_ids & next_ids)
         sync_later_candidates = current_ids - next_ids
@@ -126,17 +143,24 @@ class BagPipeCachePolicy:
     ) -> None:
         cache_updated = set(_ids_to_tuple(cache_updated_ids))
         for emb_id in _ids_to_tuple(ids):
-            self._updated_after_plan[emb_id] = max(
-                int(step),
-                self._updated_after_plan.get(emb_id, -1),
-            )
             if emb_id in cache_updated:
                 self._cache_updated_after_plan[emb_id] = max(
                     int(step),
                     self._cache_updated_after_plan.get(emb_id, -1),
                 )
             else:
+                self._updated_after_plan[emb_id] = max(
+                    int(step),
+                    self._updated_after_plan.get(emb_id, -1),
+                )
                 self._cache_ttl.pop(emb_id, None)
+
+    def on_prefetch_issued(self, step: int, ids: torch.Tensor | Iterable[int]) -> None:
+        issued = set(_ids_to_tuple(ids))
+        self._planned_prefetch[int(step)] = issued
+        for emb_id in issued:
+            self._updated_after_plan.pop(emb_id, None)
+            self._cache_updated_after_plan.pop(emb_id, None)
 
     def on_consume(self, step: int) -> BagPipeConsumeDecision:
         step = int(step)
@@ -166,7 +190,7 @@ class BagPipeCachePolicy:
         )
 
     def on_step_end(self, step: int) -> torch.Tensor:
-        return self._evict_expired(int(step))
+        return self._evict_expired_through(int(step))
 
     def _future_last_use(self, step: int) -> dict[int, int]:
         last_use: dict[int, int] = {}
@@ -181,7 +205,7 @@ class BagPipeCachePolicy:
             self._cache_ttl.move_to_end(emb_id)
         self._cache_ttl[emb_id] = int(ttl)
 
-    def _evict_expired(self, step: int) -> torch.Tensor:
+    def _evict_expired_before(self, step: int) -> torch.Tensor:
         expired = [
             emb_id
             for emb_id, ttl in list(self._cache_ttl.items())
@@ -191,13 +215,12 @@ class BagPipeCachePolicy:
             self._cache_ttl.pop(emb_id, None)
         return _tensor_from_ids(expired)
 
-    def _trim_to_capacity(self) -> torch.Tensor:
-        if self.cache_capacity <= 0:
-            evicted = list(self._cache_ttl.keys())
-            self._cache_ttl.clear()
-            return _tensor_from_ids(evicted)
-        evicted: list[int] = []
-        while len(self._cache_ttl) > self.cache_capacity:
-            emb_id, _ = self._cache_ttl.popitem(last=False)
-            evicted.append(int(emb_id))
-        return _tensor_from_ids(evicted)
+    def _evict_expired_through(self, step: int) -> torch.Tensor:
+        expired = [
+            emb_id
+            for emb_id, ttl in list(self._cache_ttl.items())
+            if ttl <= int(step)
+        ]
+        for emb_id in expired:
+            self._cache_ttl.pop(emb_id, None)
+        return _tensor_from_ids(expired)
