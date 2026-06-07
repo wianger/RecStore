@@ -876,6 +876,60 @@ void prefill_gpu_cache_torch(const torch::Tensor& keys,
 #endif
 }
 
+void invalidate_gpu_cache_torch(const torch::Tensor& keys) {
+#ifdef RECSTORE_ENABLE_GPU_CACHE
+  TORCH_CHECK(keys.dim() == 1, "keys must be 1-dimensional");
+  TORCH_CHECK(keys.scalar_type() == torch::kInt64,
+              "keys must have dtype int64");
+  if (keys.numel() == 0) {
+    return;
+  }
+  TORCH_CHECK(keys.is_cuda(), "invalidate_gpu_cache requires keys on CUDA");
+  auto keys_cuda = keys;
+  if (!keys_cuda.is_contiguous()) {
+    keys_cuda = keys_cuda.contiguous();
+  }
+  gpu::InvalidateGpuCache(keys_cuda);
+#else
+  (void)keys;
+#endif
+}
+
+bool apply_sgd_update_gpu_cache_torch(const torch::Tensor& keys,
+                                      const torch::Tensor& grads,
+                                      double learning_rate) {
+#ifdef RECSTORE_ENABLE_GPU_CACHE
+  TORCH_CHECK(keys.dim() == 1, "keys must be 1-dimensional");
+  TORCH_CHECK(keys.scalar_type() == torch::kInt64,
+              "keys must have dtype int64");
+  TORCH_CHECK(grads.dim() == 2, "grads must be 2-dimensional");
+  TORCH_CHECK(grads.scalar_type() == torch::kFloat32,
+              "grads must have dtype float32");
+  TORCH_CHECK(keys.size(0) == grads.size(0),
+              "keys and grads must have the same number of rows");
+  if (keys.numel() == 0) {
+    return true;
+  }
+  TORCH_CHECK(keys.is_cuda() || grads.is_cuda(),
+              "apply_sgd_update_gpu_cache requires keys or grads on CUDA");
+  const auto cache_device = grads.is_cuda() ? grads.device() : keys.device();
+  auto keys_cuda          = keys.is_cuda() ? keys : keys.to(cache_device);
+  auto grads_cuda         = grads.is_cuda() ? grads : grads.to(cache_device);
+  if (!keys_cuda.is_contiguous()) {
+    keys_cuda = keys_cuda.contiguous();
+  }
+  if (!grads_cuda.is_contiguous()) {
+    grads_cuda = grads_cuda.contiguous();
+  }
+  return gpu::ApplySgdUpdateGpuCache(keys_cuda, grads_cuda, learning_rate);
+#else
+  (void)keys;
+  (void)grads;
+  (void)learning_rate;
+  return false;
+#endif
+}
+
 void set_gpu_cache_lookup_bypass_enabled_torch(bool enabled) {
 #ifdef RECSTORE_ENABLE_GPU_CACHE
   SetGpuCacheLookupBypassEnabled(enabled);
@@ -947,6 +1001,8 @@ TORCH_LIBRARY(recstore_ops, m) {
   m.def("disable_gpu_cache", disable_gpu_cache_torch);
   m.def("clear_gpu_cache", clear_gpu_cache_torch);
   m.def("prefill_gpu_cache", prefill_gpu_cache_torch);
+  m.def("invalidate_gpu_cache", invalidate_gpu_cache_torch);
+  m.def("apply_sgd_update_gpu_cache", apply_sgd_update_gpu_cache_torch);
   m.def("set_gpu_cache_lookup_bypass_enabled",
         set_gpu_cache_lookup_bypass_enabled_torch);
   m.def("is_gpu_cache_lookup_bypass_enabled",

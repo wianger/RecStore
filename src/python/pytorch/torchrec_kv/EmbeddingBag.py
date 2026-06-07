@@ -337,6 +337,7 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
         record_stats: bool = True,
         fused_ids_cpu: torch.Tensor | None = None,
         fused_inverse: torch.Tensor | None = None,
+        invalid_fused_ids_cpu: torch.Tensor | None = None,
     ):
         """Set a single fused prefetch handle for the upcoming forward.
 
@@ -353,6 +354,11 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             "issue_ts": float(issue_ts) if issue_ts is not None else time.time(),
             "fused_ids_cpu": fused_ids_cpu if fused_ids_cpu is not None else None,
             "fused_inverse": fused_inverse if fused_inverse is not None else None,
+            "invalid_fused_ids_cpu": (
+                invalid_fused_ids_cpu.detach().to(dtype=torch.int64, device="cpu").flatten()
+                if isinstance(invalid_fused_ids_cpu, torch.Tensor)
+                else None
+            ),
         }
         self._fused_prefetch_slots.append(slot)
         self._sync_fused_prefetch_slot_state()
@@ -371,12 +377,14 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             self._fused_prefetch_issue_ts = slot["issue_ts"]
             self._fused_ids_cpu = slot["fused_ids_cpu"]
             self._fused_inverse = slot["fused_inverse"]
+            self._fused_invalid_ids_cpu = slot.get("invalid_fused_ids_cpu")
         else:
             self._fused_prefetch_handle = None
             self._fused_prefetch_num_ids = 0
             self._fused_prefetch_issue_ts = None
             self._fused_ids_cpu = None
             self._fused_inverse = None
+            self._fused_invalid_ids_cpu = None
 
     def issue_fused_prefetch(
         self,
@@ -430,6 +438,112 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             self.set_fused_prefetch_handle(handle, num_ids=num_ids, issue_ts=issue_ts, fused_ids_cpu=unique_ids, fused_inverse=inverse)
             return handle
         return handle, num_ids, issue_ts, unique_ids, inverse
+
+    def issue_fused_id_prefetch(
+        self,
+        fused_ids: torch.Tensor,
+        *,
+        record_handle: bool = True,
+    ) -> int | Tuple[int, int, float, torch.Tensor, torch.Tensor]:
+        """Issue a fused prefetch from an oracle-selected fused-id tensor."""
+        if not self._enable_fusion or self._master_config is None:
+            raise RuntimeError("Fused prefetch requires fusion enabled and a valid master config.")
+        if not isinstance(fused_ids, torch.Tensor):
+            raise TypeError("fused_ids must be a torch.Tensor")
+
+        t_build_start = perf_counter()
+        fused_ids_cpu_full = fused_ids.detach().to(dtype=torch.int64, device="cpu").flatten()
+        if fused_ids_cpu_full.numel() > 0:
+            unique_ids, inverse = torch.unique(fused_ids_cpu_full, return_inverse=True)
+        else:
+            unique_ids = fused_ids_cpu_full
+            inverse = fused_ids_cpu_full
+        self._perf_add("lookup_ids_build_ms", (perf_counter() - t_build_start) * 1e3)
+
+        t_issue_start = perf_counter()
+        set_prefetch_table_name = getattr(self.kv_client, "set_prefetch_table_name", None)
+        if callable(set_prefetch_table_name):
+            set_prefetch_table_name(self._master_config.name)
+        handle = self.kv_client.prefetch(unique_ids)
+        self._perf_add("prefetch_issue_ms", (perf_counter() - t_issue_start) * 1e3)
+        num_ids = int(unique_ids.numel())
+        issue_ts = perf_counter()
+
+        if record_handle:
+            self.set_fused_prefetch_handle(
+                handle,
+                num_ids=num_ids,
+                issue_ts=issue_ts,
+                fused_ids_cpu=unique_ids,
+                fused_inverse=inverse,
+            )
+            return handle
+        return handle, num_ids, issue_ts, unique_ids, inverse
+
+    def prefill_gpu_cache_for_fused_ids(self, fused_ids: torch.Tensor) -> bool:
+        """Synchronously insert oracle-selected fused ids into the GPU cache."""
+        if not self._enable_fusion or self._master_config is None:
+            raise RuntimeError("GPU cache prefill requires fusion enabled and a valid master config.")
+        if not isinstance(fused_ids, torch.Tensor):
+            raise TypeError("fused_ids must be a torch.Tensor")
+        if fused_ids.numel() == 0:
+            return True
+        prefill = getattr(self.kv_client, "prefill_gpu_cache", None)
+        is_gpu_cache_enabled = getattr(self.kv_client, "is_gpu_cache_enabled", None)
+        if callable(is_gpu_cache_enabled) and not bool(is_gpu_cache_enabled()):
+            self._perf_add("planned_gpu_cache_prefill_no_api", 1.0)
+            self._perf_add("planned_gpu_cache_prefill_fallbacks", 1.0)
+            return False
+        if not callable(prefill):
+            self._perf_add("planned_gpu_cache_prefill_no_api", 1.0)
+            self._perf_add("planned_gpu_cache_prefill_fallbacks", 1.0)
+            return False
+
+        t_prefill_start = perf_counter()
+        unique_ids = torch.unique(
+            fused_ids.detach().to(dtype=torch.int64, device="cpu").flatten(),
+            sorted=True,
+        )
+        values = self.kv_client.pull(name=self._master_config.name, ids=unique_ids)
+        if torch.cuda.is_available():
+            cache_device = torch.device("cuda", torch.cuda.current_device())
+            prefill_ids = unique_ids.to(cache_device)
+            values = values.to(cache_device)
+        else:
+            prefill_ids = unique_ids
+        if not prefill_ids.is_contiguous():
+            prefill_ids = prefill_ids.contiguous()
+        if not values.is_contiguous():
+            values = values.contiguous()
+        prefill(self._master_config.name, prefill_ids, values)
+        self._perf_add("planned_gpu_cache_prefill_ms", (perf_counter() - t_prefill_start) * 1e3)
+        self._perf_add("planned_gpu_cache_prefill_batches", 1.0)
+        self._perf_add("planned_gpu_cache_prefill_ids", float(unique_ids.numel()))
+        self._perf_add("planned_gpu_cache_prefill_successes", 1.0)
+        return True
+
+    def invalidate_gpu_cache_for_fused_ids(self, fused_ids: torch.Tensor) -> bool:
+        """Invalidate oracle-evicted fused ids from the GPU cache."""
+        if not self._enable_fusion or self._master_config is None:
+            raise RuntimeError("GPU cache invalidation requires fusion enabled and a valid master config.")
+        if not isinstance(fused_ids, torch.Tensor):
+            raise TypeError("fused_ids must be a torch.Tensor")
+        if fused_ids.numel() == 0:
+            return True
+        invalidator = getattr(self.kv_client, "invalidate_gpu_cache", None)
+        is_gpu_cache_enabled = getattr(self.kv_client, "is_gpu_cache_enabled", None)
+        if callable(is_gpu_cache_enabled) and not bool(is_gpu_cache_enabled()):
+            return False
+        if not callable(invalidator):
+            return False
+        unique_ids = torch.unique(
+            fused_ids.detach().to(dtype=torch.int64, device="cpu").flatten(),
+            sorted=True,
+        )
+        if torch.cuda.is_available():
+            unique_ids = unique_ids.to(torch.device("cuda", torch.cuda.current_device()))
+        invalidator(self._master_config.name, unique_ids)
+        return True
 
     def _can_use_single_node_distributed_fast_path(self) -> bool:
         if not self.enable_single_node_distributed_fast_path:
@@ -774,15 +888,30 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
         self._perf_add("lookup_wait_ms", (perf_counter() - t_wait_perf_start) * 1e3)
 
         used_fused_prefetch = True
+        invalid_ids = self._fused_invalid_ids_cpu
         if all_embeddings.size(0) != fused_values_all.numel():
             inv = self._fused_inverse
             ids_cached = self._fused_ids_cpu
             if inv is not None and ids_cached is not None and all_embeddings.size(0) == ids_cached.numel():
-                indexer = inv.to(device=all_embeddings.device, dtype=torch.long)
-                all_embeddings = all_embeddings.index_select(0, indexer)
+                if (
+                    ids_cached.numel() == torch.unique(fused_values_all).numel()
+                    and (invalid_ids is None or invalid_ids.numel() == 0)
+                ):
+                    indexer = inv.to(device=all_embeddings.device, dtype=torch.long)
+                    all_embeddings = all_embeddings.index_select(0, indexer)
+                else:
+                    all_embeddings = self._merge_partial_fused_prefetch_embeddings(
+                        fused_values_all,
+                        prefetched_ids=ids_cached,
+                        prefetched_embeddings=all_embeddings,
+                        invalid_ids=invalid_ids,
+                        compute_device=compute_device,
+                    )
             else:
                 unique_ids, inverse = torch.unique(fused_values_all, return_inverse=True)
-                if all_embeddings.size(0) == unique_ids.size(0):
+                if all_embeddings.size(0) == unique_ids.size(0) and (
+                    invalid_ids is None or invalid_ids.numel() == 0
+                ):
                     all_embeddings = all_embeddings.index_select(0, inverse)
                 else:
                     logging.warning(
@@ -797,7 +926,110 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
                     if compute_device.type == "cuda":
                         all_embeddings = all_embeddings.to(compute_device)
                     used_fused_prefetch = False
+        elif invalid_ids is not None and invalid_ids.numel() > 0:
+            unique_ids, inverse = torch.unique(
+                fused_values_all.detach().to(dtype=torch.int64, device="cpu"),
+                sorted=True,
+                return_inverse=True,
+            )
+            if all_embeddings.size(0) == unique_ids.size(0):
+                all_embeddings = self._merge_partial_fused_prefetch_embeddings(
+                    fused_values_all,
+                    prefetched_ids=unique_ids,
+                    prefetched_embeddings=all_embeddings,
+                    invalid_ids=invalid_ids,
+                    compute_device=compute_device,
+                )
+            else:
+                all_embeddings = self._merge_partial_fused_prefetch_embeddings(
+                    fused_values_all,
+                    prefetched_ids=fused_values_all.detach().to(dtype=torch.int64, device="cpu"),
+                    prefetched_embeddings=all_embeddings,
+                    invalid_ids=invalid_ids,
+                    compute_device=compute_device,
+                )
         return all_embeddings, used_fused_prefetch
+
+    def _merge_partial_fused_prefetch_embeddings(
+        self,
+        fused_values_all: torch.Tensor,
+        *,
+        prefetched_ids: torch.Tensor,
+        prefetched_embeddings: torch.Tensor,
+        invalid_ids: torch.Tensor | None = None,
+        compute_device: torch.device,
+    ) -> torch.Tensor:
+        batch_ids_cpu = fused_values_all.detach().to(dtype=torch.int64, device="cpu")
+        prefetched_ids_cpu = prefetched_ids.detach().to(dtype=torch.int64, device="cpu")
+        unique_batch_ids = torch.unique(batch_ids_cpu, sorted=True)
+        invalid_set = (
+            set(int(v) for v in invalid_ids.detach().to(dtype=torch.int64, device="cpu").flatten().tolist())
+            if isinstance(invalid_ids, torch.Tensor)
+            else set()
+        )
+        prefetched_set = {
+            int(v)
+            for v in prefetched_ids_cpu.tolist()
+            if int(v) not in invalid_set
+        }
+        missing_ids = [
+            int(v)
+            for v in unique_batch_ids.tolist()
+            if int(v) not in prefetched_set
+        ]
+
+        rows_by_id: dict[int, torch.Tensor] = {
+            int(emb_id): prefetched_embeddings[row_index]
+            for row_index, emb_id in enumerate(prefetched_ids_cpu.tolist())
+            if int(emb_id) not in invalid_set
+        }
+        if missing_ids:
+            missing_tensor = torch.tensor(
+                missing_ids,
+                dtype=torch.int64,
+                device=fused_values_all.device,
+            )
+            missing_embeddings = self._lookup_missing_fused_prefetch_rows(missing_tensor)
+            if missing_embeddings.device != prefetched_embeddings.device:
+                missing_embeddings = missing_embeddings.to(prefetched_embeddings.device)
+            for row_index, emb_id in enumerate(missing_ids):
+                rows_by_id[int(emb_id)] = missing_embeddings[row_index]
+
+        merged_rows = [rows_by_id[int(emb_id)] for emb_id in batch_ids_cpu.tolist()]
+        merged = torch.stack(merged_rows, dim=0) if merged_rows else torch.empty(
+            (0, self._master_config.embedding_dim),
+            dtype=prefetched_embeddings.dtype,
+            device=prefetched_embeddings.device,
+        )
+        if merged.device != compute_device:
+            merged = merged.to(compute_device)
+        return merged
+
+    def _lookup_missing_fused_prefetch_rows(self, ids: torch.Tensor) -> torch.Tensor:
+        local_lookup = getattr(self.kv_client, "local_lookup_flat", None)
+        if callable(local_lookup):
+            try:
+                t_lookup_start = perf_counter()
+                rows = local_lookup(self._master_config.name, ids)
+                self._perf_add("lookup_local_lookup_ms", (perf_counter() - t_lookup_start) * 1e3)
+                _merge_profile_values(
+                    getattr(self, "_single_node_forward_profile", {}),
+                    getattr(self.kv_client, "get_last_local_shm_lookup_profile", lambda: {})(),
+                )
+                return rows
+            except RuntimeError as exc:
+                logging.debug(
+                    "[EBC] local lookup unavailable for partial fused prefetch merge; "
+                    "falling back to pull for %s ids: %s",
+                    ids.numel(),
+                    exc,
+                )
+        t_pull_start = perf_counter()
+        rows = self.kv_client.pull(name=self._master_config.name, ids=ids.to("cpu"))
+        self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_pull_start) * 1e3)
+        if ids.device.type == "cuda":
+            rows = rows.to(ids.device)
+        return rows
 
     def forward(self, features: KeyedJaggedTensor) -> KeyedTensor:
         setattr(self, "_single_node_forward_profile", {})

@@ -11,6 +11,7 @@ class _FakeOps:
         self.lookup_calls = []
         self.update_calls = []
         self.prefill_calls = []
+        self.gpu_cache_sgd_update_calls = []
         self.update_clear_gpu_cache_call_counts = []
         self.backend_switch_calls = []
         self.clear_gpu_cache_calls = 0
@@ -33,6 +34,17 @@ class _FakeOps:
 
     def prefill_gpu_cache(self, keys: torch.Tensor, values: torch.Tensor) -> None:
         self.prefill_calls.append((keys.clone(), values.clone()))
+
+    def apply_sgd_update_gpu_cache(
+        self,
+        keys: torch.Tensor,
+        grads: torch.Tensor,
+        learning_rate: float,
+    ) -> bool:
+        self.gpu_cache_sgd_update_calls.append(
+            (keys.clone(), grads.clone(), float(learning_rate))
+        )
+        return True
 
     def clear_gpu_cache(self) -> None:
         self.clear_gpu_cache_calls += 1
@@ -90,6 +102,22 @@ class TestKVClientLocalFastPath(unittest.TestCase):
         called_keys, called_values = client.ops.prefill_calls[0]
         self.assertTrue(torch.equal(called_keys, keys))
         self.assertTrue(torch.equal(called_values, values))
+        self.assertEqual(client._gpu_cache_table_name, "table_a")
+
+    def test_apply_sgd_update_gpu_cache_forwards_to_ops(self):
+        client = self._build_client()
+
+        keys = torch.tensor([7, 3], dtype=torch.int64)
+        grads = torch.ones((2, 4), dtype=torch.float32)
+        self.assertTrue(
+            client.apply_sgd_update_gpu_cache("table_a", keys, grads, learning_rate=0.25)
+        )
+
+        self.assertEqual(len(client.ops.gpu_cache_sgd_update_calls), 1)
+        called_keys, called_grads, called_lr = client.ops.gpu_cache_sgd_update_calls[0]
+        self.assertTrue(torch.equal(called_keys, keys))
+        self.assertTrue(torch.equal(called_grads, grads))
+        self.assertEqual(called_lr, 0.25)
         self.assertEqual(client._gpu_cache_table_name, "table_a")
 
     @unittest.skipUnless(torch.cuda.is_available(), "CUDA is required for CPU-normalization regression coverage")

@@ -178,19 +178,23 @@ def run_custom_benchmark(cfg: BenchmarkConfig, transports: tuple[str, ...], *, d
             if processes:
                 time.sleep(3.0)
             for repeat_index in range(cfg.repeat):
+                group_run_id = (
+                    f"{transport_lower}_b{cfg.batch_size}_d{cfg.embedding_dim}"
+                    f"_r{repeat_index}"
+                )
                 client_entries: list[dict[str, Any]] = []
                 for client in cfg.clients:
-                    run_id = f"{transport_lower}_b{cfg.batch_size}_d{cfg.embedding_dim}_r{repeat_index}_n{client.node_rank}"
                     client_cmd = build_client_command(
                         cfg=cfg,
                         transport=transport,
                         client=client,
-                        run_id=run_id,
+                        run_id=group_run_id,
+                        rdzv_id=group_run_id,
                     )
-                    log_path = logs_dir / f"{run_id}.log"
-                    main_csv = cfg.output_dir / "outputs" / run_id / "recstore_main.csv"
+                    log_path = logs_dir / f"{group_run_id}_n{client.node_rank}.log"
+                    main_csv = cfg.output_dir / "outputs" / group_run_id / "recstore_main.csv"
                     row = {
-                        "run_id": run_id,
+                        "run_id": group_run_id,
                         "lane": transport,
                         "backend": "recstore",
                         "transport": transport,
@@ -218,19 +222,23 @@ def run_custom_benchmark(cfg: BenchmarkConfig, transports: tuple[str, ...], *, d
         lane = torchrec_label(memory_mode)
         mode_slug = memory_mode.replace("_", "")
         for repeat_index in range(cfg.repeat):
+            group_run_id = (
+                f"torchrec_{mode_slug}_b{cfg.batch_size}_d{cfg.embedding_dim}"
+                f"_r{repeat_index}"
+            )
             client_entries = []
             for client in cfg.clients:
-                run_id = f"torchrec_{mode_slug}_b{cfg.batch_size}_d{cfg.embedding_dim}_r{repeat_index}_n{client.node_rank}"
                 client_cmd = build_torchrec_command(
                     cfg=cfg,
                     memory_mode=memory_mode,
                     client=client,
-                    run_id=run_id,
+                    run_id=group_run_id,
+                    rdzv_id=group_run_id,
                 )
-                log_path = logs_dir / f"{run_id}.log"
-                main_csv = cfg.output_dir / "outputs" / run_id / "torchrec_main.csv"
+                log_path = logs_dir / f"{group_run_id}_n{client.node_rank}.log"
+                main_csv = cfg.output_dir / "outputs" / group_run_id / "torchrec_main.csv"
                 row = {
-                    "run_id": run_id,
+                    "run_id": group_run_id,
                     "lane": lane,
                     "backend": "torchrec",
                     "transport": "",
