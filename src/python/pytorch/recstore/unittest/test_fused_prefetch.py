@@ -234,6 +234,43 @@ class TestFusedPrefetch(unittest.TestCase):
         perf = ebc.consume_perf_stats(reset=True)
         self.assertEqual(perf["lookup_fallback_pull_ms"], 0.0)
 
+    def test_partial_fused_prefetch_records_merge_stats(self):
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _FakeKVClient(fake)
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        for idx, cfg in enumerate(configs):
+            base_offset = idx << 30
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = (
+                torch.arange(cfg["num_embeddings"] * cfg["embedding_dim"], dtype=torch.float32)
+                .view(cfg["num_embeddings"], cfg["embedding_dim"])
+                + idx * 1000
+            )
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        out_sync = ebc(features).values().detach().clone()
+        ebc.consume_perf_stats(reset=True)
+
+        partial_ids = torch.tensor([1, (1 << 30) + 4], dtype=torch.int64)
+        ebc.issue_fused_id_prefetch(partial_ids)
+        out_prefetch = ebc(features).values().detach().clone()
+
+        self.assertTrue(torch.allclose(out_sync, out_prefetch))
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertGreater(perf["lookup_partial_merge_ms"], 0.0)
+        self.assertEqual(perf["lookup_partial_prefetched_ids"], 2.0)
+        self.assertEqual(perf["lookup_partial_missing_ids"], 4.0)
+
     def test_invalid_fused_prefetch_ids_are_refreshed_from_local_lookup(self):
         configs = [
             dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
@@ -314,6 +351,99 @@ class TestFusedPrefetch(unittest.TestCase):
         self.assertEqual(len(fake_client.local_lookup_calls), 1)
         perf = ebc.consume_perf_stats(reset=True)
         self.assertGreater(perf["lookup_fallback_pull_ms"], 0.0)
+
+    def test_partial_fused_prefetch_uses_gpu_cache_aware_pull_when_available(self):
+        class _GpuCacheAwarePullClient(_FakeKVClient):
+            def __init__(self, ops: _FakeOps) -> None:
+                super().__init__(ops)
+                self.gpu_cached_pull_calls = []
+
+            def local_lookup_flat(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+                self.local_lookup_calls.append((name, ids.clone()))
+                raise RuntimeError("local_lookup_flat requires an active shard")
+
+            def pull_with_gpu_cache(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+                self.gpu_cached_pull_calls.append((name, ids.clone()))
+                embedding_dim = int(self._tensor_meta[name]["shape"][1])
+                return self.ops.emb_read(ids, embedding_dim).to(ids.device)
+
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _GpuCacheAwarePullClient(fake)
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        for idx, cfg in enumerate(configs):
+            base_offset = idx << 30
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = (
+                torch.arange(cfg["num_embeddings"] * cfg["embedding_dim"], dtype=torch.float32)
+                .view(cfg["num_embeddings"], cfg["embedding_dim"])
+                + idx * 1000
+            )
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        out_sync = ebc(features).values().detach().clone()
+        ebc.consume_perf_stats(reset=True)
+        fake_client.gpu_cached_pull_calls.clear()
+
+        ebc.issue_fused_id_prefetch(torch.tensor([1, (1 << 30) + 4], dtype=torch.int64))
+        out_prefetch = ebc(features).values().detach().clone()
+
+        self.assertTrue(torch.allclose(out_sync, out_prefetch))
+        self.assertEqual(len(fake_client.local_lookup_calls), 1)
+        self.assertEqual(len(fake_client.gpu_cached_pull_calls), 1)
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertEqual(perf["lookup_fallback_pull_ms"], 0.0)
+
+    def test_fused_fallback_without_prefetch_uses_gpu_cache_aware_pull_when_available(self):
+        class _GpuCacheAwarePullClient(_FakeKVClient):
+            def __init__(self, ops: _FakeOps) -> None:
+                super().__init__(ops)
+                self.gpu_cached_pull_calls = []
+
+            def pull_with_gpu_cache(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+                self.gpu_cached_pull_calls.append((name, ids.clone()))
+                embedding_dim = int(self._tensor_meta[name]["shape"][1])
+                return self.ops.emb_read(ids, embedding_dim).to(ids.device)
+
+        configs = [
+            dict(name="t0", embedding_dim=4, num_embeddings=16, feature_names=["f1"]),
+            dict(name="t1", embedding_dim=4, num_embeddings=16, feature_names=["f2"]),
+        ]
+        fake = _FakeOps()
+        fake_client = _GpuCacheAwarePullClient(fake)
+        ebc = RecStoreEmbeddingBagCollection(
+            configs,
+            enable_fusion=True,
+            fusion_k=30,
+            kv_client=fake_client,
+        )
+        for idx, cfg in enumerate(configs):
+            base_offset = idx << 30
+            keys = torch.arange(cfg["num_embeddings"], dtype=torch.int64) + base_offset
+            vals = (
+                torch.arange(cfg["num_embeddings"] * cfg["embedding_dim"], dtype=torch.float32)
+                .view(cfg["num_embeddings"], cfg["embedding_dim"])
+                + idx * 1000
+            )
+            fake.emb_write(keys, vals)
+
+        features = self._build_features()
+        out = ebc(features).values().detach().clone()
+
+        self.assertGreater(out.numel(), 0)
+        self.assertEqual(len(fake_client.gpu_cached_pull_calls), 1)
+        perf = ebc.consume_perf_stats(reset=True)
+        self.assertGreater(perf["lookup_gpu_cache_pull_ms"], 0.0)
+        self.assertEqual(perf["lookup_fallback_pull_ms"], 0.0)
 
     def test_fused_prefetch_prefills_gpu_cache_before_local_lookup(self):
         configs = [

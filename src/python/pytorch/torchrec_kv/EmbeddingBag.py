@@ -253,7 +253,11 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             "lookup_owner_exchange_ms": 0.0,
             "lookup_local_lookup_ms": 0.0,
             "lookup_reassemble_ms": 0.0,
+            "lookup_gpu_cache_pull_ms": 0.0,
             "lookup_fallback_pull_ms": 0.0,
+            "lookup_partial_merge_ms": 0.0,
+            "lookup_partial_prefetched_ids": 0.0,
+            "lookup_partial_missing_ids": 0.0,
             "pool_embedding_bag_ms": 0.0,
         }
 
@@ -941,11 +945,10 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
                         all_embeddings.size(0),
                         fused_values_all.numel(),
                     )
-                    t_fallback_start = perf_counter()
-                    all_embeddings = self.kv_client.pull(name=self._master_config.name, ids=cpu_ids)
-                    self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_fallback_start) * 1e3)
-                    if compute_device.type == "cuda":
-                        all_embeddings = all_embeddings.to(compute_device)
+                    all_embeddings = self._pull_fused_rows(
+                        fused_values_all,
+                        target_device=compute_device,
+                    )
                     used_fused_prefetch = False
         elif invalid_ids is not None and invalid_ids.numel() > 0:
             unique_ids, inverse = torch.unique(
@@ -980,50 +983,63 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
         invalid_ids: torch.Tensor | None = None,
         compute_device: torch.device,
     ) -> torch.Tensor:
+        t_merge_start = perf_counter()
         batch_ids_cpu = fused_values_all.detach().to(dtype=torch.int64, device="cpu")
         prefetched_ids_cpu = prefetched_ids.detach().to(dtype=torch.int64, device="cpu")
         unique_batch_ids = torch.unique(batch_ids_cpu, sorted=True)
-        invalid_set = (
-            set(int(v) for v in invalid_ids.detach().to(dtype=torch.int64, device="cpu").flatten().tolist())
-            if isinstance(invalid_ids, torch.Tensor)
-            else set()
-        )
-        prefetched_set = {
-            int(v)
-            for v in prefetched_ids_cpu.tolist()
-            if int(v) not in invalid_set
-        }
-        missing_ids = [
-            int(v)
-            for v in unique_batch_ids.tolist()
-            if int(v) not in prefetched_set
-        ]
-
-        rows_by_id: dict[int, torch.Tensor] = {
-            int(emb_id): prefetched_embeddings[row_index]
-            for row_index, emb_id in enumerate(prefetched_ids_cpu.tolist())
-            if int(emb_id) not in invalid_set
-        }
-        if missing_ids:
-            missing_tensor = torch.tensor(
-                missing_ids,
-                dtype=torch.int64,
-                device=fused_values_all.device,
+        if isinstance(invalid_ids, torch.Tensor) and invalid_ids.numel() > 0:
+            invalid_cpu = invalid_ids.detach().to(dtype=torch.int64, device="cpu").flatten()
+            valid_prefetched_mask = ~torch.isin(prefetched_ids_cpu, invalid_cpu)
+            prefetched_ids_cpu = prefetched_ids_cpu[valid_prefetched_mask]
+            prefetched_embeddings = prefetched_embeddings.index_select(
+                0,
+                valid_prefetched_mask.nonzero(as_tuple=False).flatten().to(
+                    device=prefetched_embeddings.device,
+                    dtype=torch.long,
+                ),
             )
+
+        prefetched_ids_cpu, sort_index = torch.sort(prefetched_ids_cpu)
+        if sort_index.numel() > 0:
+            prefetched_embeddings = prefetched_embeddings.index_select(
+                0,
+                sort_index.to(device=prefetched_embeddings.device, dtype=torch.long),
+            )
+
+        has_prefetched = (
+            torch.isin(unique_batch_ids, prefetched_ids_cpu)
+            if prefetched_ids_cpu.numel() > 0
+            else torch.zeros_like(unique_batch_ids, dtype=torch.bool)
+        )
+        missing_ids_cpu = unique_batch_ids[~has_prefetched]
+        self._perf_add("lookup_partial_prefetched_ids", float(prefetched_ids_cpu.numel()))
+        self._perf_add("lookup_partial_missing_ids", float(missing_ids_cpu.numel()))
+
+        all_ids_cpu = prefetched_ids_cpu
+        all_embeddings = prefetched_embeddings
+        if missing_ids_cpu.numel() > 0:
+            missing_tensor = missing_ids_cpu.to(device=fused_values_all.device)
             missing_embeddings = self._lookup_missing_fused_prefetch_rows(missing_tensor)
             if missing_embeddings.device != prefetched_embeddings.device:
                 missing_embeddings = missing_embeddings.to(prefetched_embeddings.device)
-            for row_index, emb_id in enumerate(missing_ids):
-                rows_by_id[int(emb_id)] = missing_embeddings[row_index]
+            if missing_embeddings.dtype != prefetched_embeddings.dtype:
+                missing_embeddings = missing_embeddings.to(dtype=prefetched_embeddings.dtype)
+            all_ids_cpu = torch.cat([all_ids_cpu, missing_ids_cpu])
+            all_embeddings = torch.cat([all_embeddings, missing_embeddings], dim=0)
 
-        merged_rows = [rows_by_id[int(emb_id)] for emb_id in batch_ids_cpu.tolist()]
-        merged = torch.stack(merged_rows, dim=0) if merged_rows else torch.empty(
-            (0, self._master_config.embedding_dim),
-            dtype=prefetched_embeddings.dtype,
-            device=prefetched_embeddings.device,
+        all_ids_cpu, all_sort_index = torch.sort(all_ids_cpu)
+        all_embeddings = all_embeddings.index_select(
+            0,
+            all_sort_index.to(device=all_embeddings.device, dtype=torch.long),
+        )
+        positions = torch.searchsorted(all_ids_cpu, batch_ids_cpu)
+        merged = all_embeddings.index_select(
+            0,
+            positions.to(device=all_embeddings.device, dtype=torch.long),
         )
         if merged.device != compute_device:
             merged = merged.to(compute_device)
+        self._perf_add("lookup_partial_merge_ms", (perf_counter() - t_merge_start) * 1e3)
         return merged
 
     def _lookup_missing_fused_prefetch_rows(self, ids: torch.Tensor) -> torch.Tensor:
@@ -1041,7 +1057,24 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
             except RuntimeError as exc:
                 logging.debug(
                     "[EBC] local lookup unavailable for partial fused prefetch merge; "
-                    "falling back to pull for %s ids: %s",
+                    "trying GPU-cache-aware pull for %s ids: %s",
+                    ids.numel(),
+                    exc,
+                )
+        gpu_cache_pull = getattr(self.kv_client, "pull_with_gpu_cache", None)
+        if callable(gpu_cache_pull):
+            try:
+                t_gpu_cache_pull_start = perf_counter()
+                rows = gpu_cache_pull(name=self._master_config.name, ids=ids)
+                self._perf_add(
+                    "lookup_gpu_cache_pull_ms",
+                    (perf_counter() - t_gpu_cache_pull_start) * 1e3,
+                )
+                return rows
+            except RuntimeError as exc:
+                logging.debug(
+                    "[EBC] GPU-cache-aware pull unavailable for partial fused prefetch "
+                    "merge; falling back to CPU pull for %s ids: %s",
                     ids.numel(),
                     exc,
                 )
@@ -1050,6 +1083,39 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
         self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_pull_start) * 1e3)
         if ids.device.type == "cuda":
             rows = rows.to(ids.device)
+        return rows
+
+    def _pull_fused_rows(
+        self,
+        ids: torch.Tensor,
+        *,
+        target_device: torch.device,
+        metric_key: str = "lookup_gpu_cache_pull_ms",
+    ) -> torch.Tensor:
+        gpu_cache_pull = getattr(self.kv_client, "pull_with_gpu_cache", None)
+        if callable(gpu_cache_pull):
+            try:
+                t_gpu_cache_pull_start = perf_counter()
+                rows = gpu_cache_pull(name=self._master_config.name, ids=ids)
+                self._perf_add(
+                    metric_key,
+                    (perf_counter() - t_gpu_cache_pull_start) * 1e3,
+                )
+                if rows.device != target_device:
+                    rows = rows.to(target_device)
+                return rows
+            except RuntimeError as exc:
+                logging.debug(
+                    "[EBC] GPU-cache-aware fused pull unavailable; falling back "
+                    "to CPU pull for %s ids: %s",
+                    ids.numel(),
+                    exc,
+                )
+        t_pull_start = perf_counter()
+        rows = self.kv_client.pull(name=self._master_config.name, ids=ids.to("cpu"))
+        self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_pull_start) * 1e3)
+        if rows.device != target_device:
+            rows = rows.to(target_device)
         return rows
 
     def forward(self, features: KeyedJaggedTensor) -> KeyedTensor:
@@ -1186,12 +1252,11 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
                                 f"[EBC] Prefetch result size mismatch for feature '{key}': got {emb.size(0)}, expected {values.numel()}, falling back to pull."
                             )
                             table_idx = self._feature_table_indices[key]
-                            cpu_ids_local = (values.to(torch.int64) + (table_idx << self._fusion_k)).to('cpu')
-                            t_fallback_start = perf_counter()
-                            emb = self.kv_client.pull(name=self._master_config.name, ids=cpu_ids_local)
-                            self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_fallback_start) * 1e3)
-                            if values.device.type == 'cuda':
-                                emb = emb.to(values.device)
+                            fused_ids_local = values.to(torch.int64) + (table_idx << self._fusion_k)
+                            emb = self._pull_fused_rows(
+                                fused_ids_local,
+                                target_device=values.device,
+                            )
                         per_feature_embs.append(emb)
                     else:
                         # No prefetch for this feature, do a synchronous pull with fused IDs for that feature only
@@ -1201,21 +1266,19 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
                         else:
                             table_idx = self._feature_table_indices[key]
                             prefix = (table_idx << self._fusion_k)
-                            cpu_ids_local = (values.to(torch.int64) + prefix).to('cpu')
-                            t_pull_start = perf_counter()
-                            emb = self.kv_client.pull(name=self._master_config.name, ids=cpu_ids_local)
-                            self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_pull_start) * 1e3)
-                            if values.device.type == 'cuda':
-                                emb = emb.to(values.device)
+                            fused_ids_local = values.to(torch.int64) + prefix
+                            emb = self._pull_fused_rows(
+                                fused_ids_local,
+                                target_device=values.device,
+                            )
                             per_feature_embs.append(emb)
                 all_embeddings = torch.cat(per_feature_embs, dim=0) if len(per_feature_embs) > 0 else torch.empty((0, self._master_config.embedding_dim), device=features.device(), dtype=torch.float32)
             else:
                 # Single pull for all fused IDs
-                t_pull_start = perf_counter()
-                all_embeddings = self.kv_client.pull(name=self._master_config.name, ids=cpu_ids)
-                self._perf_add("lookup_fallback_pull_ms", (perf_counter() - t_pull_start) * 1e3)
-                if compute_device.type == 'cuda':
-                    all_embeddings = all_embeddings.to(compute_device)
+                all_embeddings = self._pull_fused_rows(
+                    fused_values_all,
+                    target_device=compute_device,
+                )
             all_embeddings.requires_grad_()
 
             def grad_hook_fused(grad, ids=trace_ids, master_name=self._master_config.name):

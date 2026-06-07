@@ -807,6 +807,23 @@ class ShardedRecstoreClient:
         embedding_dim = int(self._tensor_meta[name]["shape"][1])
         return self.emb_read(ids, embedding_dim)
 
+    def pull_with_gpu_cache(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+        if name not in self._tensor_meta:
+            raise RuntimeError(f"Tensor {name} has not been initialized.")
+        embedding_dim = int(self._tensor_meta[name]["shape"][1])
+        normalized_ids = self._normalize_ids(ids, keep_device=True)
+        self._ensure_gpu_cache_table(name)
+        if self._uses_native_distributed_backend():
+            return self._client.emb_read(normalized_ids, embedding_dim)
+        if self._num_shards != 1:
+            raise RuntimeError(
+                "pull_with_gpu_cache currently supports single-shard distributed "
+                "wrappers only; multi-shard GPU scatter is not implemented"
+            )
+        server = self._servers[0]
+        self._activate_shard(server.shard)
+        return self._client.emb_read(normalized_ids, embedding_dim)
+
     def prefetch(self, ids: torch.Tensor) -> int:
         normalized_ids = self._normalize_ids(ids)
         if self._uses_native_distributed_backend():
