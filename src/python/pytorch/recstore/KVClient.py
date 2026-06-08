@@ -260,6 +260,32 @@ class RecStoreClient:
         
         return res
 
+    def pull_with_gpu_cache(self, name: str, ids: torch.Tensor) -> torch.Tensor:
+        """Pull rows while preserving CUDA ids so the backend can use GPU cache."""
+        if name not in self._tensor_meta:
+            raise RuntimeError(f"Tensor '{name}' has not been initialized.")
+
+        meta = self._tensor_meta[name]
+        embedding_dim = meta['shape'][1]
+        ids = self._normalize_ids(ids, preserve_device=True)
+        self._reject_gpu_cache_reserved_ids(ids)
+
+        start_t = time.time()
+        res = self.ops.emb_read(ids, embedding_dim)
+        end_t = time.time()
+
+        start_us = int(start_t * 1e6)
+        duration_us = (end_t - start_t) * 1e6
+        report_metric("embread_stages", f"KVClient::pull_with_gpu_cache|{start_us}", "duration_us", duration_us)
+        report_metric(
+            "embread_stages",
+            f"KVClient::pull_with_gpu_cache|{start_us}",
+            "request_size",
+            float(ids.numel()),
+        )
+
+        return res
+
     def _normalize_ids(
         self,
         ids: torch.Tensor,

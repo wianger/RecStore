@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import fcntl
 import hashlib
+import importlib
 import json
 import os
 import subprocess
@@ -80,6 +81,47 @@ GPU_CACHE_PROFILE_KEYS = (
     "gpu_cache_request_count",
     "gpu_cache_miss_count",
 )
+
+
+def _import_first_available(*module_names: str) -> Any:
+    last_error: ModuleNotFoundError | None = None
+    for module_name in module_names:
+        try:
+            return importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            if exc.name and (
+                exc.name == module_name or module_name.startswith(f"{exc.name}.")
+            ):
+                last_error = exc
+                continue
+            raise
+    if last_error is not None:
+        raise last_error
+    raise ModuleNotFoundError("no module names provided")
+
+
+def _import_bagpipe_cache_module() -> Any:
+    return _import_first_available(
+        "python.pytorch.recstore.bagpipe_cache",
+        "pytorch.recstore.bagpipe_cache",
+        "src.python.pytorch.recstore.bagpipe_cache",
+    )
+
+
+def _import_recstore_optimizer_module() -> Any:
+    return _import_first_available(
+        "python.pytorch.recstore.optimizer",
+        "pytorch.recstore.optimizer",
+        "src.python.pytorch.recstore.optimizer",
+    )
+
+
+def _import_recstore_embeddingbag_module() -> Any:
+    return _import_first_available(
+        "python.pytorch.torchrec_kv.EmbeddingBag",
+        "pytorch.torchrec_kv.EmbeddingBag",
+        "src.python.pytorch.torchrec_kv.EmbeddingBag",
+    )
 
 
 def _safe_ratio(numerator: float, denominator: float) -> float:
@@ -183,14 +225,9 @@ def _attach_or_refetch_with_bagpipe_policy(
     row: dict[str, Any],
     step: int,
 ) -> None:
-    try:
-        from python.pytorch.recstore.bagpipe_cache import (  # type: ignore
-            attach_or_refetch_with_bagpipe_policy,
-        )
-    except ModuleNotFoundError:
-        from pytorch.recstore.bagpipe_cache import (  # type: ignore
-            attach_or_refetch_with_bagpipe_policy,
-        )
+    attach_or_refetch_with_bagpipe_policy = (
+        _import_bagpipe_cache_module().attach_or_refetch_with_bagpipe_policy
+    )
 
     attach_or_refetch_with_bagpipe_policy(
         prefetch_depth=prefetch_depth,
@@ -211,10 +248,7 @@ def _notify_bagpipe_sparse_update(
     row: dict[str, Any],
     step: int,
 ) -> None:
-    try:
-        from python.pytorch.recstore.bagpipe_cache import notify_sparse_update  # type: ignore
-    except ModuleNotFoundError:
-        from pytorch.recstore.bagpipe_cache import notify_sparse_update  # type: ignore
+    notify_sparse_update = _import_bagpipe_cache_module().notify_sparse_update
 
     notify_sparse_update(
         bagpipe_policy=bagpipe_policy,
@@ -669,19 +703,12 @@ class RecStoreRunner(BenchmarkRunner):
     ) -> dict[str, Any]:
         inject_project_paths(repo_root)
         from client import RecstoreClient  # type: ignore
-        try:
-            from python.pytorch.recstore.bagpipe_cache import (  # type: ignore
-                BagPipeCachePolicy,
-                BagPipeWindowScheduler,
-            )
-        except ModuleNotFoundError:
-            from pytorch.recstore.bagpipe_cache import (  # type: ignore
-                BagPipeCachePolicy,
-                BagPipeWindowScheduler,
-            )
-        from python.pytorch.recstore.optimizer import SparseSGD  # type: ignore
-        from python.pytorch.torchrec_kv.EmbeddingBag import (  # type: ignore
-            RecStoreEmbeddingBagCollection,
+        bagpipe_cache_module = _import_bagpipe_cache_module()
+        BagPipeCachePolicy = bagpipe_cache_module.BagPipeCachePolicy
+        BagPipeWindowScheduler = bagpipe_cache_module.BagPipeWindowScheduler
+        SparseSGD = _import_recstore_optimizer_module().SparseSGD
+        RecStoreEmbeddingBagCollection = (
+            _import_recstore_embeddingbag_module().RecStoreEmbeddingBagCollection
         )
         from torch import distributed as dist
         default_cat_names = get_default_cat_names()
@@ -1126,14 +1153,18 @@ class RecStoreRunner(BenchmarkRunner):
                     update_lat_us.append(row["sparse_update_ms"] * 1e3)
                 bagpipe_scheduler.on_step_end(step, row)
                 _finalize_step_timing(row, consume_start=consume_step_start)
-                rows.append(finalize_recstore_row(row))
-                lookahead_prefetcher.reset_stats()
                 _barrier_for_step_alignment(
                     dist=dist,
                     device=device,
                     local_rank=local_rank,
                     use_dist=use_dist,
                 )
+                bagpipe_scheduler.issue_prefetches_ready_after_update(
+                    current_step=step,
+                    row=row,
+                )
+                rows.append(finalize_recstore_row(row))
+                lookahead_prefetcher.reset_stats()
 
                 if (step + 1) % 10 == 0:
                     print(

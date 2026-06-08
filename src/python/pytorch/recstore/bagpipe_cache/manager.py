@@ -44,6 +44,7 @@ class BagPipeWindowScheduler:
         self.read_before_update = bool(read_before_update)
         self.read_mode = str(read_mode)
         self._planned_steps: set[int] = set()
+        self._pending_prefetch: dict[int, torch.Tensor] = {}
 
     @property
     def depth(self) -> int:
@@ -65,7 +66,11 @@ class BagPipeWindowScheduler:
                 continue
             bagpipe_plan = self.bagpipe_policy.plan_for_step(batch_step)
             self._record_plan(row, bagpipe_plan)
-            self._insert_planned_cache_rows(row, bagpipe_plan.cache_insert_ids)
+            cache_insert_ids = self._cache_insert_ids_not_prefetched(
+                bagpipe_plan.cache_insert_ids,
+                bagpipe_plan.prefetch_ids,
+            )
+            self._insert_planned_cache_rows(row, cache_insert_ids)
             self._invalidate_evicted_cache_rows(
                 row,
                 bagpipe_plan.evict_ids,
@@ -74,7 +79,9 @@ class BagPipeWindowScheduler:
             self._planned_steps.add(batch_step)
             if not (self.read_before_update and self.read_mode == "prefetch"):
                 continue
-            self._enqueue_planned_prefetch(row, bagpipe_plan.prefetch_ids)
+            if batch_step <= int(current_step):
+                continue
+            self._pending_prefetch[batch_step] = bagpipe_plan.prefetch_ids
 
     def on_step_end(self, step: int, row: dict[str, Any]) -> torch.Tensor:
         evicted = self.bagpipe_policy.on_step_end(int(step))
@@ -85,6 +92,35 @@ class BagPipeWindowScheduler:
             prefix="bagpipe_step_end_gpu_cache_evict",
         )
         return evicted
+
+    def issue_prefetches_ready_after_update(
+        self,
+        *,
+        current_step: int,
+        row: dict[str, Any],
+    ) -> None:
+        if not (self.read_before_update and self.read_mode == "prefetch"):
+            return
+        ready_until = int(current_step) + self.depth
+        issued_nonempty = False
+        for batch_step in sorted(list(self._pending_prefetch.keys())):
+            if batch_step > ready_until:
+                continue
+            prefetch_ids = self._pending_prefetch.pop(batch_step)
+            if prefetch_ids.numel() == 0:
+                issued = getattr(self.bagpipe_policy, "on_prefetch_issued", None)
+                if callable(issued):
+                    issued(batch_step, prefetch_ids)
+                continue
+            self._enqueue_planned_prefetch(row, prefetch_ids)
+            issued_nonempty = True
+            issued = getattr(self.bagpipe_policy, "on_prefetch_issued", None)
+            if callable(issued):
+                issued(batch_step, prefetch_ids)
+        if issued_nonempty:
+            advance_all = getattr(self.lookahead_prefetcher, "advance_all", None)
+            if callable(advance_all):
+                advance_all()
 
     @staticmethod
     def _extract_step_and_row(item: Any) -> tuple[int, dict[str, Any]]:
@@ -108,6 +144,8 @@ class BagPipeWindowScheduler:
         row: dict[str, Any],
         prefetch_ids: torch.Tensor,
     ) -> None:
+        if prefetch_ids.numel() == 0:
+            return
         prefetch_issue_before = self.lookahead_prefetcher.consume_stats(reset=False)
         self.lookahead_prefetcher.enqueue_fused_ids(prefetch_ids)
         self.lookahead_prefetcher.advance()
@@ -120,6 +158,26 @@ class BagPipeWindowScheduler:
             row[key] = float(prefetch_issue_after.get(key, 0.0)) - float(
                 prefetch_issue_before.get(key, 0.0)
             )
+
+    @staticmethod
+    def _cache_insert_ids_not_prefetched(
+        cache_insert_ids: torch.Tensor,
+        prefetch_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        if cache_insert_ids.numel() == 0 or prefetch_ids.numel() == 0:
+            return cache_insert_ids
+        prefetch_set = set(
+            int(v)
+            for v in prefetch_ids.detach().to(dtype=torch.int64, device="cpu").flatten().tolist()
+        )
+        values = [
+            int(v)
+            for v in cache_insert_ids.detach().to(dtype=torch.int64, device="cpu").flatten().tolist()
+            if int(v) not in prefetch_set
+        ]
+        if not values:
+            return torch.empty((0,), dtype=torch.int64)
+        return torch.tensor(values, dtype=torch.int64)
 
     def _insert_planned_cache_rows(
         self,
@@ -222,18 +280,19 @@ def attach_or_refetch_with_bagpipe_policy(
     row["bagpipe_stale_refetch_ids"] = stale_refetch_ids
     row["bagpipe_valid_prefetch_ids"] = valid_prefetch_ids
 
-    if stale_refetch_ids > 0:
+    can_repair_from_valid_prefetch = valid_prefetch_ids > 0 and stale_ids > 0
+    if stale_refetch_ids > 0 and not can_repair_from_valid_prefetch:
         discarded_stale_handle = _bool_int(lookahead_prefetcher.discard_next_ready())
     else:
         discarded_stale_handle = 0
     row["bagpipe_discarded_stale_handle"] = discarded_stale_handle
 
-    if consume_decision.requires_refetch:
+    if consume_decision.requires_refetch and not can_repair_from_valid_prefetch:
         embedding_module.issue_fused_prefetch(sparse_features)
     else:
         attach_kwargs = {}
-        if stale_cached_ids > 0:
-            attach_kwargs["invalid_fused_ids"] = consume_decision.stale_cached_ids
+        if stale_ids > 0:
+            attach_kwargs["invalid_fused_ids"] = consume_decision.stale_ids
         try:
             lookahead_prefetcher.attach_next(**attach_kwargs)
         except TypeError:

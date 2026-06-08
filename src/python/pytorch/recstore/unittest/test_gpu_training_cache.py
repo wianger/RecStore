@@ -31,6 +31,28 @@ class _FakeGpuProfileClient:
         self.ops = _FakeGpuProfileOps(values)
 
 
+class _FakeShardOps:
+    def __init__(self):
+        self.backend = "BRPC"
+        self.config_calls = []
+
+    def current_ps_backend(self):
+        return self.backend
+
+    def set_ps_config(self, host, port):
+        self.config_calls.append((host, int(port)))
+
+
+class _FakeShardClient:
+    def __init__(self):
+        self.ops = _FakeShardOps()
+        self.emb_read_calls = []
+
+    def emb_read(self, keys: torch.Tensor, embedding_dim: int):
+        self.emb_read_calls.append((keys.clone(), int(embedding_dim)))
+        return torch.zeros((keys.numel(), int(embedding_dim)), dtype=torch.float32, device=keys.device)
+
+
 class TestGpuCacheProfileMapping(unittest.TestCase):
     def tearDown(self) -> None:
         RecStoreClient._instance = None
@@ -114,6 +136,30 @@ class TestGpuCacheProfileMapping(unittest.TestCase):
         self.assertEqual(row["batch_dedup_ratio"], 2.0 / 6.0)
         self.assertEqual(row["gpu_cache_capacity"], 1024)
         self.assertEqual(row["prefetch_depth"], 2)
+
+    def test_sharded_client_pull_with_gpu_cache_forwards_single_shard_ids(self) -> None:
+        client = object.__new__(ShardedRecstoreClient)
+        raw_client = _FakeShardClient()
+        client._client = raw_client
+        client._tensor_meta = {"table_a": {"shape": (16, 4), "dtype": torch.float32}}
+        client._gpu_cache_table_name = None
+        client._num_shards = 1
+        client._cache_ps_type = "BRPC"
+        client._cache_num_shards = 1
+        client._servers = [type("Server", (), {"host": "127.0.0.1", "port": 15000, "shard": 0})()]
+        client._cache_servers = client._servers
+        client._servers_by_shard = {0: client._servers[0]}
+        client._active_shard = None
+        client._native_distributed_backend = False
+
+        ids = torch.tensor([1, 3], dtype=torch.int64)
+        client.pull_with_gpu_cache("table_a", ids)
+
+        self.assertEqual(len(raw_client.emb_read_calls), 1)
+        called_ids, called_dim = raw_client.emb_read_calls[0]
+        self.assertTrue(torch.equal(called_ids, ids))
+        self.assertEqual(called_dim, 4)
+        self.assertEqual(raw_client.ops.config_calls, [("127.0.0.1", 15000)])
 
 
 class TestGpuTrainingCache(unittest.TestCase):
