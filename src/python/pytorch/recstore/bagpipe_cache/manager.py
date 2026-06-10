@@ -37,12 +37,20 @@ class BagPipeWindowScheduler:
         embedding_module: Any | None = None,
         read_before_update: bool,
         read_mode: str,
+        prefetch_issue_depth: int | None = None,
     ) -> None:
         self.bagpipe_policy = bagpipe_policy
         self.lookahead_prefetcher = lookahead_prefetcher
         self.embedding_module = embedding_module
         self.read_before_update = bool(read_before_update)
         self.read_mode = str(read_mode)
+        if prefetch_issue_depth is None:
+            self.prefetch_issue_depth = self.depth
+        else:
+            requested_issue_depth = max(0, int(prefetch_issue_depth))
+            self.prefetch_issue_depth = (
+                self.depth if requested_issue_depth == 0 else min(self.depth, requested_issue_depth)
+            )
         self._planned_steps: set[int] = set()
         self._pending_prefetch: dict[int, torch.Tensor] = {}
 
@@ -59,7 +67,7 @@ class BagPipeWindowScheduler:
         current_step: int,
         prepared_batches: Any,
     ) -> None:
-        plan_until = int(current_step) + self.depth
+        plan_until = int(current_step) + self.prefetch_issue_depth
         for item in prepared_batches:
             batch_step, row = self._extract_step_and_row(item)
             if batch_step > plan_until or batch_step in self._planned_steps:
@@ -101,7 +109,7 @@ class BagPipeWindowScheduler:
     ) -> None:
         if not (self.read_before_update and self.read_mode == "prefetch"):
             return
-        ready_until = int(current_step) + self.depth
+        ready_until = int(current_step) + self.prefetch_issue_depth
         issued_nonempty = False
         for batch_step in sorted(list(self._pending_prefetch.keys())):
             if batch_step > ready_until:

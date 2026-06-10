@@ -19,6 +19,7 @@ from model_zoo.rs_demo.runners.recstore_runner import (
     RecStoreRunner,
     _attach_or_refetch_with_bagpipe_policy,
     _build_train_dataloader_for_mode,
+    _effective_prefetch_issue_depth,
     _maybe_wrap_dense_module_for_dist,
 )
 from model_zoo.rs_demo.runtime.prefetch import LookaheadPrefetcher
@@ -422,6 +423,12 @@ class TestRecStoreRunner(unittest.TestCase):
         self.assertEqual(stats["prefetch_depth"], 0)
         self.assertEqual(stats["prefetch_issued_batches"], 0)
         self.assertEqual(stats["prefetch_consumed_batches"], 0)
+
+    def test_effective_prefetch_issue_depth_clamps_large_depth(self) -> None:
+        self.assertEqual(_effective_prefetch_issue_depth(50, 20), 20)
+        self.assertEqual(_effective_prefetch_issue_depth(100, 20), 20)
+        self.assertEqual(_effective_prefetch_issue_depth(10, 20), 10)
+        self.assertEqual(_effective_prefetch_issue_depth(50, 0), 50)
 
     def test_lookahead_prefetcher_delays_consumption_by_depth(self) -> None:
         module = _FakePrefetchModule()
@@ -895,6 +902,18 @@ class TestRecStoreRunner(unittest.TestCase):
 
         self.assertEqual(cfg.prefetch_depth, 4)
 
+    def test_parse_config_accepts_prefetch_issue_depth(self) -> None:
+        cfg = config.parse_config(
+            [
+                "--backend",
+                "recstore",
+                "--prefetch-issue-depth",
+                "12",
+            ]
+        )
+
+        self.assertEqual(cfg.prefetch_issue_depth, 12)
+
     def test_validate_recstore_config_rejects_gpu_cache_without_capacity(self) -> None:
         cfg = RunConfig(backend="recstore")
         cfg.enable_gpu_cache = True
@@ -910,6 +929,12 @@ class TestRecStoreRunner(unittest.TestCase):
         cfg = RunConfig(backend="recstore", prefetch_depth=-1)
 
         with self.assertRaisesRegex(RuntimeError, "--prefetch-depth must be non-negative"):
+            config.validate_recstore_config(cfg)
+
+    def test_validate_recstore_config_rejects_negative_prefetch_issue_depth(self) -> None:
+        cfg = RunConfig(backend="recstore", prefetch_issue_depth=-1)
+
+        with self.assertRaisesRegex(RuntimeError, "--prefetch-issue-depth must be non-negative"):
             config.validate_recstore_config(cfg)
 
     def test_validate_recstore_config_allows_single_node_fast_path(self) -> None:

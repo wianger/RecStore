@@ -102,6 +102,7 @@ class RunConfig:
     read_before_update: bool = True
     read_mode: str = "prefetch"
     prefetch_depth: int = 0
+    prefetch_issue_depth: int = 20
     recstore_enable_fusion: bool = True
     start_server: bool = True
     server_host: str = "127.0.0.1"
@@ -290,6 +291,17 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Number of future batches to issue fused embedding prefetches ahead. "
             "0 keeps the legacy issue-and-immediate-wait path."
+        ),
+    )
+    parser.add_argument(
+        "--prefetch-issue-depth",
+        type=int,
+        default=20,
+        help=(
+            "Maximum future batches with live issued prefetch handles. "
+            "The oracle may still observe --prefetch-depth batches, but this "
+            "caps outstanding network/GPU-cache pressure for large windows. "
+            "Use 0 to match --prefetch-depth."
         ),
     )
     parser.add_argument(
@@ -494,6 +506,8 @@ def validate_recstore_config(cfg: RunConfig) -> None:
         )
     if cfg.prefetch_depth < 0:
         raise RuntimeError("--prefetch-depth must be non-negative")
+    if cfg.prefetch_issue_depth < 0:
+        raise RuntimeError("--prefetch-issue-depth must be non-negative")
     if cfg.tiered_dram_capacity_multiplier < 0:
         raise RuntimeError("--tiered-dram-capacity-multiplier must be non-negative")
     if cfg.enable_single_node_distributed_fast_path:
