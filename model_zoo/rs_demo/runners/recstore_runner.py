@@ -131,6 +131,12 @@ def _safe_ratio(numerator: float, denominator: float) -> float:
     return float(numerator) / denominator
 
 
+def _effective_prefetch_issue_depth(prefetch_depth: int, requested_issue_depth: int) -> int:
+    depth = max(0, int(prefetch_depth))
+    requested = max(0, int(requested_issue_depth))
+    return depth if requested == 0 else min(depth, requested)
+
+
 def _add_sparse_id_stats(
     row: dict[str, Any],
     sparse_features: Any,
@@ -884,8 +890,12 @@ class RecStoreRunner(BenchmarkRunner):
                 else 0,
                 embedding_dim=cfg.embedding_dim,
             )
+            prefetch_issue_depth = _effective_prefetch_issue_depth(
+                lookahead_prefetcher.depth,
+                cfg.prefetch_issue_depth,
+            )
             bagpipe_policy = BagPipeCachePolicy(
-                lookahead_depth=lookahead_prefetcher.depth,
+                lookahead_depth=prefetch_issue_depth,
                 cache_capacity=cfg.gpu_cache_capacity if cfg.enable_gpu_cache else 0,
             )
             bagpipe_scheduler = BagPipeWindowScheduler(
@@ -894,6 +904,7 @@ class RecStoreRunner(BenchmarkRunner):
                 embedding_module=embedding_module,
                 read_before_update=cfg.read_before_update,
                 read_mode=cfg.read_mode,
+                prefetch_issue_depth=prefetch_issue_depth,
             )
             prepared_batches: deque[
                 tuple[int, dict[str, Any], float, Any, Any, Any]
@@ -913,6 +924,8 @@ class RecStoreRunner(BenchmarkRunner):
                     "nproc_per_node": cfg.nproc_per_node,
                     "world_size": cfg.nnodes * cfg.nproc_per_node,
                     "dist_mode": "multi_node" if cfg.nnodes > 1 else "single_node",
+                    "prefetch_issue_depth": cfg.prefetch_issue_depth,
+                    "prefetch_policy_depth": prefetch_issue_depth,
                 }
                 batch_prepare_start = time.perf_counter()
                 try:

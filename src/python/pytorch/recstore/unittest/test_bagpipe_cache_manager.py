@@ -262,6 +262,39 @@ class TestBagPipeCacheManager(unittest.TestCase):
         self.assertTrue(prefetcher.attach_next())
         self.assertEqual(module.attached, [(1, [101]), (2, [102])])
 
+    def test_window_scheduler_clamps_large_depth_issue_window(self) -> None:
+        from model_zoo.rs_demo.runtime.prefetch import LookaheadPrefetcher
+        from ..bagpipe_cache import BagPipeCachePolicy
+
+        module = _RealPrefetchModule()
+        policy = BagPipeCachePolicy(lookahead_depth=5, cache_capacity=16)
+        prefetcher = LookaheadPrefetcher(module, depth=5, embedding_dim=4)
+        scheduler = BagPipeWindowScheduler(
+            bagpipe_policy=policy,
+            lookahead_prefetcher=prefetcher,
+            embedding_module=module,
+            read_before_update=True,
+            read_mode="prefetch",
+            prefetch_issue_depth=2,
+        )
+        prepared_batches = [
+            (step, {}, torch.tensor([100 + step], dtype=torch.int64))
+            for step in range(6)
+        ]
+        for step, _, fused_ids in prepared_batches:
+            scheduler.observe_batch(step, fused_ids)
+
+        scheduler.plan_ready(current_step=0, prepared_batches=prepared_batches)
+        row0: dict[str, object] = {}
+        scheduler.on_step_end(0, row0)
+        scheduler.issue_prefetches_ready_after_update(current_step=0, row=row0)
+
+        self.assertEqual(
+            [ids.tolist() for ids in module.issued_fused_ids.values()],
+            [[101], [102]],
+        )
+        self.assertNotIn("bagpipe_prefetch_ids", prepared_batches[3][1])
+
     def test_window_scheduler_surfaces_capacity_overflow(self) -> None:
         from ..bagpipe_cache import BagPipeCachePolicy
 
