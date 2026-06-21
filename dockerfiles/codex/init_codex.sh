@@ -19,6 +19,8 @@ cp ${SCRIPT_DIR}/config.toml ~/.codex/config.toml
 
 curl https://cursor.com/install -fsS | bash
 
+curl -fsSL https://claude.ai/install.sh | bash
+
 ln -s /app/RecStore/dockerfiles/codex/.cursor-agent ~/.cursor
 
 
