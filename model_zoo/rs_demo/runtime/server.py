@@ -397,6 +397,7 @@ def start_rdma_server_cluster(
     value_size: int = 512,
     max_kv_num_per_request: int = 512,
     timeout_s: float = 60.0,
+    rdma_control_plane_host: str = "127.0.0.1",
 ):
     scripts_dir = repo_root / "src/test/scripts"
     import_path = str(scripts_dir)
@@ -432,6 +433,7 @@ def start_rdma_server_cluster(
         show_status_logs=True,
         show_control_plane_logs=True,
         rdma_namespace=f"rs-demo-{cfg_path.parent.name}",
+        rdma_control_plane_host=str(rdma_control_plane_host),
         rdma_wait_timeout_ms=20000,
         rdma_qps_per_client_per_shard=32,
         rdma_slots_per_qp=1,

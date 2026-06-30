@@ -14,6 +14,15 @@
 
 namespace recstore {
 
+struct EmbeddedRdmaClientIdentity {
+  int client_index         = 0;
+  int num_client_processes = 1;
+  int global_id            = 0;
+};
+
+// Derives per-process RDMA mesh identity for embedded PyTorch clients.
+EmbeddedRdmaClientIdentity ResolveEmbeddedRdmaClientIdentity(int num_shards);
+
 void InitializeRdmaProcessRuntime();
 
 class RDMAPSClientAdapter : public BasePSClient {

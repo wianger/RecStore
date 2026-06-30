@@ -227,6 +227,44 @@ class RecStoreEmbeddingBagCollection(torch.nn.Module):
                 dtype=torch.float32,
                 base_offset=base_offset,
             )
+            # RDMA backend: the client<->server transport is established through a
+            # collective QP-metadata rendezvous that the server runs per lane and
+            # per client. Non-initializer ranks (which otherwise only record local
+            # tensor metadata) must also open their connection here, otherwise the
+            # server's rendezvous blocks forever waiting for the missing client and
+            # the job deadlocks against the trainer's NCCL collectives. Calling
+            # init_embedding_table only opens the connection and (idempotently)
+            # registers the table; it writes no embedding data, so the
+            # rank-0-only data initialization above is preserved.
+            if self._remote_backend_requires_eager_connect():
+                init_embedding_table = getattr(
+                    self.kv_client, "init_embedding_table", None
+                )
+                if callable(init_embedding_table):
+                    init_embedding_table(
+                        config.name,
+                        int(config.num_embeddings),
+                        int(config.embedding_dim),
+                    )
+
+    def _remote_backend_requires_eager_connect(self) -> bool:
+        """Whether non-initializer ranks must eagerly open the PS connection.
+
+        Only the RDMA backend needs this: its transport setup is a collective
+        rendezvous across all clients, so every rank must connect during table
+        setup. The single-node fast path and request-lazy backends (BRPC/GRPC)
+        do not, and are left untouched.
+        """
+        if getattr(self, "enable_single_node_distributed_fast_path", False):
+            return False
+        current_ps_backend = getattr(self.kv_client, "current_ps_backend", None)
+        if not callable(current_ps_backend):
+            return False
+        try:
+            backend = str(current_ps_backend()).lower()
+        except Exception:
+            return False
+        return "rdma" in backend
 
     def embedding_bag_configs(self):
         return self._embedding_bag_configs

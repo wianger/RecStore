@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 class TestBenchmarkE2E(unittest.TestCase):
@@ -18,18 +20,51 @@ class TestBenchmarkE2E(unittest.TestCase):
         )
 
         client = parse_client_spec(
-            "ssh=root@10.0.2.191 -p 50201,repo=/app/RecStore,ip=10.0.2.191,gpu=1,node_rank=0,nproc=2"
+            "ssh=root@10.0.2.191,ssh_port=50201,repo=/app/RecStore,ip=10.0.2.191,gpu=1,node_rank=0,nproc=2"
         )
         server = parse_server_spec(
-            "ssh=root@10.0.2.190 -p 50201,repo=/app/RecStore,ip=10.0.2.190,port=25000,shard=0"
+            "ssh=root@10.0.2.190,ssh_port=50201,repo=/app/RecStore,ip=10.0.2.190,port=25000,shard=0"
         )
         cfg = BenchmarkConfig(clients=(client,), servers=(server,))
 
+        self.assertEqual(client.ssh_host, "root@10.0.2.191")
+        self.assertEqual(client.ssh_port, 50201)
         self.assertEqual(client.gpu_id, 1)
         self.assertEqual(client.nproc_per_node, 2)
+        self.assertEqual(server.ssh_host, "root@10.0.2.190")
+        self.assertEqual(server.ssh_port, 50201)
         self.assertEqual(server.port, 25000)
         self.assertEqual(infer_client_deployment(cfg.clients), "single-node")
         self.assertEqual(infer_ps_deployment(cfg.servers), "single-ps")
+
+    def test_build_remote_client_command_uses_ssh_port(self) -> None:
+        from tools.benchmarks.e2e.custom import (
+            BenchmarkConfig,
+            ClientSpec,
+            ServerSpec,
+            build_client_command,
+        )
+
+        cfg = BenchmarkConfig(
+            clients=(
+                ClientSpec(
+                    ssh_host="root@10.0.2.191",
+                    ssh_port=50201,
+                    repo_root=Path("/app/RecStore"),
+                    ip="10.0.2.191",
+                ),
+            ),
+            servers=(ServerSpec(ip="10.0.2.190", port=26000),),
+            output_dir=Path("/tmp/out"),
+            runtime_dir=Path("/tmp/out/runtime/brpc"),
+        )
+        cmd = build_client_command(
+            cfg=cfg,
+            transport="BRPC",
+            client=cfg.clients[0],
+            run_id="remote_b1024_r0",
+        )
+        self.assertEqual(cmd[:4], ["ssh", "-p", "50201", "root@10.0.2.191"])
 
     def test_runtime_config_uses_requested_transport_and_shards(self) -> None:
         from tools.benchmarks.e2e.custom import (
@@ -92,6 +127,46 @@ class TestBenchmarkE2E(unittest.TestCase):
         self.assertIn("--no-start-server", cmd)
         self.assertIn("--server-host", cmd)
         self.assertIn("10.0.2.190", cmd)
+
+    def test_rdma_cluster_wraps_server_commands_for_remote_ps(self) -> None:
+        from tools.benchmarks.e2e.custom import BenchmarkConfig, ClientSpec, ServerSpec
+        from tools.benchmarks.e2e.custom.runtime import start_rdma_ps_cluster
+
+        scripts_dir = Path(__file__).resolve().parents[3] / "src/test/scripts"
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        cfg = BenchmarkConfig(
+            clients=(ClientSpec(),),
+            servers=(
+                ServerSpec(
+                    ssh_host="root@ps0",
+                    ssh_port=50201,
+                    repo_root=Path("/remote/RecStore"),
+                    ip="10.0.2.190",
+                    shard_id=0,
+                ),
+            ),
+            output_dir=Path("/tmp/out"),
+        )
+
+        with mock.patch("petps_cluster_runner.PetPSClusterRunner") as runner_cls:
+            runner = runner_cls.return_value
+            runner.rdma_namespace = "ns"
+            runner.rdma_control_plane_host = "10.0.2.190"
+            runner.rdma_control_plane_port = 32000
+            runner.num_clients = 1
+            start_rdma_ps_cluster(
+                cfg=cfg,
+                config_path=Path("/tmp/runtime/recstore_config.json"),
+                log_path=Path("/tmp/logs/rdma.log"),
+                control_plane_host="10.0.2.190",
+            )
+            wrapper = runner_cls.call_args.kwargs["server_command_wrapper"]
+        cmd = wrapper(0, ["/remote/RecStore/build/bin/petps_server", "--global_id=0"])
+
+        self.assertEqual(cmd[:4], ["ssh", "-p", "50201", "root@ps0"])
+        self.assertIn("cd /remote/RecStore", cmd[-1])
+        self.assertIn("/remote/RecStore/build/bin/petps_server", cmd[-1])
 
     def test_build_torchrec_command_uses_same_workload(self) -> None:
         from tools.benchmarks.e2e.custom import (

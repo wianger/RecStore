@@ -130,9 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         if cfg.recstore_runtime_dir:
             runtime_dir = Path(cfg.recstore_runtime_dir)
-            runtime_cfg_path = runtime_dir / "recstore_config.json"
         else:
-            runtime_dir, runtime_cfg_path = make_runtime_dir(
+            runtime_dir, _runtime_cfg_path = make_runtime_dir(
                 base_cfg=base_cfg,
                 host=cfg.server_host,
                 port0=cfg.server_port0,
@@ -149,7 +148,9 @@ def main(argv: list[str] | None = None) -> int:
                 ps_kv_backend=cfg.ps_kv_backend,
                 tiered_dram_capacity_multiplier=cfg.tiered_dram_capacity_multiplier,
             )
-            cfg.recstore_runtime_dir = str(runtime_dir)
+        runtime_dir = runtime_dir.resolve()
+        runtime_cfg_path = runtime_dir / "recstore_config.json"
+        cfg.recstore_runtime_dir = str(runtime_dir)
 
     proc = None
     rdma_cluster = None

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ def estimate_runtime_capacity(num_embeddings: int, init_rows: int) -> int:
 
 def build_runtime_config(cfg: BenchmarkConfig, *, transport: str, value_path: Path) -> dict[str, Any]:
     transport_upper = transport.upper()
-    if transport_upper not in {"BRPC", "GRPC"}:
+    if transport_upper not in {"BRPC", "GRPC", "RDMA"}:
         raise ValueError(f"unsupported E2E transport: {transport}")
     value_size = int(cfg.embedding_dim) * 4
     servers = _server_entries(cfg.servers)
@@ -61,21 +62,133 @@ def build_runtime_config(cfg: BenchmarkConfig, *, transport: str, value_path: Pa
     }
 
 
-def _wrap_remote(cmd: list[str], *, ssh_host: str, cwd: Path) -> list[str]:
+def _wrap_remote(cmd: list[str], *, ssh_host: str, ssh_port: int, cwd: Path) -> list[str]:
     if ssh_host in {"", "local", "localhost"}:
         return cmd
-    return wrap_remote_command(cmd, ssh_host, cwd=cwd)
+    return wrap_remote_command(cmd, ssh_host, cwd=cwd, ssh_port=ssh_port)
+
+
+def _cuda_visible_devices(client: ClientSpec) -> str:
+    start = int(client.gpu_id)
+    count = max(int(client.nproc_per_node), 1)
+    if count <= 1:
+        return str(start)
+    return ",".join(str(start + offset) for offset in range(count))
+
+
+def _client_node_count(clients: tuple[ClientSpec, ...]) -> int:
+    return max((client.node_rank for client in clients), default=0) + 1
+
+
+def _rdma_client_process_count(clients: tuple[ClientSpec, ...]) -> int:
+    return sum(max(int(client.nproc_per_node), 1) for client in clients)
+
+
+def _rdma_client_env(runner: Any) -> dict[str, str]:
+    env = {
+        "RECSTORE_RDMA_RC_NAMESPACE": str(runner.rdma_namespace),
+        "RECSTORE_RDMA_CONTROL_PLANE_HOST": str(runner.rdma_control_plane_host),
+        "RECSTORE_RDMA_CONTROL_PLANE_PORT": str(runner.rdma_control_plane_port),
+    }
+    if runner.rdma_control_plane_timeout_ms is not None:
+        env["RECSTORE_RDMA_CONTROL_PLANE_TIMEOUT_MS"] = str(
+            runner.rdma_control_plane_timeout_ms
+        )
+    if runner.rdma_wait_timeout_ms is not None:
+        env["RECSTORE_RDMA_WAIT_TIMEOUT_MS"] = str(runner.rdma_wait_timeout_ms)
+    if runner.rdma_qps_per_client_per_shard is not None:
+        env["RECSTORE_RDMA_RC_QPS_PER_CLIENT_PER_SHARD"] = str(
+            runner.rdma_qps_per_client_per_shard
+        )
+    if runner.rdma_slots_per_qp is not None:
+        env["RECSTORE_RDMA_RC_SLOTS_PER_QP"] = str(runner.rdma_slots_per_qp)
+    if runner.rdma_server_coroutines_per_thread is not None:
+        env["RECSTORE_RDMA_RC_SERVER_COROUTINES_PER_THREAD"] = str(
+            runner.rdma_server_coroutines_per_thread
+        )
+    if runner.rdma_server_get_workers is not None:
+        env["RECSTORE_RDMA_RC_SERVER_GET_WORKERS"] = str(runner.rdma_server_get_workers)
+    return env
+
+
+def start_rdma_ps_cluster(
+    *,
+    cfg: BenchmarkConfig,
+    config_path: Path,
+    log_path: Path,
+    control_plane_host: str,
+) -> Any:
+    sorted_servers = sorted(cfg.servers, key=lambda item: item.shard_id)
+    repo_root = sorted_servers[0].repo_root
+    scripts_dir = repo_root / "src/test/scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from petps_cluster_runner import PetPSClusterRunner  # type: ignore
+
+    has_remote_server = any(
+        server.ssh_host not in {"", "local", "localhost"} for server in sorted_servers
+    )
+
+    def wrap_server_command(global_id: int, cmd: list[str]) -> list[str]:
+        server = sorted_servers[global_id]
+        return _wrap_remote(
+            cmd,
+            ssh_host=server.ssh_host,
+            ssh_port=server.ssh_port,
+            cwd=server.repo_root,
+        )
+
+    value_size = int(cfg.embedding_dim) * 4
+    max_kv_num_per_request = max(1, int(cfg.batch_size) * SPARSE_FEATURES_PER_SAMPLE)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    runner = PetPSClusterRunner(
+        server_path=str(repo_root / "build/bin/petps_server"),
+        config_path=str(config_path),
+        num_servers=len(cfg.servers),
+        num_clients=_rdma_client_process_count(cfg.clients),
+        thread_num=16,
+        value_size=value_size,
+        max_kv_num_per_request=max_kv_num_per_request,
+        timeout=180,
+        startup_delay=0.0,
+        log_dir=str(log_path.parent),
+        verbose=True,
+        show_status_logs=True,
+        show_control_plane_logs=True,
+        rdma_namespace=f"rs-e2e-{cfg.output_dir.name}",
+        rdma_control_plane_host=control_plane_host,
+        rdma_wait_timeout_ms=120000,
+        rdma_control_plane_timeout_ms=300000,
+        rdma_qps_per_client_per_shard=32,
+        rdma_slots_per_qp=1,
+        rdma_server_coroutines_per_thread=1,
+        rdma_server_get_workers=0,
+        rdma_profile_interval_ms=1000,
+        server_command_wrapper=wrap_server_command if has_remote_server else None,
+    )
+    with log_path.open("w", encoding="utf-8") as f:
+        f.write(
+            "petps_server cluster\n"
+            f"config_path={config_path}\n"
+            f"namespace={runner.rdma_namespace}\n"
+            f"control_plane={runner.rdma_control_plane_host}:{runner.rdma_control_plane_port}\n"
+            f"num_clients={runner.num_clients}\n"
+        )
+    runner._rs_demo_log_path = log_path  # type: ignore[attr-defined]
+    runner.start()
+    return runner
+
+
+def stop_rdma_ps_cluster(runner: Any) -> None:
+    if runner is not None:
+        runner.stop()
 
 
 def build_server_command(*, server: ServerSpec, runtime_config: Path, transport: str) -> list[str]:
     cmd = [str(server.repo_root / "build/bin/ps_server"), "--config_path", str(runtime_config)]
     if transport.upper() == "BRPC":
         cmd.extend(["--brpc_server_port", str(server.port)])
-    return _wrap_remote(cmd, ssh_host=server.ssh_host, cwd=server.repo_root)
-
-
-def _client_node_count(clients: tuple[ClientSpec, ...]) -> int:
-    return max((client.node_rank for client in clients), default=0) + 1
+    return _wrap_remote(cmd, ssh_host=server.ssh_host, ssh_port=server.ssh_port, cwd=server.repo_root)
 
 
 def build_client_command(
@@ -85,11 +198,16 @@ def build_client_command(
     client: ClientSpec,
     run_id: str,
     rdzv_id: str | None = None,
+    rdma_runner: Any | None = None,
 ) -> list[str]:
     first_server = sorted(cfg.servers, key=lambda item: item.shard_id)[0]
+    env_prefix = ["env", f"CUDA_VISIBLE_DEVICES={_cuda_visible_devices(client)}"]
+    if transport.upper() == "RDMA" and rdma_runner is not None:
+        env_prefix.extend(
+            f"{key}={value}" for key, value in _rdma_client_env(rdma_runner).items()
+        )
     cmd = [
-        "env",
-        f"CUDA_VISIBLE_DEVICES={int(client.gpu_id)}",
+        *env_prefix,
         cfg.python_bin,
         str(client.repo_root / "model_zoo/rs_demo/run_mock_stress.py"),
         "--backend",
@@ -144,7 +262,7 @@ def build_client_command(
         "--rdzv-id",
         rdzv_id or run_id,
     ]
-    return _wrap_remote(cmd, ssh_host=client.ssh_host, cwd=client.repo_root)
+    return _wrap_remote(cmd, ssh_host=client.ssh_host, ssh_port=client.ssh_port, cwd=client.repo_root)
 
 
 def build_torchrec_command(
@@ -158,7 +276,7 @@ def build_torchrec_command(
     output_dir = cfg.output_dir / "outputs" / run_id
     cmd = [
         "env",
-        f"CUDA_VISIBLE_DEVICES={int(client.gpu_id)}",
+        f"CUDA_VISIBLE_DEVICES={_cuda_visible_devices(client)}",
         cfg.python_bin,
         str(client.repo_root / "model_zoo/rs_demo/run_mock_stress.py"),
         "--backend",
@@ -201,4 +319,4 @@ def build_torchrec_command(
         "--rdzv-id",
         rdzv_id or run_id,
     ]
-    return _wrap_remote(cmd, ssh_host=client.ssh_host, cwd=client.repo_root)
+    return _wrap_remote(cmd, ssh_host=client.ssh_host, ssh_port=client.ssh_port, cwd=client.repo_root)

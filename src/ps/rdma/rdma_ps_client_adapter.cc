@@ -27,6 +27,9 @@ DECLARE_int32(num_server_processes);
 DECLARE_int32(num_client_processes);
 DECLARE_int32(value_size);
 DECLARE_int32(max_kv_num_per_request);
+DECLARE_int32(rdma_rc_client_id_base);
+DECLARE_int32(rdma_rc_num_logical_clients);
+DECLARE_int32(rdma_control_plane_timeout_ms);
 DECLARE_string(rdma_transport_mode);
 DEFINE_string(rdma_transport_mode, "rc_write", "RDMA transport mode: rc_write");
 DEFINE_bool(rdma_adapter_skip_prefetch_result_copy,
@@ -36,20 +39,34 @@ DEFINE_bool(rdma_adapter_skip_prefetch_result_copy,
 
 namespace recstore {
 
+namespace detail {
+
+bool TryParseIntEnv(const char* env_name, int* parsed_value) {
+  const char* value = std::getenv(env_name);
+  if (value == nullptr || *value == '\0') {
+    return false;
+  }
+  char* end         = nullptr;
+  const long parsed = std::strtol(value, &end, 10);
+  if (end == value || *end != '\0') {
+    return false;
+  }
+  *parsed_value = static_cast<int>(parsed);
+  return true;
+}
+
+} // namespace detail
+
 namespace {
+
 bool AdapterProfileEnabled() {
   const char* value = std::getenv("RECSTORE_RDMA_ADAPTER_PROFILE");
   return value != nullptr && std::string(value) != "0";
 }
 
 void SetIntFlagFromEnv(const char* env_name, int32_t* flag_value) {
-  const char* value = std::getenv(env_name);
-  if (value == nullptr || *value == '\0') {
-    return;
-  }
-  char* end         = nullptr;
-  const long parsed = std::strtol(value, &end, 10);
-  if (end != value && *end == '\0') {
+  int parsed = 0;
+  if (detail::TryParseIntEnv(env_name, &parsed)) {
     *flag_value = static_cast<int32_t>(parsed);
   }
 }
@@ -63,6 +80,9 @@ void ApplyRdmaFlagsFromEnv() {
   }
   SetIntFlagFromEnv(
       "RECSTORE_RDMA_CONTROL_PLANE_PORT", &FLAGS_rdma_control_plane_port);
+  SetIntFlagFromEnv(
+      "RECSTORE_RDMA_CONTROL_PLANE_TIMEOUT_MS",
+      &FLAGS_rdma_control_plane_timeout_ms);
   SetIntFlagFromEnv(
       "RECSTORE_RDMA_WAIT_TIMEOUT_MS", &FLAGS_rdma_wait_timeout_ms);
   SetIntFlagFromEnv("RECSTORE_RDMA_RC_QPS_PER_CLIENT_PER_SHARD",
@@ -119,6 +139,43 @@ std::vector<std::string> ReadProcessArgv() {
   return argv;
 }
 } // namespace
+
+EmbeddedRdmaClientIdentity ResolveEmbeddedRdmaClientIdentity(int num_shards) {
+  if (num_shards <= 0) {
+    throw std::runtime_error("embedded RDMA num_shards must be positive");
+  }
+
+  int client_index = 0;
+  if (!detail::TryParseIntEnv("RECSTORE_RDMA_OS_CLIENT_INDEX", &client_index) &&
+      !detail::TryParseIntEnv("RANK", &client_index)) {
+    detail::TryParseIntEnv("LOCAL_RANK", &client_index);
+  }
+
+  int num_client_processes = 1;
+  if (!detail::TryParseIntEnv("RECSTORE_RDMA_NUM_CLIENT_PROCESSES",
+                              &num_client_processes) &&
+      !detail::TryParseIntEnv("WORLD_SIZE", &num_client_processes)) {
+    detail::TryParseIntEnv("LOCAL_WORLD_SIZE", &num_client_processes);
+  }
+
+  if (client_index < 0) {
+    throw std::runtime_error("embedded RDMA client index must be non-negative");
+  }
+  if (num_client_processes <= 0) {
+    throw std::runtime_error(
+        "embedded RDMA num_client_processes must be positive");
+  }
+  if (client_index >= num_client_processes) {
+    throw std::runtime_error(
+        "embedded RDMA client index out of range for num_client_processes");
+  }
+
+  EmbeddedRdmaClientIdentity identity;
+  identity.client_index         = client_index;
+  identity.num_client_processes = num_client_processes;
+  identity.global_id            = num_shards + client_index;
+  return identity;
+}
 
 int RDMAPSClientAdapter::PartitionKey(uint64_t key) const {
   CHECK_GT(num_shards_, 0);
@@ -270,15 +327,20 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
   const json client_cfg =
       config_.contains("client") ? config_["client"] : json::object();
   const json dist_cfg = ResolveFrameworkDistributedClientConfig(config_);
-  const int logical_client_id =
-      config_.value("rdma_logical_client_id", FLAGS_rdma_rc_client_id_base);
 
   num_shards_  = dist_cfg.value("num_shards", 1);
   hash_method_ = dist_cfg.value("hash_method", "city_hash");
   if (FLAGS_global_id < num_shards_) {
+    const auto identity = ResolveEmbeddedRdmaClientIdentity(num_shards_);
     FLAGS_num_server_processes = num_shards_;
-    FLAGS_num_client_processes = 1;
-    FLAGS_global_id            = num_shards_;
+    FLAGS_num_client_processes = identity.num_client_processes;
+    FLAGS_global_id            = identity.global_id;
+    if (FLAGS_rdma_rc_num_logical_clients < 0) {
+      FLAGS_rdma_rc_num_logical_clients = identity.num_client_processes;
+    }
+    if (FLAGS_rdma_rc_client_id_base < 0) {
+      FLAGS_rdma_rc_client_id_base = identity.client_index;
+    }
   } else if (FLAGS_num_server_processes != num_shards_) {
     throw std::runtime_error(
         "RDMA num_server_processes must match distributed_client.num_shards");
@@ -293,6 +355,9 @@ void RDMAPSClientAdapter::EnsureClientInitialized() {
   if (const char* mode = std::getenv("RECSTORE_RDMA_TRANSPORT_MODE")) {
     FLAGS_rdma_transport_mode = mode;
   }
+
+  const int logical_client_id =
+      config_.value("rdma_logical_client_id", FLAGS_rdma_rc_client_id_base);
 
   shard_clients_.clear();
   shard_to_client_index_.clear();

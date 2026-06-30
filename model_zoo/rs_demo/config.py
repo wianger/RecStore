@@ -576,6 +576,9 @@ def populate_default_paths(cfg: RunConfig) -> None:
     if not cfg.hps_torch_main_agg_csv:
         cfg.hps_torch_main_agg_csv = str(outputs_base / "hps_torch_main_agg.csv")
 
+    cfg.recstore_main_csv = str(Path(cfg.recstore_main_csv).resolve())
+    cfg.recstore_main_agg_csv = str(Path(cfg.recstore_main_agg_csv).resolve())
+
 
 def ensure_parent_dirs(cfg: RunConfig) -> None:
     ensure_shared_dir(Path(cfg.jsonl).parent)

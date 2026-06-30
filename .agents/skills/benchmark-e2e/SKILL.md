@@ -12,11 +12,18 @@ skill directory; call project scripts directly.
 
 1. Confirm the current directory is the RecStore repo root, or pass `--repo`.
 2. Prompt only for P0 inputs unless the user already provided them:
-   - client list, each entry as `(ssh_host, repo_root, ip, gpu_id, node_rank, nproc_per_node)`;
-     default = one local client, GPU 0, `node_rank=0`, `nproc_per_node=1`
-   - PS server list, each entry as `(ssh_host, repo_root, ip, port, shard_id)`;
-     default = one local PS, `127.0.0.1:15000`, shard 0
+   - client list, each entry as
+     `(ssh_host, ssh_port, repo_root, ip, gpu_id, node_rank, nproc_per_node)`;
+     default = one local client, `ssh_port=22`, GPU 0, `node_rank=0`, `nproc_per_node=1`
+   - PS server list, each entry as
+     `(ssh_host, ssh_port, repo_root, ip, ps_port, shard_id)`;
+     default = one local PS, `ssh_port=22`, `127.0.0.1:15000`, shard 0
    - result output directory (default = `results/e2e_$(date +%m%d%H%M)`)
+   - `ssh_host` is the SSH login target (`local` means run commands locally);
+     `ip` is the runtime data-plane address for PS/client traffic and distributed
+     rendezvous. They may differ when SSH goes through a bastion or hostname
+     while training uses a cluster IP. `ssh_port` is the SSH login port;
+     `ps_port` is the PS service port and must not be confused with `ssh_port`.
 3. Apply P1 defaults without prompting, and record them in `summary.md`:
    - model = `dlrm`
    - client deployment = inferred from client list
@@ -217,9 +224,9 @@ Write `<output_dir>/deployment.md` before running:
 模型: dlrm
 传输: <PS_TYPE>
 client:
-  - ssh_host=<ssh_host>, repo=<repo_root>, ip=<client_ip>, gpu=<gpu_id>, node_rank=<rank>, nproc_per_node=<nproc>
+  - ssh_host=<ssh_host>, ssh_port=<ssh_port>, repo=<repo_root>, ip=<client_ip>, gpu=<gpu_id>, node_rank=<rank>, nproc_per_node=<nproc>
 ps:
-  - ssh_host=<ssh_host>, repo=<repo_root>, ip=<ps_ip>, port=<port>, shard=<shard_id>
+  - ssh_host=<ssh_host>, ssh_port=<ssh_port>, repo=<repo_root>, ip=<ps_ip>, ps_port=<ps_port>, shard=<shard_id>
 client 部署: single-node | distributed
 PS 部署: single-ps | sharded-ps
 分片: <num_shards>, hash_method=city_hash, max_keys_per_request=<value>
