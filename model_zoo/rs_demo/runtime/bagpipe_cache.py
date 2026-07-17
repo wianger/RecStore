@@ -85,8 +85,16 @@ class BagPipeCacheController:
     ) -> None:
         self.embedding_module = embedding_module
         self.kv_client = kv_client
-        self.lookahead_value = max(1, int(lookahead_value))
-        self.cleanup_interval = max(1, int(cleanup_batch_proportion * self.lookahead_value))
+        self._base_lookahead = max(1, int(lookahead_value))
+        self._dynamic_lookahead = self._base_lookahead
+        self._max_lookahead = max(self._base_lookahead, 16)
+        self._additive_increase = 1
+        self._multiplicative_decrease = 0.5
+        self._pressure_low = 0.70
+        self._pressure_high = 0.90
+        self._lookahead_adjust_interval = 10
+        self.cleanup_batch_proportion = float(cleanup_batch_proportion)
+        self.cleanup_interval = max(1, int(self.cleanup_batch_proportion * self._dynamic_lookahead))
         self.cache_capacity = int(cache_capacity)
         self.embedding_dim = int(embedding_dim)
         self.fuse_k = int(fuse_k)
@@ -136,8 +144,10 @@ class BagPipeCacheController:
         # forward+backward.  The result is waited at the start of the
         # *following* update_grads call.
         self._sync_later_stream: Optional[torch.cuda.Stream] = None
+        self._eviction_stream: Optional[torch.cuda.Stream] = None
         if self.device.type == "cuda":
             self._sync_later_stream = torch.cuda.Stream(device=self.device)
+            self._eviction_stream = torch.cuda.Stream(device=self.device)
         # Pending sync_later future (dist.Work) + its IDs/grads for rank-0 push
         self._sync_later_future = None
         self._sync_later_ids: Optional[torch.Tensor] = None
@@ -154,6 +164,9 @@ class BagPipeCacheController:
         # Accumulate unique IDs during first lookahead window for one-time all_gather
         self._init_unique_ids: Set[int] = set()
         self._init_batches_seen: int = 0
+        # ---- Oracle prescan (opt 8): complete future knowledge ----
+        self._prescan_done: bool = False
+        self._prescan_unique_ids: Set[int] = set()
         # Stats
         self._stats["bagpipe_no_sync_ids"] = 0.0
         self._stats["bagpipe_shared_ids"] = 0.0
@@ -161,6 +174,18 @@ class BagPipeCacheController:
     # ------------------------------------------------------------------
     #  Public API (compatible with LookaheadPrefetcher where possible)
     # ------------------------------------------------------------------
+
+    @property
+    def lookahead_value(self) -> int:
+        """Dynamic lookahead, adjusted based on cache pressure (opt 9).
+
+        Mirrors BagPipe's additive_increase / multiplicative_decrease design:
+        when cache has spare capacity, look further ahead to hide more network
+        latency; when cache is under pressure, reduce lookahead to avoid
+        excessive evictions.  The runner reads this each step to decide how
+        many batches to prepare ahead.
+        """
+        return self._dynamic_lookahead
 
     @property
     def depth(self) -> int:
@@ -188,6 +213,12 @@ class BagPipeCacheController:
             "bagpipe_prefill_ms": 0.0,
             "bagpipe_update_ms": 0.0,
             "bagpipe_cleanup_ms": 0.0,
+            "bagpipe_eviction_stream_ms": 0.0,
+            "bagpipe_eviction_stream_overlap_ms": 0.0,
+            "bagpipe_prescan_batches": 0.0,
+            "bagpipe_prescan_ids": 0.0,
+            "bagpipe_dynamic_lookahead": 0.0,
+            "bagpipe_cache_pressure": 0.0,
         }
 
     def consume_stats(self, *, reset: bool = True) -> Dict[str, float]:
@@ -236,6 +267,85 @@ class BagPipeCacheController:
             self.latest_tracker[fid] = max(
                 self.latest_tracker.get(fid, -1), batch_num
             )
+
+    # ------------------------------------------------------------------
+    #  Oracle prescan (opt 8): pre-scan full dataset for complete future
+    #  knowledge, mirroring BagPipe OracleCacher.train_addition() which
+    #  pre-loads all batches to build latest_tracker + no_sync classification
+    #  with full future knowledge vs the online limited-lookahead approach.
+    # ------------------------------------------------------------------
+
+    def prescan_batch(self, batch_num: int, sparse_features: Any) -> None:
+        """Record a batch unique IDs during a full-dataset pre-scan.
+
+        Builds a complete latest_tracker (ID -> last usage batch) with full
+        future knowledge, and accumulates all unique IDs for a one-time
+        all_gather to build the complete shared-ID set.
+        """
+        unique_ids = self._compute_unique_fused_ids(sparse_features)
+        id_set = unique_ids.tolist() if unique_ids.numel() > 0 else []
+        for fid in id_set:
+            self.latest_tracker[fid] = max(
+                self.latest_tracker.get(fid, -1), batch_num
+            )
+            self._prescan_unique_ids.add(fid)
+        self._stats["bagpipe_prescan_batches"] += 1
+        self._stats["bagpipe_prescan_ids"] += float(len(id_set))
+
+    def finalize_prescan(self) -> None:
+        """After all batches pre-scanned, build the complete shared-ID set.
+
+        Performs a one-time all_gather of all unique IDs across ranks to
+        determine which IDs are shared (appear on >1 rank) vs local-only.
+        Also builds the global ID->index mapping for dense all_reduce.
+        """
+        if self._prescan_done:
+            return
+        if not self._is_distributed():
+            self._shared_ids = set()
+            self._global_id_to_index = {}
+            self._global_unique_count = 0
+            self._prescan_done = True
+            self._stats["bagpipe_shared_ids"] = 0.0
+            return
+
+        local_ids = torch.tensor(sorted(self._prescan_unique_ids),
+                                  dtype=torch.int64, device=self.device)
+        local_n = torch.tensor([local_ids.numel()], dtype=torch.int64,
+                                device=self.device)
+        world_size = dist.get_world_size()
+        n_list = [torch.zeros(1, dtype=torch.int64, device=self.device)
+                   for _ in range(world_size)]
+        dist.all_gather(n_list, local_n)
+        max_n = max(int(ni.item()) for ni in n_list)
+
+        padded = torch.zeros(max_n, dtype=torch.int64, device=self.device)
+        padded[:local_ids.numel()] = local_ids
+        ids_list = [torch.zeros(max_n, dtype=torch.int64, device=self.device)
+                     for _ in range(world_size)]
+        dist.all_gather(ids_list, padded)
+
+        id_rank_count: Dict[int, int] = {}
+        for r in range(world_size):
+            nr = int(n_list[r].item())
+            for fid in ids_list[r][:nr].tolist():
+                id_rank_count[fid] = id_rank_count.get(fid, 0) + 1
+
+        self._shared_ids = {fid for fid, cnt in id_rank_count.items() if cnt > 1}
+        all_shared = sorted(self._shared_ids)
+        self._global_id_to_index = {fid: i for i, fid in enumerate(all_shared)}
+        self._global_unique_count = len(all_shared)
+        self._prescan_done = True
+        self._stats["bagpipe_shared_ids"] = float(len(self._shared_ids))
+        logger.info(
+            "[BagPipe] oracle prescan: %d shared IDs, %d local-only, "
+            "%d total unique across %d batches",
+            len(self._shared_ids),
+            len(id_rank_count) - len(self._shared_ids),
+            len(id_rank_count),
+            int(self._stats["bagpipe_prescan_batches"]),
+        )
+        self._prescan_unique_ids = set()
 
     # ------------------------------------------------------------------
     #  Consume (called when a batch is about to be used)
@@ -464,7 +574,7 @@ class BagPipeCacheController:
         all_gather to build the shared ID set.
         """
         if self._shared_ids is not None:
-            return  # Already built
+            return  # Already built (by prescan or online)
         if not self._is_distributed():
             self._shared_ids = set()
             return
@@ -1043,32 +1153,75 @@ class BagPipeCacheController:
         if expired:
             self._evict_entries(expired)
 
+        # Dynamic lookahead adjustment (opt 9)
+        self._maybe_adjust_lookahead(current_batch)
+
         self._stats["bagpipe_cleanup_ms"] += (time.perf_counter() - t_start) * 1e3
+
+    def _maybe_adjust_lookahead(self, current_batch: int) -> None:
+        """Adjust lookahead based on cache pressure (opt 9).
+
+        Additive increase when cache has spare capacity (pressure < low
+        threshold): look further ahead to hide more network latency.
+        Multiplicative decrease when cache is under pressure (pressure >
+        high threshold): reduce lookahead to limit evictions.
+        """
+        if current_batch % self._lookahead_adjust_interval != 0:
+            return
+        if self.cache_capacity <= 0:
+            return
+        pressure = len(self.cache_entries) / self.cache_capacity
+        old_la = self._dynamic_lookahead
+        if pressure > self._pressure_high:
+            self._dynamic_lookahead = max(1, int(self._dynamic_lookahead * self._multiplicative_decrease))
+        elif pressure < self._pressure_low:
+            self._dynamic_lookahead = min(self._max_lookahead, self._dynamic_lookahead + self._additive_increase)
+        if self._dynamic_lookahead != old_la:
+            self.cleanup_interval = max(1, int(self.cleanup_batch_proportion * self._dynamic_lookahead))
+            logger.info(
+                "[BagPipe] dynamic lookahead: %d -> %d (pressure=%.2f, cache=%d/%d)",
+                old_la, self._dynamic_lookahead, pressure,
+                len(self.cache_entries), self.cache_capacity,
+            )
+        self._stats["bagpipe_dynamic_lookahead"] = float(self._dynamic_lookahead)
+        self._stats["bagpipe_cache_pressure"] = pressure
 
     def _read_cache_values(self, ids: list[int]) -> tuple:
         """Read current GPU cache values for local-only (no_sync) IDs.
 
-        Runs on the training thread (GPU op).  The values already have local
-        SGD applied via ``apply_sgd_update_gpu_cache``; for no_sync IDs the
-        local gradient is the full gradient, so the value equals the correct
-        PS value.  The actual PS write is offloaded to the background thread
-        (opt 5).
+        Runs the GPU read on the dedicated ``_eviction_stream`` so it
+        overlaps with the next step's forward/backward (opt 7, mirroring
+        BagPipe bagcache.py ``with torch.cuda.stream(self.s)`` in
+        ``clean_up_caches``).  A CUDA event is recorded after the read so
+        the background PS-writeback thread can wait for tensor readiness
+        without blocking the training thread.
         """
         ids_cuda = torch.tensor(ids, dtype=torch.int64, device=self.device)
         if not ids_cuda.is_contiguous():
             ids_cuda = ids_cuda.contiguous()
+        stream = self._eviction_stream
         try:
-            values = self.kv_client.gpu_cache_lookup_flat(
-                ids_cuda, self.embedding_dim
-            )
+            if stream is not None:
+                with torch.cuda.stream(stream):
+                    values = self.kv_client.gpu_cache_lookup_flat(
+                        ids_cuda, self.embedding_dim
+                    )
+                # Record event on eviction stream for background-thread sync
+                event = torch.cuda.Event()
+                event.record(stream)
+            else:
+                values = self.kv_client.gpu_cache_lookup_flat(
+                    ids_cuda, self.embedding_dim
+                )
+                event = None
             if values.device != self.device:
                 values = values.to(self.device)
             if not values.is_contiguous():
                 values = values.contiguous()
-            return ids_cuda, values
+            return ids_cuda, values, event
         except Exception as exc:
             logger.warning("[BagPipe] value read for writeback failed: %s", exc)
-            return ids_cuda, None
+            return ids_cuda, None, None
 
     def _evict_entries(self, expired_ids: list[int]) -> None:
         """Evict expired entries: write back values / flush grads + invalidate.
@@ -1101,9 +1254,9 @@ class BagPipeCacheController:
             and fid not in self.sync_later_grads
         ]
         if deferred_value:
-            wb_ids, wb_vals = self._read_cache_values(deferred_value)
+            wb_ids, wb_vals, wb_event = self._read_cache_values(deferred_value)
             if wb_vals is not None and wb_ids.numel() > 0:
-                self._cleanup_queue.put((wb_ids, wb_vals))
+                self._cleanup_queue.put((wb_ids, wb_vals, wb_event))
             self._stats["bagpipe_writeback_ids"] += float(len(deferred_value))
 
         # ---- Grad flush for deferred sync_later (shared) entries ----
@@ -1188,9 +1341,12 @@ class BagPipeCacheController:
                 continue
             if task is None:
                 break
-            wb_ids, wb_vals = task
+            wb_ids, wb_vals, wb_event = task
             if wb_vals is None:
                 continue
+            # Wait for eviction-stream GPU read to complete (opt 7)
+            if wb_event is not None:
+                wb_event.synchronize()
             try:
                 self.kv_client.emb_write_values(
                     self.master_table_name, wb_ids, wb_vals
@@ -1215,7 +1371,9 @@ class BagPipeCacheController:
                     break
                 if task is None:
                     break
-                wb_ids, wb_vals = task
+                wb_ids, wb_vals, wb_event = task
+                if wb_event is not None:
+                    wb_event.synchronize()
                 if wb_vals is not None:
                     self.kv_client.emb_write_values(
                         self.master_table_name, wb_ids, wb_vals

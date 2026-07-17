@@ -949,6 +949,36 @@ class RecStoreRunner(BenchmarkRunner):
             update_lat_us: list[float] = []
             rows: list[dict[str, Any]] = []
             data_iter = iter(dataloader)
+
+            # ---- Oracle prescan (opt 8): pre-scan full dataset for complete
+            # future knowledge before training starts.  Creates a second
+            # iterator from the same dataloader (DistributedSampler is
+            # deterministic with the same seed/epoch) to build the complete
+            # latest_tracker and shared-ID set.  ----
+            if cfg.enable_bagpipe_cache and bagpipe_controller is not None:
+                prescan_start = time.perf_counter()
+                prescan_iter = iter(dataloader)
+                for ps_batch in range(cfg.steps):
+                    try:
+                        ps_dense, ps_sparse, ps_labels = next(prescan_iter)
+                    except StopIteration:
+                        prescan_iter = iter(dataloader)
+                        try:
+                            ps_dense, ps_sparse, ps_labels = next(prescan_iter)
+                        except StopIteration:
+                            break
+                    _, ps_features = build_kjt_batch_from_dense_sparse_labels(
+                        ps_dense, ps_sparse, ps_labels, device=device,
+                    )
+                    bagpipe_controller.prescan_batch(ps_batch, ps_features)
+                bagpipe_controller.finalize_prescan()
+                _barrier_for_step_alignment(
+                    dist=dist, device=device, local_rank=local_rank,
+                    use_dist=use_dist,
+                )
+                print(f"[rs_demo] bagpipe oracle prescan: {cfg.steps} batches "
+                      f"in {(time.perf_counter() - prescan_start)*1e3:.0f}ms")
+
             lookahead_prefetcher = LookaheadPrefetcher(
                 embedding_module,
                 depth=cfg.prefetch_depth
