@@ -537,6 +537,94 @@ class RecStoreClient:
             self._clear_gpu_cache_if_available()
             self._gpu_cache_table_name = name
 
+    def gpu_cache_lookup_flat(self, keys: torch.Tensor, embedding_dim: int) -> torch.Tensor:
+        """GPU-cache-accelerated flat lookup that works with any backend.
+
+        Serves cache hits from the GPU cache; misses are fetched via the
+        active backend (BRPC/GRPC/RDMA/local_shm) and filled back into the
+        cache.  Returns a [num_keys, embedding_dim] float32 tensor on the
+        same device as ``keys`` (CUDA when keys are CUDA).
+        """
+        fn = getattr(self.ops, "gpu_cache_lookup_flat", None)
+        if not callable(fn):
+            raise RuntimeError(
+                "gpu_cache_lookup_flat requires a RecStore ops library "
+                "exposing gpu_cache_lookup_flat()."
+            )
+        keys = self._normalize_ids(keys, preserve_device=True)
+        if not keys.is_contiguous():
+            keys = keys.contiguous()
+        return fn(keys, int(embedding_dim))
+
+    def query_gpu_cache(self, keys: torch.Tensor, embedding_dim: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Query GPU cache. Returns (values, missing_keys).
+
+        values has shape [num_keys, embedding_dim] with zeros for misses.
+        missing_keys is a CPU int64 tensor of keys not found in cache."""
+        query = getattr(self.ops, "query_gpu_cache", None)
+        if not callable(query):
+            raise RuntimeError("query_gpu_cache requires ops library exposing query_gpu_cache().")
+        result = query(keys, int(embedding_dim))
+        return result[0], result[1]
+
+    def update_gpu_cache(self, ids: torch.Tensor, values: torch.Tensor) -> None:
+        """Update existing GPU cache entries with new values (no eviction)."""
+        update = getattr(self.ops, "update_gpu_cache", None)
+        if not callable(update):
+            raise RuntimeError("update_gpu_cache requires ops library exposing update_gpu_cache().")
+        self._ensure_gpu_cache_table(getattr(self, "_gpu_cache_table_name", None) or "")
+        ids = self._normalize_ids(ids, preserve_device=True)
+        values = self._normalize_grads(values, preserve_device=True)
+        update(ids, values)
+
+    def invalidate_gpu_cache(self, keys: torch.Tensor) -> None:
+        """Invalidate (evict) specific keys from the GPU cache."""
+        invalidate = getattr(self.ops, "invalidate_gpu_cache", None)
+        if not callable(invalidate):
+            raise RuntimeError("invalidate_gpu_cache requires ops library exposing invalidate_gpu_cache().")
+        if keys.numel() == 0:
+            return
+        invalidate(keys)
+
+    def apply_sgd_update_gpu_cache(self, keys: torch.Tensor, grads: torch.Tensor, lr: float) -> bool:
+        """Apply SGD update in-place on GPU cache entries.
+        Returns True if all keys were cache hits and update was applied.
+        Returns False if some keys were misses (cache invalidated, caller should fall back)."""
+        apply_sgd = getattr(self.ops, "apply_sgd_update_gpu_cache", None)
+        if not callable(apply_sgd):
+            raise RuntimeError("apply_sgd_update_gpu_cache requires ops library exposing apply_sgd_update_gpu_cache().")
+        if keys.numel() == 0:
+            return True
+        return bool(apply_sgd(keys, grads, float(lr)))
+
+    def emb_write_values(self, name: str, keys: torch.Tensor, values: torch.Tensor) -> None:
+        """Write (set) embedding values directly to the PS for a subset of
+        keys, with per-key GPU cache invalidation (no full cache clear).
+
+        Used by the BagPipe eviction writeback path to push locally-updated
+        cache values back to the PS without disturbing other cached entries.
+        """
+        if name not in self._tensor_meta:
+            raise RuntimeError(f"Tensor '{name}' has not been initialized.")
+        write_values = getattr(self.ops, "emb_write_values", None)
+        if not callable(write_values):
+            raise RuntimeError(
+                "emb_write_values requires ops library exposing emb_write_values()."
+            )
+        if keys.numel() == 0:
+            return
+        self._ensure_gpu_cache_table(name)
+        ids = self._normalize_ids(keys, preserve_device=True)
+        if ids.device.type == "cpu":
+            if torch.cuda.is_available():
+                ids = ids.to(torch.device("cuda", torch.cuda.current_device()))
+            else:
+                raise RuntimeError("emb_write_values requires CUDA ids")
+        vals = self._normalize_grads(values, preserve_device=True)
+        if vals.device.type == "cpu" and torch.cuda.is_available():
+            vals = vals.to(ids.device)
+        write_values(ids, vals)
+
     def get_last_gpu_cache_profile(self) -> Dict[str, float]:
         getter = getattr(self.ops, "get_last_gpu_cache_profile", None)
         if not callable(getter):

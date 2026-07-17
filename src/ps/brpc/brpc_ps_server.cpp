@@ -1,7 +1,7 @@
 #include "brpc_ps_server.h"
 
 #include <brpc/server.h>
-#include <fmt/core.h>
+#include <fmt/format.h>
 #include <gflags/gflags.h>
 
 #include <chrono>
@@ -55,6 +55,33 @@ DEFINE_int32(local_shard_id,
 DEFINE_int32(brpc_server_num_threads,
              0,
              "Number of threads for bRPC server, 0 means auto");
+DEFINE_bool(brpc_ps_use_rdma,
+            false,
+            "Use RDMA transport for the brpc PS server (requires brpc built "
+            "with WITH_RDMA=ON).");
+
+namespace {
+
+// Mirror the client: allow enabling RDMA and selecting the HCA via env vars so
+// the ps_server launcher does not require extra command-line flags.
+//   RECSTORE_BRPC_USE_RDMA=1        -> enable RDMA transport
+//   RECSTORE_BRPC_RDMA_DEVICE=mlx5_0 -> select the HCA (maps to -rdma_device)
+bool ResolveBrpcServerUseRdmaFromEnv(bool fallback) {
+  const char* value = std::getenv("RECSTORE_BRPC_USE_RDMA");
+  if (value == nullptr || *value == '\0') {
+    return fallback;
+  }
+  return std::string(value) != "0";
+}
+
+void ApplyBrpcServerRdmaDeviceFromEnv() {
+  const char* dev = std::getenv("RECSTORE_BRPC_RDMA_DEVICE");
+  if (dev != nullptr && *dev != '\0') {
+    google::SetCommandLineOption("rdma_device", dev);
+  }
+}
+
+} // namespace
 
 namespace recstore {
 
@@ -222,6 +249,14 @@ void BRPCParameterServiceImpl::GetParameter(
   std::vector<ParameterPack> packs;
   packs.reserve(keys_array.Size());
   cache_ps_->GetParameterRun2Completion(keys_array, packs, 0);
+
+  {
+    int est_bytes = 0;
+    for (const auto& pack : packs) {
+      est_bytes += ParameterCompressItem::GetSize(pack.dim);
+    }
+    compressor.Reserve(static_cast<int>(packs.size()), est_bytes);
+  }
 
   for (auto& pack : packs) {
     compressor.AddItem(pack, nullptr);
@@ -757,6 +792,13 @@ public:
           brpc::Server server;
           brpc::ServerOptions options;
           options.num_threads = FLAGS_brpc_server_num_threads;
+#if BRPC_WITH_RDMA
+          options.use_rdma    = ResolveBrpcServerUseRdmaFromEnv(
+              FLAGS_brpc_ps_use_rdma);
+          if (options.use_rdma) {
+            ApplyBrpcServerRdmaDeviceFromEnv();
+          }
+#endif
 
           if (server.AddService(
                   service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
@@ -799,6 +841,12 @@ public:
       brpc::Server server;
       brpc::ServerOptions options;
       options.num_threads = FLAGS_brpc_server_num_threads;
+#if BRPC_WITH_RDMA
+      options.use_rdma    = ResolveBrpcServerUseRdmaFromEnv(FLAGS_brpc_ps_use_rdma);
+      if (options.use_rdma) {
+        ApplyBrpcServerRdmaDeviceFromEnv();
+      }
+#endif
 
       if (server.AddService(service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) !=
           0) {

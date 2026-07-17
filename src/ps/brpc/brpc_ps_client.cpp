@@ -1,13 +1,16 @@
 #include "brpc_ps_client.h"
 
 #include <brpc/channel.h>
-#include <fmt/core.h>
+#include <fmt/format.h>
+#include <gflags/gflags.h>
 
 #include <cstdint>
 #include <cstring>
 #include <future>
 #include <string>
 #include <vector>
+
+#include <google/protobuf/arena.h>
 
 #include "base/array.h"
 #include "base/factory.h"
@@ -94,6 +97,34 @@ int BuildUpdateBlocksFromFlat(
 DEFINE_int32(brpc_timeout_ms, 5000, "brpc request timeout in milliseconds");
 DEFINE_int32(brpc_max_retry, 3, "brpc max retry times");
 DEFINE_bool(parameter_client_random_init_brpc, false, "");
+DEFINE_bool(brpc_ps_use_rdma,
+            false,
+            "Use RDMA transport for the brpc PS channel (requires brpc built "
+            "with WITH_RDMA=ON).");
+
+namespace {
+
+// The brpc PS client is loaded as a shared library from Python and never calls
+// gflags::ParseCommandLineFlags, so RDMA options are configured from env vars
+// (consistent with the RECSTORE_RDMA_* convention used by the raw-verbs path).
+//   RECSTORE_BRPC_USE_RDMA=1        -> enable RDMA transport
+//   RECSTORE_BRPC_RDMA_DEVICE=mlx5_0 -> select the HCA (maps to brpc -rdma_device)
+bool ResolveBrpcUseRdmaFromEnv(bool fallback) {
+  const char* value = std::getenv("RECSTORE_BRPC_USE_RDMA");
+  if (value == nullptr || *value == '\0') {
+    return fallback;
+  }
+  return std::string(value) != "0";
+}
+
+void ApplyBrpcRdmaDeviceFromEnv() {
+  const char* dev = std::getenv("RECSTORE_BRPC_RDMA_DEVICE");
+  if (dev != nullptr && *dev != '\0') {
+    google::SetCommandLineOption("rdma_device", dev);
+  }
+}
+
+} // namespace
 
 // New constructor that takes JSON config
 BRPCParameterClient::BRPCParameterClient(json config)
@@ -111,13 +142,21 @@ BRPCParameterClient::BRPCParameterClient(json config)
   brpc::ChannelOptions options;
   options.timeout_ms = timeout_ms_;
   options.max_retry  = max_retry_;
+  bool use_rdma_enabled = ResolveBrpcUseRdmaFromEnv(
+      config.value("use_rdma", FLAGS_brpc_ps_use_rdma));
+  if (use_rdma_enabled) {
+    ApplyBrpcRdmaDeviceFromEnv();
+  }
+#if BRPC_WITH_RDMA
+  options.use_rdma = use_rdma_enabled;
+#endif
 
   std::string server_addr = fmt::format("{}:{}", host_, port_);
   if (channel_->Init(server_addr.c_str(), &options) != 0) {
     LOG(ERROR) << "Failed to initialize bRPC channel to " << server_addr;
   } else {
     LOG(INFO) << "Initialized bRPC PS Client Shard " << shard_ << " at "
-              << server_addr;
+              << server_addr << " (use_rdma=" << use_rdma_enabled << ")";
   }
 }
 
@@ -137,13 +176,20 @@ BRPCParameterClient::BRPCParameterClient(
   brpc::ChannelOptions options;
   options.timeout_ms = timeout_ms_;
   options.max_retry  = max_retry_;
+  bool use_rdma_enabled = ResolveBrpcUseRdmaFromEnv(FLAGS_brpc_ps_use_rdma);
+  if (use_rdma_enabled) {
+    ApplyBrpcRdmaDeviceFromEnv();
+  }
+#if BRPC_WITH_RDMA
+  options.use_rdma = use_rdma_enabled;
+#endif
 
   std::string server_addr = fmt::format("{}:{}", host, port);
   if (channel_->Init(server_addr.c_str(), &options) != 0) {
     LOG(ERROR) << "Failed to initialize bRPC channel to " << server_addr;
   } else {
     LOG(INFO) << "Initialized bRPC PS Client Shard " << shard_ << " at "
-              << server_addr;
+              << server_addr << " (use_rdma=" << use_rdma_enabled << ")";
   }
 }
 
@@ -162,8 +208,13 @@ int BRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
 
   int request_num =
       (keys.Size() + MAX_PARAMETER_BATCH_BRPC - 1) / MAX_PARAMETER_BATCH_BRPC;
-  std::vector<GetParameterRequest> requests(request_num);
-  std::vector<GetParameterResponse> responses(request_num);
+  google::protobuf::Arena arena;
+  std::vector<GetParameterRequest*> requests(request_num);
+  std::vector<GetParameterResponse*> responses(request_num);
+  for (int i = 0; i < request_num; ++i) {
+    requests[i] = google::protobuf::Arena::Create<GetParameterRequest>(&arena);
+    responses[i] = google::protobuf::Arena::Create<GetParameterResponse>(&arena);
+  }
   std::vector<brpc::Controller> controllers(request_num);
   std::vector<int> key_sizes;
 
@@ -187,7 +238,7 @@ int BRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
 
     google::protobuf::Closure* done = brpc::NewCallback([]() { /* no-op */ });
     stub.GetParameter(
-        &controllers[index], &requests[index], &responses[index], done);
+        &controllers[index], requests[index], responses[index], done);
   }
 
   // Wait for all RPCs to complete
@@ -242,11 +293,11 @@ int BRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
   std::string payload_storage;
 
   for (int i = 0; i < responses.size(); ++i) {
-    auto& response   = responses[i];
+    auto* response   = responses[i];
     int key_size     = key_sizes[i];
     int payload_size = 0;
     auto parameters  = ExtractGetResponseReader(
-        controllers[i], response, &payload_storage, &payload_size);
+        controllers[i], *response, &payload_storage, &payload_size);
 
     if (parameters == nullptr || !parameters->Valid(payload_size)) {
       LOG(ERROR) << "GetParameter invalid payload: " << payload_size;
@@ -373,8 +424,13 @@ int BRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
 
   int request_num =
       (keys.Size() + MAX_PARAMETER_BATCH_BRPC - 1) / MAX_PARAMETER_BATCH_BRPC;
-  std::vector<GetParameterRequest> requests(request_num);
-  std::vector<GetParameterResponse> responses(request_num);
+  google::protobuf::Arena arena;
+  std::vector<GetParameterRequest*> requests(request_num);
+  std::vector<GetParameterResponse*> responses(request_num);
+  for (int i = 0; i < request_num; ++i) {
+    requests[i] = google::protobuf::Arena::Create<GetParameterRequest>(&arena);
+    responses[i] = google::protobuf::Arena::Create<GetParameterResponse>(&arena);
+  }
   std::vector<brpc::Controller> controllers(request_num);
   std::vector<int> key_sizes;
 
@@ -397,7 +453,7 @@ int BRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
 
     google::protobuf::Closure* done = brpc::NewCallback([]() { /* no-op */ });
     stub.GetParameter(
-        &controllers[index], &requests[index], &responses[index], done);
+        &controllers[index], requests[index], responses[index], done);
   }
 
   // Wait for all RPCs to complete
@@ -450,11 +506,11 @@ int BRPCParameterClient::GetParameter(const base::ConstArray<uint64_t>& keys,
   // Parse responses
   std::string payload_storage;
   for (int i = 0; i < responses.size(); ++i) {
-    auto& response   = responses[i];
+    auto* response   = responses[i];
     int key_size     = key_sizes[i];
     int payload_size = 0;
     auto parameters  = ExtractGetResponseReader(
-        controllers[i], response, &payload_storage, &payload_size);
+        controllers[i], *response, &payload_storage, &payload_size);
 
     if (parameters == nullptr || !parameters->Valid(payload_size)) {
       LOG(ERROR) << "GetParameter(vector) invalid payload: " << payload_size;

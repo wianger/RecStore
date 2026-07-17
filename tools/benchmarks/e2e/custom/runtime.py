@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -84,11 +85,12 @@ def _rdma_client_process_count(clients: tuple[ClientSpec, ...]) -> int:
     return sum(max(int(client.nproc_per_node), 1) for client in clients)
 
 
-def _rdma_client_env(runner: Any) -> dict[str, str]:
+def _rdma_client_env(runner: Any, *, response_mode: str) -> dict[str, str]:
     env = {
         "RECSTORE_RDMA_RC_NAMESPACE": str(runner.rdma_namespace),
         "RECSTORE_RDMA_CONTROL_PLANE_HOST": str(runner.rdma_control_plane_host),
         "RECSTORE_RDMA_CONTROL_PLANE_PORT": str(runner.rdma_control_plane_port),
+        "RECSTORE_RDMA_GET_RESPONSE_MODE": response_mode,
     }
     if runner.rdma_control_plane_timeout_ms is not None:
         env["RECSTORE_RDMA_CONTROL_PLANE_TIMEOUT_MS"] = str(
@@ -163,7 +165,9 @@ def start_rdma_ps_cluster(
         rdma_slots_per_qp=1,
         rdma_server_coroutines_per_thread=1,
         rdma_server_get_workers=0,
-        rdma_profile_interval_ms=1000,
+        rdma_profile_interval_ms=int(
+            os.getenv("RECSTORE_E2E_RDMA_PROFILE_INTERVAL_MS", "1000")
+        ),
         server_command_wrapper=wrap_server_command if has_remote_server else None,
     )
     with log_path.open("w", encoding="utf-8") as f:
@@ -185,10 +189,63 @@ def stop_rdma_ps_cluster(runner: Any) -> None:
 
 
 def build_server_command(*, server: ServerSpec, runtime_config: Path, transport: str) -> list[str]:
-    cmd = [str(server.repo_root / "build/bin/ps_server"), "--config_path", str(runtime_config)]
     if transport.upper() == "BRPC":
-        cmd.extend(["--brpc_server_port", str(server.port)])
+        cmd = [
+            "env",
+            *(f"{key}={value}" for key, value in _brpc_rdma_env().items()),
+            str(server.repo_root / "build/bin/ps_server"),
+            "--config_path",
+            str(runtime_config),
+            "--brpc_server_port",
+            str(server.port),
+        ]
+    else:
+        cmd = [str(server.repo_root / "build/bin/ps_server"), "--config_path", str(runtime_config)]
     return _wrap_remote(cmd, ssh_host=server.ssh_host, ssh_port=server.ssh_port, cwd=server.repo_root)
+
+
+def _nccl_socket_ifnames() -> str:
+    # 192 uses enp3s0f0 for 10.0.2.192; 191 uses eno8303 for 10.0.2.191.
+    # NCCL/GLOO match by subnet, so listing both is safe on either host and
+    # avoids picking a docker/flannel interface (which crashed earlier runs
+    # with "socketFinalizeAccept: wrong type 4 != 3").
+    return "enp3s0f0,eno8303"
+
+
+def _recstore_nccl_env() -> dict[str, str]:
+    # Embedding traffic uses the RecStore PS transport; dense DDP uses NCCL-IB.
+    ifnames = _nccl_socket_ifnames()
+    return {
+        "NCCL_SOCKET_IFNAME": ifnames,
+        "GLOO_SOCKET_IFNAME": ifnames,
+        "NCCL_SOCKET_FAMILY": "AF_INET",
+        "NCCL_IB_DISABLE": "0",
+        "NCCL_IB_HCA": "mlx5_0",
+        "NCCL_DEBUG": "INFO",
+        "NCCL_DEBUG_SUBSYS": "NET",
+    }
+
+
+def _brpc_rdma_env() -> dict[str, str]:
+    # Patched RecStore brpc client/server read these to enable RDMA over mlx5_0.
+    return {
+        "RECSTORE_BRPC_USE_RDMA": "1",
+        "RECSTORE_BRPC_RDMA_DEVICE": "mlx5_0",
+    }
+
+
+def _torchrec_nccl_env() -> dict[str, str]:
+    # TorchRec's embedding all-reduce IS the traffic we want on the IB NIC.
+    ifnames = _nccl_socket_ifnames()
+    return {
+        "NCCL_SOCKET_IFNAME": ifnames,
+        "GLOO_SOCKET_IFNAME": ifnames,
+        "NCCL_SOCKET_FAMILY": "AF_INET",
+        "NCCL_IB_DISABLE": "0",
+        "NCCL_IB_HCA": "mlx5_0",
+        "NCCL_DEBUG": "INFO",
+        "NCCL_DEBUG_SUBSYS": "NET",
+    }
 
 
 def build_client_command(
@@ -202,9 +259,20 @@ def build_client_command(
 ) -> list[str]:
     first_server = sorted(cfg.servers, key=lambda item: item.shard_id)[0]
     env_prefix = ["env", f"CUDA_VISIBLE_DEVICES={_cuda_visible_devices(client)}"]
+    env_prefix.extend(f"{key}={value}" for key, value in _recstore_nccl_env().items())
+    if transport.upper() == "BRPC":
+        env_prefix.extend(f"{key}={value}" for key, value in _brpc_rdma_env().items())
     if transport.upper() == "RDMA" and rdma_runner is not None:
+        response_mode = (
+            "staging_copy"
+            if cfg.index_type == "DRAM_PET_HASH"
+            else "direct_sg"
+        )
         env_prefix.extend(
-            f"{key}={value}" for key, value in _rdma_client_env(rdma_runner).items()
+            f"{key}={value}"
+            for key, value in _rdma_client_env(
+                rdma_runner, response_mode=response_mode
+            ).items()
         )
     cmd = [
         *env_prefix,
@@ -277,6 +345,7 @@ def build_torchrec_command(
     cmd = [
         "env",
         f"CUDA_VISIBLE_DEVICES={_cuda_visible_devices(client)}",
+        *(f"{key}={value}" for key, value in _torchrec_nccl_env().items()),
         cfg.python_bin,
         str(client.repo_root / "model_zoo/rs_demo/run_mock_stress.py"),
         "--backend",

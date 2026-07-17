@@ -44,8 +44,6 @@ if(ENABLE_CUDA)
 endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "") # works
 
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/Modules)
-
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)
   set(RECSTORE_CUDA_INCLUDE_DIRS ${CUDA_INCLUDE_DIRS} ${CUDA_TOOLKIT_INCLUDE})
@@ -210,9 +208,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake")
 
 
 
-list(APPEND CMAKE_PREFIX_PATH "/home/xieminhui/.local/share/cmake/")
-list(APPEND CMAKE_PREFIX_PATH "/home/pod/.local/share/cmake/")
-
 list(APPEND CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/third_party/libtorch/libtorch/share/cmake/Torch")
 set(Torch_DIR "${PROJECT_SOURCE_DIR}/third_party/libtorch/libtorch/share/cmake/Torch")
 
@@ -236,7 +231,7 @@ add_subdirectory(third_party/fmt)
 add_library(jemalloc_compat STATIC
   ${PROJECT_SOURCE_DIR}/src/base/jemalloc_compat.cc
 )
-target_link_libraries(jemalloc_compat PUBLIC jemalloc)
+target_link_libraries(jemalloc_compat PUBLIC jemalloc ${CMAKE_DL_LIBS})
 
 if(EXISTS "${RECSTORE_FOLLY_INSTALL_DIR}/folly-config.cmake")
   find_package(folly REQUIRED)
@@ -279,6 +274,10 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/third_party/folly/_build
 )
 
+if(Boost_INCLUDE_DIR)
+  include_directories(${Boost_INCLUDE_DIR})
+endif()
+
 set(glog_DIR "${RECSTORE_GLOG_INSTALL_DIR}")
 if(EXISTS "${RECSTORE_GLOG_INSTALL_DIR}/glog-config.cmake")
   find_package(glog CONFIG REQUIRED)
@@ -286,6 +285,15 @@ elseif(EXISTS "${PROJECT_SOURCE_DIR}/third_party/glog/CMakeLists.txt")
   add_subdirectory(third_party/glog EXCLUDE_FROM_ALL)
 else()
   find_package(glog CONFIG REQUIRED)
+endif()
+
+if(TARGET glog::glog AND NOT TARGET glog)
+  add_library(glog ALIAS glog::glog)
+endif()
+if(TARGET gflags_shared AND NOT TARGET gflags)
+  add_library(gflags ALIAS gflags_shared)
+elseif(TARGET gflags::gflags AND NOT TARGET gflags)
+  add_library(gflags ALIAS gflags::gflags)
 endif()
 
 
@@ -303,7 +311,9 @@ add_subdirectory(third_party/json)
 # add_subdirectory(third_party/pybind11)
 # add_subdirectory(third_party/mimalloc)
 
-set(PYBIND11_CMAKE_DIR "/usr/local/lib/python3.10/dist-packages/pybind11/share/cmake/pybind11")
+if(NOT DEFINED PYBIND11_CMAKE_DIR)
+  set(PYBIND11_CMAKE_DIR "/usr/local/lib/python3.10/dist-packages/pybind11/share/cmake/pybind11")
+endif()
 list(APPEND CMAKE_PREFIX_PATH ${PYBIND11_CMAKE_DIR})
 find_package(pybind11 REQUIRED)
 

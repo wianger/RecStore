@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import pickle
+import re
 import subprocess
 import sys
 import time
@@ -20,9 +21,13 @@ from ..config import (
     validate_torchrec_config,
 )
 from ..runtime.hybrid_dlrm import (
+    build_criterion,
+    build_dense_module,
     build_hybrid_dense_arch,
+    compute_dense_loss,
     parse_layer_sizes,
     prepare_hybrid_dlrm_input,
+    rankmixer_task_names,
     reshape_torchrec_embeddings_for_dlrm,
     run_hybrid_backward,
     sync_device,
@@ -76,6 +81,18 @@ def _pick_socket_ifname() -> str | None:
         if name in available:
             return name
     return None
+
+
+def _parse_nccl_transport_log(log_path: Path | None) -> str:
+    if log_path is None or not log_path.exists():
+        return "unknown"
+    match = re.search(
+        r"NCCL INFO NET/(IB|Socket)\s*:\s*Using",
+        log_path.read_text(errors="replace"),
+    )
+    if not match:
+        return "unknown"
+    return "RDMA" if match.group(1) == "IB" else "TCP"
 
 
 def _debug_log_path(cfg: RunConfig, rank: int) -> Path:
@@ -282,6 +299,12 @@ def _build_uvm_caching_constraints(
     }
 
 
+def _zero_embedding_parameters(module, torch) -> None:
+    with torch.no_grad():
+        for param in module.parameters():
+            param.zero_()
+
+
 def _build_train_dataloader_for_mode(
     repo_root: Path,
     cfg: RunConfig,
@@ -371,8 +394,30 @@ def _run_single_or_dist_worker(
     else:
         device = torch.device("cpu")
     if (is_dist or use_uvm_caching) and not dist.is_initialized():
+        nccl_log_path = None
+        if backend == "nccl" and is_dist:
+            if "NCCL_DEBUG_FILE" in os.environ:
+                nccl_log_path = Path(os.environ["NCCL_DEBUG_FILE"])
+            else:
+                nccl_log_path = (
+                    Path(cfg.output_root)
+                    / "outputs"
+                    / cfg.run_id
+                    / f"torchrec_nccl_rank{rank}.log"
+                )
+                nccl_log_path.parent.mkdir(parents=True, exist_ok=True)
+                os.environ["NCCL_DEBUG_FILE"] = str(nccl_log_path)
+            os.environ.setdefault("NCCL_DEBUG", "INFO")
+            os.environ.setdefault("NCCL_DEBUG_SUBSYS", "NET")
         _append_worker_debug(cfg, rank, f"before_init_process_group device={device}")
         dist.init_process_group(backend=backend)
+        if backend == "nccl" and is_dist:
+            dist.barrier()
+            _append_worker_debug(
+                cfg,
+                rank,
+                f"nccl_transport={_parse_nccl_transport_log(nccl_log_path)}",
+            )
         _append_worker_debug(cfg, rank, "after_init_process_group")
 
     if is_dist:
@@ -476,7 +521,14 @@ def _run_single_or_dist_worker(
         collective_mode = "not_measured_single_process"
         collective_measured = 0
 
-    dense_module = build_hybrid_dense_arch(
+    if cfg.torchrec_align_recstore_init:
+        _zero_embedding_parameters(embedding_module, torch)
+        torch.manual_seed(cfg.seed)
+        _append_worker_debug(cfg, rank, "torchrec_align_recstore_init=1")
+
+    model_type = getattr(cfg, "model", "dlrm")
+    dense_module = build_dense_module(
+        model_type=model_type,
         torch=torch,
         dense_in_features=13,
         embedding_dim=cfg.embedding_dim,
@@ -484,6 +536,11 @@ def _run_single_or_dist_worker(
         dense_arch_layer_sizes=parse_layer_sizes(cfg.dense_arch_layer_sizes),
         over_arch_layer_sizes=parse_layer_sizes(cfg.over_arch_layer_sizes),
         device=device,
+        rankmixer_segment_dims=getattr(cfg, "rankmixer_segment_dims", None),
+        rankmixer_tokens_split_dim=getattr(cfg, "rankmixer_tokens_split_dim", 2400),
+        rankmixer_blocks=getattr(cfg, "rankmixer_blocks", 2),
+        rankmixer_gate_num=getattr(cfg, "rankmixer_gate_num", 6),
+        rankmixer_masked_dim=getattr(cfg, "rankmixer_masked_dim", 56),
     )
     dense_module = _maybe_wrap_dense_module_for_dist(
         dense_module=dense_module,
@@ -496,7 +553,12 @@ def _run_single_or_dist_worker(
     if use_dist and fair_remote_mode:
         _append_worker_debug(cfg, rank, "skip_dense_ddp_fair_remote")
 
-    criterion = nn.BCEWithLogitsLoss()
+    _dispatch_module = dense_module.module if isinstance(
+        dense_module, torch.nn.parallel.DistributedDataParallel) else dense_module
+    criterion = build_criterion(
+        getattr(_dispatch_module, "model_type", "dlrm"),
+        rankmixer_task_names(_dispatch_module),
+    )
     _append_worker_debug(cfg, rank, "after_criterion")
     _append_worker_debug(cfg, rank, "before_optimizer_init")
     dense_optimizer = torch.optim.SGD(dense_module.parameters(), lr=0.01)
@@ -599,9 +661,11 @@ def _run_single_or_dist_worker(
                 _append_worker_debug(cfg, rank, f"before_dense_fwd step={step}")
                 with stage_timer(row, "dense_fwd_ms"):
                     _sync_for_timing(torch, device, cfg, "stage")
-                    logits = dense_module(dense_features, embedded_sparse)
-                    loss = criterion(logits, labels)
+                    loss, logits = compute_dense_loss(
+                        model_type, dense_module, criterion,
+                        dense_features, embedded_sparse, labels)
                     _sync_for_timing(torch, device, cfg, "stage")
+                row["loss"] = float(loss.detach().float().cpu().item())
                 _append_worker_debug(cfg, rank, f"after_dense_fwd step={step}")
 
                 _append_worker_debug(cfg, rank, f"before_backward step={step}")
@@ -736,6 +800,8 @@ class TorchRecRunner(BenchmarkRunner):
             str(cfg.dense_arch_layer_sizes),
             "--over-arch-layer-sizes",
             str(cfg.over_arch_layer_sizes),
+            "--model",
+            str(cfg.model),
             "--seed",
             str(cfg.seed),
             "--data-dir",
@@ -758,6 +824,8 @@ class TorchRecRunner(BenchmarkRunner):
             str(cfg.torchrec_timing_sync_mode),
             "--no-start-server",
         ]
+        if cfg.torchrec_align_recstore_init:
+            cmd.append("--torchrec-align-recstore-init")
         if cfg.num_embeddings_per_feature:
             cmd.extend(
                 [
@@ -775,6 +843,21 @@ class TorchRecRunner(BenchmarkRunner):
                     str(cfg.torchrec_profiler_active),
                     "--torchrec-profiler-repeat",
                     str(cfg.torchrec_profiler_repeat),
+                ]
+            )
+        if cfg.model == "rankmixer":
+            cmd.extend(
+                [
+                    "--rankmixer-tokens-split-dim",
+                    str(cfg.rankmixer_tokens_split_dim),
+                    "--rankmixer-blocks",
+                    str(cfg.rankmixer_blocks),
+                    "--rankmixer-gate-num",
+                    str(cfg.rankmixer_gate_num),
+                    "--rankmixer-masked-dim",
+                    str(cfg.rankmixer_masked_dim),
+                    "--rankmixer-segment-dims",
+                    str(cfg.rankmixer_segment_dims),
                 ]
             )
         return cmd
@@ -804,9 +887,6 @@ class TorchRecRunner(BenchmarkRunner):
         if socket_ifname:
             env.setdefault("NCCL_SOCKET_IFNAME", socket_ifname)
             env.setdefault("GLOO_SOCKET_IFNAME", socket_ifname)
-        env.setdefault("NCCL_IB_DISABLE", "1")
-        env.setdefault("NCCL_SOCKET_FAMILY", "AF_INET")
-        env.setdefault("NCCL_DEBUG", "WARN")
         res = subprocess.run(
             cmd,
             cwd=str(repo_root),

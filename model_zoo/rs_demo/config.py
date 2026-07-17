@@ -125,6 +125,14 @@ class RunConfig:
     fuse_k: int = 30
     dense_arch_layer_sizes: str = "512,256,128"
     over_arch_layer_sizes: str = "1024,1024,512,256,1"
+    # Dense compute model: "dlrm" (default DLRM interaction) or "rankmixer"
+    # (ported RankMixer blocks: MaskBlock + LT + TokenMixer/PFFN + PLE).
+    model: str = "dlrm"
+    rankmixer_tokens_split_dim: int = 2400
+    rankmixer_blocks: int = 2
+    rankmixer_gate_num: int = 6
+    rankmixer_masked_dim: int = 56
+    rankmixer_segment_dims: str = ""
     backend: str = "recstore"
     nproc: int = 1
     nnodes: int = 1
@@ -136,6 +144,9 @@ class RunConfig:
     enable_gpu_cache: bool = False
     gpu_cache_capacity: int = 0
     disable_gpu_cache_lookup_bypass: bool = False
+    enable_bagpipe_cache: bool = False
+    bagpipe_lookahead: int = 0
+    bagpipe_cleanup_proportion: float = 0.25
     master_addr: str = "127.0.0.1"
     master_port: int = 29500
     rdzv_backend: str = "c10d"
@@ -148,6 +159,7 @@ class RunConfig:
     torchrec_dist_mode: str = "replicated"
     torchrec_memory_mode: str = "hbm"
     torchrec_timing_sync_mode: str = "stage"
+    torchrec_align_recstore_init: bool = False
     torchrec_profiler_warmup: int = 0
     torchrec_profiler_active: int = 2
     torchrec_profiler_repeat: int = 1
@@ -219,6 +231,28 @@ def build_parser() -> argparse.ArgumentParser:
             "Keep querying the RecStore GPU cache for large low-hit lookups. "
             "Useful for planned/lookahead cache experiments."
         ),
+    )
+    parser.add_argument(
+        "--enable-bagpipe-cache",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable BagPipe-style GPU cache with TTL-based eviction, "
+            "oracle lookahead prefetch, and sync_now/sync_later gradient "
+            "split. Requires --enable-gpu-cache."
+        ),
+    )
+    parser.add_argument(
+        "--bagpipe-lookahead",
+        type=int,
+        default=0,
+        help="Number of future batches to analyze for oracle cache decisions.",
+    )
+    parser.add_argument(
+        "--bagpipe-cleanup-proportion",
+        type=float,
+        default=0.25,
+        help="Proportion of lookahead batches at which to evict and write back.",
     )
     parser.add_argument("--master-addr", type=str, default="127.0.0.1")
     parser.add_argument("--master-port", type=int, default=29500)
@@ -342,6 +376,35 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         default="1024,1024,512,256,1",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="dlrm",
+        choices=["dlrm", "rankmixer"],
+        help="Dense compute model. 'rankmixer' uses the ported RankMixer "
+             "blocks (MaskBlock + LT + TokenMixer/PFFN + PLE) instead of DLRM.",
+    )
+    parser.add_argument(
+        "--rankmixer-tokens-split-dim", type=int, default=2400,
+        help="RankMixer LT projection output dim (token dim). Production: 2400.",
+    )
+    parser.add_argument(
+        "--rankmixer-blocks", type=int, default=2,
+        help="Number of TokenMixer+PFFN blocks. Production: 2.",
+    )
+    parser.add_argument(
+        "--rankmixer-gate-num", type=int, default=6,
+        help="PLE expert (gate) count = 1 base + task groups. Production: 6.",
+    )
+    parser.add_argument(
+        "--rankmixer-masked-dim", type=int, default=56,
+        help="Mask feature dim for PLE/MMoE gate. Production: 4*(6+8)=56.",
+    )
+    parser.add_argument(
+        "--rankmixer-segment-dims", type=str, default="",
+        help="Comma-separated per-segment deep-input dims. Empty = auto-partition "
+             "num_sparse_features*embedding_dim into 5 segments.",
+    )
     parser.add_argument("--torchrec-profiler", action="store_true", default=False)
     parser.add_argument(
         "--torchrec-dist-mode",
@@ -362,6 +425,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="stage",
         choices=["stage", "step", "none"],
         help="TorchRec CUDA synchronization policy for benchmark timing. stage synchronizes inside each measured stage; step synchronizes only at step boundaries; none avoids explicit timing synchronizes.",
+    )
+    parser.add_argument(
+        "--torchrec-align-recstore-init",
+        action="store_true",
+        default=False,
+        help=(
+            "Validation mode: zero TorchRec embeddings and reset dense-module RNG "
+            "to match RecStore's zero-initialized PS path."
+        ),
     )
     parser.add_argument("--torchrec-profiler-warmup", type=int, default=0)
     parser.add_argument("--torchrec-profiler-active", type=int, default=2)
@@ -508,6 +580,22 @@ def validate_recstore_config(cfg: RunConfig) -> None:
         raise RuntimeError("--prefetch-depth must be non-negative")
     if cfg.prefetch_issue_depth < 0:
         raise RuntimeError("--prefetch-issue-depth must be non-negative")
+    if cfg.enable_bagpipe_cache:
+        if not cfg.enable_gpu_cache:
+            raise RuntimeError(
+                "--enable-bagpipe-cache requires --enable-gpu-cache"
+            )
+        # BagPipe relies on the GPU cache being queried on every forward;
+        # disable the low-hit bypass so the prefilled cache is not cleared.
+        cfg.disable_gpu_cache_lookup_bypass = True
+        if cfg.bagpipe_lookahead <= 0:
+            raise RuntimeError(
+                "--bagpipe-lookahead must be positive when --enable-bagpipe-cache is set"
+            )
+        if cfg.bagpipe_cleanup_proportion <= 0 or cfg.bagpipe_cleanup_proportion > 1:
+            raise RuntimeError(
+                "--bagpipe-cleanup-proportion must be within (0, 1]"
+            )
     if cfg.tiered_dram_capacity_multiplier < 0:
         raise RuntimeError("--tiered-dram-capacity-multiplier must be non-negative")
     if cfg.enable_single_node_distributed_fast_path:

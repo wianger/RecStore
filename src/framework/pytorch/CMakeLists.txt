@@ -11,6 +11,7 @@ add_library(recstore_torch_ops SHARED
     ../../ps/client_factory.cc
     ${PROJECT_SOURCE_DIR}/src/ps/rdma/rc_options.cc
     ${PROJECT_SOURCE_DIR}/src/ps/rdma/rdma_ps_client_adapter.cc
+    boost_regex_cxx11_inst.cc
 )
 
 target_compile_definitions(recstore_torch_ops PRIVATE _GLIBCXX_USE_CXX11_ABI=1)
