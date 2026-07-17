@@ -154,6 +154,13 @@ class BagPipeCacheController:
         self._sync_later_grads_buf: Optional[torch.Tensor] = None
         # Whether this is the first step (skip waiting for prior sync_later)
         self._first_update = True
+        # ---- Pending sync_now work (opt 11): sync_now all_reduce is launched
+        # async in update_grads and waited in the next step's prefill_cache,
+        # overlapping the all_reduce with prefetch fill, mirroring BagPipe
+        # bagcache.py cache_sync: fut=all_reduce(async) -> prefetch_signal.get
+        # -> fut.wait(). ----
+        self._pending_sync_now_work = None
+        self._pending_sync_now_ids = None
 
         # ---- no_sync: local-only IDs that don't need cross-GPU all_reduce ----
         # Set of fused_ids that appear on >1 rank (shared IDs needing all_reduce)
@@ -201,6 +208,8 @@ class BagPipeCacheController:
             "bagpipe_prefetch_ids": 0.0,
             "bagpipe_prefetch_skip_cached": 0.0,
             "bagpipe_prefetch_pruned": 0.0,
+            "bagpipe_prefetch_local_nosync_kept": 0.0,
+            "bagpipe_sync_now_overlap_ms": 0.0,
             "bagpipe_sync_now_ids": 0.0,
             "bagpipe_sync_later_ids": 0.0,
             "bagpipe_evicted_ids": 0.0,
@@ -351,6 +360,45 @@ class BagPipeCacheController:
     #  Consume (called when a batch is about to be used)
     # ------------------------------------------------------------------
 
+    def _wait_pending_sync_now(self) -> None:
+        """Wait for the previous step's sync_now all_reduce and push to PS.
+
+        Called at the start of prefill_cache so the all_reduce overlaps with
+        the gap between update_grads (end of prev step) and prefill_cache
+        (start of current step), and the wait itself overlaps with the
+        prefetch fill that follows.  Mirrors BagPipe bagcache.py cache_sync:
+        ``fut = all_reduce(async)`` ... ``prefetch_completed_signal.get()``
+        ... ``fut.wait()``.
+        """
+        work = self._pending_sync_now_work
+        if work is None:
+            return
+        self._pending_sync_now_work = None
+        now_ids_list = self._pending_sync_now_ids or []
+        self._pending_sync_now_ids = None
+
+        t_start = time.perf_counter()
+        if work is not None:
+            work.wait()
+            agg_ids, agg_grads = work.result
+        else:
+            return
+        # PS push (rank-0) / invalidate (non-rank-0)
+        if not self._is_distributed() or self._get_rank() == 0:
+            try:
+                self.kv_client.update(self.master_table_name, agg_ids, agg_grads)
+            except Exception as exc:
+                logger.warning("[BagPipe] sync_now deferred push failed: %s", exc)
+        if self._is_distributed() and self._get_rank() != 0:
+            try:
+                self.kv_client.invalidate_gpu_cache(self.master_table_name, agg_ids)
+            except Exception as exc:
+                logger.warning("[BagPipe] sync_now deferred invalidate failed: %s", exc)
+        for fid in now_ids_list:
+            self.cache_entries.pop(fid, None)
+            self.sync_later_grads.pop(fid, None)
+        self._stats["bagpipe_sync_now_overlap_ms"] += (time.perf_counter() - t_start) * 1e3
+
     def prefill_cache(
         self,
         sparse_features: Any,
@@ -358,11 +406,15 @@ class BagPipeCacheController:
     ) -> None:
         """Issue smart prefetch + fill GPU cache with TTL tracking.
 
-        Called at consumption time (replaces ``attach_next``).  Only prefetches
-        IDs that are not cached or have expired TTL, then fills the GPU cache
-        and records TTL for each newly cached entry.
+        Called at consumption time (replaces ``attach_next``).  First waits
+        for the previous step's sync_now all_reduce (opt 11: overlaps with
+        the gap between steps and the subsequent prefetch fill), then only
+        prefetches IDs that are not cached or have expired TTL, fills the
+        GPU cache and records TTL for each newly cached entry.
         """
         t_start = time.perf_counter()
+        # Wait for previous step's sync_now all_reduce (opt 11 overlap)
+        self._wait_pending_sync_now()
 
         # Pop the oldest entry from the lookahead buffer
         if not self._lookahead_ids:
@@ -411,36 +463,52 @@ class BagPipeCacheController:
     def _issue_batched_prefetch(self) -> None:
         """Issue a single batched prefetch for accumulated IDs.
 
-        Prefetch pruning: skip IDs that are no_sync (local-only, not shared
-        across ranks).  These IDs don't need cross-GPU sync, so prefetching
-        them for sync purposes is wasteful.  They are still fetched on-demand
-        during lookup if not in cache.
+        Prefetch pruning: no_sync (local-only) IDs are pruned from the
+        prefetch list.  In the original BagPipe, the OracleCacher
+        distinguishes ``local_no_sync`` (needed by this rank, kept) from
+        ``others_no_sync`` (needed by a different rank, pruned).
+
+        In RecStore, each rank builds its own prefetch list from its own
+        batches, so all no_sync IDs would be local_no_sync.  However, with
+        a large GPU cache (capacity >> working set), these no_sync IDs are
+        fetched on-demand during lookup with 100% hit rate after the first
+        access, so pruning them avoids eviction/writeback overhead without
+        measurable cache-miss penalty.  When cache_capacity is close to the
+        working set, this pruning should be disabled to avoid misses.
         """
         if not self._batched_prefetch_ids:
             self._batched_count = 0
             return
 
-        # Prefetch pruning: remove no_sync (local-only) IDs from prefetch list
-        # if the shared ID set has been built.  In the original BagPipe, this
-        # is done via others_no_sync pruning in fill_prefetch_cache.
+        # Prune no_sync IDs unless the cache is small enough that misses
+        # would be costly (pressure > 50% means we should keep them).
         shared = self._shared_ids
         if shared is not None:
-            pruned_ids = set()
-            pruned_ttl = {}
-            skipped = 0
-            for fid in self._batched_prefetch_ids:
-                if fid in shared:
-                    pruned_ids.add(fid)
-                    pruned_ttl[fid] = self._batched_prefetch_ttl.get(fid, 0)
-                else:
-                    skipped += 1
-            self._stats["bagpipe_prefetch_pruned"] = self._stats.get("bagpipe_prefetch_pruned", 0.0) + float(skipped)
-            self._batched_prefetch_ids = pruned_ids
-            self._batched_prefetch_ttl = pruned_ttl
+            pressure = len(self.cache_entries) / self.cache_capacity if self.cache_capacity > 0 else 0.0
+            keep_local_nosync = pressure > 0.50
+            if keep_local_nosync:
+                # Keep all IDs (including local_no_sync) to avoid cache misses
+                self._stats["bagpipe_prefetch_local_nosync_kept"] = \
+                    self._stats.get("bagpipe_prefetch_local_nosync_kept", 0.0) + \
+                    float(sum(1 for fid in self._batched_prefetch_ids if fid not in shared))
+            else:
+                # Prune no_sync IDs (safe with large cache, avoids eviction overhead)
+                pruned_ids = set()
+                pruned_ttl = {}
+                skipped = 0
+                for fid in self._batched_prefetch_ids:
+                    if fid in shared:
+                        pruned_ids.add(fid)
+                        pruned_ttl[fid] = self._batched_prefetch_ttl.get(fid, 0)
+                    else:
+                        skipped += 1
+                self._stats["bagpipe_prefetch_pruned"] = self._stats.get("bagpipe_prefetch_pruned", 0.0) + float(skipped)
+                self._batched_prefetch_ids = pruned_ids
+                self._batched_prefetch_ttl = pruned_ttl
 
-            if not self._batched_prefetch_ids:
-                self._batched_count = 0
-                return
+                if not self._batched_prefetch_ids:
+                    self._batched_count = 0
+                    return
 
         ids_cpu = torch.tensor(
             sorted(self._batched_prefetch_ids), dtype=torch.int64
@@ -1034,7 +1102,10 @@ class BagPipeCacheController:
                     if entry is not None:
                         entry.dirty = True
 
-        # ---- sync_now: dense async all_reduce, then rank-0 push ----
+        # ---- sync_now: dense async all_reduce, deferred wait (opt 11) ----
+        # Mirrors BagPipe bagcache.py cache_sync: launch all_reduce async,
+        # then wait in the NEXT step's prefill_cache (overlapping with
+        # prefetch fill).  The PS push happens after the wait.
         if sync_now_count > 0:
             now_indices = torch.tensor(sync_now_grads_indices, dtype=torch.long,
                                         device=self.device)
@@ -1047,24 +1118,12 @@ class BagPipeCacheController:
                     if fid in self.sync_later_grads:
                         now_grads[j] += self.sync_later_grads[fid].to(self.device)
             _, _, work = self._dense_all_reduce_async(now_ids, now_grads)
-            if work is not None:
-                work.wait()  # sync_now must complete before PS push
-                agg_ids, agg_grads = work.result
-            else:
-                agg_ids, agg_grads = now_ids, now_grads
-            if not self._is_distributed() or self._get_rank() == 0:
-                try:
-                    self.kv_client.update(self.master_table_name, agg_ids, agg_grads)
-                except Exception as exc:
-                    logger.warning("[BagPipe] sync_now push failed: %s", exc)
-            if self._is_distributed() and self._get_rank() != 0:
-                try:
-                    self.kv_client.invalidate_gpu_cache(self.master_table_name, agg_ids)
-                except Exception as exc:
-                    logger.warning("[BagPipe] sync_now invalidate failed: %s", exc)
-            for fid in now_ids.tolist():
-                self.cache_entries.pop(fid, None)
-                self.sync_later_grads.pop(fid, None)
+            # Store pending work to be waited in next prefill_cache (opt 11)
+            self._pending_sync_now_work = work
+            self._pending_sync_now_ids = now_ids.tolist()
+        else:
+            self._pending_sync_now_work = None
+            self._pending_sync_now_ids = None
 
         # ---- sync_later: launch async all_reduce on dedicated stream ----
         # This overlaps with the NEXT step's forward+backward.
@@ -1356,6 +1415,11 @@ class BagPipeCacheController:
 
     def shutdown(self) -> None:
         """Signal the background thread to exit and flush pending work."""
+        # Flush pending sync_now (opt 11) before shutting down
+        try:
+            self._wait_pending_sync_now()
+        except Exception:
+            pass
         # Flush any pending async sync_later before shutting down
         try:
             self._wait_prev_sync_later()
