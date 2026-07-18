@@ -148,7 +148,7 @@ def run_custom_benchmark(cfg: BenchmarkConfig, transports: tuple[str, ...], *, d
 
     if not cfg.skip_build and not dry_run:
         _checked_run(["cmake", "-S", ".", "-B", "build"], cwd=ROOT)
-        build_targets = ["ps_server"]
+        build_targets = ["ps_server", "recstore_torch_ops"]
         if any(transport.upper() == "RDMA" for transport in transports):
             build_targets.append("petps_server")
         _checked_run(["cmake", "--build", "build", "--target", *build_targets, "-j"], cwd=ROOT)

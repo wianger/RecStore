@@ -118,6 +118,17 @@ if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
     ${PROJECT_SOURCE_DIR}/third_party/HugeCTR/third_party/redis_pp/src
     ${RECSTORE_CUDA_INCLUDE_DIRS}
   )
+  # grpc-install is on CMAKE_PREFIX_PATH and ships OpenSSL 1.x static libs, while
+  # /usr/include is OpenSSL 3.x. rdkafka/hiredis then compile against 3.x headers but
+  # propagate the 1.x libs — final links miss OSSL_*. Pin system OpenSSL like brpc.
+  if(NOT SYSTEM_OPENSSL_SSL_LIB)
+    find_library(SYSTEM_OPENSSL_SSL_LIB NAMES ssl
+      PATHS /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib NO_DEFAULT_PATH)
+  endif()
+  if(NOT SYSTEM_OPENSSL_CRYPTO_LIB)
+    find_library(SYSTEM_OPENSSL_CRYPTO_LIB NAMES crypto
+      PATHS /usr/lib/x86_64-linux-gnu /usr/lib64 /usr/lib NO_DEFAULT_PATH)
+  endif()
   target_link_libraries(hps_native_support PUBLIC
     pthread
     base
@@ -125,6 +136,8 @@ if(RECSTORE_HUGECTR_CUDA_HEADERS_AVAILABLE)
     rocksdb-shared
     redis++
     rdkafka
+    ${SYSTEM_OPENSSL_SSL_LIB}
+    ${SYSTEM_OPENSSL_CRYPTO_LIB}
     ${CUDA_CUDART_LIBRARY}
     OpenMP::OpenMP_CXX
   )
