@@ -21,9 +21,12 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
    - read mode (default = `get`; use `batch_get_flat` when aligning with PS RDMA GET)
    - batch keys (default = `500` for `batch_get_flat`)
 3. Run:
-   - `cmake -S . -B build`
+   - Always compile in Release mode for KVEngine benchmarks. The compare
+     script expects `build/bin/benchmark_kv_engine`, so configure Release into
+     `build`:
+     `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
    - `cmake --build build --target test_kvengine -j`
-   - `ctest -R '^test_kvengine$' -VV`
+   - `ctest --test-dir build -R '^test_kvengine$' -VV`
    - `cmake --build build --target benchmark_kv_engine -j`
    - `tools/benchmarks/run_kvengine_compare.py`
 4. Save logs and CSV/SVG artifacts under the chosen result directory.
@@ -37,9 +40,9 @@ Use this skill from a RecStore checkout. Do not run helper scripts from this ski
 Ask the user for `threads`, `ssd_root`, and `output_dir`. Use defaults only when the user accepts them.
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target test_kvengine -j
-ctest -R '^test_kvengine$' -VV
+ctest --test-dir build -R '^test_kvengine$' -VV
 cmake --build build --target benchmark_kv_engine -j
 ```
 
@@ -81,7 +84,7 @@ python3 tools/benchmarks/run_kvengine_compare.py \
 
 ## Summary Format
 
-Generate `<output_dir>/summary.md` from `kvengine_workload_summary.csv` after YCSB finishes. Keep only these three sections:
+Generate `<output_dir>/summary.md` from `kvengine_workload_summary.csv` after YCSB finishes. The first two lines of `summary.md` must be the current git commit hash and hostname from the RecStore checkout / host used for the run (`git rev-parse HEAD` on line 1, `hostname` on line 2), then a blank line, then the report body. Keep only these three sections after that header:
 
 1. `Workload 说明`
 2. `Run 吞吐（ops/s，...）`

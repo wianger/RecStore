@@ -69,13 +69,14 @@ skill directory; call project scripts directly.
        `--read-mode prefetch --prefetch-depth N` with `N > 0`, fused path
        enabled.
 5. Run:
-   - `cmake -S . -B build`
-   - `cmake --build build --target ps_server -j`
+   - Always compile in Release mode for E2E benchmarks:
+     `cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release`
+   - `cmake --build build_release --target ps_server -j`
    - run the correctness tests relevant to the requested PS backend. For BRPC,
-     use `ctest -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`;
+     use `ctest --test-dir build_release -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure`;
      for GRPC, LOCAL_SHM/SHM, RDMA, or other PS types, use the corresponding
      targeted tests before E2E.
-   - start one `ps_server` per PS entry
+   - start one `ps_server` per PS entry from `build_release`
    - run `model_zoo/rs_demo/run_mock_stress.py` for each RecStore E2E client
    - run matched TorchRec-HBM client commands with the same workload
    - for multi-host runs, verify the runner files and CLI options are present
@@ -98,10 +99,10 @@ Ask the user for P0 inputs only: `client_list`, `ps_server_list`, and
 overrides them.
 
 ```bash
-cmake -S . -B build
-cmake --build build --target ps_server -j
+cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release
+cmake --build build_release --target ps_server -j
 # Example for BRPC. Replace with the targeted tests for the requested PS type.
-ctest -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure
+ctest --test-dir build_release -R 'brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure
 ```
 
 Create `<runtime_dir>/recstore_config.json` with the requested PS type and
@@ -138,7 +139,7 @@ Start each PS server from its configured host:
 
 ```bash
 cd <server_repo>
-build/bin/ps_server --config_path <runtime_dir>/recstore_config.json
+build_release/bin/ps_server --config_path <runtime_dir>/recstore_config.json
 ```
 
 Run one training command per client entry:
@@ -239,7 +240,10 @@ output: <output_dir>
 
 Generate `<output_dir>/summary.md` from `recstore_main.csv`,
 `recstore_main_agg.csv`, or the matrix runner's `summary_e2e.csv` after the E2E
-benchmark finishes. Keep only these three sections:
+benchmark finishes. The first two lines of `summary.md` must be the current
+git commit hash and hostname from the RecStore checkout / host used for the
+run (`git rev-parse HEAD` on line 1, `hostname` on line 2), then a blank line,
+then the report body. Keep only these three sections after that header:
 
 1. `Workload 说明`
 2. `E2E 吞吐（samples/s，...）`

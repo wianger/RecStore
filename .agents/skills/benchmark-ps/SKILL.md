@@ -28,9 +28,10 @@ directory; call project scripts directly.
    - workload size profile: `smoke`, `rpc-small`, `rdma-capacity`, or custom
    - client processes per IP, client threads per process, server RDMA threads,
      runtime seconds, and repeat count
-3. Build the benchmark targets before running CTest or benchmarks:
-   - debug/smoke: `cmake -S . -B build`
-   - throughput: `cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release`
+3. Always compile in Release mode for PS benchmarks that feed `summary.md`:
+   `cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release`.
+   Optional Debug smoke-only builds may use `cmake -S . -B build`, but do not
+   report Debug/O0 numbers as throughput results.
 4. Validate the runner and relevant tests before non-trivial benchmark work.
 5. Generate one command per compatible transport group. Split RDMA and RPC when
    their safe concurrency settings differ.
@@ -50,7 +51,7 @@ for a quick bring-up.
 | runner backend | `--execution-backend local` | `--execution-backend ssh` |
 | server topology | `--server-shard-ips 127.0.0.1` | RDMA uses `--server-plan 0:<server_ssh>:25000:0`; single-shard GRPC/BRPC uses `--server-plan 0:<server_ssh>:15000:0` |
 | client topology | `--client-ips 127.0.0.1` | repeated `--client-plan` entries |
-| build dir | `build` for smoke, `build_release` for throughput | local and remote `build_release` |
+| build dir | `build_release` (Release) for benchmarks; optional `build` for smoke-only | local and remote `build_release` |
 | remote sync | none | `--remote-sync check` |
 | remote repo | none | `/app/RecStore` |
 | remote container | none | `recstore` |
@@ -126,20 +127,14 @@ For every cross-host RDMA run, choose a unique `--rdma-control-plane-port`.
 
 ## Preflight Commands
 
-Build and runner validation:
-
-```bash
-cmake -S . -B build
-cmake --build build --target ps_transport_benchmark ps_server petps_server -j
-python3 -m unittest src/test/scripts/test_run_benchmark_ps.py
-ctest --test-dir build -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_transport_benchmark|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure
-```
-
-Release build for throughput:
+Release build (required for throughput / `summary.md` runs) and runner
+validation:
 
 ```bash
 cmake -S . -B build_release -DCMAKE_BUILD_TYPE=Release
-cmake --build build_release --target ps_transport_benchmark petps_server -j
+cmake --build build_release --target ps_transport_benchmark ps_server petps_server -j
+python3 -m unittest src/test/scripts/test_run_benchmark_ps.py
+ctest --test-dir build_release -R 'grpc_ps_client_test|dist_grpc_ps_client_test|brpc_ps_client_test|dist_brpc_ps_client_test|test_ps_transport_benchmark|test_ps_server_launcher|test_ps_client_factory|test_allshards_ps_client' --output-on-failure
 ```
 
 RDMA verbs check:
@@ -475,7 +470,11 @@ scan. It does not by itself prove clients are slow.
 
 ## Summary Format
 
-Write `<output_dir>/summary.md` in Chinese after the benchmark finishes. Include:
+Write `<output_dir>/summary.md` in Chinese after the benchmark finishes. The
+first two lines of `summary.md` must be the current git commit hash and
+hostname from the RecStore checkout / host used for the run (`git rev-parse
+HEAD` on line 1, `hostname` on line 2), then a blank line, then the report
+body. Include:
 
 1. `配置说明`: mode, transports, endpoint IPs, role mapping, backend, build
    directory/build type, remote repo/container when used, output directory
