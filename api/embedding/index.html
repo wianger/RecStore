@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -2106,9 +2106,31 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../performance/reports/" class="md-nav__link">
+    
+    
+      
         
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -2122,7 +2144,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    性能报告
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    总览
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/tiered-e2e/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    混合存储（DRAM+SSD）
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2385,9 +2479,10 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
+    <nav class="md-nav" aria-label="RecStoreEmbeddingBagCollection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#distembedding" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2395,6 +2490,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2724,9 +2824,10 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
+    <nav class="md-nav" aria-label="RecStoreEmbeddingBagCollection">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#distembedding" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2734,6 +2835,11 @@
       
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2763,29 +2869,8 @@
 
 
 <h1 id="embedding">Embedding 模块<a class="headerlink" href="#embedding" title="Permanent link">&para;</a></h1>
-<p>计算层的主入口是 <code>RecStoreEmbeddingBagCollection</code>。<code>DistEmbedding</code> 是单表封装，适合简单实验和兼容旧训练代码；它的更新路径和 EBC 不一样。</p>
-<table>
-<thead>
-<tr>
-<th>模块</th>
-<th>文件</th>
-<th>使用场景</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>RecStoreEmbeddingBagCollection</code></td>
-<td><code>src/python/pytorch/torchrec_kv/EmbeddingBag.py</code></td>
-<td>TorchRec 风格多表、多特征模型。当前模型接入优先看它。</td>
-</tr>
-<tr>
-<td><code>DistEmbedding</code></td>
-<td><code>src/python/pytorch/recstore/DistEmb.py</code></td>
-<td>单个 embedding table。通过 <code>DistTensor</code> 读写，optimizer 在 Python 侧做 SGD 写回。</td>
-</tr>
-</tbody>
-</table>
-<h3 id="recstoreembeddingbagcollection">RecStoreEmbeddingBagCollection<a class="headerlink" href="#recstoreembeddingbagcollection" title="Permanent link">&para;</a></h3>
+<p>模块划分与选择（<code>RecStoreEmbeddingBagCollection</code> vs <code>DistEmbedding</code>）见 <a href="../../calc/embedding_optimizer/">计算层：Embedding 与 Optimizer</a>。本文只列 Python API。</p>
+<h2 id="recstoreembeddingbagcollection">RecStoreEmbeddingBagCollection<a class="headerlink" href="#recstoreembeddingbagcollection" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">module</span> <span class="o">=</span> <span class="n">RecStoreEmbeddingBagCollection</span><span class="p">(</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">embedding_bag_configs</span><span class="o">=</span><span class="n">configs</span><span class="p">,</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
@@ -2919,7 +3004,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.indexes", "navigation.footer", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.action.edit"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

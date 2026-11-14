@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -2120,9 +2120,31 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../performance/reports/" class="md-nav__link">
+    
+    
+      
         
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -2136,7 +2158,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    性能报告
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    总览
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/tiered-e2e/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    混合存储（DRAM+SSD）
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2709,10 +2803,49 @@
 <h2 id="_2">开发入门<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h2>
 <p>环境准备见 <a href="zero_config_run/">Docker 开发镜像</a>与<a href="../quickstart/">从源码构建</a>，测试入口见<a href="testing/">测试概览</a>。</p>
 <h2 id="_3">代码地图<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
-<div class="admonition note">
-<p class="admonition-title">待补充</p>
-<p>整理主要代码目录与开发入口。</p>
-</div>
+<table>
+<thead>
+<tr>
+<th>目录</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/framework/</code></td>
+<td><code>CommonOp</code> / <code>KVClientOp</code> 与 PyTorch binding（<code>pytorch/</code>）</td>
+</tr>
+<tr>
+<td><code>src/ps/</code></td>
+<td>参数服务器：<code>base/</code>、<code>grpc/</code>、<code>brpc/</code>、<code>rdma/</code>、<code>proto/</code></td>
+</tr>
+<tr>
+<td><code>src/storage/</code></td>
+<td>KVEngine、index、value store、allocator、IO backend</td>
+</tr>
+<tr>
+<td><code>src/memory/</code></td>
+<td>持久化与并发 slab allocator</td>
+</tr>
+<tr>
+<td><code>src/python/</code></td>
+<td>Python 客户端与 TorchRec 兼容层</td>
+</tr>
+<tr>
+<td><code>src/test/</code></td>
+<td>单测、集成测试与测试脚本</td>
+</tr>
+<tr>
+<td><code>tools/benchmarks/</code></td>
+<td>storage-only / PS / E2E 基准 runner</td>
+</tr>
+<tr>
+<td><code>model_zoo/</code></td>
+<td>DLRM 与 rs_demo 示例</td>
+</tr>
+</tbody>
+</table>
+<p>修改前先看<a href="testing/">测试概览</a>，文档约定见<a href="documentation/">文档维护</a>。</p>
 
 
 
@@ -2827,7 +2960,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.indexes", "navigation.footer", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.action.edit"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

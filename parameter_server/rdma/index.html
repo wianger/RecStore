@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -2404,9 +2404,31 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../performance/reports/" class="md-nav__link">
+    
+    
+      
         
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -2420,7 +2442,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    性能报告
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    总览
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/tiered-e2e/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    混合存储（DRAM+SSD）
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3195,7 +3289,7 @@
 <code>rs-benchmark-ps</code> skill；不要在本页复制测试命令或临时性能数字。
 面向真实跨机部署的配置、IB/RoCE v1/RoCE v2 选择和改造边界，以代码中的
 <code>ResolvedRdmaDeployment</code> 配置契约和本页的稳定架构说明为准。</p>
-<p>默认工作目录为仓库根目录：</p>
+<p>默认工作目录为仓库根目录，本文命令按容器内的固定路径书写；在宿主机上跑时把 <code>/app/RecStore</code> 换成自己的仓库根目录。</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">cd</span><span class="w"> </span>/app/RecStore
 </code></pre></div>
 <h2 id="1">1. 适用范围<a class="headerlink" href="#1" title="Permanent link">&para;</a></h2>
@@ -3570,8 +3664,8 @@ CQE；<strong>等到接近等待超时</strong>说明收割与慢路径都被关
   <code>ibv_create_qp failed</code> 或 <code>no idle RC write slot available</code>。</li>
 <li><code>slots-per-qp</code> 默认是 <code>1</code>，增加它主要提高在途深度，不增加 QP 数。</li>
 <li><code>read</code> 和 <code>push</code> 是不同的 PUT-v2 payload 路径，结果不能直接混合比较。</li>
-<li><code>rdma-get-response-mode=auto</code> 会按 index/value layout 选择 GET response path；
-  当前 <code>DRAM_PET_HASH</code> 使用 <code>staging_copy</code>，其他 index 默认使用 <code>direct_sg</code>。</li>
+<li><code>rdma-get-response-mode</code> 只接受 <code>direct_sg</code> 或 <code>staging_copy</code>，其它值启动即失败；
+  runner 里的 <code>auto</code> 只是解析层：<code>DRAM_PET_HASH</code> 解析成 <code>staging_copy</code>，其余解析成 <code>direct_sg</code>。</li>
 <li>调试使用 Debug/O0 构建，吞吐基准使用 Release 构建。</li>
 <li>修改源码后，重新编译对应的 <code>petps_server</code>、benchmark、integration 或 op-layer target，再验证结果。</li>
 <li>热点路径零开销：正常请求（µs 级完成）既不查控制面（1 s 后才查）也不收割 CQ
@@ -3713,7 +3807,7 @@ row copy 和 response completion 可分别定位查找、清零、搬运和回�
 <li>检查 <code>/dev/infiniband</code>、<code>ibv_devices</code> 和 shard 0 控制面日志。</li>
 <li>若卡在 <code>control-plane-wait</code> 或 <code>startup-wait</code>，先查看 shard 0 日志和控制面端口。</li>
 <li>若出现 <code>librdkafka.so.1</code> 缺失，确认 <code>build/lib</code> 在运行时库路径中：
-   <code>LD_LIBRARY_PATH=/app/RecStore/build/lib:${LD_LIBRARY_PATH}</code>。</li>
+   <code>LD_LIBRARY_PATH=$PWD/build/lib:${LD_LIBRARY_PATH}</code>。</li>
 <li>若出现 <code>unknown command line flag 'rdma_transport_mode'</code> 或旧的
    <code>--use-local-memcached</code>，优先检查是否运行了旧 binary 或旧 runner。</li>
 <li>若请求卡住，检查 MR 注册、QP metadata 的 shard/lane 匹配、CQ 消费线程以及
@@ -3893,7 +3987,7 @@ row copy 和 response completion 可分别定位查找、清零、搬运和回�
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.indexes", "navigation.footer", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.action.edit"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

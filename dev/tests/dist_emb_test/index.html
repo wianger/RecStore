@@ -25,7 +25,7 @@
       
       
       <link rel="icon" href="../../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -2191,9 +2191,31 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../../performance/reports/" class="md-nav__link">
+    
+    
+      
         
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
+            
   
   
   <span class="md-ellipsis">
@@ -2207,7 +2229,79 @@
   
   
 
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    性能报告
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../performance/reports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    总览
+  
+
+    
+  </span>
+  
+  
+
       </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../performance/tiered-e2e/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    混合存储（DRAM+SSD）
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -2781,34 +2875,28 @@
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><code>test_initialization</code></td>
-<td style="text-align: left;"><strong>初始化与元数据注册</strong></td>
-<td style="text-align: left;"><code>DistEmbedding(...)</code> -&gt; 连接 Client -&gt; 注册 Table</td>
-<td style="text-align: left;">Client 内部元数据结构中应包含该 Table 的 Shape 和 Dtype。</td>
+<td style="text-align: left;"><code>test_initialization_and_forward</code></td>
+<td style="text-align: left;"><strong>初始化、元数据注册与 forward</strong></td>
+<td style="text-align: left;"><code>DistEmbedding(...)</code> -&gt; 连接 Client -&gt; 注册 Table -&gt; forward</td>
+<td style="text-align: left;">Client 内部元数据结构中包含该 Table 的 Shape 和 Dtype；forward 输出形状正确。</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>test_backward</code></td>
-<td style="text-align: left;"><strong>梯度追踪 (Tracing)</strong></td>
-<td style="text-align: left;"><code>loss.backward()</code> -&gt; <strong>Hook 触发</strong> -&gt; 记录 <code>{Keys, Grads}</code> 到 Trace</td>
-<td style="text-align: left;">Backward 仅记录 Trace，<strong>不更新</strong>权重。权重在此时应保持不变。</td>
+<td style="text-align: left;"><code>test_backward_and_optimizer_step</code></td>
+<td style="text-align: left;"><strong>梯度追踪与优化器更新</strong></td>
+<td style="text-align: left;"><code>loss.backward()</code> -&gt; Hook 记录 <code>{Keys, Grads}</code> -&gt; <code>SparseSGD.step()</code> -&gt; <code>client.push</code></td>
+<td style="text-align: left;">backward 只记录 Trace，不更新权重；<code>step()</code> 后权重按 SGD 公式变化。</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>test_optimizer_step</code></td>
-<td style="text-align: left;"><strong>优化器更新</strong></td>
-<td style="text-align: left;"><code>SparseSGD.step()</code> -&gt; 读取 Trace -&gt; <code>client.push</code></td>
-<td style="text-align: left;">调用 <code>step()</code> 后，权重发生变化，且符合 SGD 更新公式。</td>
+<td style="text-align: left;"><code>test_update_with_duplicate_ids</code></td>
+<td style="text-align: left;"><strong>重复 ID 的梯度聚合</strong></td>
+<td style="text-align: left;">输入 Batch: <code>[ID 1, ID 1, ID 1]</code>，backward 后 step</td>
+<td style="text-align: left;">Server 端收到的 ID 1 梯度为 3 次梯度的总和。</td>
 </tr>
 <tr>
-<td style="text-align: left;"><code>test_duplicate_ids</code></td>
-<td style="text-align: left;"><strong>梯度聚合</strong></td>
-<td style="text-align: left;">输入 Batch: <code>[ID 1, ID 1, ID 1]</code><br>Backward: <code>Wait...</code></td>
-<td style="text-align: left;">Server 端收到的 ID 1 的梯度应为 3 次梯度的<strong>总和</strong>。</td>
-</tr>
-<tr>
-<td style="text-align: left;"><code>test_persistence</code></td>
+<td style="text-align: left;"><code>test_persistence_with_same_name</code></td>
 <td style="text-align: left;"><strong>数据持久化</strong></td>
-<td style="text-align: left;"><code>Emb(name="A")</code> 退出 -&gt; <code>Emb(name="A")</code> 重启</td>
-<td style="text-align: left;">新实例应能读取到上一个实例写入的数据。</td>
+<td style="text-align: left;"><code>Emb(name="A")</code> 退出 -&gt; 重新创建 <code>Emb(name="A")</code></td>
+<td style="text-align: left;">新实例能读取到上一个实例写入的数据。</td>
 </tr>
 </tbody>
 </table>
@@ -2926,7 +3014,7 @@
       <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.indexes", "navigation.footer", "navigation.sections", "navigation.top", "navigation.tracking", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.action.edit"], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
